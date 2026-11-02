@@ -14,15 +14,15 @@ parity, Thymeleaf + htmx UI, SSO via the deploying organization's identity provi
 
 ## Status
 **PLAN ONLY — no code yet.** Two documents:
-- `BUILD_PLAN.md` v0.3 — what we are building: scope decisions, roles and permissions, flows,
+- `BUILD_PLAN.md` v0.4 — what we are building: scope decisions, roles and permissions, flows,
   domain model, SLA engine, architecture, Oracle/PG portability rules, security design,
   accessibility program, open-source governance, scanning strategy, testing, deployment, import
   of existing records, phases, risks, open questions (§19), DDL and CI sketches.
-- `IMPLEMENTATION_PLAN.md` v0.1 — how we build it: the audit decisions register (Part A, the
-  result of an author pass plus an independent hostile review), engineering standards (Part B),
-  work packages WP-01…30 with sizes and dependencies (Part C), the first twelve PRs (Part D),
-  definition of done (Part E) and the re-baselined schedule (Part F). **Where the two disagree,
-  the implementation plan wins.**
+- `IMPLEMENTATION_PLAN.md` v0.2 — how we build it: the audit decisions register (Part A: an
+  author pass plus two rounds of independent hostile review, 52 findings resolved), engineering
+  standards (Part B), work packages WP-01…30 with sizes and dependencies (Part C), the first
+  twelve PRs (Part D), definition of done (Part E), the re-baselined schedule (Part F) and the
+  CI check-placement table (Part G). **Where the two disagree, the implementation plan wins.**
 Phase 0 (discovery) answers the BUILD_PLAN §19 questions before any code is written.
 
 ## Project rules
