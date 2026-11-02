@@ -1,0 +1,18 @@
+# build + IDE
+target/
+.idea/
+*.iml
+.vscode/
+.settings/
+.classpath
+.project
+# local secrets / env
+.env
+*.env
+*.jks
+*.p12
+wallet/
+# logs + junk
+*.log
+._*
+.DS_Store
