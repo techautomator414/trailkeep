@@ -1,7 +1,7 @@
 # Trailkeep — Full Build Plan
 
 _Open-source compliance case tracker. Java · Oracle (PostgreSQL for local/CI) · modern server-rendered UI · Section 508 conformant · zero-finding security posture · Apache-2.0._
-_Version 0.2 — 2026-11-02 — status: PLAN, no code yet._
+_Version 0.3 — 2026-11-02 — status: PLAN, no code yet. v0.3 applies the audit decisions in `IMPLEMENTATION_PLAN.md` Part A; where the two disagree, the implementation plan wins._
 
 ---
 
@@ -80,7 +80,7 @@ Trailkeep is a **small, opinionated compliance case tracker**: a case has an own
 
 **Non-goals (v1):**
 - Configurable workflow / BPM engine, forms designer, integrations marketplace.
-- Mobile app, offline mode, public API for third parties (an internal REST API exists for the UI and for reports, versioned, but not published).
+- Mobile app, offline mode, any JSON API. The UI is server-rendered HTML; exports are plain HTTP endpoints returning CSV or HTML. A public API is a v1.1+ decision.
 - Replacing document management (attachments are case evidence, not a DMS).
 - Hosting or operating the service for anyone; Trailkeep is software, not a SaaS.
 
@@ -88,7 +88,7 @@ Trailkeep is a **small, opinionated compliance case tracker**: a case has an own
 
 ## 3. Users, roles, permissions, sensitivity
 
-### 3.1 Roles (mapped from IdP groups; the app never stores passwords)
+### 3.1 Roles (global roles come from IdP groups; team roles are managed in the app; the app never stores passwords)
 
 | Role | Who | Summary |
 |---|---|---|
@@ -119,12 +119,14 @@ Trailkeep is a **small, opinionated compliance case tracker**: a case has an own
 | Manage case types, SLA policies, retention, legal hold | – | – | – | ✓ | – |
 | Manage users/teams, view audit for all, system health | – | – | – | ✓ (audit) | ✓ |
 
-Rules of thumb: an approver cannot approve their own closure request; the same person cannot be both owner and approver on a case; System Admin has no case data access unless also granted a case role (logged as a deliberate override).
+A user's authority is the set of their **team roles** (Reader/Analyst/Manager per team) plus **global roles** (Compliance Admin, System Admin), so every decision is a function of (user, case); `hasRole()` alone cannot express any row above. One `CasePermissionService` implements the matrix as a decision table (team role × relationship to the case × status × action) that is tested exhaustively from a CSV which is the single source of truth for this section.
+
+Edge rules: an approver cannot approve their own closure request, and the same person cannot be both owner and approver on a case. The default approver list is the team's Managers minus the requester; if that leaves nobody, Compliance Admins approve. All Managers of a team receive its escalations. Only the owner or a Manager+ may mark a case restricted. A Manager may reassign a restricted case away from themselves. Reader and Analyst reports exclude restricted rows automatically. A disabled owner's cases are flagged on the aging report and on the team's dashboard until a Manager reassigns them. System Admin has no case data access unless also granted a case role (logged as a deliberate override).
 
 ### 3.3 Sensitivity model
 
 - `sensitivity ∈ {STANDARD, RESTRICTED}` on the case; attachments and comments inherit.
-- Restricted cases are filtered at the **repository query level** (a mandatory predicate added by a `CaseAccessPolicy` specification), never by post-filtering a list, so search results, counts, exports and reports can never leak them.
+- Restricted cases are enforced by **one read path**: `CaseAccessGate` in the `casefile` module is the only component permitted to use case-rooted repositories (an ArchUnit rule forbids injecting them anywhere else). Single-entity reads load the row and then assert readability for the principal (post-filtering one row is correct and is stated as such). Lists, counts, exports and reports all go through one `Specification` factory that adds the sensitivity predicate; child tables (comments, attachments, requests, audit) are always queried through the case with the same predicate. Scheduled jobs run as an explicit `SystemPrincipal` with its own policy branch. A reflection-driven test enumerates every repository method and proves restricted rows are invisible to a non-permitted user. Detail: `IMPLEMENTATION_PLAN.md` A.1 #6.
 - Every read of a restricted case (page view or attachment download) writes an `AUDIT: VIEW_RESTRICTED` event.
 - Field-level: the case `subject` and `description` may contain PHI/PII. They are never written to application logs, never included in email bodies (emails carry case number, title, due date and a link; the title is required to be non-sensitive by policy and the intake form says so), and are redacted in CSV exports unless the exporting user is Manager+ and ticks "include details" (audited).
 
@@ -140,7 +142,7 @@ Navigation: left nav **Dashboard · Cases · Reports · Admin** (role-dependent)
 
 ### 4.2 Create a case (one page)
 Fields: Case Type\*, Title\* (hint: "no sensitive details in the title"), Priority (Normal/High), Date Identified\*, Team\* (defaulted from user), Owner (defaulted to me), Subject / involved parties, Description\*, Sensitivity (Standard/Restricted), Attachments (optional, drag-drop **or** file-chooser button).
-Save disabled until required fields are valid; inline errors tied to fields and summarized at the top; `Ctrl+S` saves. On save: case number assigned (configurable prefix, e.g. `CASE-2026-000123`), SLA due date computed from the case type's policy, toast (also announced to assistive tech), navigate to case page.
+Save disabled until required fields are valid; inline errors tied to fields and summarized at the top; `Ctrl+S` saves. On save: case number assigned from a database sequence (configurable prefix ≤ 8 chars, e.g. `CASE-2026-000123`; the year is the opening year, the number never resets, and **gaps are possible** — the help text says so), SLA row initialised from the case type's policy, toast (also announced to assistive tech), navigate to case page. The case number is the only identifier used in URLs.
 
 ### 4.3 Case page
 Header: number, title, status chip, **SLA chip** ("12 days left" / "At Risk — 3 days left" / "Overdue 6 days"), owner, team, sensitivity badge. Chips carry icon + text, never color alone.
@@ -148,10 +150,10 @@ Primary actions (right): **Edit · Request Update · Request Closure · ⋯ More
 Tabs: **Overview · Comments · Attachments · History** (ARIA tabs pattern, arrow-key navigation).
 
 - **Edit**: fields become editable; Save/Cancel; optimistic-locking conflict → "This case was updated by _name_ at _time_" with **Reload** (Force Save is **not** offered — v1 keeps the simpler, safer rule).
-- **Comments**: text box with minimal formatting (bold/italic/lists via Markdown subset, rendered sanitized) → **Post**. Pin via ⋯. No edit/delete.
+- **Comments**: text box with minimal formatting (bold/italic/lists via Markdown subset, rendered through the sanitizer into a `SafeHtml` value) → **Post**. Pin via ⋯ (stored in `CASE_COMMENT_PIN`, so the comment table itself stays insert-only). No edit/delete.
 - **Attachments**: **Upload** → progress (with text percentage) → badge `Scanning…` → `Verified` or `Quarantined` (download disabled; Compliance Admin sees **Release** with reason). Allowed types and max size shown.
 - **Request Update**: modal → pick user (accessible combobox) → message → **Send**. Emails the user with a link; case shows "Update requested from _X_ on _date_ — awaiting" until that user posts a comment (auto-resolves) or anyone clicks "Mark answered".
-- **Request Closure**: modal → Outcome\* (dropdown per case type: Resolved / No Action Required / Transferred / Duplicate), Resolution Summary\*, Follow-up Actions (optional), Approver (defaulted to team manager; list limited to Managers of the team) → **Send**. Status → `Pending Closure`; approver emailed with summary + link.
+- **Request Closure**: modal → Outcome\* (dropdown per case type: Resolved / No Action Required / Transferred / Duplicate), Resolution Summary\*, Follow-up Actions (optional), Approver (list = the team's Managers minus the requester; Compliance Admins if that list is empty) → **Send**. Status → `Pending Closure`; approver emailed with summary + link.
 - **Approve / Reject** (approver sees buttons on the case and on the dashboard "Pending my approval"): Approve → `Closed`, closure fields locked, retention clock starts. Reject → reason\* → back to `Open`, requester emailed, "Requires Changes" badge until the next comment.
 - **Reopen** (Manager+) → reason\* → `Open`; SLA restarts from reopen date.
 - **History**: chronological, filterable (field changes old→new, comments, attachments, emails sent, state changes, restricted views), each with who/when/origin (UI / scheduler / import).
@@ -166,14 +168,14 @@ Tabs: **Overview · Comments · Attachments · History** (ARIA tabs pattern, arr
 - **Aging report** (the one that goes out automatically): open cases bucketed `0–30 · 31–60 · 61–90 · 90+ days` and by SLA state, grouped by team and owner, with a list of overdue cases and unanswered update requests. Run on demand; scheduled weekly (configurable) to Managers (own team) and Compliance Admins (all).
 - **SLA compliance**: cases closed in period, % within SLA, average age, by type/team.
 - **Open by owner**: workload view.
-- All: parameters (date range, team, type), table first, then an optional bar chart that is a visual duplicate of the table (the table is the accessible source of truth), **Export CSV / PDF** (PDF is tagged, §10.3).
+- All: parameters (date range, team, type), table first, then an optional bar chart that is a visual duplicate of the table (the table is the accessible source of truth), **Export CSV**, and a print-ready accessible HTML view of the same report (tagged PDF export is v1.1, §10.3).
 
 ### 4.6 Admin
 - **Case Types**: name, description, default SLA policy, allowed outcomes, active flag.
 - **SLA Policies**: name, target days, at-risk threshold (%, default 80), reminder cadence after overdue (days), escalation recipient rule (owner / owner+manager).
-- **Teams & Users**: teams (name, manager(s)); users are read from the IdP on login (upsert); admin sets team membership and can disable a user locally.
+- **Teams & Users**: teams (name); users are created from the IdP on first login (upsert of id, name, email) and their **global** roles come from IdP group claims; **team roles** (Reader/Analyst/Manager per team) are owned here and set by System Admins; a user can be disabled locally.
 - **Retention**: per case type: years after closure → archive → purge; **Legal hold** toggle on a case stops the clock. Purge job logs what it removed (metadata only).
-- **Email templates**: subject/body with placeholders, preview, "send me a test". Emails are multipart (plain text + simple HTML).
+- **Email wording**: templates are fixed Thymeleaf files shipped with the application (multipart: plain text + simple HTML); organizations change wording through `messages_*.properties` overrides and can "send me a test" from the System screen. A database-backed template editor is v1.1 and, when it comes, uses non-evaluating `{{key}}` substitution over an allow-listed map — never a template engine — to rule out server-side template injection.
 - **System** (System Admin): health, scheduler status, scan engine status, last import run.
 
 ### 4.7 Alerts (email + in-app list)
@@ -216,6 +218,10 @@ erDiagram
   CASE_RECORD ||--o| CLOSURE_REQUEST : "current"
   CASE_RECORD ||--o{ CLOSURE_REQUEST : "history"
   CASE_RECORD ||--o{ AUDIT_EVENT : "subject of"
+  CASE_RECORD ||--|| CASE_SLA : "sla state (job-owned)"
+  CASE_RECORD ||--|| CASE_SEARCH : "search text (no version)"
+  CASE_ATTACHMENT ||--|| CASE_ATTACHMENT_CONTENT : "bytes (JDBC only)"
+  CASE_COMMENT ||--o| CASE_COMMENT_PIN : pinned
   APP_USER ||--o{ SAVED_VIEW : owns
   NOTIFICATION_OUTBOX }o--|| CASE_RECORD : "about"
   RETENTION_POLICY ||--o{ CASE_TYPE : governs
@@ -230,19 +236,16 @@ erDiagram
     bigint team_id FK
     bigint owner_id FK
     varchar priority "NORMAL|HIGH"
-    varchar status "OPEN|PENDING_CLOSURE|CLOSED"
+    varchar status "OPEN|PENDING_CLOSURE|CLOSED|ARCHIVED"
     varchar sensitivity "STANDARD|RESTRICTED"
     date identified_on
     timestamptz opened_at
-    timestamptz sla_due_at
-    timestamptz at_risk_at
-    varchar sla_state "ON_TRACK|AT_RISK|OVERDUE|MET|BREACHED"
     timestamptz closed_at
-    varchar outcome
-    clob resolution_summary
-    clob follow_up_actions
+    timestamptz last_rejected_at
     boolean legal_hold
-    timestamptz purge_after
+    bigint legal_hold_by
+    timestamptz legal_hold_at
+    varchar legal_hold_reason
     varchar legacy_ref "nullable, import only"
     int version "optimistic lock"
     timestamptz created_at
@@ -259,9 +262,34 @@ erDiagram
     varchar sha256
     varchar scan_status "PENDING|CLEAN|QUARANTINED|RELEASED"
     varchar scan_detail
-    blob content
+    bigint released_by
+    timestamptz released_at
+    varchar released_reason
     timestamptz uploaded_at
     bigint uploaded_by
+  }
+  CASE_SLA {
+    bigint case_id PK
+    varchar sla_state "ON_TRACK|AT_RISK|OVERDUE|MET|BREACHED|NOT_APPLICABLE"
+    timestamptz sla_due_at
+    timestamptz at_risk_at
+    int sla_cycle "increments on reopen"
+    timestamptz last_evaluated_at
+  }
+  CLOSURE_REQUEST {
+    bigint id PK
+    bigint case_id FK
+    bigint requested_by
+    bigint approver_id
+    timestamptz requested_at
+    varchar outcome
+    clob resolution_summary
+    clob follow_up_actions
+    varchar decision "PENDING|APPROVED|REJECTED"
+    bigint decided_by
+    timestamptz decided_at
+    varchar reason
+    int version
   }
   AUDIT_EVENT {
     bigint id PK
@@ -269,8 +297,9 @@ erDiagram
     bigint actor_id
     varchar actor_name_snapshot
     varchar origin "UI|SCHEDULER|IMPORT|SYSTEM"
+    bigint case_id "nullable, indexed"
     varchar entity_type
-    bigint entity_id
+    bigint entity_id "nullable"
     varchar action
     clob old_values_json
     clob new_values_json
@@ -279,7 +308,7 @@ erDiagram
   }
 ```
 
-Supporting tables: `APP_USER` (external_id from IdP, display name, email, disabled flag, last_login), `APP_USER_TEAM` (user, team, role_in_team ∈ READER/ANALYST/MANAGER), global roles table (`COMPLIANCE_ADMIN`, `SYSTEM_ADMIN`), `CASE_TYPE`, `SLA_POLICY`, `RETENTION_POLICY`, `CASE_COMMENT` (append-only, pinned flag), `UPDATE_REQUEST` (requested_by, requested_from, message, requested_at, answered_at, answered_by), `CLOSURE_REQUEST` (requested_by, approver_id, requested_at, decision ∈ APPROVED/REJECTED, decided_at, reason), `NOTIFICATION_OUTBOX` (to, subject, body_text, body_html, status, attempts, next_attempt_at, sent_at, template_id, case_id), `SAVED_VIEW` (owner, name, filter_json), `EMAIL_TEMPLATE`, `SHEDLOCK` (scheduler lock), `CASE_NUMBER_SEQ` (per-year sequence via table row + `SELECT … FOR UPDATE`, portable across both DBs).
+Supporting tables: `APP_USER` (external_id from IdP, display name, email, disabled flag, last_login), `APP_USER_TEAM` (user, team, role_in_team ∈ READER/ANALYST/MANAGER), `APP_USER_GLOBAL_ROLE` (`COMPLIANCE_ADMIN`, `SYSTEM_ADMIN`), `CASE_TYPE` (incl. retention years, sla anchor), `CASE_TYPE_OUTCOME`, `SLA_POLICY`, `CASE_COMMENT` (insert-only), `CASE_COMMENT_PIN`, `CASE_SEARCH` (case_id PK, search_text, updated_at — no version, subject excluded), `CASE_ATTACHMENT_CONTENT` (attachment_id PK, content), `UPDATE_REQUEST` (requested_by, requested_from, message, requested_at, last_reminded_at, answered_at, answered_by, answered_by_comment_id), `NOTIFICATION_OUTBOX` (recipient, subject, body_text, body_html, status ∈ PENDING/SENDING/SENT/FAILED, locked_until, attempts, next_attempt_at, sent_at, template_id, case_id, report_run_id), `ALERT_LEDGER` (case_id, alert_type, sla_cycle, period_key — unique), `USER_ALERT` (in-app list), `REPORT_SCHEDULE` (report_type, team_id, cron, next_run_at), `REPORT_RUN` (report_type, params_json, rendered_at, format, content), `SAVED_VIEW` (owner, name, filter_json), `SPRING_SESSION` + `SPRING_SESSION_ATTRIBUTES` and `OAUTH2_AUTHORIZED_CLIENT` (vendor schemas shipped as migrations), `SHEDLOCK`. Case numbers come from the sequence `SEQ_CASE_NUMBER`; there is no allocator table. Every enum-valued column has a `CHECK` constraint.
 
 ### 5.2 Case state machine
 
@@ -290,7 +319,8 @@ stateDiagram-v2
   PENDING_CLOSURE --> CLOSED : approve (Manager+, not requester)
   PENDING_CLOSURE --> OPEN : reject with reason
   CLOSED --> OPEN : reopen with reason (Manager+) — SLA restarts
-  CLOSED --> [*] : archive/purge per retention (unless legal hold)
+  CLOSED --> ARCHIVED : retention job, after the policy's years (unless legal hold)
+  ARCHIVED --> [*] : purge job (separate credential), metadata-only log
 ```
 
 SLA sub-state is **derived**, not stored as truth: `sla_state` is recomputed by the evaluator every 15 minutes from `opened_at`, `sla_due_at`, `at_risk_at`, `status`, and cached on the row for fast filtering; the History tab records each transition.
@@ -301,11 +331,13 @@ SLA sub-state is **derived**, not stored as truth: `sla_state` is recomputed by 
 
 - **Policy**: `target_days`, `at_risk_pct` (default 80), `overdue_reminder_days` (default 7), `escalate_to` (OWNER | OWNER_AND_MANAGER), `business_days` (boolean; v1 uses calendar days unless confirmed otherwise — see §18).
 - **At creation / reopen**: `sla_due_at = opened_at + target_days`, `at_risk_at = opened_at + target_days × at_risk_pct`.
-- **Evaluator job** (every 15 min, ShedLock-guarded so only one replica runs it): for each `OPEN|PENDING_CLOSURE` case, compute state; on transition, write history + enqueue outbox emails per policy; `Pending Closure` does not pause the clock (closure latency is part of age — surfaced on the aging report as "awaiting approval N days").
-- **Closure**: `sla_state` finalizes to `MET` or `BREACHED` for compliance reporting.
-- **Aging report job** (weekly, configurable cron per team): renders the same report the UI shows, as tagged PDF + CSV, into the outbox for Managers (own team) and Compliance Admins (all). Report content follows the §3.3 redaction rules.
-- **Outbox dispatcher** (every minute): sends via SMTP relay with exponential backoff, max 10 attempts, then flags on the System screen. The dispatcher is the **only** component that talks to SMTP.
-- **Idempotency**: alert keys (`case_id + alert_type + period`) prevent duplicate emails on restarts.
+- **SLA anchor**: the clock starts at `identified_on` at end of day in `app.timezone` (policy-configurable to `opened_at`), so back-dated items are honest about their age.
+- **State lives in `CASE_SLA`** (`CASE_ID PK, SLA_STATE, SLA_DUE_AT, AT_RISK_AT, SLA_CYCLE, LAST_EVALUATED_AT`), a side table without `@Version`, owned by the evaluator; the case row is never touched by the job, so users mid-edit never see a conflict caused by it.
+- **Evaluator job** (every 15 min; ShedLock `lockAtMostFor=14m`, `lockAtLeastFor=1m`, `usingDbTime()`): selects candidate ids via the `(STATUS, SLA_DUE_AT)` index, processes them in id-ordered chunks of 500 with one transaction per chunk, writes transitions with a bulk update, and records history + `ALERT_LEDGER` rows + outbox rows in the same chunk transaction. `Pending Closure` does not pause the clock (closure latency is part of age — surfaced on the aging report as "awaiting approval N days").
+- **Closure**: `SLA_STATE` finalizes to `MET` or `BREACHED` for compliance reporting. **Reopen** increments `SLA_CYCLE`, so "At Risk once" is once per cycle.
+- **Aging report delivery** (weekly, configurable per team): an hourly tick over `REPORT_SCHEDULE.NEXT_RUN_AT` (not dynamic `@Scheduled`) renders the same report the UI shows into a `REPORT_RUN` row (HTML + CSV in v1; tagged PDF in v1.1) and enqueues outbox rows referencing it for Managers (own team) and Compliance Admins (all). Report content follows the §3.3 redaction rules; the first cycle after go-live can be limited to Compliance Admins.
+- **Outbox dispatcher** (every minute, any replica): claims rows with `SELECT … FOR UPDATE SKIP LOCKED`, moves them `PENDING → SENDING(locked_until)`, sends via SMTP **outside** the database transaction, then marks `SENT` or `FAILED` with exponential backoff (max 10 attempts, then flagged on the System screen); a reaper returns stale `SENDING` rows to `PENDING`. The dispatcher is the **only** component that talks to SMTP.
+- **Idempotency**: `ALERT_LEDGER (CASE_ID, ALERT_TYPE, SLA_CYCLE, PERIOD_KEY)` with a unique constraint prevents duplicate alerts across restarts and replicas.
 
 ---
 
@@ -320,7 +352,7 @@ flowchart LR
   end
   subgraph App["trailkeep (Spring Boot, 1..n replicas)"]
     Web[Web layer: controllers, views, validation]
-    Sec[Security: OIDC/SAML, roles, CaseAccessPolicy]
+    Sec[Security: OIDC, roles, CasePermissionService]
     Dom[Domain modules: case · closure · updaterequest · sla · document · notification · report · admin · audit]
     Jobs[Scheduled jobs: SLA evaluator · aging report · outbox dispatcher · retention · scan poller]
     JPA[Spring Data JPA / Hibernate · Flyway]
@@ -344,22 +376,22 @@ One deployable. Modular monolith with **ArchUnit-enforced** package boundaries (
 | Layer | Choice | License | Rationale |
 |---|---|---|---|
 | Runtime | **Java 21 LTS** (Temurin or Red Hat build of OpenJDK) | GPLv2+CPE | Broad vendor/Oracle JDBC support; virtual threads available. Java 25 LTS acceptable. |
-| Framework | **Spring Boot 4.0.x** (Spring Framework 7, Spring Security 7, Hibernate ORM 7) — fall back to **3.5.x** only if a deploying organization's approved list lags | Apache-2.0 (Hibernate ORM 7 is Apache-2.0) | Current supported line; Security 7 defaults are what the scanners expect. |
-| Build | **Maven** + wrapper, `maven-enforcer` (banned deps, convergence, Java version), `license-maven-plugin` | Apache-2.0 | Deterministic; license gate built in. |
-| Persistence | **Spring Data JPA + Hibernate**, **Flyway** (community), **HikariCP** | Apache-2.0 | Portable across Oracle/PG with the rules in §8. |
-| Oracle driver | `com.oracle.database.jdbc:ojdbc17` | Oracle Free Use Terms (build-time dependency only, not redistributed) | Maven Central, Java 17+ build. |
+| Framework | **Spring Boot, current 4.x line** (Spring Framework 7, Spring Security 7, Hibernate ORM 7, Jackson 3, JSpecify null-safety). No 3.x compatibility: the starters, test slices and Jackson package moved in 4.0 and 3.5 is out of OSS support. Starters by their 4.x names (`spring-boot-starter-webmvc`, `spring-boot-starter-security-oauth2-client`, per-technology test starters). | Apache-2.0 (Hibernate ORM 7 is Apache-2.0) | Current supported line; Security 7 defaults are what the scanners expect. If an approved-software list lags, the organization runs the published artifact under a documented exception. |
+| Build | **Maven** + wrapper, `maven-enforcer` (banned deps, convergence, Java version), `com.mycila:license-maven-plugin` (SPDX headers), `org.codehaus.mojo:license-maven-plugin` (third-party report + allow-list) | Apache-2.0 | Deterministic; license gates built in. |
+| Persistence | **Spring Data JPA + Hibernate**, **Flyway Community** with the `flyway-database-oracle` plugin — **Liquibase (Apache-2.0) is the pre-approved fallback** if Phase 0 shows Community does not cover the organization's Oracle version; SQL files stay tool-neutral. **HikariCP**. | Apache-2.0 | Portable across Oracle/PG with the rules in §8. |
+| Oracle driver | `com.oracle.database.jdbc:ojdbc17` | Oracle Free Use Terms and Conditions — the driver is redistributed inside the published container image under those terms and recorded in `NOTICE` | Maven Central, Java 17+ build. |
 | PG driver | `org.postgresql:postgresql` | BSD-2 | |
 | Scheduling | Spring `@Scheduled` + **ShedLock** (JDBC provider) | Apache-2.0 | DB-backed lock works identically on both DBs; no Quartz tables/ops. |
-| UI | **Thymeleaf + htmx + Bootstrap 5** (custom theme tokens, WCAG-checked palette), minimal vanilla JS, no bundler | Apache-2.0 / 0BSD / MIT | Server-rendered: smallest attack surface, strict CSP, no npm dependency tree in the SCA report, accessible by default, "modern" feel via htmx partial swaps. See §7.3. |
+| UI | **Thymeleaf + htmx + Bootstrap 5 CSS only** (no Bootstrap JS, no Popper; WCAG-checked theme tokens), one vendored `app.js` built on native `<dialog>` and WAI-ARIA APG patterns, no bundler | Apache-2.0 / 0BSD / MIT | Server-rendered: smallest attack surface, strict CSP without `unsafe-inline`, no npm dependency tree in the SCA report, vetted components, "modern" feel via htmx partial swaps. JavaScript is required (intranet tool). See §7.3. |
 | Markdown | `commonmark-java` + **OWASP Java HTML Sanitizer** on output | BSD-2 / Apache-2.0 | Comments with safe formatting. |
 | File type detection | **Apache Tika** (core only) | Apache-2.0 | Content-type from magic bytes, not from the client. |
 | Antivirus | **ClamAV** (`clamd`) via a small TCP client | GPLv2 (separate process over the network; not linked) | Standard, on-prem, no data leaves the network. |
-| PDF export | **Apache PDFBox** with tagged-PDF (PDF/UA) structure | Apache-2.0 | Accessible server-side report PDFs; no headless browser. |
-| PDF validation | **veraPDF** CLI in CI | MPL-2.0 / GPLv3+ (tool only, not shipped) | Proves PDF/UA conformance of exports. |
+| Reports (v1) | Accessible **HTML report view with print stylesheet + CSV** | — | Hand-tagging PDF/UA with PDFBox is a multi-week subsystem; v1 ships the formats that are accessible by construction. |
+| PDF export (v1.1) | `openhtmltopdf` maintained fork (`io.github.openhtmltopdf`), PDF/UA mode, over PDFBox; **veraPDF** CLI gate in CI | LGPL-2.1 (dynamically linked; the one LGPL runtime dependency, recorded in NOTICE) / veraPDF is a build tool, not shipped | The accessible HTML renders once into tagged PDF; veraPDF proves conformance or the export is withheld. |
 | CSV | **Apache Commons CSV** (with formula-injection escaping) | Apache-2.0 | |
 | Email | Spring Mail (Jakarta Mail) → SMTP relay; Thymeleaf text + HTML templates | EPL-2.0/GPL-CPE (Jakarta Mail) | |
 | Auth | Spring Security **OAuth2 client (OIDC)**, SAML2 module if the IdP requires it | Apache-2.0 | Roles = IdP group claims → app roles mapping table. |
-| Observability | Micrometer → Prometheus; JSON logs (Logback + logstash encoder); Actuator on a separate management port | Apache-2.0 / EPL-1.0+LGPL (Logback) | |
+| Observability | Micrometer → Prometheus; JSON logs (Logback + logstash encoder); Actuator on a separate management port | Apache-2.0 / EPL-1.0 (Logback, taken under EPL) | |
 | Tests | JUnit 5, AssertJ, Mockito, **Testcontainers** (PostgreSQL + `gvenzl/oracle-free`), **Playwright for Java** + **axe-core**, **ArchUnit**, JaCoCo, optional PIT | EPL-2.0 / Apache-2.0 / MIT / MPL-2.0 (axe-core, test-only) | |
 | Container | Red Hat **UBI 9 OpenJDK 21 runtime** image, non-root, read-only FS | UBI EULA (freely redistributable) | Matches RHEL/OpenShift; passes typical container benchmarks. |
 
@@ -367,7 +399,7 @@ One deployable. Modular monolith with **ArchUnit-enforced** package boundaries (
 
 | Option | Pros | Cons | Verdict |
 |---|---|---|---|
-| **Thymeleaf + htmx + Bootstrap** | Pure Java build; strict CSP easy; tiny JS; fewest SCA findings; SSR fast on intranet; accessible by default (real HTML, real forms, works without JS for core flows) | Less "app-like" for very dynamic screens; team must learn htmx idioms (small) | **Chosen** |
+| **Thymeleaf + htmx + Bootstrap CSS** | Pure Java build; strict CSP achievable; tiny JS surface we own; fewest SCA findings; SSR fast on intranet; real HTML and real forms give assistive technology the most to work with | Less "app-like" for very dynamic screens; team must learn htmx idioms (small); the handful of interactive components (dialog, combobox, tabs, toast) are ours to make accessible | **Chosen** |
 | React/Angular SPA + REST API | Richest interactivity; familiar to front-end devs | Hundreds of npm transitive deps = constant SCA churn; CSP harder; two build toolchains; CORS/token handling adds DAST surface; accessibility of custom components is on us | Rejected for v1 |
 | Vaadin Flow | 100 % Java, polished components with ARIA built in | Heavy client bundle; commercial add-ons for some features; still ships npm deps; harder to CSP; larger container | Viable alternative if the team strongly prefers pure Java components |
 
@@ -379,7 +411,7 @@ trailkeep/
 ├─ src/main/java/.../trailkeep/
 │  ├─ TrailkeepApplication.java
 │  ├─ shared/        (ids, clock, events, exceptions)
-│  ├─ security/      (OIDC config, role mapping, CaseAccessPolicy, headers/CSP)
+│  ├─ security/      (OIDC config, sessions, role mapping, CasePermissionService, nonce filter, headers/CSP)
 │  ├─ audit/         (AuditEvent, AuditRecorder, read-only repo)
 │  ├─ user/          (AppUser, Team, membership, admin screens)
 │  ├─ casefile/      (CaseRecord, numbering, comments, create/edit/search, views)
@@ -404,7 +436,8 @@ trailkeep/
 ├─ security/          (threat model, scanner config, suppressions.xml with justifications, SBOM)
 ├─ accessibility/     (ACR/VPAT, test scripts, manual test logs per release)
 ├─ .github/           (workflows, CODEOWNERS, issue/PR templates, dependabot.yml, SECURITY.md)
-├─ CONTEXT.md · BUILD_PLAN.md · README.md · CONTRIBUTING.md · CODE_OF_CONDUCT.md
+├─ adr/              (MADR-format decision records, 0001–0010 with the first code PR)
+├─ CONTEXT.md · BUILD_PLAN.md · IMPLEMENTATION_PLAN.md · README.md · CONTRIBUTING.md · CODE_OF_CONDUCT.md
 ├─ LICENSE (Apache-2.0) · NOTICE · THIRD-PARTY.txt (generated) · CHANGELOG.md
 ```
 
@@ -413,12 +446,13 @@ trailkeep/
 ## 8. Oracle + PostgreSQL portability rules (enforced by CI, not by memory)
 
 1. **Every integration test runs on PostgreSQL in every build and on Oracle Free (`gvenzl/oracle-free:23-slim`) nightly and on every release branch.** A schema or query that passes PG and fails Oracle fails the build.
-2. **DDL lives in `db/migration/common` using the portable subset**: `VARCHAR(n)`, `TIMESTAMP WITH TIME ZONE`, `NUMBER(1)`-style booleans mapped via a JPA `AttributeConverter` (Oracle 19c has no `BOOLEAN` column type; 23ai does, but we target the older one), `CLOB`/`BLOB` with Hibernate `@Lob`, sequences via `@SequenceGenerator` (`allocationSize` 50, both DBs), no vendor functions in JPQL, no `LIMIT`/`ROWNUM` by hand (use `Pageable`). Flyway placeholders handle the few type-name differences (e.g. `${clob}` → `CLOB` / `TEXT`, `${bytes}` → `BLOB` / `BYTEA`).
-3. **Identifier discipline**: ≤ 30 characters, upper-snake, no reserved words (`USER`, `COMMENT`, `DATE`, `SIZE`…) — hence `APP_USER`, `CASE_RECORD`, `CASE_COMMENT`. Checked by a unit test over the Flyway scripts.
-4. **Search**: v1 uses indexed `LOWER(column) LIKE` on title/number/subject plus a per-case `search_text` column maintained by the service layer (title + number + subject + last 20 comments, truncated) so there is one predicate and one index on both DBs. If relevance ranking is later needed, Hibernate Search with an embedded Lucene index is the portable upgrade path (no Oracle Text / PG `tsvector` divergence).
+2. **DDL lives in `db/migration/common` using a portable subset expressed through placeholders**: `${id}` → `NUMBER(19,0)` / `BIGINT`; `${bool}` → `NUMBER(1,0)` / `BOOLEAN`; `${clob}` → `CLOB` / `TEXT`; `${bytes}` → `BLOB` / `BYTEA`; `${tstz}` → `TIMESTAMP WITH TIME ZONE` on both. `VARCHAR(n)` with the Oracle session set to `NLS_LENGTH_SEMANTICS=CHAR` via the migration tool's `initSql`, and no column wider than `VARCHAR(2000)`. Sequences via `@SequenceGenerator` (`allocationSize` 50, both DBs); no vendor functions in JPQL; no `LIMIT`/`ROWNUM` by hand (use `Pageable`).
+   **Hibernate mapping rules (ArchUnit-enforced):** no `@Lob` anywhere — Hibernate maps `@Lob String`/`byte[]` to PostgreSQL large objects (`oid`), not `TEXT`/`BYTEA`. Long text is `@Column(length = Length.LONG32)` (→ `CLOB` / `TEXT`). Binary content is never a JPA field; it lives in `CASE_ATTACHMENT_CONTENT` and is streamed through a JDBC DAO. Booleans are plain `boolean` with `hibernate.type.preferred_boolean_jdbc_type=BIT` and an explicitly pinned dialect version, so behaviour does not change when the Oracle dialect detects a 23ai server. A Testcontainers test runs `hibernate.hbm2ddl.auto=validate` against the migrated schema on **both** vendors in every build.
+3. **Identifier discipline**: ≤ 30 characters (a convention; Oracle 12.2+ allows 128), upper-snake, no reserved words on either vendor (`USER`, `COMMENT`, `DATE`, `SIZE`, `TO`…) — hence `APP_USER`, `CASE_RECORD`, `CASE_COMMENT`, `RECIPIENT`. A unit test over the migration scripts checks identifier length, reserved words, and ANSI types Oracle lacks (`BIGINT`, `BOOLEAN` outside placeholders).
+4. **Search**: behind a `SearchGateway` interface. v1 ships `CASE_SEARCH (CASE_ID PK, SEARCH_TEXT ${clob}, UPDATED_AT)` — a 1:1 side table with no `@Version` (so a colleague's comment never fails your Save), maintained in the same transaction as the write, **subject text excluded** (it may hold PHI) — and a portable `LIKE` adapter. `LIKE '%term%'` is a scan on both vendors; the stated expectation is "fine at ~50k cases, measured at the 50k seed; not fine at 500k comments". Vendor adapters (PostgreSQL `pg_trgm` + `ILIKE`; Oracle Text `CONTAINS`) are v1.1 behind the same interface in the vendor migration folders. Embedded Lucene is ruled out: it does not work across replicas without shared storage.
 5. **Time**: all timestamps stored as `TIMESTAMP WITH TIME ZONE` in UTC; the app renders in the organization's configured zone.
-6. **Locking**: `@Version` optimistic locking everywhere a user edits; `SELECT … FOR UPDATE` only in the case-number allocator.
-7. **Database users**: `TRAILKEEP_OWNER` (DDL, used only by Flyway at deploy) and `TRAILKEEP_APP` (DML on tables, `INSERT`-only on `AUDIT_EVENT` and `CASE_COMMENT`; no `DELETE` anywhere except the retention job's dedicated `TRAILKEEP_PURGE` user). Grants are migration scripts, so they are reviewed and versioned.
+6. **Locking**: `@Version` optimistic locking on every user-edited aggregate; state written by background jobs (`CASE_SLA`, `CASE_SEARCH`) lives in side tables without `@Version` so jobs never conflict with editors. `SELECT … FOR UPDATE SKIP LOCKED` (supported by both vendors) is used only by the outbox dispatcher. **Case numbers come from one database sequence and may have gaps** (stated in the UI help); no hot row, no lock.
+7. **Database users and grants**: `TRAILKEEP_OWNER` (DDL, used only by the migration tool at deploy), `TRAILKEEP_APP` (runtime), `TRAILKEEP_PURGE` (used only by the retention `CronJob`, a separate pod running the same image with the `purge` profile). Grants are a matrix (table × SELECT/INSERT/UPDATE/DELETE × user) in `R__grants.sql`: `AUDIT_EVENT` and `CASE_COMMENT` are INSERT-only for the app (pins live in `CASE_COMMENT_PIN`); `SPRING_SESSION*`, `OAUTH2_AUTHORIZED_CLIENT` and `SHEDLOCK` need UPDATE/DELETE and are carved out explicitly; only `TRAILKEEP_PURGE` may DELETE case data. `hibernate.default_schema` (Oracle `CURRENT_SCHEMA`, PostgreSQL `search_path`) is set explicitly because the app user does not own the objects.
 8. **Oracle specifics handled once**: Hikari `connectionInitSql` for session time zone, `oracle.jdbc.fanEnabled=false`, LOB prefetch, TLS (`tcps`) with the wallet or JKS trust store mounted as a secret.
 
 ---
@@ -429,12 +463,12 @@ Mapped loosely to OWASP ASVS 4.0 L2 and NIST 800-53 families; a deploying organi
 
 | Area | Control |
 |---|---|
-| **Identity (IA)** | SSO only (OIDC/SAML). No local accounts, no password fields, no "forgot password." Session = Spring Session JDBC (both DBs) so replicas share state; 30-min idle with a 2-minute accessible warning, 8-h absolute, IdP logout propagated. |
-| **Authorization (AC)** | Method security on every service entry point; `CaseAccessPolicy` predicate on every case query; object-level checks on attachment download (no IDOR: attachment URL includes case id and is checked against it); separation of duties rules in §3.2; deny-by-default URL rules; admin actions require a fresh IdP auth (`max_age`) for Compliance Admin changes. |
-| **Audit (AU)** | Append-only `AUDIT_EVENT` written in the same transaction as the change; DB grants forbid `UPDATE/DELETE` for the app user; restricted-case views logged; audit export for auditors; clock from DB `now()` to avoid skewed app clocks. |
+| **Identity (IA)** | SSO only (OIDC in v1; SAML2 in v1.1). No local accounts, no password fields, no "forgot password." Sessions: Spring Session JDBC with the vendor schemas shipped as migrations, JSON attribute serialization (no JDK serialization), the vendor `JdbcIndexedSessionRepositoryCustomizer`, a `JdbcOAuth2AuthorizedClientService` so ID tokens for RP-initiated logout exist on every replica, and a Spring-Session-backed `OidcSessionRegistry` for back-channel logout. 30-min idle with a 2-minute accessible warning; 8-h absolute lifetime enforced by a filter from a login-time attribute. Step-up re-authentication for admin actions is **not** in v1 (Spring Security has no portable OIDC `max_age` support); admin actions are audited instead. |
+| **Authorization (AC)** | Method security (`@PreAuthorize("isAuthenticated()")`) at the web edge; all case decisions in `CasePermissionService` + `CaseAccessGate` (§3.3); object-level checks on attachment download (no IDOR: attachment URL is case-number-scoped and checked against the case); separation-of-duties rules in §3.2; deny-by-default URL rules; sort/filter parameters parsed into allow-listed enums. |
+| **Audit (AU)** | Append-only `AUDIT_EVENT` written synchronously in the same transaction as the change (rollback test); DB grants forbid `UPDATE/DELETE` for the app user; old/new values come from a service-layer snapshot diff with a **redaction policy** (`description`/`subject` stored as SHA-256 + length, never text); `CASE_ID` on every case-rooted event so the History tab and restricted filtering work; restricted-case views and downloads logged; audit export for auditors. One `InstantSource` bean (UTC) is the application clock, NTP on pods; database time is used only by ShedLock. |
 | **Input validation (SI)** | Jakarta Bean Validation on all DTOs; allow-lists for enums; sizes everywhere; Markdown rendered then sanitized (OWASP sanitizer policy: formatting only, no links to javascript:, no images); file uploads: Tika-detected type must be in allow-list (PDF, DOCX/XLSX/PPTX, PNG/JPG, TXT/CSV, EML/MSG), max 25 MB, ClamAV scan before `CLEAN`, served with `Content-Disposition: attachment`, `X-Content-Type-Options: nosniff`, never inline except PNG/JPG re-encoded server-side. CSV export cells starting with `= + - @` are prefixed to defeat formula injection. |
-| **Injection** | Only JPA/JPQL/Criteria with bound parameters; a Semgrep rule fails the build on string-concatenated queries or `createNativeQuery` with non-constant SQL; Thymeleaf natural escaping, `th:utext` banned by a custom check. |
-| **Browser security** | Strict **CSP** (`default-src 'self'; script-src 'self' 'nonce-…'; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'`) — htmx configured for nonce-based inline attribute handling (no `hx-on` inline scripts); HSTS; `Referrer-Policy: same-origin`; cookies `Secure; HttpOnly; SameSite=Lax`; CSRF tokens on all state-changing requests including htmx (`hx-headers`); no CORS (same-origin only). |
+| **Injection** | Only JPA/JPQL/Criteria with bound parameters; a Semgrep rule fails the build on string-concatenated queries or `createNativeQuery` with non-constant SQL; Thymeleaf escapes by default; `th:utext` is banned by Semgrep, and the only unescaped path is the custom `tk:safe` attribute, which accepts solely the `SafeHtml` type the sanitizer produces. Admin-editable templates are not rendered by a template engine (v1 has none; v1.1 uses non-evaluating `{{key}}` substitution). |
+| **Browser security** | Exact **CSP**: `default-src 'self'; script-src 'self' 'nonce-{n}'; style-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'`. A per-request nonce filter sets the header and exposes `${cspNonce}` to Thymeleaf (`th:attr="nonce=${cspNonce}"` on every script tag) — Spring Security does not generate nonces. htmx: `allowEval=false`, `allowScriptTags=false`, `selfRequestsOnly=true`, `inlineScriptNonce` set via the `htmx-config` meta tag; `hx-on*` and `hx-vals="js:…"` banned by Semgrep. No Bootstrap JS/Popper (they set inline styles that a strict `style-src` blocks); interactive behaviour lives in `app.js`. HSTS; `Referrer-Policy: same-origin`; cookies `Secure; HttpOnly; SameSite=Lax`; CSRF tokens on all state-changing requests including htmx (`hx-headers`); on 401/403 for an `HX-Request`, the entry point/denied handler answer with `HX-Redirect` instead of swapping a login page into a fragment; no CORS (same-origin only). |
 | **Secrets (SC)** | None in the repo or image. DB credentials, SMTP credentials, OIDC client secret, Oracle wallet mounted from the platform's secret store. `gitleaks` in pre-commit and CI; GitHub secret scanning + push protection on the public repo. |
 | **Transport** | TLS everywhere: edge → app (route/ingress), app → Oracle (`tcps`), app → SMTP (STARTTLS required), app → clamd (network policy; mTLS optional). |
 | **Data at rest** | Oracle TDE / PG volume encryption (platform responsibility, documented); attachment hashes recorded; backups per organization policy. |
@@ -442,7 +476,7 @@ Mapped loosely to OWASP ASVS 4.0 L2 and NIST 800-53 families; a deploying organi
 | **Errors** | Generic error pages; `server.error.include-*` all off; exceptions mapped centrally. |
 | **Availability** | Rate limit on search and upload per user (Bucket4j); request size limits; DB pool sizing; scheduler lock. |
 | **Supply chain** | Enforcer bans known-bad artifacts; Dependabot weekly; **CycloneDX SBOM** published per release; images signed (cosign/Sigstore keyless from GitHub Actions); base image digest pinned; Actions pinned by commit SHA; SLSA build provenance attached to releases. |
-| **Separation of duties** | System Admin ≠ case access; approver ≠ requester; purge uses a separate DB user and only runs when no legal hold. |
+| **Separation of duties** | System Admin ≠ case access; approver ≠ requester; retention purge runs as a **separate Kubernetes `CronJob`** (same image, `purge` profile, `TRAILKEEP_PURGE` credential) so the web pods never hold a credential that can delete case data; purge skips anything under legal hold. |
 | **Privacy** | Data-minimizing emails; export redaction; retention with legal hold; a "where is PHI" data map in `security/DATA_MAP.md`. |
 
 A lightweight **threat model** (STRIDE over the §7.1 diagram) is a Phase 1 deliverable and is re-checked at each phase gate.
@@ -461,7 +495,7 @@ Section 508 (36 CFR Part 1194, 2017 Refresh) incorporates **WCAG 2.0 Level A and
 | Keyboard | Every action reachable and operable by keyboard; visible focus indicator with ≥ 3:1 contrast; no keyboard traps; logical tab order; single-key shortcuts (`/`, `N`) can be turned off or remapped in user preferences (WCAG 2.1.4). |
 | Forms | Every input has a programmatic label; required fields marked in text (not only `*` or color); errors tied to the field with `aria-describedby` and summarized in a focusable error region; `autocomplete` attributes where applicable. |
 | Dynamic updates (htmx) | After a partial swap, focus moves to the updated region's heading or a polite `aria-live` region announces the result ("Comment posted", "12 cases found"); loading indicators have text equivalents; no content auto-refreshes under the user's focus. |
-| Dialogs | Native `<dialog>` or Bootstrap modal with `aria-modal`, focus trapped, `Esc` closes, focus returns to the invoking control. |
+| Dialogs | Native `<dialog>` everywhere (one helper in `app.js`): `aria-modal`, focus trapped, `Esc` closes, focus returns to the invoking control. No Bootstrap modal. |
 | Color and status | Contrast ≥ 4.5:1 text, ≥ 3:1 UI components and focus rings; status chips are icon + text (+ visually hidden text where needed); SLA state never conveyed by color alone; respects `prefers-reduced-motion`, `prefers-color-scheme`, and Windows High Contrast / forced-colors mode. |
 | Tables | `<caption>`, `<th scope>`, sortable headers expose `aria-sort`, pagination and row-selection controls labelled; data tables are the accessible source for any chart. |
 | Zoom and reflow | Usable at 200 % zoom and 400 % reflow (320 px CSS width) without horizontal scrolling for primary content (WCAG 1.4.10); text spacing override safe (1.4.12). |
@@ -469,7 +503,7 @@ Section 508 (36 CFR Part 1194, 2017 Refresh) incorporates **WCAG 2.0 Level A and
 | Media and motion | No audio/video in v1; no animation beyond reduced-motion-safe transitions. |
 | Target size | Interactive targets ≥ 24 × 24 CSS px (2.2 AA 2.5.8). |
 | Language | `lang` on `html`; UI strings externalized (`messages.properties`) so translations keep accessibility semantics. |
-| Documents the system produces | Emails are multipart with a plain-text part and simple, linear HTML; CSV is plain data; **PDF exports are tagged (PDF/UA-1, ISO 14289)**: document title, language, heading structure, table structure, no untagged content, verified by veraPDF in CI. If a conformant PDF cannot be produced for a given report, the export is withheld rather than shipped non-conformant, and the accessible HTML/CSV remains available. |
+| Documents the system produces | Emails are multipart with a plain-text part and simple, linear HTML; CSV is plain data; reports are accessible HTML with a print stylesheet. **v1 ships no PDF.** In v1.1, PDF exports are tagged (PDF/UA-1, ISO 14289) by rendering the same accessible HTML through `openhtmltopdf`: document title, language, heading structure, table structure, no untagged content, verified by veraPDF in CI; if a conformant PDF cannot be produced for a report, the export is withheld rather than shipped non-conformant. |
 
 ### 10.2 Testing and evidence
 
@@ -487,7 +521,8 @@ Section 508 (36 CFR Part 1194, 2017 Refresh) incorporates **WCAG 2.0 Level A and
 - **Typeahead / combobox** (user picker) — implement the WAI-ARIA APG combobox pattern; test with all three screen readers before adopting any library.
 - **Drag-and-drop upload** — always paired with a standard file input button.
 - **htmx partials** — a single `swapped` event handler manages focus/announcements centrally so no page forgets.
-- **Tagged PDF** — build one `AccessiblePdfWriter` around PDFBox's structure-tree API, used by every report; veraPDF in CI catches regressions.
+- **Tagged PDF (v1.1)** — hand-tagging with PDFBox's structure-tree API is weeks of work and veraPDF is unforgiving, so reports are rendered once as accessible HTML and converted with `openhtmltopdf` in PDF/UA mode; veraPDF in CI gates every generated file.
+- **JavaScript is required** — stated plainly; the app is an intranet tool and the interactive components (dialog, combobox, tabs, toast, session warning) are ours, built to the WAI-ARIA APG patterns and tested with three screen readers. "Accessible by default" is not claimed; a vetted component list is.
 
 ---
 
@@ -497,8 +532,8 @@ Section 508 (36 CFR Part 1194, 2017 Refresh) incorporates **WCAG 2.0 Level A and
 **Apache License 2.0** for all original code and documentation. Rationale: explicit patent grant, universally accepted in enterprise and government procurement, compatible with the entire chosen stack, and permits private forks for organization-specific configuration without obligations beyond attribution. Files: `LICENSE` (verbatim text), `NOTICE` (copyright + third-party notice), SPDX header `// SPDX-License-Identifier: Apache-2.0` in every source file, enforced by `license-maven-plugin` `check` in the build.
 
 ### 11.2 Dependency license policy (enforced)
-- Allowed in the shipped artifact: Apache-2.0, MIT, BSD-2/3, 0BSD, ISC, EPL-2.0, MPL-2.0 (file-level copyleft, unmodified), CDDL/EPL-with-Classpath-Exception for Jakarta APIs, LGPL only as dynamically linked runtime libraries (currently: Logback; prefer alternatives when equal).
-- **Banned** in the shipped artifact: GPL (any), AGPL, SSPL, BUSL, Commons Clause, "source-available" and commercial licenses. `maven-enforcer` + `license-maven-plugin` fail the build on an unknown or banned license; the allow-list lives in `security/licenses-allowed.txt`.
+- Allowed in the shipped artifact: Apache-2.0, MIT, BSD-2/3, 0BSD, ISC, EPL-1.0/2.0, MPL-2.0 (file-level copyleft, unmodified), CDDL/EPL-with-Classpath-Exception for Jakarta APIs, Oracle FUTC for the JDBC driver, LGPL only as a dynamically linked runtime library with an explicit entry in `NOTICE` (v1: none; v1.1: `openhtmltopdf`). Logback is dual EPL-1.0/LGPL and is taken under EPL.
+- **Banned** in the shipped artifact: GPL (any), AGPL, SSPL, BUSL, Commons Clause, "source-available" and commercial licenses. `maven-enforcer` + `org.codehaus.mojo:license-maven-plugin` fail the build on an unknown or banned license; the allow-list lives in `security/licenses-allowed.txt`. `com.mycila:license-maven-plugin` checks the SPDX header on every source file.
 - Build/test-only tools (veraPDF, axe-core, Testcontainers images, ClamAV) are not shipped and are listed as such in `THIRD-PARTY.txt`.
 - The Oracle JDBC driver is fetched by Maven at build time under Oracle's Free Use Terms and is never committed or redistributed; the published container image documents this in its labels and `NOTICE`.
 
@@ -521,20 +556,20 @@ Section 508 (36 CFR Part 1194, 2017 Refresh) incorporates **WCAG 2.0 Level A and
 
 ## 12. Compliance scanning — the zero-findings strategy
 
-**Principle:** scanners are quality gates that *break the build* from the very first commit, not a report run before release. Findings are either fixed or formally suppressed with a written justification that a maintainer with the security role approves; the suppression file is itself reviewed in PRs and suppressions expire. "Zero findings" is then a property we maintain, not a milestone we chase. Because the repository is public, the evidence is public too.
+**Principle:** scanners are quality gates that *break the build* from the very first commit, not a report run before release. Because fork pull requests receive no secrets, required checks are split into **fork-safe** (compile, unit, PostgreSQL IT, CodeQL, Semgrep, SpotBugs/FindSecBugs, license check, axe, gitleaks) and **main / maintainer branches** (SonarCloud, Dependency-Check with an NVD key, Oracle IT, authenticated ZAP). Findings are either fixed or formally suppressed with a written justification that a maintainer with the security role approves; the suppression file is itself reviewed in PRs and suppressions expire. "Zero findings" is then a property we maintain, not a milestone we chase. Because the repository is public, the evidence is public too.
 
 ### 12.1 Toolchain (free for public repositories; a deploying organization's scanner-of-record runs the same artifacts)
 
 | Stage | Tool | Gate |
 |---|---|---|
-| Pre-commit | `gitleaks`, `spotless` (formatting), `checkstyle`, SPDX header check | Block commit |
+| Pre-commit (advisory — cannot be enforced on a public repo; CI is the gate) | `gitleaks`, `spotless` (formatting), `checkstyle`, SPDX header check | Block commit locally |
 | Compile | `-Xlint:all -Werror`, Error Prone | 0 warnings |
 | SAST | **CodeQL** (Java, security-extended queries), **SpotBugs + FindSecBugs**, **Semgrep** (Java + Spring + custom rules), **SonarCloud** with Security Hotspots review required | 0 High/Critical; 0 unreviewed hotspots; Sonar quality gate A on security/reliability; coverage ≥ 80 % |
 | SCA | **OWASP Dependency-Check** (NVD + OSS Index), `maven-enforcer` bans, **CycloneDX** SBOM, **Trivy** on the SBOM, Dependabot | 0 CVSS ≥ 7 unsuppressed; medium requires a dated justification; suppressions expire in 90 days |
-| License | `license-maven-plugin` against `security/licenses-allowed.txt` | 0 unknown/banned |
+| License | `org.codehaus.mojo:license-maven-plugin` against `security/licenses-allowed.txt`; `com.mycila:license-maven-plugin` header check | 0 unknown/banned; 0 missing headers |
 | Container | **Trivy** / Grype on the final image; Dockle for config (non-root, read-only FS) | 0 High/Critical |
 | IaC | `kube-linter` / Checkov on `deploy/` | 0 High |
-| Accessibility | **axe-core** (Playwright) on every page state; Nu HTML validator; **veraPDF** on generated PDFs | 0 WCAG A/AA violations; 0 PDF/UA errors |
+| Accessibility | **axe-core** (Playwright) on every page state; Nu HTML validator; **veraPDF** on generated PDFs (v1.1) | 0 WCAG A/AA violations; 0 PDF/UA errors — axe is one gate, not the proof (§10.2) |
 | DAST | **OWASP ZAP** — baseline on every PR against an ephemeral stack; **authenticated full scan + API scan** nightly and on release branches (Playwright logs in and hands the session to ZAP) | 0 Medium+ |
 | E2E security tests | Playwright suites that assert CSP headers, CSRF rejection, 403 on cross-team access, no restricted leak in search/export, upload rejection of disguised executables | Must pass |
 | Project hygiene | **OpenSSF Scorecard** | Score ≥ 8 by v1.0; no regression on PRs |
@@ -559,10 +594,10 @@ SBOM (CycloneDX JSON) · SAST/SCA/DAST reports (HTML + SARIF) · suppressions wi
 
 | Level | What | Tooling |
 |---|---|---|
-| Unit | Domain rules: SLA math, state transitions, permission matrix, redaction, CSV escaping, identifier-length check over migrations | JUnit 5, AssertJ |
-| Architecture | Module boundaries, no controller → repository, no `th:utext`, no raw SQL | ArchUnit, Semgrep |
+| Unit | Domain rules: SLA math, state transitions, permission matrix (CSV-driven, exhaustive), redaction, CSV escaping, migration lint (identifier length, reserved words, banned types) | JUnit 5, AssertJ — Surefire, `*Test` |
+| Architecture | Spring Modulith `ApplicationModules.verify()`; ArchUnit: repositories package-private, no entity in `web`, no `@Lob`, case-rooted repositories only inside `casefile.access`; Semgrep: `th:utext` (allow-listing `tk:safe`), `.disable()` on Spring Security, `hx-on*`, string-built queries. Every rule has a negative test. | Spring Modulith, ArchUnit, Semgrep |
 | Slice | Controllers with MockMvc (authz per role × action matrix auto-generated from §3.2), JPA repositories with Testcontainers PG | Spring Boot test slices |
-| Integration | Full app + PG (every build) and + Oracle Free (nightly/release): migrations, queries, scheduler, outbox, ClamAV stub, Keycloak | Testcontainers |
+| Integration | Full app + PG (every build) and + Oracle Free (nightly/release): migrations + two-vendor `validate`, queries, query-count assertions on the hottest pages, scheduler, outbox (two instances, no double send), ClamAV, Keycloak, two app instances sharing sessions | Testcontainers (`@ServiceConnection`) — Failsafe, `*IT` |
 | E2E | Golden paths: create → request update → request closure → approve; reject path; reopen; restricted-case invisibility across users; export redaction; upload quarantine | Playwright for Java |
 | Accessibility | axe-core on every page/state; keyboard-only scripted journeys; veraPDF on exports; manual AT passes per §10.2 | Playwright + axe-core, veraPDF, manual |
 | Security E2E | §12.1 row | Playwright + ZAP |
@@ -570,7 +605,7 @@ SBOM (CycloneDX JSON) · SAST/SCA/DAST reports (HTML + SARIF) · suppressions wi
 | Import | Dry-run harness: sample export → staging → reconcile counts/checksums → report | Importer module + fixtures |
 | Mutation (optional) | Domain packages only | PIT |
 
-Coverage gate 80 % line / 70 % branch overall, 90 % in `sla`, `closure`, `security`.
+Coverage gate 80 % line / 70 % branch overall, 90 % line in `sla`, `closure`, `security`, measured per package by JaCoCo. Conventions (naming, fixtures, page objects, PR size) are in `IMPLEMENTATION_PLAN.md` Part B.
 
 ---
 
@@ -606,7 +641,9 @@ Trailkeep ships a **generic importer**; the organization-specific mapping stays 
 
 - **Reference target**: OpenShift (RHEL) — one `Deployment` (2 replicas), `Route` with edge/re-encrypt TLS, `NetworkPolicy` allowing only IdP, Oracle, SMTP, clamd egress; ClamAV as a sidecar or a shared `Service`; secrets via platform store; `readOnlyRootFilesystem`, non-root UID, restricted SCC. Plain Kubernetes manifests and a Helm chart are provided; a WAR packaging profile exists for Tomcat if an organization requires it.
 - **Config**: 12-factor via env/ConfigMap; `prod` profile forbids `ddl-auto`, H2, the dev realm, and fails fast if any required secret is missing.
-- **Migrations**: Flyway run as a pre-deploy `Job` with the `TRAILKEEP_OWNER` credential; app starts with `validate` only.
+- **Migrations**: the migration tool runs as a pre-deploy `Job` with the `TRAILKEEP_OWNER` credential; the app starts with `validate` only.
+- **Retention purge**: a `CronJob` running the same image with the `purge` profile and the `TRAILKEEP_PURGE` credential; the web `Deployment` never carries that secret.
+- **Proxy headers**: `server.forward-headers-strategy=framework` with the Route as the trusted proxy, so audited client IPs are real and not the router's.
 - **Observability**: Prometheus metrics (cases by SLA state, outbox backlog, evaluator lag, scan queue), JSON logs to the platform stack, alert rules: evaluator not run in 30 min, outbox failures > 0 for 1 h, clamd down, DB pool exhaustion.
 - **Backups/DR**: database owned by the organization's DBAs per policy; attachments are in the DB, so one backup covers everything; restore drill in Phase 6.
 - **Runbook** (`docs/RUNBOOK.md`): deploy, rollback (previous image + forward-only Flyway with repeatable-safe scripts), rotate secrets, release a quarantined file, re-send outbox, re-run aging report.
@@ -619,18 +656,18 @@ Assumes a core team of **2 Java developers + 1 part-time UX/accessibility/QA + s
 
 | Phase | Weeks | Deliverables | Exit criteria |
 |---|---|---|---|
-| **0 — Discovery & decisions** | 1–2 | Answers to §18; confirmed Oracle version, IdP, SMTP relay, scanner-of-record and its policy, hosting; legacy export sample (held privately); threat model v0; ADRs for stack choices; public repo bootstrapped with LICENSE/NOTICE/CONTRIBUTING/SECURITY/CoC; this plan re-baselined | Sponsors sign scope table §1.2; environments requested |
-| **1 — Foundation (walking skeleton)** | 2 | CI with **all scanners, license check, axe and Scorecard green on an empty app**; Spring Boot skeleton; Flyway + Testcontainers PG & Oracle; SSO login with role mapping; audit framework; accessible UI shell (landmarks, skip link, focus management, CSP); Playwright + axe smoke; UBI container; deploy to DEV | Pipeline is the definition of done; login works against a real IdP in DEV; first ACR draft (shell only) |
-| **2 — Cases** | 3 | Create/edit/view case; numbering; comments; attachments with Tika + ClamAV + quarantine/release; owner/team; restricted-case policy; search + filters + saved views; cases list; History tab | E2E golden path 1; restricted-leak tests pass; p95 list < 500 ms on 50k seed; manual AT pass on all new screens |
-| **3 — Closure & email** | 2 | Request Update; Request Closure / Approve / Reject / Reopen; outbox + dispatcher + multipart templates; alerts list; dashboard tiles | E2E golden paths 2–4; emails visible in Mailpit; SoD rules tested; AT pass |
-| **4 — SLA & aging** | 2 | SLA policies admin; evaluator; At Risk/Overdue transitions + emails; aging report (UI + tagged PDF/CSV + scheduled); SLA compliance report; metrics | Evaluator idempotent across restarts; report matches a hand-computed fixture; veraPDF clean |
-| **5 — Admin, retention, importer, polish** | 2 | Case types, teams/users, email templates, retention + legal hold + purge job, System screen, generic importer + mapping file, exports, keyboard shortcuts + preferences, error states | axe 0 violations; all §4.8 states demonstrated; importer dry-run on synthetic extract |
-| **6 — Hardening, conformance, migration** | 2 | Authenticated ZAP full scan clean; CodeQL/Sonar/Dependency-Check clean; performance test; restore drill; **Trusted Tester conformance pass + ACR v1.0**; migration dry runs ×2 (deploying organization, privately); UAT; runbook; evidence pack; v1.0.0 release | 0 open findings anywhere; ACR has no "Does Not Support"; UAT sign-off; reconciliation 100 % |
+| **0 — Discovery & decisions** | 2 | Answers to §18; confirmed Oracle version, IdP, SMTP relay, scanner-of-record and its policy, hosting; legacy export sample (held privately); threat model v0; ADRs for stack choices; public repo bootstrapped with LICENSE/NOTICE/CONTRIBUTING/SECURITY/CoC; this plan re-baselined | Sponsors sign scope table §1.2; environments requested |
+| **1 — Foundation (walking skeleton)** | 3 | CI with **all scanners, license check, axe and Scorecard green on an empty app**; Spring Boot skeleton; Flyway + Testcontainers PG & Oracle; SSO login with role mapping; audit framework; accessible UI shell (landmarks, skip link, focus management, CSP); Playwright + axe smoke; UBI container; deploy to DEV | Pipeline is the definition of done; login works against a real IdP in DEV; first ACR draft (shell only) |
+| **2 — Cases** | 5 | Create/edit/view case; numbering; comments; attachments with Tika + ClamAV + quarantine/release; owner/team; restricted-case policy; search + filters + saved views; cases list; History tab | E2E golden path 1; restricted-leak tests pass; p95 list < 500 ms on 50k seed; manual AT pass on all new screens |
+| **3 — Closure & email** | 3 | Request Update; Request Closure / Approve / Reject / Reopen; outbox + dispatcher + multipart templates; alerts list; dashboard tiles | E2E golden paths 2–4; emails visible in Mailpit; SoD rules tested; AT pass |
+| **4 — SLA & aging** | 3 | SLA policies admin; chunked evaluator over `CASE_SLA`; At Risk/Overdue transitions + ledger + emails; aging report (accessible HTML + CSV, scheduled via `REPORT_RUN`); SLA compliance report; metrics | Evaluator idempotent across restarts and replicas; report matches a hand-computed fixture; axe clean |
+| **5 — Admin, retention, importer, polish** | 3 | Case types, teams/users, email templates, retention + legal hold + purge job, System screen, generic importer + mapping file, exports, keyboard shortcuts + preferences, error states | axe 0 violations; all §4.8 states demonstrated; importer dry-run on synthetic extract |
+| **6 — Hardening, conformance, migration** | 3 | Authenticated ZAP full scan clean; CodeQL/Sonar/Dependency-Check clean; performance test; restore drill; **Trusted Tester v5 conformance pass by a named, certified tester + ACR v1.0 with the manual test matrix**; migration dry runs ×2 (deploying organization, privately); UAT; runbook; evidence pack; v1.0.0 release | 0 open findings anywhere; ACR has no "Does Not Support" and every "Partially Supports" has a dated remediation ticket; UAT sign-off; reconciliation 100 % |
 | **7 — Go-live & hypercare** | 1 | Cut-over, legacy read-only, first automated aging report sent, two weeks of hypercare | First weekly report delivered; no Sev-1 |
 
-Total ≈ **15–16 weeks** to a 1.0 release and first production deployment. A reduced "pilot" (Phases 0–4, one team, manual import of open items only) is possible at ≈ 10 weeks.
+The per-phase table above is the **shape** of delivery; the **re-baselined durations** after the audit are in `IMPLEMENTATION_PLAN.md` Part F: ≈ **23 weeks** for two developers to a 1.0 release (≈ 16–17 with a third developer from Phase 2), with Phase 6 widened to 3 weeks for the Section 508 conformance pass. A reduced "pilot" (Phases 0–4, one team, open items imported by hand) is ≈ 16 weeks.
 
-**v1.1 candidates (post go-live, by demand):** optional checklist on cases; per-case subscribe; business-day SLA calendars; structured parties; Hibernate Search relevance ranking; chat/webhook notifications; bulk reassign for managers; REST API publication for reporting tools; additional UI languages.
+**Deferred to v1.1 (decided, not by demand):** PDF export via `openhtmltopdf` + veraPDF; vendor search adapters (`pg_trgm`, Oracle Text); SAML2 login; WAR packaging; email-template editor; step-up re-authentication for admin actions; importer mapping DSL beyond the fixed YAML. **v1.1 candidates by demand:** optional checklist on cases; per-case subscribe; business-day SLA calendars; structured parties; chat/webhook notifications; bulk reassign for managers; a public API; additional UI languages.
 
 ---
 
@@ -638,15 +675,16 @@ Total ≈ **15–16 weeks** to a 1.0 release and first production deployment. A 
 
 | Risk | Impact | Mitigation |
 |---|---|---|
-| Oracle version older than assumed (no `BOOLEAN`, 30-char limits) | Rework | §8 rules assume 19c; nightly Oracle Free tests catch divergence early; confirm version in Phase 0 |
+| Organization's Oracle version is not covered by Flyway Community, or differs from the only version we can test publicly (Oracle Free 23ai) | Day-one blocker / "worked in CI, failed in UAT" | Phase 0 confirms the version and runs the migration tool against it; Liquibase is the pre-approved fallback (ADR-003); the deploying organization runs `-Poracle-it` against its real version in Phase 1 and the result is recorded; boolean/dialect behaviour is pinned (§8.2) so it does not depend on the detected server |
 | IdP is SAML-only or group claims unavailable | Login/roles blocked | Spring Security SAML2 module ready; fallback role mapping by admin-maintained table |
 | Deploying organization's scanner has rules we didn't mirror | Late findings | Phase 0 obtains the policy; run it in Phase 1 on the skeleton |
 | "Simple" scope creeps back toward the blueprint | Schedule | §1.2 table is the contract; changes go through a one-line ADR and a re-estimate |
-| Tagged-PDF generation proves harder than expected | Export gap | HTML/CSV remain the primary accessible outputs; PDF export is withheld until veraPDF passes rather than shipped non-conformant |
+| Tagged-PDF generation (v1.1) proves harder than expected | Export gap | HTML/CSV are the v1 contract; v1.1 PDF is withheld until veraPDF passes rather than shipped non-conformant |
+| Two-developer estimate still slips | Schedule | Part F of the implementation plan is bottom-up per work package; the pilot cut (Phases 0–4) is the pre-agreed fallback scope |
 | Accessibility regressions from third-party UI components | Conformance | Components vetted before adoption; axe on every PR; AT pass per phase |
 | First aging report embarrasses people | Adoption | Brief managers before go-live; initial report sent to Compliance Admins only for one cycle |
 | ClamAV not permitted / no egress for signature updates | Uploads blocked | Offline signature mirror; or route to an existing AV gateway via ICAP (adapter interface isolates this) |
-| Approved-software list lags Spring Boot 4 | Downgrade | Code written against APIs common to 3.5 and 4.0; `spring-boot.version` is a single property |
+| Approved-software list lags the current Spring Boot 4.x | Deployment blocked | No downgrade path exists (3.x is source-incompatible and out of OSS support); the organization runs the published artifact under a documented exception, and the SBOM + scan evidence pack is what that exception is granted on |
 | PHI in titles/emails despite policy | Breach | Intake hint + a lightweight regex heuristic (SSN/MRN/DOB patterns) that warns before save; emails never carry free text |
 | Public-repo leakage of organization specifics | Exposure | §11.5 content rules; gitleaks + push protection; PR template scrub item; synthetic seed data only |
 | Name conflict discovered later | Rename cost | UI branding is a property; package/repo rename is a mechanical refactor; clearance search recorded in `NOTICE` |
@@ -672,115 +710,200 @@ Total ≈ **15–16 weeks** to a 1.0 release and first production deployment. A 
 
 ## Appendix A — Initial migration sketch (`V1__core.sql`, portable subset)
 
+Placeholders (resolved per vendor by the migration tool):
+
+| Placeholder | Oracle | PostgreSQL |
+|---|---|---|
+| `${id}` | `NUMBER(19,0)` | `BIGINT` |
+| `${int}` | `NUMBER(10,0)` | `INTEGER` |
+| `${bool}` / `${true}` / `${false}` | `NUMBER(1,0)` / `1` / `0` | `BOOLEAN` / `TRUE` / `FALSE` |
+| `${clob}` | `CLOB` | `TEXT` |
+| `${bytes}` | `BLOB` | `BYTEA` |
+| `${tstz}` | `TIMESTAMP WITH TIME ZONE` | `TIMESTAMP WITH TIME ZONE` |
+
+Oracle sessions run the migrations with `ALTER SESSION SET NLS_LENGTH_SEMANTICS=CHAR` (tool `initSql`), so `VARCHAR(n)` means *n* characters on both vendors. No column is wider than `VARCHAR(2000)`. Identifiers ≤ 30 characters, no reserved words on either vendor, no `BIGINT`/`BOOLEAN` outside placeholders — all checked by the migration-lint unit test.
+
 ```sql
 CREATE TABLE APP_USER (
-  ID            BIGINT         NOT NULL,
+  ID            ${id}          NOT NULL,
   EXTERNAL_ID   VARCHAR(255)   NOT NULL,
   DISPLAY_NAME  VARCHAR(200)   NOT NULL,
   EMAIL         VARCHAR(320)   NOT NULL,
   DISABLED      ${bool}        DEFAULT ${false} NOT NULL,
-  LAST_LOGIN_AT TIMESTAMP WITH TIME ZONE,
-  CREATED_AT    TIMESTAMP WITH TIME ZONE NOT NULL,
+  LAST_LOGIN_AT ${tstz},
+  CREATED_AT    ${tstz}        NOT NULL,
   CONSTRAINT PK_APP_USER PRIMARY KEY (ID),
   CONSTRAINT UK_APP_USER_EXT UNIQUE (EXTERNAL_ID)
 );
 
 CREATE TABLE TEAM (
-  ID    BIGINT       NOT NULL,
-  NAME  VARCHAR(120) NOT NULL,
-  ACTIVE ${bool}     DEFAULT ${true} NOT NULL,
+  ID     ${id}        NOT NULL,
+  NAME   VARCHAR(120) NOT NULL,
+  ACTIVE ${bool}      DEFAULT ${true} NOT NULL,
   CONSTRAINT PK_TEAM PRIMARY KEY (ID),
   CONSTRAINT UK_TEAM_NAME UNIQUE (NAME)
 );
 
+CREATE TABLE APP_USER_TEAM (
+  USER_ID      ${id}       NOT NULL,
+  TEAM_ID      ${id}       NOT NULL,
+  ROLE_IN_TEAM VARCHAR(10) NOT NULL,
+  CONSTRAINT PK_APP_USER_TEAM PRIMARY KEY (USER_ID, TEAM_ID),
+  CONSTRAINT FK_AUT_USER FOREIGN KEY (USER_ID) REFERENCES APP_USER (ID),
+  CONSTRAINT FK_AUT_TEAM FOREIGN KEY (TEAM_ID) REFERENCES TEAM (ID),
+  CONSTRAINT CK_AUT_ROLE CHECK (ROLE_IN_TEAM IN ('READER','ANALYST','MANAGER'))
+);
+
 CREATE TABLE SLA_POLICY (
-  ID                     BIGINT       NOT NULL,
-  NAME                   VARCHAR(120) NOT NULL,
-  TARGET_DAYS            INTEGER      NOT NULL,
-  AT_RISK_PCT            INTEGER      DEFAULT 80 NOT NULL,
-  OVERDUE_REMINDER_DAYS  INTEGER      DEFAULT 7 NOT NULL,
-  ESCALATE_TO            VARCHAR(30)  DEFAULT 'OWNER_AND_MANAGER' NOT NULL,
-  CONSTRAINT PK_SLA_POLICY PRIMARY KEY (ID)
+  ID                    ${id}        NOT NULL,
+  NAME                  VARCHAR(120) NOT NULL,
+  SLA_ANCHOR            VARCHAR(14)  DEFAULT 'IDENTIFIED_ON' NOT NULL,
+  TARGET_DAYS           ${int}       NOT NULL,
+  AT_RISK_PCT           ${int}       DEFAULT 80 NOT NULL,
+  OVERDUE_REMINDER_DAYS ${int}       DEFAULT 7 NOT NULL,
+  ESCALATE_TO           VARCHAR(18)  DEFAULT 'OWNER_AND_MANAGER' NOT NULL,
+  CONSTRAINT PK_SLA_POLICY PRIMARY KEY (ID),
+  CONSTRAINT CK_SLA_ANCHOR CHECK (SLA_ANCHOR IN ('IDENTIFIED_ON','OPENED_AT')),
+  CONSTRAINT CK_SLA_ESCALATE CHECK (ESCALATE_TO IN ('OWNER','OWNER_AND_MANAGER'))
 );
 
 CREATE TABLE CASE_TYPE (
-  ID             BIGINT       NOT NULL,
-  NAME           VARCHAR(120) NOT NULL,
-  SLA_POLICY_ID  BIGINT       NOT NULL,
-  RETENTION_YEARS INTEGER     DEFAULT 7 NOT NULL,
-  ACTIVE         ${bool}      DEFAULT ${true} NOT NULL,
+  ID              ${id}        NOT NULL,
+  NAME            VARCHAR(120) NOT NULL,
+  SLA_POLICY_ID   ${id}        NOT NULL,
+  RETENTION_YEARS ${int}       DEFAULT 7 NOT NULL,
+  ACTIVE          ${bool}      DEFAULT ${true} NOT NULL,
   CONSTRAINT PK_CASE_TYPE PRIMARY KEY (ID),
+  CONSTRAINT UK_CASE_TYPE_NAME UNIQUE (NAME),
   CONSTRAINT FK_CASE_TYPE_SLA FOREIGN KEY (SLA_POLICY_ID) REFERENCES SLA_POLICY (ID)
 );
 
+CREATE TABLE CASE_TYPE_OUTCOME (
+  CASE_TYPE_ID ${id}       NOT NULL,
+  OUTCOME      VARCHAR(40) NOT NULL,
+  SORT_ORDER   ${int}      NOT NULL,
+  CONSTRAINT PK_CASE_TYPE_OUTCOME PRIMARY KEY (CASE_TYPE_ID, OUTCOME),
+  CONSTRAINT FK_CTO_TYPE FOREIGN KEY (CASE_TYPE_ID) REFERENCES CASE_TYPE (ID)
+);
+
 CREATE TABLE CASE_RECORD (
-  ID                  BIGINT        NOT NULL,
-  CASE_NUMBER         VARCHAR(24)   NOT NULL,
-  TITLE               VARCHAR(200)  NOT NULL,
-  DESCRIPTION         ${clob}       NOT NULL,
-  SUBJECT_TEXT        VARCHAR(1000),
-  CASE_TYPE_ID        BIGINT        NOT NULL,
-  TEAM_ID             BIGINT        NOT NULL,
-  OWNER_ID            BIGINT        NOT NULL,
-  PRIORITY            VARCHAR(10)   DEFAULT 'NORMAL' NOT NULL,
-  STATUS              VARCHAR(20)   DEFAULT 'OPEN' NOT NULL,
-  SENSITIVITY         VARCHAR(12)   DEFAULT 'STANDARD' NOT NULL,
-  IDENTIFIED_ON       DATE          NOT NULL,
-  OPENED_AT           TIMESTAMP WITH TIME ZONE NOT NULL,
-  SLA_DUE_AT          TIMESTAMP WITH TIME ZONE NOT NULL,
-  AT_RISK_AT          TIMESTAMP WITH TIME ZONE NOT NULL,
-  SLA_STATE           VARCHAR(16)   DEFAULT 'ON_TRACK' NOT NULL,
-  CLOSED_AT           TIMESTAMP WITH TIME ZONE,
-  OUTCOME             VARCHAR(40),
-  RESOLUTION_SUMMARY  ${clob},
-  FOLLOW_UP_ACTIONS   ${clob},
-  LEGAL_HOLD          ${bool}       DEFAULT ${false} NOT NULL,
-  PURGE_AFTER         TIMESTAMP WITH TIME ZONE,
-  LEGACY_REF          VARCHAR(100),
-  SEARCH_TEXT         VARCHAR(4000),
-  VERSION             INTEGER       DEFAULT 0 NOT NULL,
-  CREATED_AT          TIMESTAMP WITH TIME ZONE NOT NULL,
-  CREATED_BY          BIGINT        NOT NULL,
-  UPDATED_AT          TIMESTAMP WITH TIME ZONE NOT NULL,
-  UPDATED_BY          BIGINT        NOT NULL,
+  ID                ${id}         NOT NULL,
+  CASE_NUMBER       VARCHAR(24)   NOT NULL,
+  TITLE             VARCHAR(200)  NOT NULL,
+  DESCRIPTION       ${clob}       NOT NULL,
+  SUBJECT_TEXT      VARCHAR(1000),
+  CASE_TYPE_ID      ${id}         NOT NULL,
+  TEAM_ID           ${id}         NOT NULL,
+  OWNER_ID          ${id}         NOT NULL,
+  PRIORITY          VARCHAR(10)   DEFAULT 'NORMAL' NOT NULL,
+  STATUS            VARCHAR(16)   DEFAULT 'OPEN' NOT NULL,
+  SENSITIVITY       VARCHAR(12)   DEFAULT 'STANDARD' NOT NULL,
+  IDENTIFIED_ON     DATE          NOT NULL,
+  OPENED_AT         ${tstz}       NOT NULL,
+  CLOSED_AT         ${tstz},
+  LAST_REJECTED_AT  ${tstz},
+  LEGAL_HOLD        ${bool}       DEFAULT ${false} NOT NULL,
+  LEGAL_HOLD_BY     ${id},
+  LEGAL_HOLD_AT     ${tstz},
+  LEGAL_HOLD_REASON VARCHAR(500),
+  LEGACY_REF        VARCHAR(100),
+  VERSION           ${int}        DEFAULT 0 NOT NULL,
+  CREATED_AT        ${tstz}       NOT NULL,
+  CREATED_BY        ${id}         NOT NULL,
+  UPDATED_AT        ${tstz}       NOT NULL,
+  UPDATED_BY        ${id}         NOT NULL,
   CONSTRAINT PK_CASE_RECORD PRIMARY KEY (ID),
   CONSTRAINT UK_CASE_NUMBER UNIQUE (CASE_NUMBER),
   CONSTRAINT FK_CASE_TYPE FOREIGN KEY (CASE_TYPE_ID) REFERENCES CASE_TYPE (ID),
   CONSTRAINT FK_CASE_TEAM FOREIGN KEY (TEAM_ID) REFERENCES TEAM (ID),
   CONSTRAINT FK_CASE_OWNER FOREIGN KEY (OWNER_ID) REFERENCES APP_USER (ID),
-  CONSTRAINT CK_CASE_STATUS CHECK (STATUS IN ('OPEN','PENDING_CLOSURE','CLOSED')),
+  CONSTRAINT CK_CASE_PRIORITY CHECK (PRIORITY IN ('NORMAL','HIGH')),
+  CONSTRAINT CK_CASE_STATUS CHECK (STATUS IN ('OPEN','PENDING_CLOSURE','CLOSED','ARCHIVED')),
   CONSTRAINT CK_CASE_SENS CHECK (SENSITIVITY IN ('STANDARD','RESTRICTED'))
 );
-CREATE INDEX IX_CASE_TEAM_STATUS ON CASE_RECORD (TEAM_ID, STATUS, SLA_STATE);
+CREATE INDEX IX_CASE_TEAM_STATUS  ON CASE_RECORD (TEAM_ID, STATUS);
 CREATE INDEX IX_CASE_OWNER_STATUS ON CASE_RECORD (OWNER_ID, STATUS);
-CREATE INDEX IX_CASE_DUE ON CASE_RECORD (STATUS, SLA_DUE_AT);
+CREATE INDEX IX_CASE_LEGACY_REF   ON CASE_RECORD (LEGACY_REF);
+
+-- Job-owned side table: no VERSION, so the evaluator never conflicts with an editor.
+CREATE TABLE CASE_SLA (
+  CASE_ID           ${id}       NOT NULL,
+  SLA_STATE         VARCHAR(16) DEFAULT 'ON_TRACK' NOT NULL,
+  SLA_DUE_AT        ${tstz}     NOT NULL,
+  AT_RISK_AT        ${tstz}     NOT NULL,
+  SLA_CYCLE         ${int}      DEFAULT 1 NOT NULL,
+  LAST_EVALUATED_AT ${tstz},
+  CONSTRAINT PK_CASE_SLA PRIMARY KEY (CASE_ID),
+  CONSTRAINT FK_CASE_SLA_CASE FOREIGN KEY (CASE_ID) REFERENCES CASE_RECORD (ID),
+  CONSTRAINT CK_CASE_SLA_STATE CHECK (SLA_STATE IN
+    ('ON_TRACK','AT_RISK','OVERDUE','MET','BREACHED','NOT_APPLICABLE'))
+);
+CREATE INDEX IX_CASE_SLA_DUE ON CASE_SLA (SLA_STATE, SLA_DUE_AT);
+
+-- Search text, maintained in the writer's transaction; subject (possible PHI) is never copied here.
+CREATE TABLE CASE_SEARCH (
+  CASE_ID     ${id}   NOT NULL,
+  SEARCH_TEXT ${clob} NOT NULL,
+  UPDATED_AT  ${tstz} NOT NULL,
+  CONSTRAINT PK_CASE_SEARCH PRIMARY KEY (CASE_ID),
+  CONSTRAINT FK_CASE_SEARCH_CASE FOREIGN KEY (CASE_ID) REFERENCES CASE_RECORD (ID)
+);
+
+CREATE TABLE CLOSURE_REQUEST (
+  ID                 ${id}        NOT NULL,
+  CASE_ID            ${id}        NOT NULL,
+  REQUESTED_BY       ${id}        NOT NULL,
+  APPROVER_ID        ${id}        NOT NULL,
+  REQUESTED_AT       ${tstz}      NOT NULL,
+  OUTCOME            VARCHAR(40)  NOT NULL,
+  RESOLUTION_SUMMARY ${clob}      NOT NULL,
+  FOLLOW_UP_ACTIONS  ${clob},
+  DECISION           VARCHAR(10)  DEFAULT 'PENDING' NOT NULL,
+  DECIDED_BY         ${id},
+  DECIDED_AT         ${tstz},
+  REASON             VARCHAR(2000),
+  VERSION            ${int}       DEFAULT 0 NOT NULL,
+  CONSTRAINT PK_CLOSURE_REQUEST PRIMARY KEY (ID),
+  CONSTRAINT FK_CLOSURE_CASE FOREIGN KEY (CASE_ID) REFERENCES CASE_RECORD (ID),
+  CONSTRAINT FK_CLOSURE_APPROVER FOREIGN KEY (APPROVER_ID) REFERENCES APP_USER (ID),
+  CONSTRAINT CK_CLOSURE_DECISION CHECK (DECISION IN ('PENDING','APPROVED','REJECTED')),
+  CONSTRAINT CK_CLOSURE_SOD CHECK (REQUESTED_BY <> APPROVER_ID)
+);
+CREATE INDEX IX_CLOSURE_APPROVER ON CLOSURE_REQUEST (APPROVER_ID, DECISION);
+CREATE INDEX IX_CLOSURE_CASE     ON CLOSURE_REQUEST (CASE_ID, REQUESTED_AT);
 
 CREATE TABLE AUDIT_EVENT (
-  ID                  BIGINT        NOT NULL,
-  AT_TS               TIMESTAMP WITH TIME ZONE NOT NULL,
-  ACTOR_ID            BIGINT,
+  ID                  ${id}        NOT NULL,
+  AT_TS               ${tstz}      NOT NULL,
+  ACTOR_ID            ${id},
   ACTOR_NAME_SNAPSHOT VARCHAR(200),
-  ORIGIN              VARCHAR(12)   NOT NULL,
-  ENTITY_TYPE         VARCHAR(40)   NOT NULL,
-  ENTITY_ID           BIGINT        NOT NULL,
-  ACTION              VARCHAR(40)   NOT NULL,
+  ORIGIN              VARCHAR(12)  NOT NULL,
+  CASE_ID             ${id},
+  ENTITY_TYPE         VARCHAR(40)  NOT NULL,
+  ENTITY_ID           ${id},
+  ACTION              VARCHAR(40)  NOT NULL,
   OLD_VALUES_JSON     ${clob},
   NEW_VALUES_JSON     ${clob},
   REQUEST_ID          VARCHAR(64),
   CLIENT_IP           VARCHAR(45),
-  CONSTRAINT PK_AUDIT_EVENT PRIMARY KEY (ID)
+  CONSTRAINT PK_AUDIT_EVENT PRIMARY KEY (ID),
+  CONSTRAINT CK_AUDIT_ORIGIN CHECK (ORIGIN IN ('UI','SCHEDULER','IMPORT','SYSTEM'))
 );
+CREATE INDEX IX_AUDIT_CASE   ON AUDIT_EVENT (CASE_ID, AT_TS);
 CREATE INDEX IX_AUDIT_ENTITY ON AUDIT_EVENT (ENTITY_TYPE, ENTITY_ID, AT_TS);
 
-CREATE SEQUENCE SEQ_APP_USER     START WITH 1 INCREMENT BY 50;
-CREATE SEQUENCE SEQ_TEAM         START WITH 1 INCREMENT BY 50;
-CREATE SEQUENCE SEQ_SLA_POLICY   START WITH 1 INCREMENT BY 50;
-CREATE SEQUENCE SEQ_CASE_TYPE    START WITH 1 INCREMENT BY 50;
-CREATE SEQUENCE SEQ_CASE_RECORD  START WITH 1 INCREMENT BY 50;
-CREATE SEQUENCE SEQ_AUDIT_EVENT  START WITH 1 INCREMENT BY 50;
--- Flyway placeholders: oracle  → ${bool}=NUMBER(1) ${true}=1 ${false}=0 ${clob}=CLOB ${bytes}=BLOB
---                     postgres → ${bool}=BOOLEAN   ${true}=TRUE ${false}=FALSE ${clob}=TEXT ${bytes}=BYTEA
+-- Entity ids: pooled sequences (allocationSize 50). Case numbers: one plain sequence, gaps allowed.
+CREATE SEQUENCE SEQ_APP_USER        START WITH 1 INCREMENT BY 50;
+CREATE SEQUENCE SEQ_TEAM            START WITH 1 INCREMENT BY 50;
+CREATE SEQUENCE SEQ_SLA_POLICY      START WITH 1 INCREMENT BY 50;
+CREATE SEQUENCE SEQ_CASE_TYPE       START WITH 1 INCREMENT BY 50;
+CREATE SEQUENCE SEQ_CASE_RECORD     START WITH 1 INCREMENT BY 50;
+CREATE SEQUENCE SEQ_CLOSURE_REQUEST START WITH 1 INCREMENT BY 50;
+CREATE SEQUENCE SEQ_AUDIT_EVENT     START WITH 1 INCREMENT BY 50;
+CREATE SEQUENCE SEQ_CASE_NUMBER     START WITH 1 INCREMENT BY 1;
 ```
+
+Later migrations add `CASE_COMMENT`, `CASE_COMMENT_PIN`, `CASE_ATTACHMENT`, `CASE_ATTACHMENT_CONTENT`, `UPDATE_REQUEST`, `NOTIFICATION_OUTBOX`, `ALERT_LEDGER`, `USER_ALERT`, `REPORT_SCHEDULE`, `REPORT_RUN`, `SAVED_VIEW`, the Spring Session / authorized-client / ShedLock tables (vendor folders), and `R__grants.sql`.
 
 ## Appendix B — CI pipeline sketch (GitHub Actions, all stages free for public repositories)
 
