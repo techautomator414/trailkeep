@@ -1,0 +1,322 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Charlie Genova and contributors
+#
+# Gates that need secrets or more time than a fork PR gets (IMPLEMENTATION_PLAN Part G, "main" column):
+# SonarCloud, OWASP Dependency-Check, CycloneDX SBOM + Trivy, container build + Trivy + Dockle + kube-linter, and the
+# Oracle integration matrix. ci.yml (compile, tests, gitleaks, Semgrep) also runs on every push to main.
+# nightly.yml and release.yml call this workflow, so the three columns cannot drift apart.
+#
+# Secret-gated jobs succeed with a notice when their secret is absent (forks, or before the maintainer adds it).
+name: main
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+  workflow_call:
+    secrets:
+      SONAR_TOKEN:
+        required: false
+      NVD_API_KEY:
+        required: false
+
+permissions: {}
+
+concurrency:
+  group: main-gates-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'push' }}
+
+env:
+  # SonarCloud project created for this public repository (see the PR 12 "Maintainer setup").
+  SONAR_ORGANIZATION: techautomator414
+  SONAR_PROJECT_KEY: techautomator414_trailkeep
+  SONAR_MAVEN_PLUGIN: org.sonarsource.scanner.maven:sonar-maven-plugin:5.8.0.7211
+  DEPENDENCY_CHECK_PLUGIN: org.owasp:dependency-check-maven:12.2.2
+  CYCLONEDX_PLUGIN: org.cyclonedx:cyclonedx-maven-plugin:2.9.3
+
+jobs:
+  sonarcloud:
+    name: sonarcloud
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - name: Check for SONAR_TOKEN
+        id: secret
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: |
+          if [ -n "${SONAR_TOKEN}" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=SonarCloud skipped::Secret SONAR_TOKEN is not configured for this repository; the quality gate did not run."
+          fi
+
+      - name: Check out (full history for blame data)
+        if: steps.secret.outputs.present == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Temurin 21
+        if: steps.secret.outputs.present == 'true'
+        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      - name: Verify and analyze (waits for the quality gate)
+        if: steps.secret.outputs.present == 'true'
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: >-
+          ./mvnw -B -ntp verify "${SONAR_MAVEN_PLUGIN}:sonar"
+          -Dsonar.host.url=https://sonarcloud.io
+          -Dsonar.organization="${SONAR_ORGANIZATION}"
+          -Dsonar.projectKey="${SONAR_PROJECT_KEY}"
+          -Dsonar.qualitygate.wait=true
+
+  dependency-check:
+    name: dependency-check
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    steps:
+      - name: Check for NVD_API_KEY
+        id: secret
+        env:
+          NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
+        run: |
+          if [ -n "${NVD_API_KEY}" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=Dependency-Check skipped::Secret NVD_API_KEY is not configured for this repository; the NVD scan did not run."
+          fi
+
+      - name: Check out
+        if: steps.secret.outputs.present == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Temurin 21
+        if: steps.secret.outputs.present == 'true'
+        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      - name: Restore the NVD database
+        if: steps.secret.outputs.present == 'true'
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.m2/repository/org/owasp/dependency-check-data
+          key: nvd-${{ runner.os }}-${{ github.run_id }}
+          restore-keys: nvd-${{ runner.os }}-
+
+      - name: Scan dependencies (fails on CVSS >= 7)
+        if: steps.secret.outputs.present == 'true'
+        env:
+          NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
+        # OSS Index now requires an account; it is off until a maintainer adds credentials (PR 12 deviation).
+        run: >-
+          ./mvnw -B -ntp "${DEPENDENCY_CHECK_PLUGIN}:check"
+          -DnvdApiKey="${NVD_API_KEY}"
+          -DfailBuildOnCVSS=7
+          -DossindexAnalyzerEnabled=false
+          -Dformat=ALL
+
+      - name: Upload the report
+        if: always() && steps.secret.outputs.present == 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: dependency-check-report
+          path: target/dependency-check-report.*
+          if-no-files-found: ignore
+          retention-days: 30
+
+  sbom:
+    name: sbom (CycloneDX)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Temurin 21
+        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      - name: Generate target/bom.json
+        run: |
+          set -euo pipefail
+          # Use the build's own plugin (version and configuration from pom.xml) once it is declared there;
+          # otherwise invoke it by coordinates.
+          if grep -q '<artifactId>cyclonedx-maven-plugin</artifactId>' pom.xml; then
+            goal="org.cyclonedx:cyclonedx-maven-plugin:makeAggregateBom"
+          else
+            goal="${CYCLONEDX_PLUGIN}:makeAggregateBom"
+          fi
+          ./mvnw -B -ntp "$goal" -DprojectType=application -DoutputFormat=json -DoutputName=bom
+          test -s target/bom.json
+
+      - name: Upload the SBOM
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: sbom
+          path: target/bom.json
+          if-no-files-found: error
+          retention-days: 30
+
+  trivy-sbom:
+    name: trivy (SBOM)
+    needs: sbom
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Download the SBOM
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: sbom
+          path: sbom
+
+      - name: Install scanners
+        uses: ./.github/actions/setup-scanners
+
+      - name: Scan the SBOM (fails on HIGH or CRITICAL)
+        run: |
+          set -euo pipefail
+          mkdir -p reports
+          trivy sbom --format json --output reports/trivy-sbom.json sbom/bom.json
+          trivy sbom --format sarif --output reports/trivy-sbom.sarif sbom/bom.json
+          trivy sbom --format table --severity HIGH,CRITICAL --exit-code 1 sbom/bom.json
+
+      - name: Upload the report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: trivy-sbom-report
+          path: reports
+          if-no-files-found: ignore
+          retention-days: 30
+
+  image:
+    name: image (build, Trivy, Dockle, kube-linter)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    env:
+      IMAGE: localhost/trailkeep:ci
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install scanners
+        uses: ./.github/actions/setup-scanners
+
+      - name: Lint Kubernetes manifests
+        run: kube-linter lint deploy/
+
+      - name: Build the image from digest-pinned UBI 9 bases
+        run: .github/scripts/build-image.sh "${IMAGE}" "0.0.0-main+${GITHUB_SHA::12}"
+
+      - name: Scan the image (fails on HIGH or CRITICAL)
+        run: |
+          set -euo pipefail
+          mkdir -p reports
+          cp target/image/base-images.txt reports/
+          trivy image --format json --output reports/trivy-image.json "${IMAGE}"
+          trivy image --format sarif --output reports/trivy-image.sarif "${IMAGE}"
+          trivy image --format table --severity HIGH,CRITICAL --exit-code 1 "${IMAGE}"
+
+      - name: Check image configuration with Dockle
+        run: |
+          set -euo pipefail
+          dockle --format json --output reports/dockle.json "${IMAGE}" || true
+          dockle --exit-code 1 --exit-level warn "${IMAGE}"
+
+      - name: Upload the reports
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: image-scan-reports
+          path: reports
+          if-no-files-found: ignore
+          retention-days: 30
+
+  oracle-it:
+    name: oracle-it (${{ matrix.image }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        image:
+          - gvenzl/oracle-xe:21-slim
+          - gvenzl/oracle-free:23-slim
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Check for the oracle-it Maven profile
+        id: profile
+        run: |
+          if grep -q '<id>oracle-it</id>' pom.xml; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=Oracle IT skipped::pom.xml has no oracle-it profile yet (it arrives with WP-03a, PR 5)."
+          fi
+
+      - name: Set up Temurin 21
+        if: steps.profile.outputs.present == 'true'
+        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      - name: Verify against Oracle
+        if: steps.profile.outputs.present == 'true'
+        env:
+          ORACLE_IMAGE: ${{ matrix.image }}
+        run: ./mvnw -B -ntp verify -Poracle-it -Dtrailkeep.oracle.image="${ORACLE_IMAGE}"
+
+      - name: Upload test reports
+        if: always() && steps.profile.outputs.present == 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: oracle-it-reports-${{ strategy.job-index }}
+          path: |
+            target/surefire-reports
+            target/failsafe-reports
+          if-no-files-found: ignore
+          retention-days: 30

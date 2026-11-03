@@ -1,0 +1,16 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Charlie Genova and contributors
+# Only the application port. The management port (8081) is reached by the kubelet and by Prometheus pod-to-pod.
+apiVersion: v1
+kind: Service
+metadata:
+  name: trailkeep
+spec:
+  selector:
+    app.kubernetes.io/name: trailkeep
+    app.kubernetes.io/component: web
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+      protocol: TCP

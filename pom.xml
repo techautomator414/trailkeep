@@ -56,6 +56,9 @@
     <!-- Spring Modulith and ArchUnit (architecture verification). -->
     <spring-modulith.version>2.1.2</spring-modulith.version>
     <archunit.version>1.4.2</archunit.version>
+
+    <!-- Not managed by Spring Boot. 9.x is the line built on Jackson 3, which Boot 4 uses. -->
+    <logstash-logback-encoder.version>9.0</logstash-logback-encoder.version>
   </properties>
 
   <dependencyManagement>
@@ -86,6 +89,17 @@
     <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-validation</artifactId>
+    </dependency>
+    <dependency>
+      <!-- Prometheus scrape endpoint on the management port (BUILD_PLAN §16). Apache-2.0. -->
+      <groupId>io.micrometer</groupId>
+      <artifactId>micrometer-registry-prometheus</artifactId>
+    </dependency>
+    <dependency>
+      <!-- JSON log lines in prod/purge/importer (Part B "Logging"). Apache-2.0. -->
+      <groupId>net.logstash.logback</groupId>
+      <artifactId>logstash-logback-encoder</artifactId>
+      <version>${logstash-logback-encoder.version}</version>
     </dependency>
     <dependency>
       <groupId>org.jspecify</groupId>

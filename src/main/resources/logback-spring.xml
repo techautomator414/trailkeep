@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+
+  SPDX-License-Identifier: Apache-2.0
+  Copyright 2026 Charlie Genova and contributors
+
+-->
+<!--
+  JSON lines in prod, purge and importer (shipped to the platform log stack); readable text everywhere else.
+  The encoder escapes control characters, so log injection needs no separate rule (BUILD_PLAN §9 "Logging").
+  Only the MDC keys in io.trailkeep.shared.observability.MdcKeys are emitted. No JNDI lookups are used.
+-->
+<configuration>
+  <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
+
+  <springProfile name="prod | purge | importer">
+    <appender name="JSON" class="ch.qos.logback.core.ConsoleAppender">
+      <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+        <includeMdcKeyName>requestId</includeMdcKeyName>
+        <includeMdcKeyName>userId</includeMdcKeyName>
+        <includeMdcKeyName>caseNumber</includeMdcKeyName>
+        <includeMdcKeyName>module</includeMdcKeyName>
+        <includeContext>false</includeContext>
+        <fieldNames>
+          <version>[ignore]</version>
+          <levelValue>[ignore]</levelValue>
+        </fieldNames>
+      </encoder>
+    </appender>
+    <root level="INFO">
+      <appender-ref ref="JSON"/>
+    </root>
+  </springProfile>
+
+  <springProfile name="!(prod | purge | importer)">
+    <include resource="org/springframework/boot/logging/logback/console-appender.xml"/>
+    <root level="INFO">
+      <appender-ref ref="CONSOLE"/>
+    </root>
+  </springProfile>
+</configuration>

@@ -1,0 +1,47 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Charlie Genova and contributors
+#
+# Installs the container and IaC scanners as pinned release binaries, each verified against a SHA-256 recorded
+# here. Binaries rather than third-party actions: a tag-moving compromise of a scanner's action cannot reach us,
+# and Dependabot cannot silently change what runs. Bump version and checksum together.
+name: setup-scanners
+description: Install pinned Trivy, Dockle and kube-linter binaries into the tool path.
+runs:
+  using: composite
+  steps:
+    - name: Install Trivy, Dockle and kube-linter
+      shell: bash
+      env:
+        TRIVY_VERSION: "0.76.1"
+        TRIVY_SHA256: c7cbe3137fb8a48a17574bede3dd6beb16742d1e9772929940fc90082c39d9c0
+        DOCKLE_VERSION: "0.4.15"
+        DOCKLE_SHA256: 8bfc9183d1d3d67800edb45bea4bb63ddf1d28bec5f89944075a07007d79caad
+        KUBE_LINTER_VERSION: "0.8.3"
+        KUBE_LINTER_SHA256: 1a6d8419b11971372971fdbc22682b684ebfb7cf1c39591662d1b6ca736c41df
+      run: |
+        set -euo pipefail
+        bin="${RUNNER_TEMP}/scanners/bin"
+        dl="${RUNNER_TEMP}/scanners/dl"
+        mkdir -p "$bin" "$dl"
+
+        fetch() { # url file sha256
+          curl -fsSL --retry 3 -o "$dl/$2" "$1"
+          echo "$3  $dl/$2" | sha256sum -c -
+        }
+
+        fetch "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz" \
+          trivy.tar.gz "$TRIVY_SHA256"
+        tar -xzf "$dl/trivy.tar.gz" -C "$bin" trivy
+
+        fetch "https://github.com/goodwithtech/dockle/releases/download/v${DOCKLE_VERSION}/dockle_${DOCKLE_VERSION}_Linux-64bit.tar.gz" \
+          dockle.tar.gz "$DOCKLE_SHA256"
+        tar -xzf "$dl/dockle.tar.gz" -C "$bin" dockle
+
+        fetch "https://github.com/stackrox/kube-linter/releases/download/v${KUBE_LINTER_VERSION}/kube-linter-linux.tar.gz" \
+          kube-linter.tar.gz "$KUBE_LINTER_SHA256"
+        tar -xzf "$dl/kube-linter.tar.gz" -C "$bin" kube-linter
+
+        echo "$bin" >> "$GITHUB_PATH"
+        "$bin/trivy" --version
+        "$bin/dockle" --version
+        "$bin/kube-linter" version

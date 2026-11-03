@@ -1,0 +1,17 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Charlie Genova and contributors
+#
+# Production profile. Required values come from the environment (ConfigMap) and from mounted secret files
+# (spring.config.import=configtree:...), never from this file:
+#   - app.proxy.pattern has no default, so startup fails until the deploying organization sets it.
+#   - spring.jpa.hibernate.ddl-auto is deliberately absent; the persistence PR owns JPA settings and prod runs
+#     "validate" only.
+# Logging: this profile switches logback-spring.xml to one JSON object per line.
+server:
+  # The root filesystem is read-only; these paths are emptyDir mounts in deploy/base/deployment.yaml.
+  tomcat:
+    basedir: /var/lib/trailkeep/tomcat
+spring:
+  servlet:
+    multipart:
+      location: /var/lib/trailkeep/uploads

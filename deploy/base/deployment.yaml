@@ -1,0 +1,119 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Charlie Genova and contributors
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: trailkeep
+  labels:
+    app.kubernetes.io/component: web
+spec:
+  replicas: 2
+  revisionHistoryLimit: 5
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: trailkeep
+      app.kubernetes.io/component: web
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: trailkeep
+        app.kubernetes.io/component: web
+    spec:
+      serviceAccountName: trailkeep
+      automountServiceAccountToken: false
+      # No runAsUser: OpenShift's restricted-v2 SCC assigns one from the namespace range; plain Kubernetes uses the
+      # image's numeric USER 185. runAsNonRoot holds either way.
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      terminationGracePeriodSeconds: 45
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: kubernetes.io/hostname
+                labelSelector:
+                  matchLabels:
+                    app.kubernetes.io/name: trailkeep
+                    app.kubernetes.io/component: web
+      containers:
+        - name: trailkeep
+          image: ghcr.io/techautomator414/trailkeep:0.1.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+            - name: management
+              containerPort: 8081
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: trailkeep-config
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 250m
+              memory: 768Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+          startupProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: management
+            periodSeconds: 5
+            failureThreshold: 36
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: management
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: management
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            - name: uploads
+              mountPath: /var/lib/trailkeep/uploads
+            - name: tomcat
+              mountPath: /var/lib/trailkeep/tomcat
+            - name: secrets
+              mountPath: /etc/trailkeep/secrets
+              readOnly: true
+      volumes:
+        # The root filesystem is read-only; java.io.tmpdir, the multipart location and Tomcat's base directory
+        # (application-prod.yml) are scratch space on emptyDir.
+        - name: tmp
+          emptyDir:
+            sizeLimit: 256Mi
+        - name: uploads
+          emptyDir:
+            sizeLimit: 512Mi
+        - name: tomcat
+          emptyDir:
+            sizeLimit: 64Mi
+        # Reference only. The Secret is created from the platform's secret store; see deploy/README.md for keys.
+        - name: secrets
+          secret:
+            secretName: trailkeep-web
+            defaultMode: 0444 # readable by whichever non-root UID the platform assigns
