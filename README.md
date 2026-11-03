@@ -1,3 +1,5 @@
+[![ci](https://github.com/techautomator414/trailkeep/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/techautomator414/trailkeep/actions/workflows/ci.yml)
+
 # Trailkeep
 
 **An open-source compliance case tracker that takes aging seriously.**

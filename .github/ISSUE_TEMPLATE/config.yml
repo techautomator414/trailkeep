@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Charlie Genova and contributors
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/techautomator414/trailkeep/security/advisories/new
+    about: Please report vulnerabilities privately through the Security tab, never in a public issue. See SECURITY.md.
