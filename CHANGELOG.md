@@ -9,6 +9,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Observability, container, deploy base and main/nightly/release CI (PR 12, WP-08 and the rest of WP-02):
+  JSON logs (`logstash-logback-encoder`) in `prod`/`purge`/`importer` and text elsewhere, with a `requestId`
+  MDC filter that reuses a safe incoming `X-Request-Id` or generates one and echoes it; Prometheus registry on
+  the management port; explicit `liveness`/`readiness` probe groups that exclude cluster-level indicators by
+  construction; `native` forward headers with `internal-proxies` and `trusted-proxies` both bound to
+  `app.proxy.pattern`, proven by a spoof test and a trusted-proxy control test; validated `AppProperties`
+  (`app.proxy.pattern` required, `app.timezone`, `app.branding.name`); `prod`, `purge` and `importer` profile
+  files. Multi-stage UBI 9 `Containerfile` (layered, UID 185, exec-form entrypoint, OCI labels), a kustomize base
+  under `deploy/` (hardened `Deployment`, `Service`, `Route`, `NetworkPolicy`, `ConfigMap`, secret references,
+  `PodDisruptionBudget`, suspended purge `CronJob`) and an importer `Job` template. CI: `dco` and `actionlint`
+  jobs in `ci.yml`; `main.yml` (SonarCloud, Dependency-Check, CycloneDX SBOM + Trivy, image build + Trivy +
+  Dockle + kube-linter, Oracle matrix), `nightly.yml` (calls `main.yml`; k6 and ZAP placeholders) and
+  `release.yml` (GHCR push, cosign keyless signature and SBOM attestation, SLSA provenance, GitHub Release with
+  the evidence pack).
 - Fork-safe CI (PR 3): `ci.yml` runs `./mvnw -B verify`, gitleaks and Semgrep (registry rulesets plus
   `security/semgrep/` rules and their `--test` cases once that directory exists) on every pull request and on
   `main`; `codeql.yml` runs CodeQL `security-extended` for Java (build mode `none`) on PRs, `main` and weekly;
