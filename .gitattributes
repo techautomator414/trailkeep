@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Charlie Genova and contributors
+* text=auto eol=lf
+mvnw text eol=lf
+*.cmd text eol=crlf
+*.jar binary
+*.png binary
+*.ico binary
