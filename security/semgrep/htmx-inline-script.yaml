@@ -1,0 +1,21 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Charlie Genova and contributors
+rules:
+  - id: htmx-inline-script
+    message: >-
+      htmx attribute that evaluates JavaScript ($MATCH). `hx-on*` handlers and `js:`/`javascript:` values
+      in `hx-vals`/`hx-headers` (and the always-evaluating `hx-vars`) are inline script, which the strict CSP
+      forbids (ADR-0009). Put behavior in app.js and pass static JSON in `hx-vals`.
+    severity: ERROR
+    languages: [generic]
+    paths:
+      include:
+        - "*.html"
+    patterns:
+      - pattern-either:
+          - pattern-regex: '(?i)(?<![\w-])(?:data-)?hx-on(?:[:-][\w:.-]*)?\s*='
+          - pattern-regex: '(?i)(?<![\w-])(?:data-)?hx-(?:vals|headers)\s*=\s*["'']\s*(?:js|javascript)\s*:'
+          - pattern-regex: '(?i)(?<![\w-])(?:data-)?hx-vars\s*='
+    metadata:
+      category: security
+      cwe: "CWE-79: Improper Neutralization of Input During Web Page Generation"

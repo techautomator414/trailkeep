@@ -1,0 +1,17 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Charlie Genova and contributors
+# Non-secret configuration, bound by Spring's relaxed binding (APP_PROXY_PATTERN -> app.proxy.pattern).
+# Every value marked PLACEHOLDER is set by the deploying organization in its overlay.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: trailkeep-config
+data:
+  SPRING_PROFILES_ACTIVE: prod
+  # PLACEHOLDER: a regular expression (not a CIDR) matching the Route/ingress router's pod addresses. Only these
+  # peers may set X-Forwarded-For / X-Forwarded-Proto. The application refuses to start if it is empty.
+  APP_PROXY_PATTERN: 10\.128\.\d+\.\d+
+  APP_TIMEZONE: UTC
+  APP_BRANDING_NAME: Trailkeep
+  # Secret values are files under this directory (one file per property name), never environment variables.
+  SPRING_CONFIG_IMPORT: configtree:/etc/trailkeep/secrets/

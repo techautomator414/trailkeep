@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Charlie Genova and contributors
+# Batch profile, combined with prod (SPRING_PROFILES_ACTIVE=prod,purge). No web server, no web schedulers.
+spring:
+  main:
+    web-application-type: none

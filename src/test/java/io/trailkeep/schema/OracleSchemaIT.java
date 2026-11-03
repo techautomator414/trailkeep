@@ -12,6 +12,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.DynamicPropertyRegistry;
 
 /**
  * The schema-validation harness on Oracle. Runs only under {@code -Poracle-it}, once per image: the profile's two
@@ -30,6 +32,12 @@ class OracleSchemaIT extends AbstractVendorSchemaIT {
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
+
+    /** The oracle-test profile group carries no router placeholder of its own; AppProperties requires one. */
+    @DynamicPropertySource
+    static void proxyPattern(DynamicPropertyRegistry registry) {
+        registry.add("app.proxy.pattern", () -> "10\\.128\\.\\d+\\.\\d+");
+    }
 
     @Test
     void migrationsRunWithCharacterLengthSemantics() {

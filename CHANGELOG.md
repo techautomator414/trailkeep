@@ -7,6 +7,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- CI image scan policy (issue #11, owner decision): the Trivy gates on the built image in `main.yml` and
+  `release.yml` run with `--ignore-unfixed`, so only HIGH or CRITICAL findings that have a fixed version fail the
+  build. Unfixed base-image findings still appear in the JSON and SARIF reports and in the release evidence pack.
+
 ### Added
 
 - Migration tooling and three-image validation harness (PR 5, WP-03a): Spring Data JPA, Flyway Community with the
@@ -19,6 +25,35 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   fixtures; Testcontainers harness (`AbstractVendorSchemaIT`: Flyway, `validate`, metadata diff of nullability and
   length) on PostgreSQL 16 in every build and on `gvenzl/oracle-xe:21-slim` and `gvenzl/oracle-free:23-slim` under
   `-Poracle-it`; Failsafe for `*IT`; `compose.yaml` with PostgreSQL 16 and an `oracle` profile.
+  Test compilation runs with `-Xlint:-path` (the `ojdbc17` manifest references an `oraclepki.jar` that Maven Central
+  does not ship; every other lint category and `-Werror` stay on). The PR 12 full-context tests under `ops` became
+  Failsafe `*IT` classes on Testcontainers PostgreSQL, since a Spring context now needs a database.
+- Modulith structure, `CaseScope` contract and architecture rules (PR 7, WP-07): Spring Modulith 2.1.2 with the
+  fourteen application modules as `@NullMarked` packages whose `package-info.java` states each module's
+  responsibility and permitted callers (`shared` is an open module); `ModularityTest` runs
+  `ApplicationModules.verify()` and writes the module documentation to `target/spring-modulith-docs`. In
+  `shared`: the `CaseNumber` value record (`PREFIX-YYYY-NNNNNN`, canonical parse and format) and
+  `CaseNotFoundException`; in `shared.access`: the `CaseScope` interface (`toPredicate`, `canRead`,
+  `assertReadable`, `system()`, `all()`) and the `@CaseRooted` and `@CaseAccessPath` annotations. ArchUnit rules,
+  each with planted-violation tests: case-rooted repositories extend only `Repository`, expose only scoped methods
+  and are injected only into access paths; no `@Lob`; `@Enumerated(EnumType.STRING)` on every enum column;
+  package-private repositories; no entity in `web`; no field injection; `CaseScope.all()` only from `security`.
+  Custom Semgrep rules with `semgrep --test` cases for `th:utext`, disabled Spring Security protections, inline
+  htmx script and non-constant JPA query strings.
+- Observability, container, deploy base and main/nightly/release CI (PR 12, WP-08 and the rest of WP-02):
+  JSON logs (`logstash-logback-encoder`) in `prod`/`purge`/`importer` and text elsewhere, with a `requestId`
+  MDC filter that reuses a safe incoming `X-Request-Id` or generates one and echoes it; Prometheus registry on
+  the management port; explicit `liveness`/`readiness` probe groups that exclude cluster-level indicators by
+  construction; `native` forward headers with `internal-proxies` and `trusted-proxies` both bound to
+  `app.proxy.pattern`, proven by a spoof test and a trusted-proxy control test; validated `AppProperties`
+  (`app.proxy.pattern` required, `app.timezone`, `app.branding.name`); `prod`, `purge` and `importer` profile
+  files. Multi-stage UBI 9 `Containerfile` (layered, UID 185, exec-form entrypoint, OCI labels), a kustomize base
+  under `deploy/` (hardened `Deployment`, `Service`, `Route`, `NetworkPolicy`, `ConfigMap`, secret references,
+  `PodDisruptionBudget`, suspended purge `CronJob`) and an importer `Job` template. CI: `dco` and `actionlint`
+  jobs in `ci.yml`; `main.yml` (SonarCloud, Dependency-Check, CycloneDX SBOM + Trivy, image build + Trivy +
+  Dockle + kube-linter, Oracle matrix), `nightly.yml` (calls `main.yml`; k6 and ZAP placeholders) and
+  `release.yml` (GHCR push, cosign keyless signature and SBOM attestation, SLSA provenance, GitHub Release with
+  the evidence pack).
 - Fork-safe CI (PR 3): `ci.yml` runs `./mvnw -B verify`, gitleaks and Semgrep (registry rulesets plus
   `security/semgrep/` rules and their `--test` cases once that directory exists) on every pull request and on
   `main`; `codeql.yml` runs CodeQL `security-extended` for Java (build mode `none`) on PRs, `main` and weekly;

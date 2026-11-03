@@ -1,0 +1,48 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Charlie Genova and contributors
+#
+# Nightly column of IMPLEMENTATION_PLAN Part G: every main gate (including the Oracle matrix) against the head of
+# main, plus the DAST and performance runs once their work packages land. A red nightly Oracle run blocks the next
+# merge until fixed (Part E).
+name: nightly
+
+on:
+  schedule:
+    - cron: "41 4 * * *" # 04:41 UTC daily
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: nightly
+  cancel-in-progress: false
+
+jobs:
+  main-gates:
+    name: main gates (incl. Oracle matrix)
+    uses: ./.github/workflows/main.yml
+    permissions:
+      contents: read
+    secrets:
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
+
+  k6:
+    name: k6 (50k cases / 500k comments)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Placeholder until WP-30
+        run: echo "::notice title=k6 not yet active::Performance scripts arrive with WP-30; nothing to run yet."
+
+  zap:
+    name: zap (authenticated full + API scan)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Placeholder until WP-28
+        run: echo "::notice title=ZAP not yet active::The ephemeral stack and authenticated scan arrive with WP-28; nothing to run yet."

@@ -1,0 +1,26 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Charlie Genova and contributors
+# Plain-Kubernetes alternative to route.yaml. Not referenced by kustomization.yaml; to use it, uncomment, set the
+# host and TLS secret in an overlay, and replace route.yaml in the resources list. Remember to point
+# APP_PROXY_PATTERN and the NetworkPolicy ingress rule at the ingress controller instead of the OpenShift router.
+#
+# apiVersion: networking.k8s.io/v1
+# kind: Ingress
+# metadata:
+#   name: trailkeep
+# spec:
+#   ingressClassName: nginx            # PLACEHOLDER
+#   tls:
+#     - hosts: [trailkeep.example.org] # PLACEHOLDER
+#       secretName: trailkeep-tls      # PLACEHOLDER
+#   rules:
+#     - host: trailkeep.example.org    # PLACEHOLDER
+#       http:
+#         paths:
+#           - path: /
+#             pathType: Prefix
+#             backend:
+#               service:
+#                 name: trailkeep
+#                 port:
+#                   name: http

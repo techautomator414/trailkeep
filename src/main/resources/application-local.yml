@@ -6,3 +6,8 @@ spring:
     url: jdbc:postgresql://localhost:5432/trailkeep
     username: trailkeep
     password: trailkeep
+
+app:
+  proxy:
+    # Placeholder router range. The deploying organization sets its own Route/ingress peer pattern.
+    pattern: 10\.128\.\d+\.\d+

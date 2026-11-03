@@ -44,6 +44,18 @@ spring:
     # Placeholder values per vendor (BUILD_PLAN Appendix A) live in application-{oracle,postgresql}.yml.
     placeholder-replacement: true
 
+  task:
+    scheduling:
+      pool:
+        size: 4
+
+# app.* is bound to io.trailkeep.shared.config.AppProperties. app.proxy.pattern has no default here on purpose:
+# every deployment must set it (the local and test profiles carry a placeholder), and startup fails without it.
+app:
+  timezone: UTC
+  branding:
+    name: Trailkeep
+
 server:
   port: 8080
   error:
@@ -51,6 +63,22 @@ server:
     include-stacktrace: never
     include-exception: false
     include-binding-errors: never
+  # Honor X-Forwarded-* only from the router (Part A #29 amended r3, BUILD_PLAN §16). Spring Boot's default
+  # internal-proxies trusts every RFC 1918 address, which on an intranet is every client, so both lists are
+  # overridden with the same regular expression. An unset pattern resolves to "trust nobody" here and is then
+  # rejected by AppProperties validation.
+  forward-headers-strategy: native
+  tomcat:
+    remoteip:
+      internal-proxies: ${app.proxy.pattern:}
+      trusted-proxies: ${app.proxy.pattern:}
+      remote-ip-header: X-Forwarded-For
+      protocol-header: X-Forwarded-Proto
+
+logging:
+  # Plain-text profiles show the request id; the JSON profiles carry it as a field (logback-spring.xml).
+  pattern:
+    correlation: "[%X{requestId:-}] "
 
 management:
   server:
@@ -59,3 +87,14 @@ management:
     web:
       exposure:
         include: health,info,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      # Probe groups enumerate their members; see io.trailkeep.shared.observability (package Javadoc) for why.
+      # Add a pod-local indicator here deliberately; never a cluster-level one (Part A #30).
+      group:
+        liveness:
+          include: livenessState
+        readiness:
+          include: readinessState

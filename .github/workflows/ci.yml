@@ -116,3 +116,72 @@ jobs:
           fi
           # Rule test fixtures contain deliberate violations; they are exercised by the step above.
           semgrep scan "${configs[@]}" --exclude security/semgrep --error --metrics=off
+
+  dco:
+    name: dco (Signed-off-by on every commit)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    concurrency:
+      group: ci-dco-${{ github.ref }}
+      cancel-in-progress: true
+    steps:
+      - name: Check out (full history)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Require a Signed-off-by trailer
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          missing=0
+          for commit in $(git rev-list --no-merges "${BASE_SHA}..${HEAD_SHA}"); do
+            author="$(git log -1 --format='%an' "$commit")"
+            if [ "$author" = "dependabot[bot]" ]; then
+              echo "skip ${commit} (dependabot[bot])"
+              continue
+            fi
+            if git log -1 --format='%(trailers:key=Signed-off-by,valueonly)' "$commit" | grep -q '[^[:space:]]'; then
+              echo "ok   ${commit}"
+            else
+              echo "::error title=DCO::Commit ${commit} has no Signed-off-by trailer. Amend with 'git commit -s'."
+              missing=1
+            fi
+          done
+          exit "$missing"
+
+  actionlint:
+    name: actionlint
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    concurrency:
+      group: ci-actionlint-${{ github.ref }}
+      cancel-in-progress: true
+    env:
+      ACTIONLINT_VERSION: "1.7.12"
+      ACTIONLINT_SHA256: 8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install actionlint (pinned, checksum-verified)
+        run: |
+          set -euo pipefail
+          archive="${RUNNER_TEMP}/actionlint.tar.gz"
+          curl -fsSL --retry 3 -o "$archive" \
+            "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
+          echo "${ACTIONLINT_SHA256}  ${archive}" | sha256sum -c -
+          tar -xzf "$archive" -C "$RUNNER_TEMP" actionlint
+
+      - name: Lint workflows (with shellcheck)
+        run: '"${RUNNER_TEMP}/actionlint" -color'
