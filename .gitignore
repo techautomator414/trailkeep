@@ -16,3 +16,22 @@ wallet/
 *.log
 ._*
 .DS_Store
+# Maven
+.mvn/wrapper/maven-wrapper.jar
+dependency-reduced-pom.xml
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+release.properties
+# IDE (additional)
+*.ipr
+*.iws
+out/
+.factorypath
+.apt_generated/
+.vscode-test/
+nbproject/
+.nb-gradle/
+# OS
+Thumbs.db
+desktop.ini
