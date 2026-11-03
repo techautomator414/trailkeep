@@ -2,6 +2,6 @@
 // Copyright 2026 Charlie Genova and contributors
 /** Web-layer fixtures for the "no entity in web" rule. */
 @NullMarked
-package io.trailkeep.architecture.fixtures.web;
+package trailkeep.archfixtures.web;
 
 import org.jspecify.annotations.NullMarked;

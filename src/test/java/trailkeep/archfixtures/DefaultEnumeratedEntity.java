@@ -1,16 +1,18 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright 2026 Charlie Genova and contributors
-package io.trailkeep.architecture.fixtures;
+package trailkeep.archfixtures;
 
 import jakarta.persistence.Entity;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 
-/** Violation: an enum field without {@code @Enumerated} is persisted by ordinal. */
+/** Violation: a bare {@code @Enumerated} defaults to ORDINAL. */
 @Entity
-public class UnannotatedEnumEntity {
+public class DefaultEnumeratedEntity {
 
     @Id
     Long id;
 
+    @Enumerated
     FixtureStatus status;
 }

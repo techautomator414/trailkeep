@@ -36,14 +36,15 @@ import org.junit.jupiter.api.Test;
 
 /**
  * Architecture rules from IMPLEMENTATION_PLAN Part B and ADR-0005. Each rule is evaluated against the production
- * classes, and each has negative tests proving it fires on a planted violation in {@code fixtures} and stays quiet
- * on the compliant fixtures. Rules allow an empty subject set because the classes they govern (repositories,
+ * classes of {@code io.trailkeep}, and each has negative tests proving it fires on a planted violation in
+ * {@code trailkeep.archfixtures} and stays quiet on the compliant fixtures. The rules carry no package filter of their
+ * own: the imported class set decides what they govern, so the same rule applies to production code and fixtures. Rules allow an empty subject set because the classes they govern (repositories,
  * entities, controllers) arrive in later work packages; the negative tests prove they are not vacuous.
  */
 class ArchitectureRulesTest {
 
     private static final String ROOT = "io.trailkeep";
-    private static final String FIXTURES = "io.trailkeep.architecture.fixtures";
+    private static final String FIXTURES = "trailkeep.archfixtures";
     private static final String SPRING_DATA = "org.springframework.data";
     private static final String SPRING_DATA_REPOSITORY = "org.springframework.data.repository.Repository";
     private static final String ENTITY = "jakarta.persistence.Entity";
@@ -75,9 +76,6 @@ class ArchitectureRulesTest {
             .allowEmptyShould(true);
 
     static final ArchRule NO_LOB = noMembers()
-            .that()
-            .areDeclaredInClassesThat()
-            .resideInAPackage(ROOT + "..")
             .should()
             .beAnnotatedWith("jakarta.persistence.Lob")
             .because("@Lob maps differently on Oracle and PostgreSQL (BUILD_PLAN section 8)")
@@ -86,9 +84,6 @@ class ArchitectureRulesTest {
     static final ArchRule ENUMERATED_IS_STRING = members()
             .that()
             .areAnnotatedWith(ENUMERATED)
-            .and()
-            .areDeclaredInClassesThat()
-            .resideInAPackage(ROOT + "..")
             .should(declareEnumTypeString())
             .because("ordinals break when constants are reordered (Part B Persistence)")
             .allowEmptyShould(true);
@@ -108,8 +103,6 @@ class ArchitectureRulesTest {
     static final ArchRule REPOSITORIES_ARE_PACKAGE_PRIVATE = classes()
             .that()
             .areAssignableTo(SPRING_DATA_REPOSITORY)
-            .and()
-            .resideInAPackage(ROOT + "..")
             .should()
             .notBePublic()
             .because("modules talk through services, never through each other's repositories (Part B)")
@@ -125,9 +118,6 @@ class ArchitectureRulesTest {
             .allowEmptyShould(true);
 
     static final ArchRule NO_FIELD_INJECTION = noFields()
-            .that()
-            .areDeclaredInClassesThat()
-            .resideInAPackage(ROOT + "..")
             .should()
             .beAnnotatedWith("org.springframework.beans.factory.annotation.Autowired")
             .orShould()
@@ -149,7 +139,6 @@ class ArchitectureRulesTest {
 
     private static final JavaClasses PRODUCTION = new ClassFileImporter()
             .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS)
-            .withImportOption(location -> !location.contains("/" + FIXTURES.replace('.', '/') + "/"))
             .importPackages(ROOT);
 
     @Test
@@ -203,7 +192,7 @@ class ArchitectureRulesTest {
         assertThat(PRODUCTION.contain("io.trailkeep.TrailkeepApplication")).isTrue();
         assertThat(PRODUCTION.contain("io.trailkeep.shared.access.CaseScope")).isTrue();
         assertThat(PRODUCTION.stream().map(JavaClass::getPackageName))
-                .noneMatch(name -> name.startsWith(FIXTURES))
+                .allMatch(name -> name.startsWith(ROOT))
                 .noneMatch(name -> name.equals("io.trailkeep.architecture"));
     }
 

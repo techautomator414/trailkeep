@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright 2026 Charlie Genova and contributors
-package io.trailkeep.architecture.fixtures;
+package trailkeep.archfixtures;
 
 /** Violation: holds a case-rooted repository in a field without {@code @CaseAccessPath}. */
 class UnmarkedFieldHolder {

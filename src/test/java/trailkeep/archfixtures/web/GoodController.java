@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright 2026 Charlie Genova and contributors
-package io.trailkeep.architecture.fixtures.web;
+package trailkeep.archfixtures.web;
 
 /** Compliant: the web layer works with records. */
 class GoodController {
