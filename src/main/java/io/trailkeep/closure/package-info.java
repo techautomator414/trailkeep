@@ -3,7 +3,8 @@
 /**
  * Closure module. Closure requests and their approval, rejection and reopening.
  *
- * <p>May call: {@code shared}, {@code audit}, {@code user}, {@code casefile}; other modules react to its events. Other modules use only the {@code *Service} interfaces and records in this package.
+ * <p>May call: {@code shared}, {@code audit}, {@code user}, {@code casefile}; other modules react to its events. Other
+ * modules use only the {@code *Service} interfaces and records in this package.
  */
 @NullMarked
 @ApplicationModule(displayName = "Closure")

@@ -3,7 +3,8 @@
 /**
  * Update requests module. Requests for an update on a case, their answers and reminder nudges.
  *
- * <p>May call: {@code shared}, {@code audit}, {@code user}, {@code casefile}; notification reacts to its events. Other modules use only the {@code *Service} interfaces and records in this package.
+ * <p>May call: {@code shared}, {@code audit}, {@code user}, {@code casefile}; notification reacts to its events. Other
+ * modules use only the {@code *Service} interfaces and records in this package.
  */
 @NullMarked
 @ApplicationModule(displayName = "Update requests")

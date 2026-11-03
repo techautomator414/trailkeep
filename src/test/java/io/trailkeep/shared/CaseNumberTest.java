@@ -40,9 +40,18 @@ class CaseNumberTest {
     @ParameterizedTest
     @ValueSource(
             strings = {
-                "", "CASE-2026-00123", "case-2026-000123", "ABCDEFGHI-2026-000123", "CASE-26-000123",
-                "CASE-2026-0001234", "CASE-2026-12345678901", "CASE-2026-000000", "CASE_2026_000123",
-                " CASE-2026-000123", "CA-SE-2026-000123", "CASE-2026-000123\n"
+                "",
+                "CASE-2026-00123",
+                "case-2026-000123",
+                "ABCDEFGHI-2026-000123",
+                "CASE-26-000123",
+                "CASE-2026-0001234",
+                "CASE-2026-12345678901",
+                "CASE-2026-000000",
+                "CASE_2026_000123",
+                " CASE-2026-000123",
+                "CA-SE-2026-000123",
+                "CASE-2026-000123\n"
             })
     void rejectsAnythingElse(String text) {
         assertThatIllegalArgumentException().isThrownBy(() -> CaseNumber.parse(text));

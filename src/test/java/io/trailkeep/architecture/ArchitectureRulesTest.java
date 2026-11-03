@@ -38,7 +38,8 @@ import org.junit.jupiter.api.Test;
  * Architecture rules from IMPLEMENTATION_PLAN Part B and ADR-0005. Each rule is evaluated against the production
  * classes of {@code io.trailkeep}, and each has negative tests proving it fires on a planted violation in
  * {@code trailkeep.archfixtures} and stays quiet on the compliant fixtures. The rules carry no package filter of their
- * own: the imported class set decides what they govern, so the same rule applies to production code and fixtures. Rules allow an empty subject set because the classes they govern (repositories,
+ * own: the imported class set decides what they govern, so the same rule applies to production code and fixtures. Rules
+ * allow an empty subject set because the classes they govern (repositories,
  * entities, controllers) arrive in later work packages; the negative tests prove they are not vacuous.
  */
 class ArchitectureRulesTest {
@@ -64,14 +65,14 @@ class ArchitectureRulesTest {
     static final ArchRule CASE_ROOTED_METHODS_TAKE_A_SCOPE = classes()
             .that()
             .areAnnotatedWith(CaseRooted.class)
-            .should(exposeOnlyMethodsWithACaseScopeParameter())
+            .should(exposeOnlyMethodsWithCaseScopeParameter())
             .because("every query on a case-rooted table applies scope.toPredicate() (ADR-0005)")
             .allowEmptyShould(true);
 
     static final ArchRule CASE_ROOTED_INJECTED_ONLY_INTO_ACCESS_PATHS = noClasses()
             .that()
             .areNotAnnotatedWith(CaseAccessPath.class)
-            .should(referenceACaseRootedRepositoryInAFieldOrParameter())
+            .should(referenceCaseRootedRepositoryInFieldOrParameter())
             .because("only reviewed @CaseAccessPath classes may hold case-rooted repositories (ADR-0005)")
             .allowEmptyShould(true);
 
@@ -88,8 +89,7 @@ class ArchitectureRulesTest {
             .because("ordinals break when constants are reordered (Part B Persistence)")
             .allowEmptyShould(true);
 
-    static final ArchRule ENTITY_ENUM_FIELDS_ARE_ENUMERATED = fields()
-            .that()
+    static final ArchRule ENTITY_ENUM_FIELDS_ARE_ENUMERATED = fields().that()
             .areDeclaredInClassesThat()
             .areAnnotatedWith(ENTITY)
             .and()
@@ -147,7 +147,7 @@ class ArchitectureRulesTest {
     }
 
     @Test
-    void caseRootedRepositoryMethodsTakeAScope() {
+    void caseRootedRepositoryMethodsTakeScope() {
         CASE_ROOTED_METHODS_TAKE_A_SCOPE.check(PRODUCTION);
     }
 
@@ -267,7 +267,9 @@ class ArchitectureRulesTest {
 
         private void assertFires(ArchRule rule, String fixture) {
             EvaluationResult result = rule.evaluate(importFixture(fixture));
-            assertThat(result.hasViolation()).as("%s fires on %s", rule.getDescription(), fixture).isTrue();
+            assertThat(result.hasViolation())
+                    .as("%s fires on %s", rule.getDescription(), fixture)
+                    .isTrue();
             assertThat(result.getFailureReport().getDetails())
                     .anySatisfy(detail -> assertThat(detail).contains(simpleName(fixture)));
         }
@@ -297,41 +299,42 @@ class ArchitectureRulesTest {
     }
 
     private static ArchCondition<JavaClass> extendNoSpringDataInterfaceButRepository() {
-        return condition("extend no Spring Data interface other than Repository", (javaClass, events) -> javaClass
-                .getAllRawInterfaces()
-                .stream()
-                .filter(type -> type.getPackageName().startsWith(SPRING_DATA))
-                .filter(type -> !type.isEquivalentTo(org.springframework.data.repository.Repository.class))
-                .forEach(type -> events.add(SimpleConditionEvent.violated(
-                        javaClass, javaClass.getName() + " extends " + type.getName()))));
+        return condition(
+                "extend no Spring Data interface other than Repository",
+                (javaClass, events) -> javaClass.getAllRawInterfaces().stream()
+                        .filter(type -> type.getPackageName().startsWith(SPRING_DATA))
+                        .filter(type -> !type.isEquivalentTo(org.springframework.data.repository.Repository.class))
+                        .forEach(type -> events.add(SimpleConditionEvent.violated(
+                                javaClass, javaClass.getName() + " extends " + type.getName()))));
     }
 
-    private static ArchCondition<JavaClass> exposeOnlyMethodsWithACaseScopeParameter() {
-        return condition("expose only methods with a CaseScope parameter", (javaClass, events) -> javaClass
-                .getAllMethods()
-                .stream()
-                .filter(method -> !method.getOwner().getPackageName().startsWith(SPRING_DATA))
-                .filter(method -> !method.getOwner().isEquivalentTo(Object.class))
-                .filter(method -> !hasCaseScopeParameter(method))
-                .forEach(method -> events.add(SimpleConditionEvent.violated(
-                        method, javaClass.getName() + " exposes unscoped " + method.getFullName()))));
+    private static ArchCondition<JavaClass> exposeOnlyMethodsWithCaseScopeParameter() {
+        return condition(
+                "expose only methods with a CaseScope parameter",
+                (javaClass, events) -> javaClass.getAllMethods().stream()
+                        .filter(method -> !method.getOwner().getPackageName().startsWith(SPRING_DATA))
+                        .filter(method -> !method.getOwner().isEquivalentTo(Object.class))
+                        .filter(method -> !hasCaseScopeParameter(method))
+                        .forEach(method -> events.add(SimpleConditionEvent.violated(
+                                method, javaClass.getName() + " exposes unscoped " + method.getFullName()))));
     }
 
     private static boolean hasCaseScopeParameter(JavaMethod method) {
         return method.getRawParameterTypes().stream().anyMatch(type -> type.isAssignableTo(CaseScope.class));
     }
 
-    private static ArchCondition<JavaClass> referenceACaseRootedRepositoryInAFieldOrParameter() {
+    private static ArchCondition<JavaClass> referenceCaseRootedRepositoryInFieldOrParameter() {
         return condition("reference a @CaseRooted repository in a field or parameter", (javaClass, events) -> {
-            Stream<Reference> fieldRefs = javaClass.getFields().stream()
-                    .map(field -> new Reference(field.getFullName(), field.getType()));
+            Stream<Reference> fieldRefs =
+                    javaClass.getFields().stream().map(field -> new Reference(field.getFullName(), field.getType()));
             Stream<Reference> parameterRefs = javaClass.getCodeUnits().stream()
-                    .flatMap(unit -> unit.getParameterTypes().stream()
-                            .map(type -> new Reference(unit.getFullName(), type)));
+                    .flatMap(unit ->
+                            unit.getParameterTypes().stream().map(type -> new Reference(unit.getFullName(), type)));
             Stream.concat(fieldRefs, parameterRefs)
                     .filter(Reference::involvesCaseRooted)
                     .forEach(ref -> events.add(SimpleConditionEvent.satisfied(
-                            javaClass, javaClass.getName() + " references a @CaseRooted repository in " + ref.where())));
+                            javaClass,
+                            javaClass.getName() + " references a @CaseRooted repository in " + ref.where())));
         });
     }
 
@@ -379,5 +382,4 @@ class ArchitectureRulesTest {
             }
         };
     }
-
 }

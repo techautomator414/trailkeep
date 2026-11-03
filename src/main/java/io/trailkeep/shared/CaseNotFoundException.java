@@ -22,7 +22,11 @@ public class CaseNotFoundException extends RuntimeException {
         this.caseNumber = caseNumber;
     }
 
-    /** {@return the case number that was asked for} */
+    /**
+     * Returns the case number that was asked for.
+     *
+     * @return the case number that was asked for
+     */
     public CaseNumber caseNumber() {
         return caseNumber;
     }

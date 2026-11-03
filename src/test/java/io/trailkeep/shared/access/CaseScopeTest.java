@@ -14,6 +14,7 @@ import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
 import java.lang.reflect.Proxy;
 import java.util.Set;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 
 class CaseScopeTest {
@@ -56,17 +57,17 @@ class CaseScopeTest {
     }
 
     private interface Handler {
-        Object handle(String method, Object[] args);
+        @Nullable
+        Object handle(String method, @Nullable Object @Nullable [] args);
     }
 
-    private static <T> T proxy(Class<T> type, Handler handler) {
-        return type.cast(Proxy.newProxyInstance(
-                type.getClassLoader(), new Class<?>[] {type}, (p, method, args) -> {
-                    if (handler == null) {
-                        throw new AssertionError("unexpected call to " + method.getName());
-                    }
-                    return handler.handle(method.getName(), args);
-                }));
+    private static <T> T proxy(Class<T> type, @Nullable Handler handler) {
+        return type.cast(Proxy.newProxyInstance(type.getClassLoader(), new Class<?>[] {type}, (p, method, args) -> {
+            if (handler == null) {
+                throw new AssertionError("unexpected call to " + method.getName());
+            }
+            return handler.handle(method.getName(), args);
+        }));
     }
 
     private record OnlyScope(Set<CaseNumber> readable) implements CaseScope {

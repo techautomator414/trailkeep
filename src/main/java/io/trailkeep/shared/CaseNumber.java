@@ -55,8 +55,7 @@ public record CaseNumber(String prefix, int year, long sequence) implements Seri
         if (!matcher.matches()) {
             throw new IllegalArgumentException("Not a case number of the shape PREFIX-YYYY-NNNNNN");
         }
-        return new CaseNumber(
-                matcher.group(1), Integer.parseInt(matcher.group(2)), Long.parseLong(matcher.group(3)));
+        return new CaseNumber(matcher.group(1), Integer.parseInt(matcher.group(2)), Long.parseLong(matcher.group(3)));
     }
 
     /** {@return the canonical textual form, for example {@code CASE-2026-000123}} */

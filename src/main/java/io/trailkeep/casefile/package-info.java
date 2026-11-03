@@ -4,7 +4,8 @@
  * Case file module. The case aggregate: {@code CaseRecord}, case numbering, comments, create, edit and
  * search, and the principal-backed {@code CaseScope} implementation (WP-11).
  *
- * <p>May call: {@code shared}, {@code audit}, {@code user}, {@code security}. Other modules use only the {@code *Service} interfaces and records in this package.
+ * <p>May call: {@code shared}, {@code audit}, {@code user}, {@code security}. Other modules use only the {@code
+ * *Service} interfaces and records in this package.
  */
 @NullMarked
 @ApplicationModule(displayName = "Case file")

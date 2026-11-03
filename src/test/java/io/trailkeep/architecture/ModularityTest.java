@@ -25,8 +25,20 @@ class ModularityTest {
     void everyPlannedModuleIsDetected() {
         assertThat(MODULES.stream().map(ApplicationModule::getIdentifier).map(Object::toString))
                 .containsExactlyInAnyOrder(
-                        "shared", "security", "audit", "user", "casefile", "closure", "updaterequest", "sla",
-                        "document", "notification", "report", "retention", "importer", "web");
+                        "shared",
+                        "security",
+                        "audit",
+                        "user",
+                        "casefile",
+                        "closure",
+                        "updaterequest",
+                        "sla",
+                        "document",
+                        "notification",
+                        "report",
+                        "retention",
+                        "importer",
+                        "web");
     }
 
     @Test
@@ -40,6 +52,7 @@ class ModularityTest {
         new Documenter(MODULES).writeDocumentation();
 
         assertThat(Path.of("target", "spring-modulith-docs")).isDirectory();
-        assertThat(Files.exists(Path.of("target", "spring-modulith-docs", "components.puml"))).isTrue();
+        assertThat(Files.exists(Path.of("target", "spring-modulith-docs", "components.puml")))
+                .isTrue();
     }
 }

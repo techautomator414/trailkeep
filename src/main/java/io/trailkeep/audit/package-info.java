@@ -4,7 +4,8 @@
  * Audit module. The append-only audit trail: {@code AuditEvent}, {@code AuditRecorder} and the read-only
  * audit repository. Writes are synchronous in the originating transaction; reads are case-scoped.
  *
- * <p>May call: {@code shared}. Every domain module may call its exported service. Other modules use only the {@code *Service} interfaces and records in this package.
+ * <p>May call: {@code shared}. Every domain module may call its exported service. Other modules use only the {@code
+ * *Service} interfaces and records in this package.
  */
 @NullMarked
 @ApplicationModule(displayName = "Audit")

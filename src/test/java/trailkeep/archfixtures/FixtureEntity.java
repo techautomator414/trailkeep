@@ -7,6 +7,7 @@ import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Transient;
+import org.jspecify.annotations.Nullable;
 
 /** Compliant entity: enum stored as STRING; static and transient enum fields are ignored. */
 @Entity
@@ -22,5 +23,6 @@ public class FixtureEntity {
     FixtureStatus status;
 
     @Transient
+    @Nullable
     FixtureStatus previousStatus;
 }

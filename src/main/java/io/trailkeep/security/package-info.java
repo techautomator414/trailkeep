@@ -5,7 +5,8 @@
  * the CSP nonce filter and response headers. It is the only module that grants an unrestricted
  * {@code CaseScope.all()} (enforced by ArchUnit).
  *
- * <p>May call: {@code shared}, {@code user}, {@code audit}. Other modules use only the {@code *Service} interfaces and records in this package.
+ * <p>May call: {@code shared}, {@code user}, {@code audit}. Other modules use only the {@code *Service} interfaces and
+ * records in this package.
  */
 @NullMarked
 @ApplicationModule(displayName = "Security")
