@@ -1,8 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
+
   SPDX-License-Identifier: Apache-2.0
   Copyright 2026 Charlie Genova and contributors
+
 -->
+
 <project xmlns="http://maven.apache.org/POM/4.0.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
@@ -41,6 +44,14 @@
     <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
     <!-- Reproducible builds: fixed archive entry timestamps. Bump on release. -->
     <project.build.outputTimestamp>2026-11-03T00:00:00Z</project.build.outputTimestamp>
+
+    <!-- Static analysis tool versions (plugin versions are pinned literally in pluginManagement). -->
+    <palantir-java-format.version>2.103.0</palantir-java-format.version>
+    <checkstyle.version>14.4.0</checkstyle.version>
+    <error-prone.version>2.52.0</error-prone.version>
+    <nullaway.version>0.14.3</nullaway.version>
+    <spotbugs.version>4.10.5</spotbugs.version>
+    <findsecbugs.version>1.14.0</findsecbugs.version>
   </properties>
 
   <dependencies>
@@ -88,7 +99,68 @@
   </dependencies>
 
   <build>
+    <pluginManagement>
+      <plugins>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-enforcer-plugin</artifactId>
+          <version>3.6.3</version>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-compiler-plugin</artifactId>
+          <version>3.15.0</version>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-surefire-plugin</artifactId>
+          <version>3.5.6</version>
+        </plugin>
+        <plugin>
+          <groupId>com.diffplug.spotless</groupId>
+          <artifactId>spotless-maven-plugin</artifactId>
+          <version>3.11.0</version>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-checkstyle-plugin</artifactId>
+          <version>3.6.0</version>
+        </plugin>
+        <plugin>
+          <groupId>com.github.spotbugs</groupId>
+          <artifactId>spotbugs-maven-plugin</artifactId>
+          <version>4.10.5.0</version>
+        </plugin>
+        <plugin>
+          <groupId>org.jacoco</groupId>
+          <artifactId>jacoco-maven-plugin</artifactId>
+          <version>0.8.16</version>
+        </plugin>
+        <plugin>
+          <groupId>com.mycila</groupId>
+          <artifactId>license-maven-plugin</artifactId>
+          <version>5.1.2</version>
+        </plugin>
+        <plugin>
+          <groupId>org.codehaus.mojo</groupId>
+          <artifactId>license-maven-plugin</artifactId>
+          <version>2.7.1</version>
+        </plugin>
+        <plugin>
+          <groupId>org.cyclonedx</groupId>
+          <artifactId>cyclonedx-maven-plugin</artifactId>
+          <version>2.9.3</version>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-site-plugin</artifactId>
+          <version>3.22.0</version>
+        </plugin>
+      </plugins>
+    </pluginManagement>
+
     <plugins>
+      <!-- Toolchain and dependency hygiene (BUILD_PLAN 11.2, 12.2). -->
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-enforcer-plugin</artifactId>
@@ -106,11 +178,371 @@
                 <requireMavenVersion>
                   <version>[3.9,)</version>
                 </requireMavenVersion>
+                <requirePluginVersions>
+                  <message>Pin every plugin version in pluginManagement.</message>
+                  <banLatest>true</banLatest>
+                  <banRelease>true</banRelease>
+                  <banSnapshots>true</banSnapshots>
+                </requirePluginVersions>
+                <requireUpperBoundDeps/>
+                <dependencyConvergence/>
+                <bannedDependencies>
+                  <excludes>
+                    <exclude>org.apache.logging.log4j:log4j-core</exclude>
+                    <exclude>log4j:log4j</exclude>
+                    <exclude>org.projectlombok:lombok</exclude>
+                    <!-- Spring Framework 7 depends on Commons Logging 1.3+ directly (spring-jcl is gone) and 1.3
+                         routes to SLF4J; only the pre-1.3 discovery-based releases are banned. -->
+                    <exclude>commons-logging:commons-logging:(,1.3.0)</exclude>
+                  </excludes>
+                </bannedDependencies>
               </rules>
             </configuration>
           </execution>
         </executions>
       </plugin>
+
+      <!-- Compile: -Xlint:all -Werror, Error Prone + NullAway (forked javac needs the JDK-internal exports). -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <configuration>
+          <release>${java.version}</release>
+          <fork>true</fork>
+          <showWarnings>true</showWarnings>
+          <failOnWarning>true</failOnWarning>
+          <compilerArgs>
+            <arg>-Xlint:all,-processing</arg>
+            <arg>-Werror</arg>
+            <arg>-XDcompilePolicy=simple</arg>
+            <arg>-XDaddTypeAnnotationsToSymbol=true</arg>
+            <arg>--should-stop=ifError=FLOW</arg>
+            <arg>-Xplugin:ErrorProne -XepDisableWarningsInGeneratedCode -XepExcludedPaths:.*/target/generated-.*/.* -Xep:NullAway:ERROR -XepOpt:NullAway:AnnotatedPackages=io.trailkeep -XepOpt:NullAway:ExcludedFieldAnnotations=org.springframework.beans.factory.annotation.Autowired,org.springframework.test.context.bean.override.mockito.MockitoBean</arg>
+            <arg>-J--add-exports=jdk.compiler/com.sun.tools.javac.api=ALL-UNNAMED</arg>
+            <arg>-J--add-exports=jdk.compiler/com.sun.tools.javac.file=ALL-UNNAMED</arg>
+            <arg>-J--add-exports=jdk.compiler/com.sun.tools.javac.main=ALL-UNNAMED</arg>
+            <arg>-J--add-exports=jdk.compiler/com.sun.tools.javac.model=ALL-UNNAMED</arg>
+            <arg>-J--add-exports=jdk.compiler/com.sun.tools.javac.parser=ALL-UNNAMED</arg>
+            <arg>-J--add-exports=jdk.compiler/com.sun.tools.javac.processing=ALL-UNNAMED</arg>
+            <arg>-J--add-exports=jdk.compiler/com.sun.tools.javac.tree=ALL-UNNAMED</arg>
+            <arg>-J--add-exports=jdk.compiler/com.sun.tools.javac.util=ALL-UNNAMED</arg>
+            <arg>-J--add-opens=jdk.compiler/com.sun.tools.javac.code=ALL-UNNAMED</arg>
+            <arg>-J--add-opens=jdk.compiler/com.sun.tools.javac.comp=ALL-UNNAMED</arg>
+          </compilerArgs>
+          <annotationProcessorPaths>
+            <path>
+              <groupId>com.google.errorprone</groupId>
+              <artifactId>error_prone_core</artifactId>
+              <version>${error-prone.version}</version>
+            </path>
+            <path>
+              <groupId>com.uber.nullaway</groupId>
+              <artifactId>nullaway</artifactId>
+              <version>${nullaway.version}</version>
+            </path>
+          </annotationProcessorPaths>
+        </configuration>
+      </plugin>
+
+      <!-- Formatting: palantir-java-format. Fix locally with ./mvnw spotless:apply. -->
+      <plugin>
+        <groupId>com.diffplug.spotless</groupId>
+        <artifactId>spotless-maven-plugin</artifactId>
+        <configuration>
+          <java>
+            <palantirJavaFormat>
+              <version>${palantir-java-format.version}</version>
+              <style>PALANTIR</style>
+              <formatJavadoc>false</formatJavadoc>
+            </palantirJavaFormat>
+            <removeUnusedImports/>
+            <trimTrailingWhitespace/>
+            <endWithNewline/>
+          </java>
+        </configuration>
+        <executions>
+          <execution>
+            <id>spotless-check</id>
+            <phase>verify</phase>
+            <goals>
+              <goal>check</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+
+      <!-- Checkstyle: config/checkstyle/checkstyle.xml, main and test sources, any violation fails. -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-checkstyle-plugin</artifactId>
+        <dependencies>
+          <dependency>
+            <groupId>com.puppycrawl.tools</groupId>
+            <artifactId>checkstyle</artifactId>
+            <version>${checkstyle.version}</version>
+          </dependency>
+        </dependencies>
+        <configuration>
+          <configLocation>config/checkstyle/checkstyle.xml</configLocation>
+          <includeTestSourceDirectory>true</includeTestSourceDirectory>
+          <consoleOutput>true</consoleOutput>
+          <failOnViolation>true</failOnViolation>
+          <violationSeverity>warning</violationSeverity>
+          <maxAllowedViolations>0</maxAllowedViolations>
+        </configuration>
+        <executions>
+          <execution>
+            <id>checkstyle-check</id>
+            <phase>verify</phase>
+            <goals>
+              <goal>check</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+
+      <!-- SpotBugs + FindSecBugs: max effort, low threshold, any finding fails. -->
+      <plugin>
+        <groupId>com.github.spotbugs</groupId>
+        <artifactId>spotbugs-maven-plugin</artifactId>
+        <dependencies>
+          <dependency>
+            <groupId>com.github.spotbugs</groupId>
+            <artifactId>spotbugs</artifactId>
+            <version>${spotbugs.version}</version>
+          </dependency>
+        </dependencies>
+        <configuration>
+          <effort>Max</effort>
+          <threshold>Low</threshold>
+          <failOnError>true</failOnError>
+          <includeTests>false</includeTests>
+          <excludeFilterFile>config/spotbugs/exclude.xml</excludeFilterFile>
+          <plugins>
+            <plugin>
+              <groupId>com.h3xstream.findsecbugs</groupId>
+              <artifactId>findsecbugs-plugin</artifactId>
+              <version>${findsecbugs.version}</version>
+            </plugin>
+          </plugins>
+        </configuration>
+        <executions>
+          <execution>
+            <id>spotbugs-check</id>
+            <phase>verify</phase>
+            <goals>
+              <goal>check</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+
+      <!-- Coverage gates (Part B "Testing"). Package rules match nothing until those packages exist. -->
+      <plugin>
+        <groupId>org.jacoco</groupId>
+        <artifactId>jacoco-maven-plugin</artifactId>
+        <configuration>
+          <excludes>
+            <exclude>io/trailkeep/TrailkeepApplication.class</exclude>
+          </excludes>
+        </configuration>
+        <executions>
+          <execution>
+            <id>jacoco-prepare-agent</id>
+            <goals>
+              <goal>prepare-agent</goal>
+            </goals>
+          </execution>
+          <execution>
+            <id>jacoco-report</id>
+            <phase>verify</phase>
+            <goals>
+              <goal>report</goal>
+            </goals>
+          </execution>
+          <execution>
+            <id>jacoco-check</id>
+            <phase>verify</phase>
+            <goals>
+              <goal>check</goal>
+            </goals>
+            <configuration>
+              <haltOnFailure>true</haltOnFailure>
+              <rules>
+                <rule>
+                  <element>BUNDLE</element>
+                  <limits>
+                    <limit>
+                      <counter>LINE</counter>
+                      <value>COVEREDRATIO</value>
+                      <minimum>0.80</minimum>
+                    </limit>
+                    <limit>
+                      <counter>BRANCH</counter>
+                      <value>COVEREDRATIO</value>
+                      <minimum>0.70</minimum>
+                    </limit>
+                  </limits>
+                </rule>
+                <rule>
+                  <element>PACKAGE</element>
+                  <includes>
+                    <include>io.trailkeep.sla</include>
+                    <include>io.trailkeep.sla.*</include>
+                    <include>io.trailkeep.closure</include>
+                    <include>io.trailkeep.closure.*</include>
+                    <include>io.trailkeep.security</include>
+                    <include>io.trailkeep.security.*</include>
+                  </includes>
+                  <limits>
+                    <limit>
+                      <counter>LINE</counter>
+                      <value>COVEREDRATIO</value>
+                      <minimum>0.90</minimum>
+                    </limit>
+                  </limits>
+                </rule>
+              </rules>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+
+      <!-- SPDX header on every source file (BUILD_PLAN 11.1). Fix locally with ./mvnw license:format. -->
+      <plugin>
+        <groupId>com.mycila</groupId>
+        <artifactId>license-maven-plugin</artifactId>
+        <configuration>
+          <licenseSets>
+            <licenseSet>
+              <header>config/license/header.txt</header>
+              <includes>
+                <include>**/*.java</include>
+                <include>**/*.xml</include>
+                <include>**/*.yml</include>
+                <include>**/*.yaml</include>
+                <include>**/*.properties</include>
+              </includes>
+              <excludes>
+                <exclude>mvnw</exclude>
+                <exclude>mvnw.cmd</exclude>
+                <exclude>.mvn/**</exclude>
+                <exclude>LICENSE</exclude>
+                <exclude>NOTICE</exclude>
+                <exclude>**/*.md</exclude>
+                <exclude>adr/**</exclude>
+                <exclude>.github/**</exclude>
+                <exclude>config/**</exclude>
+                <exclude>security/**</exclude>
+                <exclude>target/**</exclude>
+              </excludes>
+            </licenseSet>
+          </licenseSets>
+          <useDefaultExcludes>true</useDefaultExcludes>
+          <strictCheck>true</strictCheck>
+          <failIfMissing>true</failIfMissing>
+          <failIfUnknown>true</failIfUnknown>
+          <!-- The two SPDX lines exactly as written: no blank comment lines around them. -->
+          <defaultInlineHeaderStyles>
+            <defaultInlineHeaderStyle>
+              <name>spdx_hash</name>
+              <beforeEachLine xml:space="preserve"># </beforeEachLine>
+              <firstLineDetectionPattern>(\s|\t)*#.*$</firstLineDetectionPattern>
+              <lastLineDetectionPattern>(\s|\t)*#.*$</lastLineDetectionPattern>
+              <allowBlankLines>false</allowBlankLines>
+              <multiLine>false</multiLine>
+              <padLines>false</padLines>
+            </defaultInlineHeaderStyle>
+            <defaultInlineHeaderStyle>
+              <name>spdx_xml</name>
+              <firstLine>&lt;!--EOL</firstLine>
+              <beforeEachLine xml:space="preserve">  </beforeEachLine>
+              <endLine>EOL--&gt;</endLine>
+              <skipLinePattern>^&lt;\?xml.*&gt;$</skipLinePattern>
+              <firstLineDetectionPattern>(\s|\t)*&lt;!--.*$</firstLineDetectionPattern>
+              <lastLineDetectionPattern>.*--&gt;(\s|\t)*$</lastLineDetectionPattern>
+              <allowBlankLines>false</allowBlankLines>
+              <multiLine>true</multiLine>
+              <padLines>false</padLines>
+            </defaultInlineHeaderStyle>
+          </defaultInlineHeaderStyles>
+          <mapping>
+            <java>SINGLE_LINE_DOUBLESLASH_STYLE</java>
+            <xml>spdx_xml</xml>
+            <yml>spdx_hash</yml>
+            <yaml>spdx_hash</yaml>
+            <properties>spdx_hash</properties>
+          </mapping>
+        </configuration>
+        <executions>
+          <execution>
+            <id>spdx-header-check</id>
+            <phase>verify</phase>
+            <goals>
+              <goal>check</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+
+      <!-- Third-party licenses: THIRD-PARTY.txt plus the allow-list gate (BUILD_PLAN 11.2). -->
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>license-maven-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>third-party-licenses</id>
+            <goals>
+              <goal>add-third-party</goal>
+            </goals>
+            <configuration>
+              <excludedScopes>system,test</excludedScopes>
+              <failOnMissing>true</failOnMissing>
+              <failOnBlacklist>true</failOnBlacklist>
+              <includedLicenses>file://${project.basedir}/security/licenses-allowed.txt</includedLicenses>
+              <useMissingFile>false</useMissingFile>
+              <licenseMerges>
+                <licenseMerge>Apache-2.0|Apache License, Version 2.0|The Apache Software License, Version 2.0|The Apache License, Version 2.0|Apache License 2.0|Apache 2.0|Apache 2|Apache License Version 2.0|Apache Software License - Version 2.0|ASF 2.0|Apache License v2.0</licenseMerge>
+                <licenseMerge>MIT|The MIT License|MIT License|The MIT License (MIT)|MIT-0</licenseMerge>
+                <licenseMerge>BSD-2-Clause|BSD 2-Clause License|The BSD 2-Clause License|BSD-2|Simplified BSD License</licenseMerge>
+                <licenseMerge>BSD-3-Clause|BSD 3-Clause License|The BSD 3-Clause License|BSD-3|New BSD License|Modified BSD License|BSD License 3|Revised BSD|Eclipse Distribution License - v 1.0|EDL 1.0|Eclipse Distribution License v. 1.0</licenseMerge>
+                <licenseMerge>EPL-1.0|Eclipse Public License - v 1.0|Eclipse Public License 1.0|Eclipse Public License v1.0</licenseMerge>
+                <licenseMerge>EPL-2.0|Eclipse Public License - v 2.0|Eclipse Public License v2.0|Eclipse Public License v. 2.0|Eclipse Public License 2.0|EPL 2.0</licenseMerge>
+                <licenseMerge>MPL-2.0|Mozilla Public License 2.0|Mozilla Public License, Version 2.0|MPL 2.0</licenseMerge>
+                <licenseMerge>CDDL-1.0|Common Development and Distribution License 1.0|CDDL 1.0</licenseMerge>
+                <licenseMerge>CDDL-1.1|Common Development and Distribution License 1.1|CDDL 1.1|CDDL+GPL License</licenseMerge>
+                <licenseMerge>Oracle-FUTC|Oracle Free Use Terms and Conditions (FUTC)|Oracle Free Use Terms and Conditions</licenseMerge>
+                <licenseMerge>GPL-2.0-with-classpath-exception|GPL2 w/ CPE|GNU General Public License, version 2 with the GNU Classpath Exception</licenseMerge>
+                <licenseMerge>LGPL-2.1|GNU Lesser General Public License|GNU Lesser General Public License, Version 2.1|LGPL 2.1</licenseMerge>
+              </licenseMerges>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+
+      <!-- SBOM for Trivy / Dependency-Check (Part G): target/bom.json. -->
+      <plugin>
+        <groupId>org.cyclonedx</groupId>
+        <artifactId>cyclonedx-maven-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>bom-json</id>
+            <phase>package</phase>
+            <goals>
+              <goal>makeAggregateBom</goal>
+            </goals>
+            <configuration>
+              <projectType>application</projectType>
+              <outputDirectory>${project.build.directory}</outputDirectory>
+              <outputFormat>json</outputFormat>
+              <outputName>bom</outputName>
+              <!-- A scanner input, not a second published artifact: Boot's embedded SBOM stays the attached one. -->
+              <skipAttach>true</skipAttach>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+
       <plugin>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-maven-plugin</artifactId>
