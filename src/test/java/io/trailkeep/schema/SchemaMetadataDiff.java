@@ -27,8 +27,7 @@ import org.jspecify.annotations.Nullable;
  */
 public final class SchemaMetadataDiff {
 
-    private static final Set<Integer> CHARACTER_TYPES =
-            Set.of(Types.CHAR, Types.VARCHAR, Types.NCHAR, Types.NVARCHAR);
+    private static final Set<Integer> CHARACTER_TYPES = Set.of(Types.CHAR, Types.VARCHAR, Types.NCHAR, Types.NVARCHAR);
 
     private SchemaMetadataDiff() {}
 
@@ -40,7 +39,11 @@ public final class SchemaMetadataDiff {
      * @param nullable whether the mapping allows null
      * @param length declared length, or {@code null} when the mapping has none
      */
-    public record ExpectedColumn(String table, String column, boolean nullable, @Nullable Long length) {}
+    public record ExpectedColumn(
+            String table,
+            String column,
+            boolean nullable,
+            @Nullable Long length) {}
 
     /**
      * Collects the columns of every entity in the mapping model, identifiers included.
@@ -67,7 +70,8 @@ public final class SchemaMetadataDiff {
         String table = normalize(selectable.getContainingTableExpression());
         String column = normalize(selectable.getSelectionExpression());
         columns.putIfAbsent(
-                table + "." + column, new ExpectedColumn(table, column, selectable.isNullable(), selectable.getLength()));
+                table + "." + column,
+                new ExpectedColumn(table, column, selectable.isNullable(), selectable.getLength()));
     }
 
     /**
@@ -108,14 +112,22 @@ public final class SchemaMetadataDiff {
             }
             boolean nullable = rs.getInt("NULLABLE") != DatabaseMetaData.columnNoNulls;
             if (nullable != expected.nullable()) {
-                out.add(new ColumnMismatch(expected.table(), expected.column(), ColumnMismatch.Kind.NULLABILITY,
-                        nullText(expected.nullable()), nullText(nullable)));
+                out.add(new ColumnMismatch(
+                        expected.table(),
+                        expected.column(),
+                        ColumnMismatch.Kind.NULLABILITY,
+                        nullText(expected.nullable()),
+                        nullText(nullable)));
             }
             Long length = expected.length();
             int size = rs.getInt("COLUMN_SIZE");
             if (CHARACTER_TYPES.contains(rs.getInt("DATA_TYPE")) && length != null && length != size) {
-                out.add(new ColumnMismatch(expected.table(), expected.column(), ColumnMismatch.Kind.LENGTH,
-                        String.valueOf(length), String.valueOf(size)));
+                out.add(new ColumnMismatch(
+                        expected.table(),
+                        expected.column(),
+                        ColumnMismatch.Kind.LENGTH,
+                        String.valueOf(length),
+                        String.valueOf(size)));
             }
         }
     }
@@ -139,6 +151,8 @@ public final class SchemaMetadataDiff {
                 ? identifier.toLowerCase(Locale.ROOT)
                 : identifier.toUpperCase(Locale.ROOT);
         String escape = metaData.getSearchStringEscape();
-        return folded.replace(escape, escape + escape).replace("_", escape + "_").replace("%", escape + "%");
+        return folded.replace(escape, escape + escape)
+                .replace("_", escape + "_")
+                .replace("%", escape + "%");
     }
 }

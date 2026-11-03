@@ -30,6 +30,8 @@ import org.springframework.core.env.Environment;
  * to plant drift. The application context itself has already run Flyway and Hibernate {@code validate}; the tests
  * make each step explicit and prove the metadata diff is not vacuous.
  */
+// "IT" is the Failsafe suffix Part B mandates for integration tests, not an abbreviation.
+@SuppressWarnings("checkstyle:AbbreviationAsWordInName")
 @RequiresDocker
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE)
 abstract class AbstractVendorSchemaIT {
@@ -69,7 +71,8 @@ abstract class AbstractVendorSchemaIT {
     void connectsToTheConfiguredVendor() throws SQLException {
         assertThat(databaseProperties.vendor()).isEqualTo(vendor());
         try (Connection connection = dataSource.getConnection()) {
-            assertThat(vendor().matches(connection.getMetaData().getDatabaseProductName())).isTrue();
+            assertThat(vendor().matches(connection.getMetaData().getDatabaseProductName()))
+                    .isTrue();
         }
     }
 
@@ -106,8 +109,7 @@ abstract class AbstractVendorSchemaIT {
         assertThat(SchemaMetadataDiff.expectedColumns(entityManagerFactory))
                 .containsEntry(
                         PROBE_TABLE + "." + PROBE_COLUMN,
-                        new SchemaMetadataDiff.ExpectedColumn(
-                                PROBE_TABLE, PROBE_COLUMN, false, (long) PROBE_LENGTH))
+                        new SchemaMetadataDiff.ExpectedColumn(PROBE_TABLE, PROBE_COLUMN, false, (long) PROBE_LENGTH))
                 .containsKeys(PROBE_TABLE + ".ID", PROBE_TABLE + ".ACTIVE", PROBE_TABLE + ".NOTE");
     }
 
@@ -117,7 +119,7 @@ abstract class AbstractVendorSchemaIT {
     }
 
     @Test
-    void metadataDiffReportsAPlantedNullabilityMismatch() throws SQLException {
+    void metadataDiffReportsPlantedNullabilityMismatch() throws SQLException {
         execute(dropNotNull(PROBE_TABLE, PROBE_COLUMN));
         try {
             assertThat(diff())
@@ -130,12 +132,12 @@ abstract class AbstractVendorSchemaIT {
     }
 
     @Test
-    void metadataDiffReportsAPlantedLengthMismatch() throws SQLException {
+    void metadataDiffReportsPlantedLengthMismatch() throws SQLException {
         execute(resizeVarchar(PROBE_TABLE, PROBE_COLUMN, PROBE_LENGTH + 10));
         try {
             assertThat(diff())
-                    .containsExactly(new ColumnMismatch(
-                            PROBE_TABLE, PROBE_COLUMN, ColumnMismatch.Kind.LENGTH, "50", "60"));
+                    .containsExactly(
+                            new ColumnMismatch(PROBE_TABLE, PROBE_COLUMN, ColumnMismatch.Kind.LENGTH, "50", "60"));
         } finally {
             execute(resizeVarchar(PROBE_TABLE, PROBE_COLUMN, PROBE_LENGTH));
         }

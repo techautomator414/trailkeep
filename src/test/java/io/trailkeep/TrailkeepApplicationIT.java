@@ -22,12 +22,12 @@ import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 
 /** Boots the whole application against PostgreSQL (it needs a database since PR 5, hence an IT). */
+// "IT" is the Failsafe suffix Part B mandates for integration tests, not an abbreviation.
+@SuppressWarnings("checkstyle:AbbreviationAsWordInName")
 @RequiresDocker
 @ActiveProfiles("test")
 @Import(PostgresTestcontainersConfiguration.class)
-@SpringBootTest(
-        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-        properties = "management.server.port=0")
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = "management.server.port=0")
 class TrailkeepApplicationIT {
 
     private static final Duration TIMEOUT = Duration.ofSeconds(10);

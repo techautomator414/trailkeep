@@ -9,35 +9,39 @@ import java.time.Instant;
 import java.time.InstantSource;
 import java.time.ZoneOffset;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.test.context.bean.override.convention.TestBean;
-import org.springframework.test.context.junit.jupiter.SpringJUnitConfig;
+import org.springframework.boot.test.context.runner.ApplicationContextRunner;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
 
-@SpringJUnitConfig(InstantSourceConfig.class)
 class InstantSourceConfigTest {
 
     private static final Instant FIXED = Instant.parse("2026-01-02T03:04:05Z");
 
-    @TestBean
-    private InstantSource instantSource;
-
-    @Autowired
-    private InstantSource injected;
-
-    static InstantSource instantSource() {
-        return InstantSource.fixed(FIXED);
-    }
+    private final ApplicationContextRunner runner =
+            new ApplicationContextRunner().withUserConfiguration(InstantSourceConfig.class);
 
     @Test
     void applicationTimeComesFromTheUtcSystemClock() {
-        InstantSource source = new InstantSourceConfig().instantSource();
-
-        assertThat(source).isInstanceOf(Clock.class);
-        assertThat(((Clock) source).getZone()).isEqualTo(ZoneOffset.UTC);
+        runner.run(context -> {
+            InstantSource source = context.getBean(InstantSource.class);
+            assertThat(source).isInstanceOf(Clock.class);
+            assertThat(((Clock) source).getZone()).isEqualTo(ZoneOffset.UTC);
+        });
     }
 
     @Test
-    void aTestCanOverrideTheInstantSourceBean() {
-        assertThat(injected.instant()).isEqualTo(FIXED);
+    void testsCanOverrideTheInstantSourceBean() {
+        runner.withAllowBeanDefinitionOverriding(true)
+                .withUserConfiguration(FixedInstantSource.class)
+                .run(context -> assertThat(context.getBean(InstantSource.class).instant())
+                        .isEqualTo(FIXED));
+    }
+
+    @Configuration(proxyBeanMethods = false)
+    static class FixedInstantSource {
+        @Bean
+        InstantSource instantSource() {
+            return InstantSource.fixed(FIXED);
+        }
     }
 }

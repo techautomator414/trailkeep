@@ -8,6 +8,8 @@ import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 
 /** The schema-validation harness on PostgreSQL 16; runs in every build. */
+// "IT" is the Failsafe suffix Part B mandates for integration tests, not an abbreviation.
+@SuppressWarnings("checkstyle:AbbreviationAsWordInName")
 @ActiveProfiles("test")
 @Import(PostgresTestcontainersConfiguration.class)
 class PostgresSchemaIT extends AbstractVendorSchemaIT {

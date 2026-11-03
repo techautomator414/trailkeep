@@ -16,4 +16,5 @@ import org.springframework.validation.annotation.Validated;
  */
 @Validated
 @ConfigurationProperties("app.db")
-public record DatabaseProperties(@NotNull DatabaseVendor vendor, @Nullable String schema) {}
+public record DatabaseProperties(
+        @NotNull DatabaseVendor vendor, @Nullable String schema) {}

@@ -67,6 +67,7 @@ final class MigrationLinter {
     /** {@code ALTER TABLE t ADD [COLUMN] x}; x may also be a keyword starting a constraint clause. */
     private static final Pattern ALTER_ADD_COLUMN = Pattern.compile(
             "\\bALTER\\s+TABLE\\s+" + NAME + "(?:\\." + NAME + ")?\\s+ADD\\s+(?:COLUMN\\s+)?" + IDENT, FLAGS);
+
     private static final Set<String> NOT_A_COLUMN = Set.of("CONSTRAINT", "PRIMARY", "UNIQUE", "FOREIGN", "CHECK");
 
     private static final Pattern VENDOR_TYPES = Pattern.compile(
@@ -161,7 +162,10 @@ final class MigrationLinter {
         Matcher type = VENDOR_TYPES.matcher(masked);
         while (type.find()) {
             out.add(new Violation(
-                    source, line(sql, type.start()), Rule.VENDOR_TYPE, type.group(1).toUpperCase(Locale.ROOT)));
+                    source,
+                    line(sql, type.start()),
+                    Rule.VENDOR_TYPE,
+                    type.group(1).toUpperCase(Locale.ROOT)));
         }
         Matcher character = CHARACTER_TYPE.matcher(masked);
         while (character.find()) {

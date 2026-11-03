@@ -71,14 +71,15 @@ class MigrationLintTest {
     void findingsCarryTheLineOfTheOffendingToken() {
         String sql = "CREATE TABLE T_OK (\n  ID ${id} NOT NULL,\n  COMMENT VARCHAR(10)\n);\n";
 
-        assertThat(linter.lint("inline.sql", sql)).containsExactly(new Violation("inline.sql", 3, Rule.RESERVED_WORD,
-                "COMMENT"));
+        assertThat(linter.lint("inline.sql", sql))
+                .containsExactly(new Violation("inline.sql", 3, Rule.RESERVED_WORD, "COMMENT"));
     }
 
     @Test
     void theReservedWordListCoversTheWordsThePlanNames() {
         assertThat(reservedWords())
-                .contains("USER", "COMMENT", "DATE", "SIZE", "TO", "FROM", "ORDER", "GROUP", "LEVEL", "TYPE", "VALUE",
+                .contains(
+                        "USER", "COMMENT", "DATE", "SIZE", "TO", "FROM", "ORDER", "GROUP", "LEVEL", "TYPE", "VALUE",
                         "KEY", "ROWNUM", "ROWID", "SYSDATE", "LIMIT", "OFFSET", "WINDOW", "NUMBER", "UID", "SESSION")
                 .doesNotContain("NAME", "STATUS", "ACTIVE", "ACTION", "OUTCOME", "REASON");
     }

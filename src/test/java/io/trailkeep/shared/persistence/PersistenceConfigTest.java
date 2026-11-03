@@ -47,7 +47,8 @@ class PersistenceConfigTest {
 
         config.defaultSchemaCustomizer(new DatabaseProperties(DatabaseVendor.ORACLE, "TRAILKEEP_OWNER"))
                 .customize(withSchema);
-        config.defaultSchemaCustomizer(new DatabaseProperties(DatabaseVendor.ORACLE, " ")).customize(blank);
+        config.defaultSchemaCustomizer(new DatabaseProperties(DatabaseVendor.ORACLE, " "))
+                .customize(blank);
 
         assertThat(withSchema).containsEntry(MappingSettings.DEFAULT_SCHEMA, "TRAILKEEP_OWNER");
         assertThat(blank).doesNotContainKey(MappingSettings.DEFAULT_SCHEMA);
