@@ -5,10 +5,10 @@ package io.trailkeep.ops;
 import static io.trailkeep.support.HttpProbe.get;
 import static org.assertj.core.api.Assertions.assertThat;
 
-import java.net.http.HttpResponse;
-import org.junit.jupiter.api.Test;
 import io.trailkeep.testsupport.PostgresTestcontainersConfiguration;
 import io.trailkeep.testsupport.RequiresDocker;
+import java.net.http.HttpResponse;
+import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.context.annotation.Import;

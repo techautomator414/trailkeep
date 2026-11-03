@@ -5,6 +5,8 @@ package io.trailkeep.ops;
 import static io.trailkeep.support.HttpProbe.get;
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.trailkeep.testsupport.PostgresTestcontainersConfiguration;
+import io.trailkeep.testsupport.RequiresDocker;
 import java.net.http.HttpResponse;
 import java.util.Objects;
 import org.junit.jupiter.api.Test;
@@ -16,8 +18,6 @@ import org.springframework.boot.health.actuate.endpoint.HealthEndpointGroups;
 import org.springframework.boot.health.contributor.Health;
 import org.springframework.boot.health.contributor.HealthIndicator;
 import org.springframework.boot.micrometer.metrics.test.autoconfigure.AutoConfigureMetrics;
-import io.trailkeep.testsupport.PostgresTestcontainersConfiguration;
-import io.trailkeep.testsupport.RequiresDocker;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.test.web.server.LocalManagementPort;
@@ -33,7 +33,11 @@ import org.springframework.test.context.ActiveProfiles;
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = "management.server.port=0")
 @ActiveProfiles("test")
 @AutoConfigureMetrics // Spring Boot tests switch metrics export off unless asked.
-@Import({RemoteAddressController.class, ManagementEndpointsIT.ClusterIndicatorConfig.class, PostgresTestcontainersConfiguration.class})
+@Import({
+    RemoteAddressController.class,
+    ManagementEndpointsIT.ClusterIndicatorConfig.class,
+    PostgresTestcontainersConfiguration.class
+})
 class ManagementEndpointsIT {
 
     @LocalServerPort
