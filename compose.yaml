@@ -1,0 +1,47 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Charlie Genova and contributors
+#
+# Local development only. Every credential here is an obviously fake dev value; nothing in this file is used by
+# CI (Testcontainers starts its own databases) or by any deployment.
+#   docker compose up -d                    # PostgreSQL 16 for the 'local' profile
+#   docker compose --profile oracle up -d   # adds Oracle Free 23 for local Oracle parity work
+# Keycloak, Mailpit and ClamAV join this file with the work packages that need them (WP-04a, WP-17, WP-14).
+name: trailkeep
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: trailkeep
+      POSTGRES_USER: trailkeep
+      POSTGRES_PASSWORD: trailkeep # dev-only
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U trailkeep -d trailkeep"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  oracle:
+    profiles: ["oracle"]
+    image: gvenzl/oracle-free:23-slim
+    environment:
+      ORACLE_PASSWORD: trailkeep-dev # dev-only SYS/SYSTEM password
+      APP_USER: trailkeep
+      APP_USER_PASSWORD: trailkeep # dev-only
+    ports:
+      - "127.0.0.1:1521:1521"
+    volumes:
+      - oracle-data:/opt/oracle/oradata
+    healthcheck:
+      test: ["CMD", "healthcheck.sh"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+
+volumes:
+  postgres-data:
+  oracle-data:

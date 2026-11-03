@@ -3,6 +3,46 @@
 spring:
   application:
     name: trailkeep
+  profiles:
+    # Every runtime profile pulls in exactly one database vendor profile (application-postgresql.yml or
+    # application-oracle.yml). There is deliberately no vendor default: an unset vendor fails at start-up
+    # (app.db.vendor is @NotNull) instead of migrating Oracle with PostgreSQL placeholders.
+    group:
+      local: postgresql
+      test: postgresql
+      oracle-test: oracle
+
+  jpa:
+    open-in-view: false
+    hibernate:
+      # The migration tool owns the schema; Hibernate only checks it. prod must never override this.
+      ddl-auto: validate
+    properties:
+      hibernate:
+        type:
+          preferred_boolean_jdbc_type: BIT
+        default_batch_fetch_size: 50
+        query:
+          fail_on_pagination_over_collection_fetch: true
+          in_clause_parameter_padding: true
+        jdbc:
+          batch_size: 50
+        order_inserts: true
+        order_updates: true
+        # hibernate.default_schema is applied from app.db.schema by PersistenceConfig, only when it is set.
+
+  flyway:
+    # {vendor} is resolved by Spring Boot from the DataSource ("oracle" or "postgresql"), which matches the
+    # vendor folder names. PersistenceConfig fails start-up if it disagrees with app.db.vendor.
+    locations:
+      - classpath:db/migration/common
+      - classpath:db/migration/{vendor}
+    fail-on-missing-locations: true
+    validate-migration-naming: true
+    validate-on-migrate: true
+    clean-disabled: true
+    # Placeholder values per vendor (BUILD_PLAN Appendix A) live in application-{oracle,postgresql}.yml.
+    placeholder-replacement: true
 
 server:
   port: 8080

@@ -1,3 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
 # Copyright 2026 Charlie Genova and contributors
-# Placeholder for the 'local' profile; settings arrive with the work packages that need them.
+# 'local' profile: the PostgreSQL service from compose.yaml. Dev-only credentials, obviously fake.
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/trailkeep
+    username: trailkeep
+    password: trailkeep

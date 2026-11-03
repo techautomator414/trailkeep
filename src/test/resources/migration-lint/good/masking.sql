@@ -1,0 +1,19 @@
+-- SPDX-License-Identifier: Apache-2.0
+-- Copyright 2026 Charlie Genova and contributors
+-- Comments, string literals and placeholders are masked: BIGINT, BOOLEAN, TEXT, USER, VARCHAR(4000) here are inert.
+/* A block comment naming CLOB, TIMESTAMPTZ and COMMENT is inert too. */
+CREATE TABLE NOTE_SAMPLE (
+  ID          ${id}         NOT NULL,
+  BODY        ${clob},
+  PAYLOAD     ${bytes},
+  ENABLED     ${bool}       DEFAULT ${true} NOT NULL,
+  KIND        VARCHAR(20)   DEFAULT 'TEXT' NOT NULL,
+  LABEL       VARCHAR(1000) DEFAULT 'it''s USER data',
+  CREATED_AT  ${tstz}       NOT NULL,
+  CONSTRAINT PK_NOTE_SAMPLE PRIMARY KEY (ID),
+  CONSTRAINT CK_NOTE_SAMPLE_KIND CHECK (KIND IN ('TEXT', 'DATE'))
+);
+CREATE INDEX IX_NOTE_SAMPLE_KIND ON NOTE_SAMPLE (KIND, CREATED_AT);
+CREATE SEQUENCE SEQ_NOTE_SAMPLE START WITH 1 INCREMENT BY 50;
+ALTER TABLE NOTE_SAMPLE ADD SUMMARY VARCHAR(200);
+ALTER TABLE NOTE_SAMPLE ADD CONSTRAINT UK_NOTE_SAMPLE_LABEL UNIQUE (LABEL);

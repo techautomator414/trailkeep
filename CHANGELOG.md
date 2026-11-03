@@ -9,6 +9,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Migration tooling and three-image validation harness (PR 5, WP-03a): Spring Data JPA, Flyway Community with the
+  Oracle and PostgreSQL database modules, `ojdbc17` and the PostgreSQL driver; Flyway locations
+  `db/migration/common` plus `db/migration/{vendor}`, the Appendix A placeholders per vendor profile
+  (`oracle`, `postgresql`), Oracle `initSql` for `NLS_LENGTH_SEMANTICS=CHAR`, strict migration naming; Hibernate
+  `validate`, `open-in-view=false`, BIT booleans, batching and fetch settings, and the dialect pinned through the
+  `jakarta.persistence.database-*` properties; `app.db.vendor`/`app.db.schema` with a start-up guard that the
+  configured vendor is the connected one; a UTC `InstantSource` bean; the migration-lint unit test with good and bad
+  fixtures; Testcontainers harness (`AbstractVendorSchemaIT`: Flyway, `validate`, metadata diff of nullability and
+  length) on PostgreSQL 16 in every build and on `gvenzl/oracle-xe:21-slim` and `gvenzl/oracle-free:23-slim` under
+  `-Poracle-it`; Failsafe for `*IT`; `compose.yaml` with PostgreSQL 16 and an `oracle` profile.
 - Fork-safe CI (PR 3): `ci.yml` runs `./mvnw -B verify`, gitleaks and Semgrep (registry rulesets plus
   `security/semgrep/` rules and their `--test` cases once that directory exists) on every pull request and on
   `main`; `codeql.yml` runs CodeQL `security-extended` for Java (build mode `none`) on PRs, `main` and weekly;
