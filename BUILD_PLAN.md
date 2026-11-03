@@ -545,7 +545,7 @@ Section 508 (36 CFR Part 1194, 2017 Refresh) incorporates **WCAG 2.0 Level A and
 - **Developer Certificate of Origin** (`git commit -s`) enforced by a DCO check; no CLA.
 - `CONTRIBUTING.md` (how to build, test, scan, write accessible UI, portable SQL), `CODE_OF_CONDUCT.md` (Contributor Covenant 2.1), issue and PR templates with the security/accessibility checklist, `CODEOWNERS`.
 - Conventional commits, semantic versioning, `CHANGELOG.md` (Keep a Changelog), signed tags, GitHub Releases with SBOM + provenance + evidence pack attached.
-- Branch protection on `main`: PR required, 1 review, all required checks green, linear history, no force-push; Actions pinned by SHA with least-privilege `GITHUB_TOKEN`.
+- Branch rules on `main`: pull request required, all required checks green, linear history, no force-push or deletion; Actions pinned by SHA with least-privilege `GITHUB_TOKEN`. While the project has a single maintainer, GitHub requires zero approving reviews (a maintainer cannot approve their own PR); the review obligation is met by an independent review pass on every PR (a separate reviewing session, on a different model from the author when AI-assisted) whose findings are recorded in the PR before merge.
 
 ### 11.4 Security policy for a public project
 - `SECURITY.md`: report privately via GitHub Private Vulnerability Reporting; acknowledgement in 3 business days, fix target 90 days or coordinated disclosure; CVE requested through GitHub as CNA; security advisories published with each fix release.
