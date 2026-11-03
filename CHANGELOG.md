@@ -9,6 +9,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Modulith structure, `CaseScope` contract and architecture rules (PR 7, WP-07): Spring Modulith 2.1.2 with the
+  fourteen application modules as `@NullMarked` packages whose `package-info.java` states each module's
+  responsibility and permitted callers (`shared` is an open module); `ModularityTest` runs
+  `ApplicationModules.verify()` and writes the module documentation to `target/spring-modulith-docs`. In
+  `shared`: the `CaseNumber` value record (`PREFIX-YYYY-NNNNNN`, canonical parse and format) and
+  `CaseNotFoundException`; in `shared.access`: the `CaseScope` interface (`toPredicate`, `canRead`,
+  `assertReadable`, `system()`, `all()`) and the `@CaseRooted` and `@CaseAccessPath` annotations. ArchUnit rules,
+  each with planted-violation tests: case-rooted repositories extend only `Repository`, expose only scoped methods
+  and are injected only into access paths; no `@Lob`; `@Enumerated(EnumType.STRING)` on every enum column;
+  package-private repositories; no entity in `web`; no field injection; `CaseScope.all()` only from `security`.
+  Custom Semgrep rules with `semgrep --test` cases for `th:utext`, disabled Spring Security protections, inline
+  htmx script and non-constant JPA query strings.
 - Observability, container, deploy base and main/nightly/release CI (PR 12, WP-08 and the rest of WP-02):
   JSON logs (`logstash-logback-encoder`) in `prod`/`purge`/`importer` and text elsewhere, with a `requestId`
   MDC filter that reuses a safe incoming `X-Request-Id` or generates one and echoes it; Prometheus registry on

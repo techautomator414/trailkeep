@@ -1,0 +1,32 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!DOCTYPE html>
+<html lang="en">
+<body>
+<!-- ruleid: htmx-inline-script -->
+<button hx-post="/cases" hx-on:click="alert(1)">Save</button>
+<!-- ruleid: htmx-inline-script -->
+<form hx-on::after-request="this.reset()"></form>
+<!-- ruleid: htmx-inline-script -->
+<button hx-on-click="go()">Go</button>
+<!-- ruleid: htmx-inline-script -->
+<div hx-on="htmx:load: go()"></div>
+<!-- ruleid: htmx-inline-script -->
+<div data-hx-on:click="go()"></div>
+<!-- ruleid: htmx-inline-script -->
+<button hx-post="/x" hx-vals="js:{when: Date.now()}">Send</button>
+<!-- ruleid: htmx-inline-script -->
+<button hx-post="/x" hx-vals='javascript:{a: 1}'>Send</button>
+<!-- ruleid: htmx-inline-script -->
+<button hx-post="/x" hx-headers="js:{'X-A': token()}">Send</button>
+<!-- ruleid: htmx-inline-script -->
+<button hx-post="/x" hx-vars="a:1">Send</button>
+<!-- ok: htmx-inline-script -->
+<button hx-post="/x" hx-vals='{"page": 2}'>Send</button>
+<!-- ok: htmx-inline-script -->
+<button hx-post="/x" hx-headers='{"X-Requested-For": "fragment"}'>Send</button>
+<!-- ok: htmx-inline-script -->
+<button hx-post="/x" hx-target="#list" hx-swap="outerHTML">Send</button>
+<!-- ok: htmx-inline-script -->
+<a href="/x" data-action="open-dialog">Open</a>
+</body>
+</html>

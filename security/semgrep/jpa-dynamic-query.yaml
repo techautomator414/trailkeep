@@ -1,0 +1,35 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Charlie Genova and contributors
+rules:
+  - id: jpa-dynamic-query-string
+    message: >-
+      `$M` is called with a query string that is not a compile-time constant. Build dynamic queries with the
+      Criteria API or a Specification and pass values as bind parameters; native SQL lives only in `*JdbcDao`
+      classes (IMPLEMENTATION_PLAN Part B, Persistence).
+    severity: ERROR
+    languages: [java]
+    patterns:
+      - pattern: $EM.$M($Q, ...)
+      - metavariable-regex:
+          metavariable: $M
+          regex: '^(createQuery|createNativeQuery|createSelectionQuery|createMutationQuery|createNativeMutationQuery)$'
+      # Compile-time constants: literals, text blocks, constant-folded concatenations and final locals or
+      # fields whose value semgrep can propagate.
+      - pattern-not: $EM.$M("...", ...)
+      # Criteria objects, not strings; CriteriaBuilder.createQuery(Foo.class) itself is not a query string.
+      - pattern-not: $EM.$M($X.class)
+      - pattern-not: $EM.$M((CriteriaQuery $CQ), ...)
+      - pattern-not: $EM.$M((CriteriaQuery<$T> $CQ), ...)
+      - pattern-not: $EM.$M((CriteriaUpdate<$T> $CQ), ...)
+      - pattern-not: $EM.$M((CriteriaDelete<$T> $CQ), ...)
+      - pattern-not: $EM.$M($CB.createQuery(...), ...)
+      - pattern-not: $EM.$M($CB.createTupleQuery(), ...)
+      - pattern-not: $EM.$M($CB.createCriteriaUpdate(...), ...)
+      - pattern-not: $EM.$M($CB.createCriteriaDelete(...), ...)
+      # Constants declared in another class, recognized by naming convention (UPPER_SNAKE_CASE).
+      - metavariable-regex:
+          metavariable: $Q
+          regex: '^(?!(?:[\w.]+\.)?[A-Z][A-Z0-9_]*$)'
+    metadata:
+      category: security
+      cwe: "CWE-89: Improper Neutralization of Special Elements used in an SQL Command"
