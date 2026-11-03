@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SPDX-License-Identifier: Apache-2.0
+  Copyright 2026 Charlie Genova and contributors
+-->
+<!--
+  SpotBugs/FindSecBugs exclusions. Intentionally empty.
+  Every future entry must name the bug pattern and class, carry a comment with the justification,
+  and be approved in review by a maintainer with the security role (BUILD_PLAN section 12).
+  Prefer @SuppressFBWarnings(value = "...", justification = "...") at the narrowest scope instead.
+-->
+<FindBugsFilter
+    xmlns="https://github.com/spotbugs/filter/3.0.0"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="https://github.com/spotbugs/filter/3.0.0 https://raw.githubusercontent.com/spotbugs/spotbugs/3.1.0/spotbugs/etc/findbugsfilter.xsd">
+</FindBugsFilter>
