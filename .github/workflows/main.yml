@@ -244,14 +244,18 @@ jobs:
       - name: Build the image from digest-pinned UBI 9 bases
         run: .github/scripts/build-image.sh "${IMAGE}" "0.0.0-main+${GITHUB_SHA::12}"
 
-      - name: Scan the image (fails on HIGH or CRITICAL)
+      - name: Scan the image (fails on fixable HIGH or CRITICAL)
+        # The JSON and SARIF reports keep every finding. The gate ignores vulnerabilities that have no fixed
+        # version: those are UBI base-image packages Red Hat has not patched yet (or marked will_not_fix), which
+        # nothing in this repository can change (issue #11, owner decision). A HIGH or CRITICAL with a fix
+        # available still fails the build until the base image is rebuilt from a newer digest.
         run: |
           set -euo pipefail
           mkdir -p reports
           cp target/image/base-images.txt reports/
           trivy image --format json --output reports/trivy-image.json "${IMAGE}"
           trivy image --format sarif --output reports/trivy-image.sarif "${IMAGE}"
-          trivy image --format table --severity HIGH,CRITICAL --exit-code 1 "${IMAGE}"
+          trivy image --format table --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 "${IMAGE}"
 
       - name: Check image configuration with Dockle
         run: |

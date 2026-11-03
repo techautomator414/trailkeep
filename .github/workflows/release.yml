@@ -99,8 +99,10 @@ jobs:
           version="${GITHUB_REF_NAME#v}"
           .github/scripts/build-image.sh "${IMAGE}:${version}" "${version}"
 
-      - name: Scan the exact image that will be pushed (fails on HIGH or CRITICAL)
-        run: trivy image --severity HIGH,CRITICAL --exit-code 1 "${IMAGE}:${GITHUB_REF_NAME#v}"
+      - name: Scan the exact image that will be pushed (fails on fixable HIGH or CRITICAL)
+        # Same policy as main.yml (issue #11): unfixed base-image findings are reported in the evidence pack,
+        # not gated on.
+        run: trivy image --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 "${IMAGE}:${GITHUB_REF_NAME#v}"
 
       - name: Push to GHCR
         id: push
