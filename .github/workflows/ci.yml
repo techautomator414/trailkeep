@@ -1,0 +1,118 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Charlie Genova and contributors
+#
+# Fork-safe pipeline (IMPLEMENTATION_PLAN Part G, "Fork PR" column). Needs no secrets.
+# Checks that need secrets (SonarCloud, Dependency-Check, Oracle IT, container scans) live in main.yml.
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions: {}
+
+jobs:
+  build:
+    name: build (./mvnw verify)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    concurrency:
+      group: ci-build-${{ github.ref }}
+      cancel-in-progress: true
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Temurin 21
+        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      - name: Verify
+        run: ./mvnw -B -ntp verify
+
+      - name: Upload test, coverage and SBOM reports
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: build-reports
+          path: |
+            target/surefire-reports
+            target/failsafe-reports
+            target/site/jacoco
+            target/bom.json
+          if-no-files-found: ignore
+          retention-days: 14
+
+  gitleaks:
+    name: gitleaks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: read
+    concurrency:
+      group: ci-gitleaks-${{ github.ref }}
+      cancel-in-progress: true
+    steps:
+      - name: Check out (full history)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Scan for secrets
+        uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
+        env:
+          # The automatic, read-only job token; no license key is needed for a personal-account repository.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_ENABLE_COMMENTS: "false"
+
+  semgrep:
+    name: semgrep
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    concurrency:
+      group: ci-semgrep-${{ github.ref }}
+      cancel-in-progress: true
+    env:
+      SEMGREP_VERSION: "1.183.0"
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.13"
+
+      - name: Install Semgrep
+        run: python -m pip install --disable-pip-version-check "semgrep==${SEMGREP_VERSION}"
+
+      - name: Test custom rules
+        run: |
+          if [ -d security/semgrep ]; then
+            semgrep --test --metrics=off security/semgrep/
+          else
+            echo "security/semgrep/ not present yet; no custom rules to test."
+          fi
+
+      - name: Scan
+        run: |
+          configs=(--config p/default --config p/java --config p/secrets)
+          if [ -d security/semgrep ]; then
+            configs+=(--config security/semgrep/)
+          fi
+          # Rule test fixtures contain deliberate violations; they are exercised by the step above.
+          semgrep scan "${configs[@]}" --exclude security/semgrep --error --metrics=off
