@@ -1,0 +1,24 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<body>
+<!-- ruleid: thymeleaf-unescaped-output -->
+<p th:utext="${comment.body}">body</p>
+<!-- ruleid: thymeleaf-unescaped-output -->
+<p data-th-utext="${comment.body}">body</p>
+<!-- ruleid: thymeleaf-unescaped-output -->
+<p TH:UTEXT = "${comment.body}">body</p>
+<!-- ruleid: thymeleaf-unescaped-output -->
+<p>[(${comment.body})]</p>
+<!-- ok: thymeleaf-unescaped-output -->
+<p tk:safe="${comment.renderedBody}">body</p>
+<!-- ok: thymeleaf-unescaped-output -->
+<p th:text="${comment.body}">body</p>
+<!-- ok: thymeleaf-unescaped-output -->
+<p data-th-text="${comment.body}">body</p>
+<!-- ok: thymeleaf-unescaped-output -->
+<p>[[${comment.body}]]</p>
+<!-- ok: thymeleaf-unescaped-output -->
+<p data-utext-hint="not a thymeleaf attribute">plain</p>
+</body>
+</html>

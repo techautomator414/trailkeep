@@ -1,0 +1,23 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Charlie Genova and contributors
+rules:
+  - id: spring-security-protection-disabled
+    message: >-
+      Spring Security protection `$M` is disabled. CSRF, security headers, frame options, CSP, HSTS,
+      content-type options, cache control and referrer policy stay on (CLAUDE.md rule 3, BUILD_PLAN section 9).
+      Configure the protection instead of disabling it; if a gate is wrong, say so in the pull request.
+    severity: ERROR
+    languages: [java]
+    patterns:
+      - pattern-either:
+          - pattern: $X.$M(...).disable()
+          - pattern: $X.$M($C -> $C.disable())
+          - pattern: |
+              $X.$M($C -> { ... $C.disable(); ... })
+          - pattern: $X.$M($T::disable)
+      - metavariable-regex:
+          metavariable: $M
+          regex: '^(csrf|headers|frameOptions|contentSecurityPolicy|contentTypeOptions|httpStrictTransportSecurity|cacheControl|referrerPolicy|crossOriginOpenerPolicy|crossOriginEmbedderPolicy|crossOriginResourcePolicy|permissionsPolicyHeader)$'
+    metadata:
+      category: security
+      cwe: "CWE-352: Cross-Site Request Forgery (CSRF)"

@@ -1,0 +1,20 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Charlie Genova and contributors
+rules:
+  - id: thymeleaf-unescaped-output
+    message: >-
+      Unescaped Thymeleaf output ($MATCH). Output is escaped by default; the only unescaped path is the
+      sanitizing `tk:safe` attribute (IMPLEMENTATION_PLAN Part B, Security conventions). Use `th:text`,
+      `[[...]]` or `tk:safe`.
+    severity: ERROR
+    languages: [generic]
+    paths:
+      include:
+        - "*.html"
+    patterns:
+      - pattern-either:
+          - pattern-regex: '(?i)(?<![\w-])(?:data-)?th[:-]utext\s*='
+          - pattern-regex: '\[\('
+    metadata:
+      category: security
+      cwe: "CWE-79: Improper Neutralization of Input During Web Page Generation"

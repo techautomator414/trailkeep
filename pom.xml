@@ -41,7 +41,21 @@
     <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
     <!-- Reproducible builds: fixed archive entry timestamps. Bump on release. -->
     <project.build.outputTimestamp>2026-11-03T00:00:00Z</project.build.outputTimestamp>
+    <spring-modulith.version>2.1.2</spring-modulith.version>
+    <archunit.version>1.4.2</archunit.version>
   </properties>
+
+  <dependencyManagement>
+    <dependencies>
+      <dependency>
+        <groupId>org.springframework.modulith</groupId>
+        <artifactId>spring-modulith-bom</artifactId>
+        <version>${spring-modulith.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
 
   <dependencies>
     <dependency>
@@ -64,6 +78,15 @@
       <groupId>org.jspecify</groupId>
       <artifactId>jspecify</artifactId>
     </dependency>
+    <dependency>
+      <groupId>org.springframework.modulith</groupId>
+      <artifactId>spring-modulith-starter-core</artifactId>
+    </dependency>
+    <!-- CaseScope speaks the Criteria API; only the API jar until the JPA starter lands (PR 5). -->
+    <dependency>
+      <groupId>jakarta.persistence</groupId>
+      <artifactId>jakarta.persistence-api</artifactId>
+    </dependency>
 
     <dependency>
       <groupId>org.springframework.boot</groupId>
@@ -83,6 +106,25 @@
     <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-validation-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.modulith</groupId>
+      <artifactId>spring-modulith-starter-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>com.tngtech.archunit</groupId>
+      <artifactId>archunit-junit5</artifactId>
+      <version>${archunit.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <!-- Spring Data repository types for the architecture-rule fixtures only. Remove when the JPA starter
+         (PR 5) puts spring-data-commons on the compile classpath; a direct test-scoped declaration would
+         otherwise demote it. -->
+    <dependency>
+      <groupId>org.springframework.data</groupId>
+      <artifactId>spring-data-commons</artifactId>
       <scope>test</scope>
     </dependency>
   </dependencies>

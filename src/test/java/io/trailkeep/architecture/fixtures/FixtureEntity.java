@@ -1,0 +1,26 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 Charlie Genova and contributors
+package io.trailkeep.architecture.fixtures;
+
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.Id;
+import jakarta.persistence.Transient;
+
+/** Compliant entity: enum stored as STRING; static and transient enum fields are ignored. */
+@Entity
+public class FixtureEntity {
+
+    /** Not persisted; must not trip the enum rule. */
+    static final FixtureStatus DEFAULT_STATUS = FixtureStatus.OPEN;
+
+    @Id
+    Long id;
+
+    @Enumerated(EnumType.STRING)
+    FixtureStatus status;
+
+    @Transient
+    FixtureStatus previousStatus;
+}
