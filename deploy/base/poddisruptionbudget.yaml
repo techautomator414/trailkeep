@@ -1,0 +1,13 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Charlie Genova and contributors
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: trailkeep
+spec:
+  minAvailable: 1
+  unhealthyPodEvictionPolicy: AlwaysAllow
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: trailkeep
+      app.kubernetes.io/component: web

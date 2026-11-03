@@ -52,6 +52,9 @@
     <nullaway.version>0.14.3</nullaway.version>
     <spotbugs.version>4.10.5</spotbugs.version>
     <findsecbugs.version>1.14.0</findsecbugs.version>
+
+    <!-- Not managed by Spring Boot. 9.x is the line built on Jackson 3, which Boot 4 uses. -->
+    <logstash-logback-encoder.version>9.0</logstash-logback-encoder.version>
   </properties>
 
   <dependencies>
@@ -70,6 +73,17 @@
     <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-validation</artifactId>
+    </dependency>
+    <dependency>
+      <!-- Prometheus scrape endpoint on the management port (BUILD_PLAN §16). Apache-2.0. -->
+      <groupId>io.micrometer</groupId>
+      <artifactId>micrometer-registry-prometheus</artifactId>
+    </dependency>
+    <dependency>
+      <!-- JSON log lines in prod/purge/importer (Part B "Logging"). Apache-2.0. -->
+      <groupId>net.logstash.logback</groupId>
+      <artifactId>logstash-logback-encoder</artifactId>
+      <version>${logstash-logback-encoder.version}</version>
     </dependency>
     <dependency>
       <groupId>org.jspecify</groupId>

@@ -1,0 +1,99 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Charlie Genova and contributors
+# Default-deny for every Trailkeep pod, then the minimum allowed (BUILD_PLAN §16). Addresses use RFC 5737
+# documentation ranges as PLACEHOLDERS; the deploying organization replaces them in its overlay. OIDC back-channel
+# logout calls the pod's own loopback address, which no NetworkPolicy governs.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: trailkeep-default-deny
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: trailkeep
+  policyTypes: [Ingress, Egress]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: trailkeep-web-ingress
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: trailkeep
+      app.kubernetes.io/component: web
+  policyTypes: [Ingress]
+  ingress:
+    # Application traffic only from the OpenShift router (the standard ingress policy-group label).
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              policy-group.network.openshift.io/ingress: ""
+      ports:
+        - port: 8080
+          protocol: TCP
+    # Metrics scrape only from cluster monitoring. PLACEHOLDER label if a different Prometheus is used.
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              network.openshift.io/policy-group: monitoring
+      ports:
+        - port: 8081
+          protocol: TCP
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: trailkeep-egress
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: trailkeep
+  policyTypes: [Egress]
+  egress:
+    # Cluster DNS.
+    - to:
+        - namespaceSelector: {}
+          podSelector:
+            matchLabels:
+              dns.operator.openshift.io/daemonset-dns: default
+      ports:
+        - port: 5353
+          protocol: UDP
+        - port: 5353
+          protocol: TCP
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+    # Database. PLACEHOLDER address; Oracle tcps 2484 (or 1521), PostgreSQL 5432.
+    - to:
+        - ipBlock:
+            cidr: 192.0.2.10/32
+      ports:
+        - port: 2484
+          protocol: TCP
+        - port: 5432
+          protocol: TCP
+    # OIDC identity provider. PLACEHOLDER address.
+    - to:
+        - ipBlock:
+            cidr: 192.0.2.20/32
+      ports:
+        - port: 443
+          protocol: TCP
+    # SMTP relay with STARTTLS. PLACEHOLDER address.
+    - to:
+        - ipBlock:
+            cidr: 192.0.2.30/32
+      ports:
+        - port: 587
+          protocol: TCP
+    # clamd as a shared Service. PLACEHOLDER label; drop this rule if ClamAV runs as a sidecar.
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: clamav
+      ports:
+        - port: 3310
+          protocol: TCP

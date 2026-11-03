@@ -1,0 +1,12 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Charlie Genova and contributors
+# Build context for Containerfile: the sources Maven needs, nothing else.
+**
+!.mvn/wrapper/maven-wrapper.properties
+!mvnw
+!pom.xml
+!src/main/**
+!config/**
+!security/licenses-allowed.txt
+!LICENSE
+!NOTICE
