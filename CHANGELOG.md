@@ -7,6 +7,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- CI image scan policy (issue #11, owner decision): the Trivy gates on the built image in `main.yml` and
+  `release.yml` run with `--ignore-unfixed`, so only HIGH or CRITICAL findings that have a fixed version fail the
+  build. Unfixed base-image findings still appear in the JSON and SARIF reports and in the release evidence pack.
+
 ### Added
 
 - Modulith structure, `CaseScope` contract and architecture rules (PR 7, WP-07): Spring Modulith 2.1.2 with the
