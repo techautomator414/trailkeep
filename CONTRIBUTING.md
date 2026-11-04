@@ -17,7 +17,7 @@ the build, not by opinion.
 Prerequisites: JDK 21, Docker (for Testcontainers and the local stack). Maven comes with the wrapper.
 
 ```
-docker compose up -d                       # PostgreSQL 16, Keycloak (dev realm), Mailpit, ClamAV
+docker compose up -d                       # PostgreSQL 16, Keycloak (dev realm); Mailpit and ClamAV arrive with WP-17/WP-14
 ./mvnw verify                              # unit + PostgreSQL integration tests + all local gates
 ./mvnw spring-boot:run -Dspring-boot.run.profiles=local
 ```
