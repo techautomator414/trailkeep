@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 Charlie Genova and contributors -->
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title th:text="|${team.name} – Teams – Trailkeep|">Team – Teams – Trailkeep</title>
+</head>
+<body>
+<a href="#main">Skip to main content</a>
+<main id="main" tabindex="-1">
+  <p><a th:href="@{/admin/teams}">All teams</a></p>
+  <h1 th:text="${team.name}">Team</h1>
+  <p th:if="${invalid}" role="alert">Nothing was changed: check the highlighted fields and try again.</p>
+
+  <h2>Team details</h2>
+  <form method="post" th:action="@{/admin/teams/{id}(id=${team.id})}">
+    <label for="name">Team name</label>
+    <input id="name" name="name" type="text" required maxlength="120" th:value="${team.name}">
+    <input type="hidden" name="_active" value="on">
+    <input id="active" name="active" type="checkbox" value="true" th:checked="${team.active}">
+    <label for="active">Active (inactive teams accept no new members or cases)</label>
+    <button type="submit">Save team</button>
+  </form>
+
+  <h2>Members</h2>
+  <table>
+    <caption th:text="|Members of ${team.name}|">Members</caption>
+    <thead><tr><th scope="col">Name</th><th scope="col">Role</th><th scope="col">Action</th></tr></thead>
+    <tbody>
+    <tr th:each="m : ${members}">
+      <th scope="row" th:text="${m.disabled} ? |${m.displayName} (disabled)| : ${m.displayName}">Name</th>
+      <td th:text="${#strings.capitalize(#strings.toLowerCase(m.role))}">Reader</td>
+      <td>
+        <form method="post" th:action="@{/admin/teams/{t}/members/{u}/remove(t=${team.id},u=${m.userId})}">
+          <button type="submit" th:text="|Remove ${m.displayName}|">Remove</button>
+        </form>
+      </td>
+    </tr>
+    <tr th:if="${#lists.isEmpty(members)}"><td colspan="3">No members yet.</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Grant or change a role</h2>
+  <p>System Admins are not listed: they cannot hold team roles.</p>
+  <form method="post" th:action="@{/admin/teams/{id}/members(id=${team.id})}">
+    <label for="userId">User</label>
+    <select id="userId" name="userId" required>
+      <option value="">Choose a user</option>
+      <option th:each="u : ${users}" th:value="${u.userId}" th:text="${u.displayName}">User</option>
+    </select>
+    <label for="role">Role</label>
+    <select id="role" name="role" required>
+      <option th:each="r : ${roles}" th:value="${r}" th:text="${#strings.capitalize(#strings.toLowerCase(r))}">
+        Reader</option>
+    </select>
+    <button type="submit">Save role</button>
+  </form>
+</main>
+</body>
+</html>

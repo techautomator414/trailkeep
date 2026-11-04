@@ -24,4 +24,15 @@
     <Method name="doFilterInternal"/>
     <Bug pattern="SERVLET_HEADER"/>
   </Match>
+  <!--
+    SPRING_ENDPOINT (FindSecBugs, Low) on TeamAdminController: an inventory marker that fires on every Spring MVC
+    handler; it reports no defect. The endpoints need an OIDC login (SecurityConfig), every POST carries a CSRF token,
+    and TeamAdminService refuses anyone but a System Admin, rebuilding permissions from the database per request.
+    Covered by TeamAdminControllerIT (403 for the nearest role, 404, 422, CSRF). Added in WP-09; needs security-role
+    approval. Scoped to this class, not the pattern, so each future controller is reviewed the same way.
+  -->
+  <Match>
+    <Class name="io.trailkeep.web.TeamAdminController"/>
+    <Bug pattern="SPRING_ENDPOINT"/>
+  </Match>
 </FindBugsFilter>

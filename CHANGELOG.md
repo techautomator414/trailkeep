@@ -21,6 +21,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Team and team-role administration (WP-09, part 2 of 2): `TeamAdminService` (System Admins only; create,
+  rename, deactivate teams; grant, change and revoke team roles; a System Admin, a disabled user or an inactive team
+  never receives a role) with `TEAM_CREATED`, `TEAM_UPDATED`, `ROLE_GRANTED`, `ROLE_CHANGED` and `ROLE_REVOKED`
+  audit events carrying old/new snapshots; server-rendered screens under `/admin/teams` (semantic tables and labelled
+  forms, CSRF on every POST) whose refusals answer 403, 404, 409 or 422.
 - Case permission matrix (WP-09, part 1 of 2): `CasePermissionService` in `security` evaluates
   `permissions/matrix.csv`, a first-match decision table over effective role (System Admin and Compliance Admin
   win over team roles) × ownership × sensitivity × status × action, which fails start-up unless it ends in a
