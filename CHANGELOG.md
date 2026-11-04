@@ -11,6 +11,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - Case schema (`V4`: `CASE_RECORD`, `CASE_SLA`, `CASE_SEARCH`, case sequences) and the principal-backed `CaseScope`,
   derived from the permission matrix, with a scoped case repository (WP-11 part 1).
+- Case creation service and the case page (WP-11 part 2a): numbers drawn from `SEQ_CASE_NUMBER` with the
+  configurable prefix `app.cases.number-prefix` (default `CASE`) and the opening year; the `CASE_SLA` row initialised
+  from the case type's policy by the one anchor rule; the `CASE_SEARCH` row from title and description; a
+  `CASE_CREATED` audit event with subject and description redacted. `/cases/{number}` shows the case header (status,
+  SLA, sensitivity and priority chips) and overview in one scoped query; unreadable, absent and malformed numbers all
+  answer the same 404.
 
 ### Changed
 

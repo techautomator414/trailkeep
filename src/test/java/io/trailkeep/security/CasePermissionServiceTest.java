@@ -7,11 +7,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 import io.trailkeep.shared.CaseStatus;
 import io.trailkeep.shared.Sensitivity;
 import io.trailkeep.user.GlobalRole;
+import io.trailkeep.user.TeamAdminService;
 import io.trailkeep.user.TeamRole;
 import io.trailkeep.user.UserDirectoryService;
 import io.trailkeep.user.UserPermissions;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
@@ -38,6 +40,16 @@ class CasePermissionServiceTest {
         @Override
         public List<Long> activeComplianceAdmins() {
             return complianceAdmins;
+        }
+
+        @Override
+        public Optional<String> displayName(long userId) {
+            return Optional.empty();
+        }
+
+        @Override
+        public Optional<TeamAdminService.TeamSummary> team(long teamId) {
+            return Optional.empty();
         }
     });
 

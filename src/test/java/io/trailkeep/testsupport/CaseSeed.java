@@ -5,6 +5,7 @@ package io.trailkeep.testsupport;
 import io.trailkeep.shared.CaseNumber;
 import io.trailkeep.shared.CaseStatus;
 import io.trailkeep.shared.Sensitivity;
+import io.trailkeep.user.TeamRole;
 import java.sql.Date;
 import java.sql.Timestamp;
 import java.time.Instant;
@@ -103,7 +104,28 @@ public final class CaseSeed {
         return id == null ? -1 : id;
     }
 
-    private long caseType() {
+    /**
+     * Gives a user a role in a team.
+     *
+     * @param userId the user
+     * @param teamId the team
+     * @param role the role in the team
+     */
+    public void member(long userId, long teamId, TeamRole role) {
+        jdbc.update(
+                "INSERT INTO APP_USER_TEAM (USER_ID, TEAM_ID, ROLE_IN_TEAM) VALUES (?, ?, ?)",
+                userId,
+                teamId,
+                role.name());
+    }
+
+    /**
+     * The seed's active case type, created on first use with a 30-day policy anchored on the identified-on day at
+     * 80 % at risk (the column defaults).
+     *
+     * @return the case type's id
+     */
+    public long caseType() {
         if (caseTypeId == 0) {
             long policy = NEXT.incrementAndGet();
             jdbc.update(

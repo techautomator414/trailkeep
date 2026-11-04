@@ -26,4 +26,14 @@ interface CaseRecordQueries {
      * @return {@code true} if the case exists and the scope reads it
      */
     boolean exists(CaseScope scope, CaseNumber caseNumber);
+
+    /**
+     * One case with what its page needs from the case type and the SLA row, in one statement, if the scope reads
+     * it. An unreadable case and an absent one give the same answer.
+     *
+     * @param scope the caller's scope
+     * @param caseNumber the case number
+     * @return the case page's row, or empty
+     */
+    Optional<CaseRow> findRow(CaseScope scope, CaseNumber caseNumber);
 }

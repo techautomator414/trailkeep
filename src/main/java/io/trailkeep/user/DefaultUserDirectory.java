@@ -5,6 +5,7 @@ package io.trailkeep.user;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -16,10 +17,15 @@ class DefaultUserDirectory implements UserDirectoryService {
     private final AppUserRepository users;
     private final AppUserTeamRepository memberships;
     private final AppUserGlobalRoleRepository globalRoles;
+    private final TeamRepository teams;
 
     DefaultUserDirectory(
-            AppUserRepository users, AppUserTeamRepository memberships, AppUserGlobalRoleRepository globalRoles) {
+            AppUserRepository users,
+            AppUserTeamRepository memberships,
+            AppUserGlobalRoleRepository globalRoles,
+            TeamRepository teams) {
         this.users = users;
+        this.teams = teams;
         this.memberships = memberships;
         this.globalRoles = globalRoles;
     }
@@ -51,6 +57,17 @@ class DefaultUserDirectory implements UserDirectoryService {
         return enabled(globalRoles.findByIdRole(GlobalRole.COMPLIANCE_ADMIN).stream()
                 .map(role -> role.getId().userId())
                 .toList());
+    }
+
+    @Override
+    public Optional<String> displayName(long userId) {
+        return users.findById(userId).map(AppUser::getDisplayName);
+    }
+
+    @Override
+    public Optional<TeamAdminService.TeamSummary> team(long teamId) {
+        return teams.findById(teamId)
+                .map(team -> new TeamAdminService.TeamSummary(teamId, team.getName(), team.isActive()));
     }
 
     private List<Long> enabled(Collection<Long> ids) {

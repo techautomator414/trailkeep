@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- The case page (BUILD_PLAN §4.3). Chips carry an icon and text, never colour alone. Tabs and actions arrive with
+     the work packages that fill them (WP-12 to WP-19). -->
+<html lang="en" xmlns:th="http://www.thymeleaf.org" th:replace="~{web/layout :: page(~{::title}, ~{::main})}">
+<head><title th:text="${c.number} + ' ' + ${c.title} + ' · ' + ${@branding.name()}">Case</title></head>
+<body>
+<main id="main" class="container tk-main" tabindex="-1">
+  <h1><span class="tk-case-number" th:text="${c.number}">CASE-2026-000001</span>
+    <span th:text="${c.title}">Title</span></h1>
+  <ul class="tk-chips" th:aria-label="#{tk.case.state}">
+    <li class="tk-chip" th:text="#{'tk.case.status.' + ${c.status}}">Open</li>
+    <li class="tk-chip" th:classappend="'tk-sla-' + ${c.sla.state}"
+        th:with="days=${c.sla.daysLeft}, gone=${-c.sla.daysLeft}">
+      <span aria-hidden="true" th:text="#{'tk.case.sla.icon.' + ${c.sla.state}}">●</span>
+      <span th:text="#{${'tk.case.sla.' + c.sla.state}(${days},${gone})}">12 days left</span></li>
+    <li class="tk-chip" th:if="${c.sensitivity.name() == 'RESTRICTED'}">
+      <span aria-hidden="true">&#x1F512;</span> <span th:text="#{tk.case.restricted}">Restricted</span></li>
+    <li class="tk-chip" th:if="${c.priority.name() == 'HIGH'}">
+      <span aria-hidden="true">!</span> <span th:text="#{tk.case.high}">High priority</span></li>
+  </ul>
+  <h2 th:text="#{tk.case.overview}">Overview</h2>
+  <dl class="tk-facts">
+    <dt th:text="#{tk.case.owner}">Owner</dt><dd th:text="${c.ownerName}">Owner</dd>
+    <dt th:text="#{tk.case.team}">Team</dt><dd th:text="${c.teamName}">Team</dd>
+    <dt th:text="#{tk.case.type}">Case type</dt><dd th:text="${c.caseTypeName}">Type</dd>
+    <dt th:text="#{tk.case.identified}">Identified on</dt><dd th:text="${c.identifiedOn}">2026-11-01</dd>
+    <dt th:text="#{tk.case.opened}">Opened on</dt><dd th:text="${c.openedOn}">2026-11-04</dd>
+    <dt th:text="#{tk.case.due}">Due on</dt>
+    <dd th:text="${c.sla.dueOn} ?: #{tk.case.due.none}">2026-12-04</dd>
+    <dt th:text="#{tk.case.subject}">Subject / involved parties</dt>
+    <dd th:text="${c.subjectText} ?: #{tk.case.subject.none}">None given</dd>
+  </dl>
+  <h3 th:text="#{tk.case.description}">Description</h3>
+  <p class="tk-description" th:text="${c.description}">Description</p>
+</main>
+</body>
+</html>
