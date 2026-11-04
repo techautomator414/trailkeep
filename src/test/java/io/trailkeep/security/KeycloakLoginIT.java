@@ -4,23 +4,20 @@ package io.trailkeep.security;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.trailkeep.testsupport.KeycloakDevRealm;
 import io.trailkeep.testsupport.PostgresTestcontainersConfiguration;
 import io.trailkeep.testsupport.RequiresDocker;
 import java.io.IOException;
-import java.io.UncheckedIOException;
 import java.net.CookieManager;
 import java.net.CookiePolicy;
 import java.net.CookieStore;
 import java.net.HttpCookie;
-import java.net.ServerSocket;
 import java.net.URI;
 import java.net.URLEncoder;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
@@ -35,9 +32,6 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
-import org.testcontainers.containers.GenericContainer;
-import org.testcontainers.containers.wait.strategy.Wait;
-import org.testcontainers.images.builder.Transferable;
 
 /**
  * A real OIDC login round-trip against Keycloak with the dev realm ({@code deploy/local/keycloak}): browser redirect
@@ -52,36 +46,20 @@ import org.testcontainers.images.builder.Transferable;
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.DEFINED_PORT)
 class KeycloakLoginIT {
 
-    /** Same image as compose.yaml. */
-    static final String KEYCLOAK_IMAGE = "keycloak/keycloak:26.0.7";
-
-    private static final String REALM = "trailkeep-dev";
-    private static final String PASSWORD = "dev-password";
+    private static final String PASSWORD = KeycloakDevRealm.PASSWORD;
     private static final String COMPLIANCE_ADMIN_ID = "00000000-0000-4000-8000-000000000101";
     private static final String DISABLED_USER_ID = "00000000-0000-4000-8000-000000000103";
     private static final Duration TIMEOUT = Duration.ofSeconds(20);
     private static final Pattern LOGIN_FORM = Pattern.compile("<form id=\"kc-form-login\"[^>]*action=\"([^\"]+)\"");
 
-    /** Fixed before the context starts, because the realm's redirect URI must name it. */
-    private static final int APP_PORT = freePort();
-
-    private static final GenericContainer<?> KEYCLOAK = keycloak();
+    private static final KeycloakDevRealm KEYCLOAK = KeycloakDevRealm.start();
 
     @Autowired
     private JdbcTemplate jdbc;
 
     @DynamicPropertySource
     static void provider(DynamicPropertyRegistry registry) {
-        String issuer = issuer();
-        String endpoints = issuer + "/protocol/openid-connect";
-        registry.add("server.port", () -> APP_PORT);
-        registry.add("management.server.port", () -> 0);
-        // The test profile pins unreachable endpoints; explicit endpoints win over discovery, so replace them all.
-        registry.add("spring.security.oauth2.client.provider.idp.issuer-uri", () -> issuer);
-        registry.add("spring.security.oauth2.client.provider.idp.authorization-uri", () -> endpoints + "/auth");
-        registry.add("spring.security.oauth2.client.provider.idp.token-uri", () -> endpoints + "/token");
-        registry.add("spring.security.oauth2.client.provider.idp.jwk-set-uri", () -> endpoints + "/certs");
-        registry.add("spring.security.oauth2.client.provider.idp.user-info-uri", () -> endpoints + "/userinfo");
+        KEYCLOAK.register(registry);
     }
 
     @Test
@@ -90,10 +68,10 @@ class KeycloakLoginIT {
 
         HttpResponse<String> landing = browser.login("compliance.admin");
 
-        // Signed in: the saved request ("/") is replayed and, with no page there yet, answers 404 rather than
-        // another redirect to the provider.
+        // Signed in: the saved request ("/") is replayed and the dashboard renders for this user.
         assertThat(landing.uri().getPath()).isEqualTo("/");
-        assertThat(landing.statusCode()).isEqualTo(404);
+        assertThat(landing.statusCode()).isEqualTo(200);
+        assertThat(landing.body()).contains("<h1>Dashboard</h1>", "Signed in as Compliance Admin.");
         assertThat(browser.get(app("/anything")).statusCode()).isEqualTo(404);
 
         Map<String, Object> user = jdbc.queryForMap(
@@ -131,38 +109,11 @@ class KeycloakLoginIT {
     }
 
     private static String app(String path) {
-        return "http://localhost:" + APP_PORT + path;
+        return KEYCLOAK.app(path);
     }
 
     private static String issuer() {
-        return "http://localhost:" + KEYCLOAK.getMappedPort(8080) + "/realms/" + REALM;
-    }
-
-    private static GenericContainer<?> keycloak() {
-        String realm;
-        try {
-            realm = Files.readString(Path.of("deploy/local/keycloak/trailkeep-dev-realm.json"))
-                    .replace("http://localhost:8080", "http://localhost:" + APP_PORT);
-        } catch (IOException e) {
-            throw new UncheckedIOException(e);
-        }
-        GenericContainer<?> container = new GenericContainer<>(KEYCLOAK_IMAGE)
-                .withCommand("start-dev", "--import-realm")
-                .withCopyToContainer(Transferable.of(realm), "/opt/keycloak/data/import/" + REALM + ".json")
-                .withExposedPorts(8080)
-                .waitingFor(Wait.forHttp("/realms/" + REALM + "/.well-known/openid-configuration")
-                        .forPort(8080)
-                        .withStartupTimeout(Duration.ofMinutes(3)));
-        container.start();
-        return container;
-    }
-
-    private static int freePort() {
-        try (ServerSocket socket = new ServerSocket(0)) {
-            return socket.getLocalPort();
-        } catch (IOException e) {
-            throw new UncheckedIOException(e);
-        }
+        return KEYCLOAK.issuer();
     }
 
     /**

@@ -7,10 +7,10 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.trailkeep.audit.AuditRecord;
 import io.trailkeep.audit.AuditTrailService;
+import io.trailkeep.shared.DomainException.Kind;
 import io.trailkeep.shared.access.CaseScope;
 import io.trailkeep.testsupport.PostgresTestcontainersConfiguration;
 import io.trailkeep.testsupport.RequiresDocker;
-import io.trailkeep.user.TeamAdminException.Kind;
 import io.trailkeep.user.TeamAdminService.Actor;
 import java.time.Instant;
 import java.util.UUID;

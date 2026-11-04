@@ -51,6 +51,23 @@ spring:
       app_user: ${app.db.app-user}
       purge_user: ${app.db.purge-user}
 
+  web:
+    resources:
+      # Content-hashed asset URLs (Part B "Web"): templates write @{/css/app.css}, the response carries
+      # /css/app-<md5>.css, and a changed file gets a new URL, so assets can be cached for a year.
+      chain:
+        strategy:
+          content:
+            enabled: true
+            paths: /**
+      cache:
+        cachecontrol:
+          max-age: 365d
+  thymeleaf:
+    servlet:
+      # Render the whole page before writing, so a template error yields the error page, not half a page.
+      produce-partial-output-while-processing: false
+
   task:
     scheduling:
       pool:

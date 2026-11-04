@@ -35,6 +35,11 @@ jobs:
           java-version: "21"
           cache: maven
 
+      - name: Install the Playwright browser for the E2E/axe tests
+        # Same Playwright version as playwright.version in pom.xml, so the Java client finds this Chromium build.
+        # --with-deps installs the system libraries; CI=true makes ShellAccessibilityIT fail rather than skip.
+        run: npx --yes playwright@1.63.0 install --with-deps chromium
+
       - name: Verify
         run: ./mvnw -B -ntp verify
 
@@ -115,7 +120,11 @@ jobs:
             configs+=(--config security/semgrep/)
           fi
           # Rule test fixtures contain deliberate violations; they are exercised by the step above.
-          semgrep scan "${configs[@]}" --exclude security/semgrep --error --metrics=off
+          # django-no-csrf-token is a Django-template rule in p/default that looks for {% csrf_token %}; it cannot see
+          # Thymeleaf's th:name/th:value or the token th:action injects, so it fires on every POST form here. CSRF
+          # enforcement is proven by SecurityDefaultsIT and WebShellIT. Excluded by owner decision (PR 9, #19).
+          semgrep scan "${configs[@]}" --exclude security/semgrep --error --metrics=off \
+            --exclude-rule python.django.security.django-no-csrf-token.django-no-csrf-token
 
   dco:
     name: dco (Signed-off-by on every commit)

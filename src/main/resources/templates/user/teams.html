@@ -1,34 +1,29 @@
 <!DOCTYPE html>
 <!-- SPDX-License-Identifier: Apache-2.0 -->
-<!-- Copyright 2026 Charlie Genova and contributors -->
-<html lang="en" xmlns:th="http://www.thymeleaf.org">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Teams – Administration – Trailkeep</title>
-</head>
+<html lang="en" xmlns:th="http://www.thymeleaf.org" th:replace="~{web/layout :: page(~{::title}, ~{::main})}">
+<head><title th:text="#{tk.teams.title} + ' · ' + ${@branding.name()}">Teams</title></head>
 <body>
-<a href="#main">Skip to main content</a>
-<main id="main" tabindex="-1">
-  <h1>Teams</h1>
-  <p th:if="${invalid}" role="alert">The team was not created: a team name has 1 to 120 characters.</p>
-  <table>
-    <caption>All teams</caption>
-    <thead><tr><th scope="col">Name</th><th scope="col">Status</th></tr></thead>
+<main id="main" class="container tk-main" tabindex="-1">
+  <h1 th:text="#{tk.teams.title}">Teams</h1>
+  <p th:if="${invalid}" class="alert alert-danger" role="alert" th:text="#{tk.teams.invalid}">Not created.</p>
+  <table class="table">
+    <caption th:text="#{tk.teams.caption}">All teams</caption>
+    <thead><tr><th scope="col" th:text="#{tk.teams.name}">Name</th>
+      <th scope="col" th:text="#{tk.teams.status}">Status</th></tr></thead>
     <tbody>
     <tr th:each="t : ${teams}">
       <th scope="row"><a th:href="@{/admin/teams/{id}(id=${t.id})}" th:text="${t.name}">Team</a></th>
-      <td th:text="${t.active} ? 'Active' : 'Inactive'">Active</td>
+      <td th:text="${t.active} ? #{tk.teams.active} : #{tk.teams.inactive}">Active</td>
     </tr>
-    <tr th:if="${#lists.isEmpty(teams)}"><td colspan="2">No teams yet.</td></tr>
+    <tr th:if="${#lists.isEmpty(teams)}"><td colspan="2" th:text="#{tk.teams.none}">No teams yet.</td></tr>
     </tbody>
   </table>
-  <h2>Create a team</h2>
+  <h2 th:text="#{tk.teams.create}">Create a team</h2>
   <form method="post" th:action="@{/admin/teams}">
-    <label for="name">Team name</label>
-    <input id="name" name="name" type="text" required maxlength="120" autocomplete="off">
+    <label class="form-label" for="name" th:text="#{tk.teams.name}">Team name</label>
+    <input class="form-control" id="name" name="name" type="text" required maxlength="120" autocomplete="off">
     <input type="hidden" name="active" value="true">
-    <button type="submit">Create team</button>
+    <button class="btn btn-primary mt-2" type="submit" th:text="#{tk.teams.create.submit}">Create team</button>
   </form>
 </main>
 </body>

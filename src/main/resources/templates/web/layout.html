@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!--
+  The one layout (Part B "Web"). A page calls it with its title and its <main> content:
+    <html th:replace="~{web/layout :: page(~{::title}, ~{::main})}">
+  Landmarks, skip link and live region per BUILD_PLAN §10.1; the htmx configuration is fixed here (ADR-0009) and
+  its presence is tested. Every <script> carries the per-request CSP nonce.
+-->
+<html lang="en" xmlns:th="http://www.thymeleaf.org" th:fragment="page(title, content)">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title th:replace="${title}">Trailkeep</title>
+  <meta name="htmx-config"
+        content='{"allowEval":false,"allowScriptTags":false,"selfRequestsOnly":true,"includeIndicatorStyles":false,"historyCacheSize":0,"refreshOnHistoryMiss":true}'>
+  <meta name="tk-csrf-header" th:if="${_csrf != null}" th:content="${_csrf.headerName}">
+  <meta name="tk-csrf-token" th:if="${_csrf != null}" th:content="${_csrf.token}">
+  <link rel="stylesheet" th:href="@{/vendor/bootstrap/bootstrap.min.css}">
+  <link rel="stylesheet" th:href="@{/css/app.css}">
+  <script defer th:src="@{/vendor/htmx/htmx.min.js}" th:attr="nonce=${cspNonce}"></script>
+  <script defer th:src="@{/js/app.js}" th:attr="nonce=${cspNonce}"></script>
+</head>
+<!-- data-tk-session-seconds matches the 30-minute idle timeout (BUILD_PLAN §9); PR 10 makes both configurable. -->
+<body data-tk-session-seconds="1800"
+      th:attr="data-tk-error-text=#{tk.problem.5xx.text},data-tk-extended-text=#{tk.session.extended}">
+<a class="tk-skip-link" href="#main" th:text="#{tk.skip}">Skip to main content</a>
+<header class="tk-header">
+  <div class="container tk-header-inner">
+    <a class="tk-brand" th:href="@{/}" th:text="${@branding.name()}">Trailkeep</a>
+    <nav th:aria-label="#{tk.nav.label}">
+      <ul class="tk-nav">
+        <li><a th:href="@{/}" th:text="#{tk.nav.dashboard}">Dashboard</a></li>
+      </ul>
+    </nav>
+    <form class="tk-signout" method="post" th:action="@{/logout}" th:if="${_csrf != null}">
+      <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+      <button class="btn btn-outline-light" type="submit" th:text="#{tk.signout}">Sign out</button>
+    </form>
+  </div>
+</header>
+<main id="main" class="container tk-main" tabindex="-1" th:replace="${content}"></main>
+<footer class="tk-footer">
+  <div class="container" th:text="${@branding.name()}">Trailkeep</div>
+</footer>
+<div id="tk-live" class="visually-hidden" role="status" aria-live="polite" aria-atomic="true"></div>
+<dialog id="tk-session-dialog" class="tk-dialog" aria-labelledby="tk-session-title"
+        aria-describedby="tk-session-text">
+  <h2 id="tk-session-title" th:text="#{tk.session.title}">Your session is about to end</h2>
+  <p id="tk-session-text" th:text="#{tk.session.text}">For your security you will be signed out soon.</p>
+  <div class="tk-dialog-actions">
+    <button type="button" class="btn btn-primary" data-tk-session-extend th:text="#{tk.session.extend}">
+      Stay signed in</button>
+    <button type="button" class="btn btn-outline-secondary" data-tk-dialog-close th:text="#{tk.dialog.close}">
+      Close</button>
+  </div>
+</dialog>
+</body>
+</html>

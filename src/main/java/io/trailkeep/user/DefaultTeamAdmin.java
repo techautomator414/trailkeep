@@ -6,7 +6,7 @@ import io.trailkeep.audit.AuditChanges;
 import io.trailkeep.audit.AuditEntry;
 import io.trailkeep.audit.AuditOrigin;
 import io.trailkeep.audit.AuditRecorder;
-import io.trailkeep.user.TeamAdminException.Kind;
+import io.trailkeep.shared.DomainException.Kind;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -132,10 +132,10 @@ class DefaultTeamAdmin implements TeamAdminService {
     public void assignRole(Actor actor, long teamId, long userId, TeamRole role) {
         requireSystemAdmin(actor);
         Team team = findTeam(teamId);
-        UserPermissions target = directory.permissionsOf(userId);
         if (users.findById(userId).isEmpty()) {
             throw new TeamAdminException(Kind.NOT_FOUND, "no such user");
         }
+        UserPermissions target = directory.permissionsOf(userId);
         if (target.disabled() || !team.isActive()) {
             throw new TeamAdminException(Kind.INVALID, "the user is disabled or the team is inactive");
         }

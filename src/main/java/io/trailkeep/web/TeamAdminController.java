@@ -3,7 +3,6 @@
 package io.trailkeep.web;
 
 import io.trailkeep.security.TrailkeepOidcUser;
-import io.trailkeep.user.TeamAdminException;
 import io.trailkeep.user.TeamAdminService;
 import io.trailkeep.user.TeamAdminService.Actor;
 import io.trailkeep.user.TeamRole;
@@ -12,14 +11,12 @@ import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
-import java.io.IOException;
 import org.jspecify.annotations.Nullable;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.validation.BindingResult;
-import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -27,7 +24,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 
 /**
  * Team and team-role administration (BUILD_PLAN §4.6). Authorization is the service's: it rebuilds the actor's
- * permissions from the database on every request and refuses anyone but a System Admin.
+ * permissions from the database on every request and refuses anyone but a System Admin. Its refusals are {@code
+ * DomainException}s, rendered by the shell's {@code ErrorAdvice}.
  */
 @Controller
 @RequestMapping("/admin/teams")
@@ -119,18 +117,6 @@ class TeamAdminController {
             @PathVariable long userId) {
         admin.revokeRole(actor(principal), teamId, userId);
         return "redirect:/admin/teams/" + teamId;
-    }
-
-    /** Refusals go through Spring's error handling, so the status (and later the shell's error page) is uniform. */
-    @ExceptionHandler(TeamAdminException.class)
-    void refused(TeamAdminException e, HttpServletResponse response) throws IOException {
-        response.sendError(
-                switch (e.kind()) {
-                    case NOT_FOUND -> HttpStatus.NOT_FOUND.value();
-                    case FORBIDDEN -> HttpStatus.FORBIDDEN.value();
-                    case CONFLICT -> HttpStatus.CONFLICT.value();
-                    case INVALID -> HttpStatus.UNPROCESSABLE_CONTENT.value();
-                });
     }
 
     private Actor actor(TrailkeepOidcUser principal) {
