@@ -52,24 +52,26 @@ abstract class AbstractDatabaseGrantsIT {
         DENIED
     }
 
-    /** Identity tables (V1) and the column each probe touches: the first key column. */
+    /** Identity (V1) and audit (V2) tables, and the column each probe touches: the first key column. */
     static final Map<String, String> TABLES = Map.of(
             "APP_USER", "ID",
             "TEAM", "ID",
             "APP_USER_TEAM", "USER_ID",
-            "APP_USER_GLOBAL_ROLE", "USER_ID");
+            "APP_USER_GLOBAL_ROLE", "USER_ID",
+            "AUDIT_EVENT", "ID");
 
     /** What the runtime user may do; anything absent is denied. */
     static final Map<String, Set<Privilege>> APP_USER_GRANTS = Map.of(
             "APP_USER", EnumSet.of(Privilege.SELECT, Privilege.INSERT, Privilege.UPDATE),
             "TEAM", EnumSet.of(Privilege.SELECT, Privilege.INSERT, Privilege.UPDATE),
             "APP_USER_TEAM", EnumSet.allOf(Privilege.class),
-            "APP_USER_GLOBAL_ROLE", EnumSet.of(Privilege.SELECT, Privilege.INSERT, Privilege.DELETE));
+            "APP_USER_GLOBAL_ROLE", EnumSet.of(Privilege.SELECT, Privilege.INSERT, Privilege.DELETE),
+            "AUDIT_EVENT", EnumSet.of(Privilege.SELECT, Privilege.INSERT));
 
     /** What the purge user may do on these tables: nothing (it deletes case data, which arrives with V4). */
     static final Map<String, Set<Privilege>> PURGE_USER_GRANTS = Map.of();
 
-    static final List<String> SEQUENCES = List.of("SEQ_APP_USER", "SEQ_TEAM");
+    static final List<String> SEQUENCES = List.of("SEQ_APP_USER", "SEQ_TEAM", "SEQ_AUDIT_EVENT");
 
     @Autowired
     private TestDatabaseUsers users;

@@ -38,6 +38,17 @@ public interface CaseScope {
     boolean canRead(CaseNumber caseNumber);
 
     /**
+     * Tells whether this scope reaches every case and also records that belong to no case, such as audit events for
+     * logins and admin changes (Part A #6). Only {@link #system()} and {@link #all()} answer {@code true}; a
+     * principal-backed scope never does, so queries over case-less rows fail closed for it.
+     *
+     * @return {@code true} for the unrestricted scopes
+     */
+    default boolean isUnrestricted() {
+        return false;
+    }
+
+    /**
      * Asserts that this scope permits reading a case.
      *
      * @param caseNumber the case number

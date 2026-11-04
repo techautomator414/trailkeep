@@ -9,6 +9,8 @@ import io.trailkeep.support.LoggingReset;
 import io.trailkeep.testsupport.PostgresTestcontainersConfiguration;
 import io.trailkeep.testsupport.RequiresDocker;
 import java.nio.file.Path;
+import java.security.SecureRandom;
+import java.util.Base64;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -65,6 +67,14 @@ class JsonLoggingIT {
         // prod points these at emptyDir mounts that do not exist on a build machine.
         registry.add("server.tomcat.basedir", () -> workDir.resolve("tomcat").toString());
         registry.add("spring.servlet.multipart.location", () -> workDir.toString());
+        // prod refuses to start without the audit HMAC key (WP-06); generate a throwaway one per run.
+        registry.add("app.audit.hmac-key", JsonLoggingIT::randomHmacKey);
+    }
+
+    private static String randomHmacKey() {
+        byte[] key = new byte[32];
+        new SecureRandom().nextBytes(key);
+        return Base64.getEncoder().encodeToString(key);
     }
 
     @Test
