@@ -22,6 +22,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - `ErrorAdvice` maps a `ConstraintViolationException` reaching the web layer to 422 (htmx `problem` fragment or the
   error page) instead of a 5xx (#27).
+- Back-channel logout's loopback `logoutUri` is set from the port the server actually bound, so an instance started
+  with `server.port=0` can end sessions too (#28).
 - `.gitignore` excludes `.claude/settings.local.json`, which holds machine-specific Claude Code settings.
 
 ## [0.1.0] - 2026-11-04
