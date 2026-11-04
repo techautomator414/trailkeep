@@ -24,6 +24,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   error page) instead of a 5xx (#27).
 - Back-channel logout's loopback `logoutUri` is set from the port the server actually bound, so an instance started
   with `server.port=0` can end sessions too (#28).
+- `JdbcOidcSessionRegistryIT` now has an Oracle variant (`OracleJdbcOidcSessionRegistryIT`, tag `oracle`) sharing
+  its tests through an abstract base, so the registry's SQL runs on XE 21 and Free 23 in the `-Poracle-it` run (#26).
 - `.gitignore` excludes `.claude/settings.local.json`, which holds machine-specific Claude Code settings.
 
 ## [0.1.0] - 2026-11-04
