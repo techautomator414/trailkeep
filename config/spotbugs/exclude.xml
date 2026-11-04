@@ -36,7 +36,7 @@
     CSRF). Approved in the security-reviewer role on #22.
     CaseController (WP-11): GET only, behind login; CaseService reads through the person's CaseScope, rebuilding
     permissions from the database per request, and answers 404 for a malformed, absent or unreadable case number.
-    Covered by CaseControllerIT. Needs security-role approval.
+    Covered by CaseControllerIT. Approved in the security-reviewer role on #39.
     Approved in the security-reviewer role on #20. Listed by class, never by pattern alone, so each new controller
     is reviewed the same way.
   -->
