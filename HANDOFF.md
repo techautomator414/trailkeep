@@ -22,8 +22,8 @@ first end-user feature is WP-11 (case create and view), which has not started. S
 is the architectural center of the product (the `V4__case` migration and the principal-backed `CaseScope`), and a
 half-finished WP-11 would be the worst state to hand over.
 
-0.1.0 is the `v0.1.0` tag, cut from `main` as the last step of this handoff, after #25 (CI fix for #13) and #32
-(this document) merged. Every workflow is green on that commit: `ci`, `main` (both Oracle images, image build and
+0.1.0 is the `v0.1.0` tag, cut from `main` as the last step of this handoff, after #25 (CI fix for #13), #33 (the
+test port fix below) and #32 (this document) merged. Every workflow is green on that commit: `ci`, `main` (both Oracle images, image build and
 scan), `codeql`, `scorecard`. "Green" has one caveat: `main.yml` skips SonarCloud and Dependency-Check with a notice
 when their secrets are absent, and they were absent at handoff (#30).
 
@@ -142,6 +142,8 @@ Not defects, but worth knowing:
   `form-action 'self'`; the application session still ends. The htmx path uses `HX-Redirect`.
 - The `SESSION` cookie is `Secure` in every profile, including `local`; browsers accept that on `http://localhost`.
 - `SharedSessionsIT` starts a second application instance in-process; it is the slowest test in the suite.
+- The five `DEFINED_PORT` ITs take their application port from `KeycloakDevRealm`, which probes 20000 to 29999
+  (#33). Picking a kernel ephemeral port raced with Docker's published ports and failed one `main` run.
 
 ## 7. What comes next, in plan order
 
