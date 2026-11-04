@@ -6,7 +6,8 @@ input the project receives.
 ## Reporting a vulnerability
 
 Please **do not** open a public issue. Use GitHub's private vulnerability reporting for this repository
-(**Security → Report a vulnerability**). Include what you found, how to reproduce it, the version or commit,
+(**Security → Report a vulnerability**, or directly at
+<https://github.com/techautomator414/trailkeep/security/advisories/new>). Include what you found, how to reproduce it, the version or commit,
 and any suggested fix.
 
 What to expect:

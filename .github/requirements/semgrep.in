@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Charlie Genova and contributors
+#
+# Semgrep CLI version for the CI semgrep job. Regenerate the hashed lockfile after changing it:
+#   uv pip compile .github/requirements/semgrep.in --generate-hashes --python-version 3.13 \
+#     --python-platform linux --no-header -o .github/requirements/semgrep.txt
+semgrep==1.183.0
