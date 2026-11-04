@@ -21,6 +21,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Team and team-role administration (WP-09, part 2 of 2): `TeamAdminService` (System Admins only; create,
+  rename, deactivate teams; grant, change and revoke team roles; a System Admin, a disabled user or an inactive team
+  never receives a role) with `TEAM_CREATED`, `TEAM_UPDATED`, `ROLE_GRANTED`, `ROLE_CHANGED` and `ROLE_REVOKED`
+  audit events carrying old/new snapshots; server-rendered screens under `/admin/teams` (semantic tables and labelled
+  forms, CSRF on every POST) whose refusals answer 403, 404, 409 or 422.
 - Web shell, CSP and htmx contract (PR 9, WP-05): one Thymeleaf layout (landmarks, skip link first, polite live
   region, `lang`, session-expiry `<dialog>`), a dashboard behind login, error pages `error/404`, `4xx`, `5xx`
   without exception details, and UI strings in `messages.properties`. `CspNonceFilter` sets the exact BUILD_PLAN §9

@@ -62,6 +62,10 @@ class Team {
         this.active = true;
     }
 
+    void setActive(boolean active) {
+        this.active = active;
+    }
+
     @Override
     public boolean equals(@Nullable Object other) {
         return this == other || (other instanceof Team team && id != null && id.equals(team.id));

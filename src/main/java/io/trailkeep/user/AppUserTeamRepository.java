@@ -3,12 +3,15 @@
 package io.trailkeep.user;
 
 import java.util.List;
+import java.util.Optional;
 import org.springframework.data.repository.Repository;
 
 /** Team memberships. Not case-rooted; module-internal. */
 interface AppUserTeamRepository extends Repository<AppUserTeam, AppUserTeamId> {
 
     AppUserTeam save(AppUserTeam membership);
+
+    Optional<AppUserTeam> findById(AppUserTeamId id);
 
     List<AppUserTeam> findByIdUserId(Long userId);
 

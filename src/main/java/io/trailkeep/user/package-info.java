@@ -9,7 +9,7 @@
  * public types are the role enums {@link io.trailkeep.user.TeamRole} and {@link io.trailkeep.user.GlobalRole}, and
  * the sign-in API {@link io.trailkeep.user.UserSignInService} with its records, and
  * {@link io.trailkeep.user.UserDirectoryService}, which rebuilds {@link io.trailkeep.user.UserPermissions} from the
- * database for every request.
+ * database for every request, and {@link io.trailkeep.user.TeamAdminService} behind the team admin screens.
  *
  * <p>May call: {@code shared}, {@code audit}. Other modules use only the {@code *Service} interfaces and records in
  * this package.

@@ -16,5 +16,7 @@ interface AppUserRepository extends Repository<AppUser, Long> {
 
     List<AppUser> findByIdIn(Collection<Long> ids);
 
+    List<AppUser> findByDisabledFalseOrderByDisplayNameAsc();
+
     Optional<AppUser> findByExternalId(String externalId);
 }
