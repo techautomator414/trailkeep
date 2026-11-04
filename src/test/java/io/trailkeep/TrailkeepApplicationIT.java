@@ -4,6 +4,8 @@ package io.trailkeep;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.trailkeep.testsupport.PostgresTestcontainersConfiguration;
+import io.trailkeep.testsupport.RequiresDocker;
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -16,11 +18,17 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalManagementPort;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.context.ApplicationContext;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = "management.server.port=0")
+/** Boots the whole application against PostgreSQL (it needs a database since PR 5, hence an IT). */
+// "IT" is the Failsafe suffix Part B mandates for integration tests, not an abbreviation.
+@SuppressWarnings("checkstyle:AbbreviationAsWordInName")
+@RequiresDocker
 @ActiveProfiles("test")
-class TrailkeepApplicationTest {
+@Import(PostgresTestcontainersConfiguration.class)
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = "management.server.port=0")
+class TrailkeepApplicationIT {
 
     private static final Duration TIMEOUT = Duration.ofSeconds(10);
 

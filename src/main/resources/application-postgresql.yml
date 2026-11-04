@@ -1,0 +1,29 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Charlie Genova and contributors
+# Database vendor profile: PostgreSQL. Activated through the profile groups in application.yml.
+app:
+  db:
+    vendor: postgresql
+
+spring:
+  flyway:
+    # BUILD_PLAN Appendix A, PostgreSQL column.
+    placeholders:
+      id: BIGINT
+      int: INTEGER
+      bool: BOOLEAN
+      "true": "TRUE"
+      "false": "FALSE"
+      clob: TEXT
+      bytes: BYTEA
+      tstz: TIMESTAMP WITH TIME ZONE
+  jpa:
+    properties:
+      # Fix the dialect version (ADR-0004). These OVERRIDE the product name and version Hibernate detects from
+      # the connection; they do not skip detection (that would need hibernate.boot.allow_jdbc_metadata_access=false).
+      # The point is that DDL expectations do not change with whichever server version the app connects to.
+      jakarta:
+        persistence:
+          database-product-name: PostgreSQL
+          database-major-version: 16
+          database-minor-version: 0

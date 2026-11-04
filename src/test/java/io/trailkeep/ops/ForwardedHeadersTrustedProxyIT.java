@@ -5,6 +5,8 @@ package io.trailkeep.ops;
 import static io.trailkeep.support.HttpProbe.get;
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.trailkeep.testsupport.PostgresTestcontainersConfiguration;
+import io.trailkeep.testsupport.RequiresDocker;
 import java.net.http.HttpResponse;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -16,12 +18,15 @@ import org.springframework.test.context.ActiveProfiles;
  * Control for {@link ForwardedHeadersSpoofTest}: when the peer does match {@code app.proxy.pattern}, the forwarded
  * client address and scheme are applied. Without this, the spoof test would also pass if the valve were missing.
  */
+// "IT" is the Failsafe suffix Part B mandates for integration tests, not an abbreviation.
+@SuppressWarnings("checkstyle:AbbreviationAsWordInName")
+@RequiresDocker
 @SpringBootTest(
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         properties = {"management.server.port=0", "app.proxy.pattern=127\\.0\\.0\\.1"})
 @ActiveProfiles("test")
-@Import(RemoteAddressController.class)
-class ForwardedHeadersTrustedProxyTest {
+@Import({RemoteAddressController.class, PostgresTestcontainersConfiguration.class})
+class ForwardedHeadersTrustedProxyIT {
 
     @LocalServerPort
     private int port;

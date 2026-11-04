@@ -15,6 +15,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Migration tooling and three-image validation harness (PR 5, WP-03a): Spring Data JPA, Flyway Community with the
+  Oracle and PostgreSQL database modules, `ojdbc17` and the PostgreSQL driver; Flyway locations
+  `db/migration/common` plus `db/migration/{vendor}`, the Appendix A placeholders per vendor profile
+  (`oracle`, `postgresql`), Oracle `initSql` for `NLS_LENGTH_SEMANTICS=CHAR`, strict migration naming; Hibernate
+  `validate`, `open-in-view=false`, BIT booleans, batching and fetch settings, and the dialect pinned through the
+  `jakarta.persistence.database-*` properties; `app.db.vendor`/`app.db.schema` with a start-up guard that the
+  configured vendor is the connected one; a UTC `InstantSource` bean; the migration-lint unit test with good and bad
+  fixtures; Testcontainers harness (`AbstractVendorSchemaIT`: Flyway, `validate`, metadata diff of nullability and
+  length) on PostgreSQL 16 in every build and on `gvenzl/oracle-xe:21-slim` and `gvenzl/oracle-free:23-slim` under
+  `-Poracle-it`; Failsafe for `*IT`; `compose.yaml` with PostgreSQL 16 and an `oracle` profile.
+  Test compilation runs with `-Xlint:-path` (the `ojdbc17` manifest references an `oraclepki.jar` that Maven Central
+  does not ship; every other lint category and `-Werror` stay on). The PR 12 full-context tests under `ops` became
+  Failsafe `*IT` classes on Testcontainers PostgreSQL, since a Spring context now needs a database.
 - Modulith structure, `CaseScope` contract and architecture rules (PR 7, WP-07): Spring Modulith 2.1.2 with the
   fourteen application modules as `@NullMarked` packages whose `package-info.java` states each module's
   responsibility and permitted callers (`shared` is an open module); `ModularityTest` runs

@@ -6,6 +6,8 @@ import static io.trailkeep.support.HttpProbe.get;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.trailkeep.support.LoggingReset;
+import io.trailkeep.testsupport.PostgresTestcontainersConfiguration;
+import io.trailkeep.testsupport.RequiresDocker;
 import java.nio.file.Path;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -24,6 +26,9 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 /** The prod profile writes one JSON object per line, carrying the request id from the MDC. */
+// "IT" is the Failsafe suffix Part B mandates for integration tests, not an abbreviation.
+@SuppressWarnings("checkstyle:AbbreviationAsWordInName")
+@RequiresDocker
 @SpringBootTest(
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         properties = {
@@ -31,10 +36,10 @@ import tools.jackson.databind.json.JsonMapper;
             "trailkeep.test.context=json-logging",
             "app.proxy.pattern=10\\.128\\.\\d+\\.\\d+"
         })
-@ActiveProfiles("prod")
-@Import(RemoteAddressController.class)
+@ActiveProfiles({"prod", "postgresql"})
+@Import({RemoteAddressController.class, PostgresTestcontainersConfiguration.class})
 @ExtendWith(OutputCaptureExtension.class)
-class JsonLoggingTest {
+class JsonLoggingIT {
 
     @TempDir
     static Path workDir;

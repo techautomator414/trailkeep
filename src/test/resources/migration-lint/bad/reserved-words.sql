@@ -1,0 +1,35 @@
+-- SPDX-License-Identifier: Apache-2.0
+-- Copyright 2026 Charlie Genova and contributors
+-- Reserved words of either vendor, as table, column, constraint, index, sequence and renamed column.
+-- expect: RESERVED_WORD USER
+-- expect: RESERVED_WORD COMMENT
+-- expect: RESERVED_WORD DATE
+-- expect: RESERVED_WORD SIZE
+-- expect: RESERVED_WORD LEVEL
+-- expect: RESERVED_WORD TYPE
+-- expect: RESERVED_WORD VALUE
+-- expect: RESERVED_WORD KEY
+-- expect: RESERVED_WORD ORDER
+-- expect: RESERVED_WORD LIMIT
+-- expect: RESERVED_WORD UNIQUE
+-- expect: RESERVED_WORD INDEX
+-- expect: RESERVED_WORD GROUP
+-- expect: RESERVED_WORD FROM
+-- expect: RESERVED_WORD OFFSET
+CREATE TABLE USER (
+  ID      ${id} NOT NULL,
+  COMMENT VARCHAR(100),
+  DATE    ${tstz},
+  SIZE    ${int},
+  LEVEL   ${int},
+  TYPE    VARCHAR(10),
+  VALUE   VARCHAR(10),
+  KEY     VARCHAR(10),
+  ORDER   ${int},
+  LIMIT   ${int}
+);
+ALTER TABLE APP_THING ADD CONSTRAINT UNIQUE UNIQUE (ID);
+CREATE INDEX INDEX ON APP_THING (ID);
+CREATE SEQUENCE GROUP START WITH 1 INCREMENT BY 50;
+ALTER TABLE APP_THING ADD COLUMN FROM VARCHAR(10);
+ALTER TABLE APP_THING RENAME COLUMN SOMETHING TO OFFSET;

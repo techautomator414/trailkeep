@@ -91,6 +91,22 @@
       <artifactId>spring-boot-starter-validation</artifactId>
     </dependency>
     <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-data-jpa</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-flyway</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.flywaydb</groupId>
+      <artifactId>flyway-database-oracle</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.flywaydb</groupId>
+      <artifactId>flyway-database-postgresql</artifactId>
+    </dependency>
+    <dependency>
       <!-- Prometheus scrape endpoint on the management port (BUILD_PLAN §16). Apache-2.0. -->
       <groupId>io.micrometer</groupId>
       <artifactId>micrometer-registry-prometheus</artifactId>
@@ -104,6 +120,16 @@
     <dependency>
       <groupId>org.jspecify</groupId>
       <artifactId>jspecify</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.oracle.database.jdbc</groupId>
+      <artifactId>ojdbc17</artifactId>
+      <scope>runtime</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.postgresql</groupId>
+      <artifactId>postgresql</artifactId>
+      <scope>runtime</scope>
     </dependency>
     <dependency>
       <groupId>org.springframework.modulith</groupId>
@@ -136,6 +162,41 @@
       <scope>test</scope>
     </dependency>
     <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-data-jpa-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-flyway-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-testcontainers</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>testcontainers-junit-jupiter</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>testcontainers-postgresql</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>testcontainers-oracle-xe</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>testcontainers-oracle-free</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
       <groupId>org.springframework.modulith</groupId>
       <artifactId>spring-modulith-starter-test</artifactId>
       <scope>test</scope>
@@ -144,14 +205,6 @@
       <groupId>com.tngtech.archunit</groupId>
       <artifactId>archunit-junit5</artifactId>
       <version>${archunit.version}</version>
-      <scope>test</scope>
-    </dependency>
-    <!-- Spring Data repository types for the architecture-rule fixtures only. Remove when the JPA starter
-         (PR 5) puts spring-data-commons on the compile classpath; a direct test-scoped declaration would
-         otherwise demote it. -->
-    <dependency>
-      <groupId>org.springframework.data</groupId>
-      <artifactId>spring-data-commons</artifactId>
       <scope>test</scope>
     </dependency>
   </dependencies>
@@ -300,6 +353,21 @@
             </path>
           </annotationProcessorPaths>
         </configuration>
+        <executions>
+          <execution>
+            <!-- Test compilation only: the Oracle driver (ojdbc17, runtime scope, so on the test classpath)
+                 declares "Class-Path: oraclepki.jar" in its manifest and Maven Central does not ship that jar
+                 beside it, so javac's [path] lint reports a bad path element and -Werror fails the build. [path]
+                 only reports missing classpath entries, which Maven already guarantees against; every other lint
+                 category and -Werror stay on. Approved by the release manager on PR 5 (#8). -->
+            <id>default-testCompile</id>
+            <configuration>
+              <compilerArgs combine.children="append">
+                <arg>-Xlint:-path</arg>
+              </compilerArgs>
+            </configuration>
+          </execution>
+        </executions>
       </plugin>
 
       <!-- Formatting: palantir-java-format. Fix locally with ./mvnw spotless:apply. -->
@@ -605,6 +673,77 @@
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-maven-plugin</artifactId>
       </plugin>
+      <plugin>
+        <!-- Surefire runs *Test (unit and slice); Failsafe runs *IT (Testcontainers) in integration-test/verify. -->
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-failsafe-plugin</artifactId>
+        <configuration>
+          <!-- Oracle ITs run only in the oracle-it profile's per-image executions. -->
+          <excludedGroups>oracle</excludedGroups>
+        </configuration>
+        <executions>
+          <execution>
+            <goals>
+              <goal>integration-test</goal>
+              <goal>verify</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
     </plugins>
   </build>
+
+  <profiles>
+    <profile>
+      <!--
+        Oracle parity: the schema harness against both public Oracle images (ADR-0003). Runs on main, nightly and
+        release tags in CI (IMPLEMENTATION_PLAN Part G). A deploying organization adds its own image with
+          ./mvnw verify -Poracle-it -Dtrailkeep.oracle.image=<image>
+        by overriding one of the executions below; the dialect version comes from application-oracle.yml.
+      -->
+      <id>oracle-it</id>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-failsafe-plugin</artifactId>
+            <executions>
+              <execution>
+                <id>oracle-xe-21</id>
+                <goals>
+                  <goal>integration-test</goal>
+                  <goal>verify</goal>
+                </goals>
+                <configuration>
+                  <groups>oracle</groups>
+                  <excludedGroups combine.self="override"/>
+                  <reportsDirectory>${project.build.directory}/failsafe-reports/oracle-xe-21</reportsDirectory>
+                  <summaryFile>${project.build.directory}/failsafe-reports/oracle-xe-21/failsafe-summary.xml</summaryFile>
+                  <systemPropertyVariables>
+                    <trailkeep.oracle.image>gvenzl/oracle-xe:21-slim</trailkeep.oracle.image>
+                  </systemPropertyVariables>
+                </configuration>
+              </execution>
+              <execution>
+                <id>oracle-free-23</id>
+                <goals>
+                  <goal>integration-test</goal>
+                  <goal>verify</goal>
+                </goals>
+                <configuration>
+                  <groups>oracle</groups>
+                  <excludedGroups combine.self="override"/>
+                  <reportsDirectory>${project.build.directory}/failsafe-reports/oracle-free-23</reportsDirectory>
+                  <summaryFile>${project.build.directory}/failsafe-reports/oracle-free-23/failsafe-summary.xml</summaryFile>
+                  <systemPropertyVariables>
+                    <trailkeep.oracle.image>gvenzl/oracle-free:23-slim</trailkeep.oracle.image>
+                  </systemPropertyVariables>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+  </profiles>
 </project>

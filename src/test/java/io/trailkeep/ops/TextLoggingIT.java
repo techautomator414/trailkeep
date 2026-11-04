@@ -6,6 +6,8 @@ import static io.trailkeep.support.HttpProbe.get;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.trailkeep.support.LoggingReset;
+import io.trailkeep.testsupport.PostgresTestcontainersConfiguration;
+import io.trailkeep.testsupport.RequiresDocker;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -18,13 +20,16 @@ import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 
 /** Outside the JSON profiles, lines stay human-readable and still show the request id. */
+// "IT" is the Failsafe suffix Part B mandates for integration tests, not an abbreviation.
+@SuppressWarnings("checkstyle:AbbreviationAsWordInName")
+@RequiresDocker
 @SpringBootTest(
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         properties = {"management.server.port=0", "trailkeep.test.context=text-logging"})
 @ActiveProfiles("test")
-@Import(RemoteAddressController.class)
+@Import({RemoteAddressController.class, PostgresTestcontainersConfiguration.class})
 @ExtendWith(OutputCaptureExtension.class)
-class TextLoggingTest {
+class TextLoggingIT {
 
     @BeforeAll
     static void applyThisProfilesLoggingConfiguration() {

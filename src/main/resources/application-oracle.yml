@@ -1,0 +1,34 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Charlie Genova and contributors
+# Database vendor profile: Oracle. Activated through the profile groups in application.yml, or directly.
+app:
+  db:
+    vendor: oracle
+
+spring:
+  flyway:
+    # VARCHAR(n) means n characters, as on PostgreSQL. Oracle's 4000-byte VARCHAR2 ceiling still applies,
+    # which is why the migration lint caps VARCHAR at 1000.
+    init-sql: ALTER SESSION SET NLS_LENGTH_SEMANTICS=CHAR
+    # BUILD_PLAN Appendix A, Oracle column.
+    placeholders:
+      id: NUMBER(19,0)
+      int: NUMBER(10,0)
+      bool: NUMBER(1,0)
+      "true": "1"
+      "false": "0"
+      clob: CLOB
+      bytes: BLOB
+      tstz: TIMESTAMP WITH TIME ZONE
+  jpa:
+    properties:
+      # Fix the dialect version (ADR-0004). These OVERRIDE the product name and version Hibernate detects from
+      # the connection; they do not skip detection (that would need hibernate.boot.allow_jdbc_metadata_access=false).
+      # 21.0 matches the gvenzl/oracle-xe:21-slim CI image (no native BOOLEAN). CI also runs gvenzl/oracle-free:23-slim
+      # against this same 21.0 pin, proving a newer server does not change DDL expectations. A deploying organization
+      # sets the version of its own server here (for example 19).
+      jakarta:
+        persistence:
+          database-product-name: Oracle
+          database-major-version: 21
+          database-minor-version: 0

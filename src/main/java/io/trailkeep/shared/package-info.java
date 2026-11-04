@@ -2,7 +2,8 @@
 // Copyright 2026 Charlie Genova and contributors
 /**
  * Shared module: identifiers and value types such as {@link io.trailkeep.shared.CaseNumber}, cross-cutting
- * exceptions, and the case access contract in {@link io.trailkeep.shared.access}.
+ * exceptions, the case access contract in {@link io.trailkeep.shared.access}, and cross-cutting infrastructure every
+ * module may use (time source, persistence and application configuration). Contains no domain logic.
  *
  * <p>Declared {@link ApplicationModule.Type#OPEN open}: every module may depend on any type here, and
  * {@code shared} depends on no other module.

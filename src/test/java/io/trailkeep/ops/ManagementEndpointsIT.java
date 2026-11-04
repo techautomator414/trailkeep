@@ -5,6 +5,8 @@ package io.trailkeep.ops;
 import static io.trailkeep.support.HttpProbe.get;
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.trailkeep.testsupport.PostgresTestcontainersConfiguration;
+import io.trailkeep.testsupport.RequiresDocker;
 import java.net.http.HttpResponse;
 import java.util.Objects;
 import org.junit.jupiter.api.Test;
@@ -25,11 +27,18 @@ import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 
 /** Management port contract: probe groups, Prometheus, nothing else exposed, request id echoed. */
+// "IT" is the Failsafe suffix Part B mandates for integration tests, not an abbreviation.
+@SuppressWarnings("checkstyle:AbbreviationAsWordInName")
+@RequiresDocker
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = "management.server.port=0")
 @ActiveProfiles("test")
 @AutoConfigureMetrics // Spring Boot tests switch metrics export off unless asked.
-@Import({RemoteAddressController.class, ManagementEndpointsTest.ClusterIndicatorConfig.class})
-class ManagementEndpointsTest {
+@Import({
+    RemoteAddressController.class,
+    ManagementEndpointsIT.ClusterIndicatorConfig.class,
+    PostgresTestcontainersConfiguration.class
+})
+class ManagementEndpointsIT {
 
     @LocalServerPort
     private int serverPort;
