@@ -14,17 +14,18 @@ import jakarta.persistence.criteria.Root;
  * {@link #toPredicate}; single-case loads follow with {@link #assertReadable}.
  *
  * <p>Not sealed: the principal-backed implementation lives in {@code casefile} (WP-11), outside this package.
- * Implementations are immutable and restrict by case id only, so one scope works for every case-rooted query.
+ * Implementations are immutable and restrict on the case record's own attributes (team, owner, sensitivity), so a
+ * query over a case's children adds a {@code CaseRecord} root joined on the case id and passes that root.
  */
 public interface CaseScope {
 
     /**
      * Restricts a query to readable cases.
      *
-     * @param caseRoot the {@code CASE_RECORD} entity root, or a join from a case-rooted entity to it
+     * @param caseRoot a {@code CaseRecord} entity root; other roots are rejected when the query is built
      * @param query the query being built, available for subqueries
      * @param cb the criteria builder
-     * @return a predicate on {@code caseRoot}'s id that is true exactly for readable cases
+     * @return a predicate on {@code caseRoot} that is true exactly for readable cases
      */
     Predicate toPredicate(Root<?> caseRoot, CriteriaQuery<?> query, CriteriaBuilder cb);
 
@@ -74,7 +75,7 @@ public interface CaseScope {
     /**
      * The unrestricted scope for a principal entitled to every case and to audit events with no case (Compliance
      * Admins). Granted only by the {@code security} module, which checks the role first; ArchUnit rejects calls
-     * from anywhere else. The principal-aware variant replaces this in WP-11.
+     * from anywhere else. A principal-aware variant that also covers case-less audit events is still to come.
      *
      * @return the all-cases scope
      */
