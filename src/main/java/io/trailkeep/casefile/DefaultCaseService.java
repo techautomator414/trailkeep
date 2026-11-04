@@ -11,6 +11,7 @@ import io.trailkeep.security.CasePermissionService;
 import io.trailkeep.shared.CaseNumber;
 import io.trailkeep.shared.CaseStatus;
 import io.trailkeep.shared.DomainException.Kind;
+import io.trailkeep.shared.Sensitivity;
 import io.trailkeep.shared.access.CaseAccessPath;
 import io.trailkeep.shared.config.AppProperties;
 import io.trailkeep.user.TeamAdminService.TeamSummary;
@@ -21,6 +22,9 @@ import java.time.InstantSource;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Set;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -109,6 +113,36 @@ class DefaultCaseService implements CaseService {
                 audit.diff(null, fields)));
         LOG.info("Case {} created in team {}", number, fields.teamId());
         return number;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public CreateChoices createChoices(Actor actor) {
+        List<Choice> types = caseTypes.findAllByOrderByNameAsc().stream()
+                .filter(CaseType::isActive)
+                .map(type -> new Choice(id(type.getId()), type.getName()))
+                .toList();
+        List<TeamChoice> teams = actor.permissions().teamRoles().keySet().stream()
+                .filter(team -> permissions.isAllowed(
+                        actor.permissions(),
+                        new CaseFacts(team, null, Sensitivity.STANDARD, CaseStatus.OPEN),
+                        CaseAction.CREATE))
+                .flatMap(team -> directory.team(team).stream())
+                .filter(TeamSummary::active)
+                .sorted(Comparator.comparing(TeamSummary::name))
+                .map(team -> new TeamChoice(
+                        team.id(),
+                        team.name(),
+                        directory.eligibleOwners(team.id()).stream()
+                                .map(owner -> new Choice(owner.userId(), owner.displayName()))
+                                .toList()))
+                .toList();
+        return new CreateChoices(types, teams);
+    }
+
+    @Override
+    public Set<TitleWarning> titleWarnings(String title) {
+        return TitleWarning.in(title);
     }
 
     @Override

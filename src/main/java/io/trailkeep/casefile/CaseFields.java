@@ -10,6 +10,7 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.time.LocalDate;
 import org.jspecify.annotations.Nullable;
+import org.springframework.format.annotation.DateTimeFormat;
 
 /**
  * The fields a person enters on a case (BUILD_PLAN §4.2), validated before they reach {@code CaseRecord}. Also the
@@ -30,7 +31,10 @@ public record CaseFields(
         @Min(1) long caseTypeId,
         @NotBlank @Size(max = 200) String title,
         @NotNull CasePriority priority,
-        @NotNull LocalDate identifiedOn,
+
+        @NotNull @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+        LocalDate identifiedOn,
+
         @Min(1) long teamId,
         @Min(1) long ownerId,
         @Redacted @Nullable @Size(max = 1000) String subjectText,

@@ -46,4 +46,12 @@ public interface UserDirectoryService {
      * @return the team, or empty for an unknown team
      */
     Optional<TeamAdminService.TeamSummary> team(long teamId);
+
+    /**
+     * The enabled members who may own a team's cases (Analysts and Managers, never a System Admin), by name.
+     *
+     * @param teamId the team id
+     * @return the candidate owners
+     */
+    List<TeamAdminService.UserChoice> eligibleOwners(long teamId);
 }

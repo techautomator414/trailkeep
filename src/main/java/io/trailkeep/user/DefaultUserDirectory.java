@@ -3,9 +3,12 @@
 package io.trailkeep.user;
 
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -68,6 +71,24 @@ class DefaultUserDirectory implements UserDirectoryService {
     public Optional<TeamAdminService.TeamSummary> team(long teamId) {
         return teams.findById(teamId)
                 .map(team -> new TeamAdminService.TeamSummary(teamId, team.getName(), team.isActive()));
+    }
+
+    @Override
+    public List<TeamAdminService.UserChoice> eligibleOwners(long teamId) {
+        Set<Long> systemAdmins = globalRoles.findByIdRole(GlobalRole.SYSTEM_ADMIN).stream()
+                .map(role -> role.getId().userId())
+                .collect(Collectors.toUnmodifiableSet());
+        List<Long> owners = memberships.findByIdTeamId(teamId).stream()
+                .filter(m -> m.getRole() == TeamRole.ANALYST || m.getRole() == TeamRole.MANAGER)
+                .map(m -> m.getId().userId())
+                .filter(id -> !systemAdmins.contains(id))
+                .toList();
+        return users.findByIdIn(owners).stream()
+                .filter(user -> !user.isDisabled())
+                .sorted(Comparator.comparing(AppUser::getDisplayName))
+                .map(user ->
+                        new TeamAdminService.UserChoice(Objects.requireNonNull(user.getId()), user.getDisplayName()))
+                .toList();
     }
 
     private List<Long> enabled(Collection<Long> ids) {
