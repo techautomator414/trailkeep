@@ -35,6 +35,7 @@ import org.springframework.test.context.ActiveProfiles;
 @AutoConfigureMetrics // Spring Boot tests switch metrics export off unless asked.
 @Import({
     RemoteAddressController.class,
+    TestOnlyEndpointsSecurity.class,
     ManagementEndpointsIT.ClusterIndicatorConfig.class,
     PostgresTestcontainersConfiguration.class
 })
@@ -91,7 +92,11 @@ class ManagementEndpointsIT {
 
     @Test
     void prometheusIsNotServedOnTheApplicationPort() throws Exception {
-        assertThat(get(serverPort, "/actuator/prometheus").statusCode()).isEqualTo(404);
+        // Since PR 8 every application-port request needs an OIDC login first; behind it the path does not exist.
+        HttpResponse<String> response = get(serverPort, "/actuator/prometheus");
+
+        assertThat(response.statusCode()).isEqualTo(302);
+        assertThat(response.body()).doesNotContain("jvm_memory_used_bytes");
     }
 
     @Test

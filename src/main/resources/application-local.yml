@@ -6,6 +6,13 @@ spring:
     url: jdbc:postgresql://localhost:5432/trailkeep
     username: trailkeep
     password: trailkeep
+  security:
+    oauth2:
+      client:
+        provider:
+          idp:
+            # The compose Keycloak with the dev realm (deploy/local/keycloak/trailkeep-dev-realm.json).
+            issuer-uri: http://localhost:8180/realms/trailkeep-dev
 
 app:
   proxy:
@@ -15,3 +22,10 @@ app:
     # Roles created by deploy/local/postgres/01-roles.sql. Locally the app still connects as the owner.
     app-user: trailkeep_app
     purge-user: trailkeep_purge
+  security:
+    oidc:
+      client-id: trailkeep
+      client-secret: dev-only-client-secret # dev-only, matches the dev realm
+    group-roles:
+      trailkeep-compliance-admins: COMPLIANCE_ADMIN
+      trailkeep-system-admins: SYSTEM_ADMIN

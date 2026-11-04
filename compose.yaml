@@ -5,7 +5,8 @@
 # CI (Testcontainers starts its own databases) or by any deployment.
 #   docker compose up -d                    # PostgreSQL 16 for the 'local' profile
 #   docker compose --profile oracle up -d   # adds Oracle Free 23 for local Oracle parity work
-# Keycloak, Mailpit and ClamAV join this file with the work packages that need them (WP-04a, WP-17, WP-14).
+#   Keycloak (dev realm) at http://localhost:8180, for the 'local' profile's OIDC login.
+# Mailpit and ClamAV join this file with the work packages that need them (WP-17, WP-14).
 name: trailkeep
 
 services:
@@ -26,6 +27,18 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
+
+  keycloak:
+    # Same image as KeycloakLoginIT. Imports deploy/local/keycloak/trailkeep-dev-realm.json on first start.
+    image: keycloak/keycloak:26.0.7
+    command: ["start-dev", "--http-port=8180", "--import-realm"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin # dev-only
+    ports:
+      - "127.0.0.1:8180:8180"
+    volumes:
+      - ./deploy/local/keycloak/trailkeep-dev-realm.json:/opt/keycloak/data/import/trailkeep-dev-realm.json:ro
 
   oracle:
     profiles: ["oracle"]

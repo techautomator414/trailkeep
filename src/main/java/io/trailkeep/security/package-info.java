@@ -5,6 +5,10 @@
  * the CSP nonce filter and response headers. It is the only module that grants an unrestricted
  * {@code CaseScope.all()} (enforced by ArchUnit).
  *
+ * <p>Login (WP-04a): {@code SecurityConfig} requires an OIDC login for every application request and leaves Spring
+ * Security's defaults on; {@code TrailkeepOidcUserService} provisions the user through
+ * {@link io.trailkeep.user.UserSignInService} and yields a {@link io.trailkeep.security.TrailkeepOidcUser}.
+ *
  * <p>May call: {@code shared}, {@code user}, {@code audit}. Other modules use only the {@code *Service} interfaces and
  * records in this package.
  */

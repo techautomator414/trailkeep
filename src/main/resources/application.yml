@@ -54,10 +54,29 @@ spring:
       pool:
         size: 4
 
+  # OIDC login (BUILD_PLAN §9 Identity). The client is per deployment (app.security.oidc.*, the secret from a
+  # mounted secret file); the provider's endpoints are set per profile: issuer discovery in local and prod, fixed
+  # unreachable endpoints in test so contexts start without an identity provider.
+  security:
+    oauth2:
+      client:
+        registration:
+          idp:
+            provider: idp
+            client-id: ${app.security.oidc.client-id}
+            client-secret: ${app.security.oidc.client-secret}
+            authorization-grant-type: authorization_code
+            redirect-uri: "{baseUrl}/login/oauth2/code/{registrationId}"
+            scope: openid, profile, email
+
 # app.* is bound to io.trailkeep.shared.config.AppProperties. app.proxy.pattern has no default here on purpose:
 # every deployment must set it (the local and test profiles carry a placeholder), and startup fails without it.
 app:
   timezone: UTC
+  security:
+    # The provider claim that lists the user's groups, and which groups grant a global role. Team roles are managed
+    # in the application, never by the provider. Deployments map their own group names.
+    groups-claim: groups
   branding:
     name: Trailkeep
 

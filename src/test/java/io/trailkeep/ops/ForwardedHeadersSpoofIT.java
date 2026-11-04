@@ -24,7 +24,7 @@ import org.springframework.test.context.ActiveProfiles;
 @RequiresDocker
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = "management.server.port=0")
 @ActiveProfiles("test")
-@Import({RemoteAddressController.class, PostgresTestcontainersConfiguration.class})
+@Import({RemoteAddressController.class, TestOnlyEndpointsSecurity.class, PostgresTestcontainersConfiguration.class})
 class ForwardedHeadersSpoofIT {
 
     @LocalServerPort

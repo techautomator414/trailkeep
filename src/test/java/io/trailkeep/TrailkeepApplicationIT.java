@@ -59,9 +59,23 @@ class TrailkeepApplicationIT {
 
     @Test
     void healthIsNotServedOnTheApplicationPort() throws IOException, InterruptedException {
+        // On the application port the actuator path is just another path: it needs a login, and behind the login
+        // it does not exist. Either way no health document is served.
         HttpResponse<String> response = get(serverPort, "/actuator/health");
 
-        assertThat(response.statusCode()).isEqualTo(404);
+        assertThat(response.statusCode()).isEqualTo(302);
+        assertThat(response.headers().firstValue("Location"))
+                .hasValueSatisfying(location -> assertThat(location).endsWith("/oauth2/authorization/idp"));
+        assertThat(response.body()).doesNotContain("UP");
+    }
+
+    @Test
+    void everyApplicationRequestNeedsAnOidcLogin() throws IOException, InterruptedException {
+        HttpResponse<String> response = get(serverPort, "/");
+
+        assertThat(response.statusCode()).isEqualTo(302);
+        assertThat(response.headers().firstValue("Location"))
+                .hasValueSatisfying(location -> assertThat(location).endsWith("/oauth2/authorization/idp"));
     }
 
     private static HttpResponse<String> get(int port, String path) throws IOException, InterruptedException {

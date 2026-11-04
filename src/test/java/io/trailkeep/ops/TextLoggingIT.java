@@ -27,7 +27,7 @@ import org.springframework.test.context.ActiveProfiles;
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         properties = {"management.server.port=0", "trailkeep.test.context=text-logging"})
 @ActiveProfiles("test")
-@Import({RemoteAddressController.class, PostgresTestcontainersConfiguration.class})
+@Import({RemoteAddressController.class, TestOnlyEndpointsSecurity.class, PostgresTestcontainersConfiguration.class})
 @ExtendWith(OutputCaptureExtension.class)
 class TextLoggingIT {
 

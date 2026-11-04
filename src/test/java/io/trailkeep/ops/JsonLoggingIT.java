@@ -6,6 +6,7 @@ import static io.trailkeep.support.HttpProbe.get;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.trailkeep.support.LoggingReset;
+import io.trailkeep.testsupport.OidcDiscoveryStub;
 import io.trailkeep.testsupport.PostgresTestcontainersConfiguration;
 import io.trailkeep.testsupport.RequiresDocker;
 import java.nio.file.Path;
@@ -42,12 +43,15 @@ import tools.jackson.databind.json.JsonMapper;
             "app.db.purge-user=trailkeep_purge"
         })
 @ActiveProfiles({"prod", "postgresql"})
-@Import({RemoteAddressController.class, PostgresTestcontainersConfiguration.class})
+@Import({RemoteAddressController.class, TestOnlyEndpointsSecurity.class, PostgresTestcontainersConfiguration.class})
 @ExtendWith(OutputCaptureExtension.class)
 class JsonLoggingIT {
 
     @TempDir
     static Path workDir;
+
+    /** prod finds its identity provider by issuer discovery at startup; this IT never logs in. */
+    private static final OidcDiscoveryStub IDP = OidcDiscoveryStub.start();
 
     @BeforeAll
     static void applyThisProfilesLoggingConfiguration() {
@@ -57,6 +61,7 @@ class JsonLoggingIT {
     @AfterAll
     static void letTheNextContextApplyItsOwn() {
         LoggingReset.beforeNewContext();
+        IDP.close();
     }
 
     @LocalServerPort
@@ -69,6 +74,9 @@ class JsonLoggingIT {
         registry.add("spring.servlet.multipart.location", () -> workDir.toString());
         // prod refuses to start without the audit HMAC key (WP-06); generate a throwaway one per run.
         registry.add("app.audit.hmac-key", JsonLoggingIT::randomHmacKey);
+        registry.add("app.security.oidc.issuer-uri", IDP::issuer);
+        registry.add("app.security.oidc.client-id", () -> "trailkeep");
+        registry.add("app.security.oidc.client-secret", () -> "test-only-client-secret");
     }
 
     private static String randomHmacKey() {

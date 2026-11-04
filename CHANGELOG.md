@@ -15,6 +15,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- OIDC login and roles (PR 8, WP-04a): `spring-boot-starter-security-oauth2-client`; one client registration
+  (`idp`) whose id and secret come from `app.security.oidc.*` and whose provider is found by issuer discovery in
+  `local`/`prod`; every application request requires a login, Spring Security defaults (CSRF, headers) stay on,
+  and only the management server is open. `TrailkeepOidcUserService` maps the groups claim to global roles via
+  `app.security.group-roles`, provisions through the new `user` API (`UserSignInService`: upsert by `sub`, last
+  login, global-role sync, the System-Admin-vs-team-role conflict rule with a warning log line and
+  `roleConflicts()`), and refuses a disabled account before any session is authenticated. `TrailkeepOidcUser`
+  principal (name = `APP_USER.ID`). Keycloak 26 dev realm (two teams x Reader, Analyst, two Managers; Compliance
+  Admin; System Admin; a user disabled in Trailkeep) in `compose.yaml`; `@WithAppUser` test support;
+  `KeycloakLoginIT` proves the login round-trip and the disabled-user refusal against a real Keycloak.
 - Audit module (PR 11, WP-06): `V2__audit.sql` (`AUDIT_EVENT` without foreign keys by decision, indexed on
   `CASE_ID`, `ACTOR_ID` and entity; `SEQ_AUDIT_EVENT`) with the immutable `AuditEvent` entity; `AuditRecorder`
   writing synchronously in the caller's transaction (`MANDATORY` propagation) with the application clock, the

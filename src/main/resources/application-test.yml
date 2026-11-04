@@ -9,3 +9,24 @@ app:
   db:
     app-user: trailkeep_app
     purge-user: trailkeep_purge
+  security:
+    oidc:
+      client-id: trailkeep
+      client-secret: dev-only-client-secret # dev-only, matches the dev realm KeycloakLoginIT imports
+    group-roles:
+      trailkeep-compliance-admins: COMPLIANCE_ADMIN
+      trailkeep-system-admins: SYSTEM_ADMIN
+
+spring:
+  security:
+    oauth2:
+      client:
+        provider:
+          idp:
+            # Unreachable on purpose: contexts start without an identity provider. KeycloakLoginIT points these at a
+            # real Keycloak.
+            authorization-uri: http://127.0.0.1:9/realms/test/protocol/openid-connect/auth
+            token-uri: http://127.0.0.1:9/realms/test/protocol/openid-connect/token
+            jwk-set-uri: http://127.0.0.1:9/realms/test/protocol/openid-connect/certs
+            user-info-uri: http://127.0.0.1:9/realms/test/protocol/openid-connect/userinfo
+            user-name-attribute: sub
