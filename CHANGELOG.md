@@ -15,6 +15,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Case permission matrix (WP-09, part 1 of 2): `CasePermissionService` in `security` evaluates
+  `permissions/matrix.csv`, a first-match decision table over effective role (System Admin and Compliance Admin
+  win over team roles) × ownership × sensitivity × status × action, which fails start-up unless it ends in a
+  catch-all DENY; `mayOwn` (Analyst or Manager in the case's team; never a System Admin) and `approverCandidates`
+  (the team's enabled Managers minus requester and owner, else enabled Compliance Admins). `UserPermissions` and
+  `UserDirectoryService` in `user` rebuild a user's authority from the database on every call (disabled or unknown
+  users hold nothing). `CaseStatus` and `Sensitivity` in `shared`. `PermissionMatrixTest` checks every
+  combination against an independent encoding of BUILD_PLAN §3.2 and that no CSV row is shadowed.
 - OIDC login and roles (PR 8, WP-04a): `spring-boot-starter-security-oauth2-client`; one client registration
   (`idp`) whose id and secret come from `app.security.oidc.*` and whose provider is found by issuer discovery in
   `local`/`prod`; every application request requires a login, Spring Security defaults (CSRF, headers) stay on,

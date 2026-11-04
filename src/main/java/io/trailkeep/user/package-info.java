@@ -7,7 +7,9 @@
  * <p>Persistence ({@code V1__identity}): the entities {@code AppUser}, {@code Team}, {@code AppUserTeam} and
  * {@code AppUserGlobalRole} and their repositories are package-private; none of these tables is case-rooted. The
  * public types are the role enums {@link io.trailkeep.user.TeamRole} and {@link io.trailkeep.user.GlobalRole}, and
- * the sign-in API {@link io.trailkeep.user.UserSignInService} with its records.
+ * the sign-in API {@link io.trailkeep.user.UserSignInService} with its records, and
+ * {@link io.trailkeep.user.UserDirectoryService}, which rebuilds {@link io.trailkeep.user.UserPermissions} from the
+ * database for every request.
  *
  * <p>May call: {@code shared}, {@code audit}. Other modules use only the {@code *Service} interfaces and records in
  * this package.
