@@ -81,6 +81,8 @@ class CaseRootedInvisibilityIT {
         long colleague = seed.user();
         CaseNumber restricted = seed.caseRow(team, owner, Sensitivity.RESTRICTED, CaseStatus.OPEN);
         long restrictedId = seed.caseId(restricted);
+        CaseNumber otherTeam = seed.caseRow(seed.team(), owner, Sensitivity.STANDARD, CaseStatus.OPEN);
+        long otherTeamId = seed.caseId(otherTeam);
         CaseNumber absent = new CaseNumber("SEED", 2026, 1);
         CaseScope ownerScope = scopes.forUser(analyst(owner, team));
         CaseScope colleagueScope = scopes.forUser(analyst(colleague, team));
@@ -92,10 +94,12 @@ class CaseRootedInvisibilityIT {
             Method method = rooted.method();
             Object bean = context.getBean(rooted.repository());
             String unreadable = outcome(bean, method, new Call(colleagueScope, restricted, restrictedId));
+            String outsideTeams = outcome(bean, method, new Call(colleagueScope, otherTeam, otherTeamId));
             String absentForColleague = outcome(bean, method, new Call(colleagueScope, absent, ABSENT_ID));
             String absentForOwner = outcome(bean, method, new Call(ownerScope, absent, ABSENT_ID));
             assertThat(unreadable)
                     .as(method.toGenericString())
+                    .isEqualTo(outsideTeams)
                     .isEqualTo(absentForColleague)
                     .isEqualTo(absentForOwner);
             if (!outcome(bean, method, new Call(ownerScope, restricted, restrictedId))

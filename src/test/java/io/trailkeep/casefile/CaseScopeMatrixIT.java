@@ -76,8 +76,10 @@ class CaseScopeMatrixIT {
         long otherAnalystA = seed.user();
         long managerB = seed.user();
         long analystB = seed.user();
-        Map<Long, List<Long>> owners =
-                Map.of(teamA, List.of(analystA, otherAnalystA), teamB, List.of(managerB, analystB));
+        long movedAnalyst = seed.user();
+        long readerA = seed.user();
+        Map<Long, List<Long>> owners = Map.of(
+                teamA, List.of(analystA, otherAnalystA, movedAnalyst, readerA), teamB, List.of(managerB, analystB));
         owners.forEach((team, ids) -> ids.forEach(owner -> {
             for (Sensitivity sensitivity : Sensitivity.values()) {
                 for (CaseStatus status : CaseStatus.values()) {
@@ -87,7 +89,11 @@ class CaseScopeMatrixIT {
                 }
             }
         }));
-        people.add(person(seed.user(), Set.of(), Map.of(teamA, TeamRole.READER)));
+        people.add(person(readerA, Set.of(), Map.of(teamA, TeamRole.READER)));
+        // Owns team A cases but has since moved to team B: the matrix's NONE rule denies, ownership alone is no grant.
+        people.add(person(movedAnalyst, Set.of(), Map.of(teamB, TeamRole.ANALYST)));
+        people.add(person(seed.user(), Set.of(GlobalRole.SYSTEM_ADMIN, GlobalRole.COMPLIANCE_ADMIN), Map.of()));
+        people.add(person(seed.user(), Set.of(GlobalRole.SYSTEM_ADMIN), Map.of(teamA, TeamRole.MANAGER)));
         people.add(person(analystA, Set.of(), Map.of(teamA, TeamRole.ANALYST)));
         people.add(person(seed.user(), Set.of(), Map.of(teamA, TeamRole.MANAGER)));
         people.add(person(managerB, Set.of(), Map.of(teamA, TeamRole.ANALYST, teamB, TeamRole.MANAGER)));
