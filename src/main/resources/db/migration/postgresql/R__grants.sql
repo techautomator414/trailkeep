@@ -17,28 +17,39 @@
 --   APP_USER_TEAM         S I U D    -            membership and role changes
 --   APP_USER_GLOBAL_ROLE  S I   D    -            re-synced from identity-provider claims at login
 --   AUDIT_EVENT           S I        -            append-only; audit outlives purge (V2)
+--   SLA_POLICY            S I U      -            edited, never deleted (V3)
+--   CASE_TYPE             S I U      -            deactivated, never deleted (V3)
+--   CASE_TYPE_OUTCOME     S I U D    -            configuration; an outcome list is replaced as a whole (V3)
 --   SEQ_APP_USER          USAGE      -
 --   SEQ_TEAM              USAGE      -
 --   SEQ_AUDIT_EVENT       USAGE      -
+--   SEQ_SLA_POLICY        USAGE      -
+--   SEQ_CASE_TYPE         USAGE      -
 --
 -- Later migrations add their tables here. Fixed rules for them: the app user has no UPDATE or DELETE on
 -- CASE_COMMENT, AUDIT_EVENT and ALERT_LEDGER; it may DELETE only from CASE_COMMENT_PIN, SAVED_VIEW, USER_ALERT,
--- SPRING_SESSION*, OIDC_SESSION, SHEDLOCK and importer staging tables, besides the membership tables above.
+-- SPRING_SESSION*, OIDC_SESSION, SHEDLOCK and importer staging tables, besides the membership tables and
+-- CASE_TYPE_OUTCOME (configuration, not case data) above.
 -- DatabaseGrantsIT asserts this matrix by executing each statement as each user.
 
 GRANT USAGE ON SCHEMA ${flyway:defaultSchema} TO ${app_user};
 GRANT USAGE ON SCHEMA ${flyway:defaultSchema} TO ${purge_user};
 
-REVOKE ALL ON TABLE APP_USER, TEAM, APP_USER_TEAM, APP_USER_GLOBAL_ROLE, AUDIT_EVENT FROM ${app_user};
-REVOKE ALL ON TABLE APP_USER, TEAM, APP_USER_TEAM, APP_USER_GLOBAL_ROLE, AUDIT_EVENT FROM ${purge_user};
-REVOKE ALL ON SEQUENCE SEQ_APP_USER, SEQ_TEAM, SEQ_AUDIT_EVENT FROM ${app_user};
-REVOKE ALL ON SEQUENCE SEQ_APP_USER, SEQ_TEAM, SEQ_AUDIT_EVENT FROM ${purge_user};
+REVOKE ALL ON TABLE APP_USER, TEAM, APP_USER_TEAM, APP_USER_GLOBAL_ROLE, AUDIT_EVENT,
+  SLA_POLICY, CASE_TYPE, CASE_TYPE_OUTCOME FROM ${app_user};
+REVOKE ALL ON TABLE APP_USER, TEAM, APP_USER_TEAM, APP_USER_GLOBAL_ROLE, AUDIT_EVENT,
+  SLA_POLICY, CASE_TYPE, CASE_TYPE_OUTCOME FROM ${purge_user};
+REVOKE ALL ON SEQUENCE SEQ_APP_USER, SEQ_TEAM, SEQ_AUDIT_EVENT, SEQ_SLA_POLICY, SEQ_CASE_TYPE FROM ${app_user};
+REVOKE ALL ON SEQUENCE SEQ_APP_USER, SEQ_TEAM, SEQ_AUDIT_EVENT, SEQ_SLA_POLICY, SEQ_CASE_TYPE FROM ${purge_user};
 
 GRANT SELECT, INSERT, UPDATE         ON TABLE APP_USER             TO ${app_user};
 GRANT SELECT, INSERT, UPDATE         ON TABLE TEAM                 TO ${app_user};
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE APP_USER_TEAM        TO ${app_user};
 GRANT SELECT, INSERT, DELETE         ON TABLE APP_USER_GLOBAL_ROLE TO ${app_user};
 GRANT SELECT, INSERT                 ON TABLE AUDIT_EVENT          TO ${app_user};
+GRANT SELECT, INSERT, UPDATE         ON TABLE SLA_POLICY           TO ${app_user};
+GRANT SELECT, INSERT, UPDATE         ON TABLE CASE_TYPE            TO ${app_user};
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE CASE_TYPE_OUTCOME    TO ${app_user};
 
 -- USAGE allows nextval(), which is all Hibernate's pooled optimizer calls.
-GRANT USAGE ON SEQUENCE SEQ_APP_USER, SEQ_TEAM, SEQ_AUDIT_EVENT TO ${app_user};
+GRANT USAGE ON SEQUENCE SEQ_APP_USER, SEQ_TEAM, SEQ_AUDIT_EVENT, SEQ_SLA_POLICY, SEQ_CASE_TYPE TO ${app_user};

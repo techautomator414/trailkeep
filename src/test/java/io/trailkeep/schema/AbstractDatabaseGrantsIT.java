@@ -52,13 +52,16 @@ abstract class AbstractDatabaseGrantsIT {
         DENIED
     }
 
-    /** Identity (V1) and audit (V2) tables, and the column each probe touches: the first key column. */
+    /** Identity (V1), audit (V2) and admin (V3) tables, and the column each probe touches: the first key column. */
     static final Map<String, String> TABLES = Map.of(
             "APP_USER", "ID",
             "TEAM", "ID",
             "APP_USER_TEAM", "USER_ID",
             "APP_USER_GLOBAL_ROLE", "USER_ID",
-            "AUDIT_EVENT", "ID");
+            "AUDIT_EVENT", "ID",
+            "SLA_POLICY", "ID",
+            "CASE_TYPE", "ID",
+            "CASE_TYPE_OUTCOME", "CASE_TYPE_ID");
 
     /** What the runtime user may do; anything absent is denied. */
     static final Map<String, Set<Privilege>> APP_USER_GRANTS = Map.of(
@@ -66,12 +69,16 @@ abstract class AbstractDatabaseGrantsIT {
             "TEAM", EnumSet.of(Privilege.SELECT, Privilege.INSERT, Privilege.UPDATE),
             "APP_USER_TEAM", EnumSet.allOf(Privilege.class),
             "APP_USER_GLOBAL_ROLE", EnumSet.of(Privilege.SELECT, Privilege.INSERT, Privilege.DELETE),
-            "AUDIT_EVENT", EnumSet.of(Privilege.SELECT, Privilege.INSERT));
+            "AUDIT_EVENT", EnumSet.of(Privilege.SELECT, Privilege.INSERT),
+            "SLA_POLICY", EnumSet.of(Privilege.SELECT, Privilege.INSERT, Privilege.UPDATE),
+            "CASE_TYPE", EnumSet.of(Privilege.SELECT, Privilege.INSERT, Privilege.UPDATE),
+            "CASE_TYPE_OUTCOME", EnumSet.allOf(Privilege.class));
 
     /** What the purge user may do on these tables: nothing (it deletes case data, which arrives with V4). */
     static final Map<String, Set<Privilege>> PURGE_USER_GRANTS = Map.of();
 
-    static final List<String> SEQUENCES = List.of("SEQ_APP_USER", "SEQ_TEAM", "SEQ_AUDIT_EVENT");
+    static final List<String> SEQUENCES =
+            List.of("SEQ_APP_USER", "SEQ_TEAM", "SEQ_AUDIT_EVENT", "SEQ_SLA_POLICY", "SEQ_CASE_TYPE");
 
     @Autowired
     private TestDatabaseUsers users;

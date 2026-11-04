@@ -21,6 +21,11 @@
 --   SEQ_APP_USER          SELECT     -            Oracle's sequence privilege is SELECT (NEXTVAL)
 --   SEQ_TEAM              SELECT     -
 --   SEQ_AUDIT_EVENT       SELECT     -
+--   SLA_POLICY            S I U      -            edited, never deleted (V3)
+--   CASE_TYPE             S I U      -            deactivated, never deleted (V3)
+--   CASE_TYPE_OUTCOME     S I U D    -            configuration; an outcome list is replaced as a whole (V3)
+--   SEQ_SLA_POLICY        SELECT     -
+--   SEQ_CASE_TYPE         SELECT     -
 --
 -- Later migrations add their rows to the cursor below. Fixed rules for them: the app user has no UPDATE or DELETE
 -- on CASE_COMMENT, AUDIT_EVENT and ALERT_LEDGER; it may DELETE only from CASE_COMMENT_PIN, SAVED_VIEW, USER_ALERT,
@@ -38,7 +43,12 @@ DECLARE
     UNION ALL SELECT 'SEQ_APP_USER', 'SELECT', UPPER('${app_user}') FROM DUAL
     UNION ALL SELECT 'AUDIT_EVENT', 'SELECT,INSERT', UPPER('${app_user}') FROM DUAL
     UNION ALL SELECT 'SEQ_TEAM', 'SELECT', UPPER('${app_user}') FROM DUAL
-    UNION ALL SELECT 'SEQ_AUDIT_EVENT', 'SELECT', UPPER('${app_user}') FROM DUAL;
+    UNION ALL SELECT 'SEQ_AUDIT_EVENT', 'SELECT', UPPER('${app_user}') FROM DUAL
+    UNION ALL SELECT 'SLA_POLICY', 'SELECT,INSERT,UPDATE', UPPER('${app_user}') FROM DUAL
+    UNION ALL SELECT 'CASE_TYPE', 'SELECT,INSERT,UPDATE', UPPER('${app_user}') FROM DUAL
+    UNION ALL SELECT 'CASE_TYPE_OUTCOME', 'SELECT,INSERT,UPDATE,DELETE', UPPER('${app_user}') FROM DUAL
+    UNION ALL SELECT 'SEQ_SLA_POLICY', 'SELECT', UPPER('${app_user}') FROM DUAL
+    UNION ALL SELECT 'SEQ_CASE_TYPE', 'SELECT', UPPER('${app_user}') FROM DUAL;
   keep PLS_INTEGER;
 BEGIN
   FOR w IN wanted LOOP

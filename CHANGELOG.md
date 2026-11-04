@@ -21,6 +21,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Case configuration (WP-10, part 1 of 2): `V3__admin.sql` (`SLA_POLICY` with range CHECKs and anchor/escalation
+  enums, `CASE_TYPE`, `CASE_TYPE_OUTCOME`, their sequences) with the `SlaPolicy`, `CaseType` and `CaseTypeOutcome`
+  entities in `casefile`; `CaseConfigService` (Compliance Admins only) creates and updates SLA policies and case
+  types from Jakarta-validated command records, replaces outcome lists as a whole, and audits every change with
+  old/new snapshots; vendor grants and `DatabaseGrantsIT` cover the new tables.
 - Team and team-role administration (WP-09, part 2 of 2): `TeamAdminService` (System Admins only; create,
   rename, deactivate teams; grant, change and revoke team roles; a System Admin, a disabled user or an inactive team
   never receives a role) with `TEAM_CREATED`, `TEAM_UPDATED`, `ROLE_GRANTED`, `ROLE_CHANGED` and `ROLE_REVOKED`
