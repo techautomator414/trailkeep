@@ -35,6 +35,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - The local seed fails with a message naming the case type and the SLA policy when the policy is unknown (#29).
 - `.gitignore` excludes `.claude/settings.local.json`, which holds machine-specific Claude Code settings.
 
+- CI installs Semgrep from a hash-pinned lockfile (`.github/requirements/semgrep.txt`, watched by Dependabot), and
+  `SECURITY.md` links the private advisory form directly, to satisfy OpenSSF Scorecard Pinned-Dependencies and
+  Security-Policy.
 ## [0.1.0] - 2026-11-04
 
 The walking skeleton: IMPLEMENTATION_PLAN Phase 1 (Part D pull requests 1 to 12) plus WP-09 and WP-10. The platform,
