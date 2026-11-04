@@ -174,7 +174,8 @@ public final class KeycloakDevRealm {
 
     /**
      * A port the application binds minutes after this call, once Keycloak and the database containers are up. The
-     * kernel's ephemeral range (32768 and up on Linux) is also where Docker publishes container ports, so a port from
+     * kernel's ephemeral range (32768 to 60999 by default on Linux) is where Docker publishes container ports and
+     * where outgoing connections take their source ports, so a port from
      * {@code new ServerSocket(0)} can be taken by the next Testcontainers start before the context binds it (seen as
      * {@code PortInUseException} in {@code SharedSessionsIT}). Probing below that range avoids the race.
      */
@@ -191,7 +192,7 @@ public final class KeycloakDevRealm {
 
     private static boolean isFree(int port) {
         try (ServerSocket socket = new ServerSocket(port)) {
-            return socket.getLocalPort() == port;
+            return true; // bound and released: a bind to an explicit port either gets it or throws
         } catch (IOException e) {
             return false;
         }
