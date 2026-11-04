@@ -7,6 +7,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.1.0] - 2026-11-04
+
+The walking skeleton: IMPLEMENTATION_PLAN Phase 1 (Part D pull requests 1 to 12) plus WP-09 and WP-10. The platform,
+its gates, identity, sessions, audit, the web shell and the administration screens are in place; case handling
+starts with WP-11. `HANDOFF.md` records the state, the decisions taken and the open issues.
+
 ### Fixed
 
 - The `DEFINED_PORT` integration tests (`KeycloakLoginIT`, `SharedSessionsIT`, the accessibility ITs) chose their
@@ -173,3 +181,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   report `THIRD-PARTY.txt` gated by `security/licenses-allowed.txt`; CycloneDX SBOM at `target/bom.json`; enforcer
   rules for plugin versions, upper-bound dependencies, dependency convergence and banned dependencies (Log4j core,
   Log4j 1, Lombok, Commons Logging before 1.3).
+
+[Unreleased]: https://github.com/techautomator414/trailkeep/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/techautomator414/trailkeep/releases/tag/v0.1.0

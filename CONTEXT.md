@@ -1,5 +1,5 @@
 # CONTEXT — Trailkeep (open-source compliance case tracker)
-_Read this before making any changes. Last updated: 2026-11-02._
+_Read this before making any changes. Last updated: 2026-11-04._
 
 ## What This Is
 Trailkeep is a small, opinionated compliance case tracker: cases with an owner, type, age,
@@ -13,18 +13,12 @@ parity, Thymeleaf + htmx UI, SSO via the deploying organization's identity provi
 `~/projects/trailkeep/` — intended public repo `github.com/techautomator414/trailkeep`.
 
 ## Status
-**PLAN ONLY — no code yet.** Two documents:
-- `BUILD_PLAN.md` v0.5 — what we are building: scope decisions, roles and permissions, flows,
-  domain model, SLA engine, architecture, Oracle/PG portability rules, security design,
-  accessibility program, open-source governance, scanning strategy, testing, deployment, import
-  of existing records, phases, risks, open questions (§19), DDL and CI sketches.
-- `IMPLEMENTATION_PLAN.md` v0.3 — how we build it: the audit decisions register (Part A: an
-  author pass plus three rounds of independent hostile review, 62 findings resolved; the loop
-  was capped at three rounds by the sponsor), engineering
-  standards (Part B), work packages WP-01…30 with sizes and dependencies (Part C), the first
-  twelve PRs (Part D), definition of done (Part E), the re-baselined schedule (Part F) and the
-  CI check-placement table (Part G). **Where the two disagree, the implementation plan wins.**
-Phase 0 (discovery) answers the BUILD_PLAN §19 questions before any code is written.
+**0.1.0 — walking skeleton merged; case handling not started.** `IMPLEMENTATION_PLAN.md` Phase 1
+(Part D PRs 1–12) and WP-09, WP-10 are on `main`, every workflow green on both database vendors.
+About a third of the work packages are done; WP-11 (`V4__case`, principal `CaseScope`) is next.
+`HANDOFF.md` is the authoritative state-of-the-build document; `CHANGELOG.md` lists the notable changes per PR.
+The two plans remain the contract. **Where the two disagree, the implementation plan wins.** Lines of
+the plans superseded during implementation are recorded by ADRs (`adr/README.md`), not by editing the plans.
 
 ## Project rules
 - **Public, Apache-2.0** by the owner's explicit decision (2026-11-02). Every file carries an
@@ -34,13 +28,16 @@ Phase 0 (discovery) answers the BUILD_PLAN §19 questions before any code is wri
   stakeholder names, or the name of the legacy tool it replaces. Stakeholder input is
   paraphrased. Organization-specific import mappings live outside this repo.
 - **Section 508 is a release gate**, not a polish item (BUILD_PLAN §10).
-- `README.md`, `docs/`, `CONTRIBUTING.md`, `SECURITY.md`, `CODE_OF_CONDUCT.md` are still to be
-  written — on this server they require a maintenance elevation (doc-gate).
+- `README.md`, `CONTRIBUTING.md`, `SECURITY.md`, `CODE_OF_CONDUCT.md`, `HANDOFF.md` exist; `docs/`
+  (runbook) arrives with WP-30 and `accessibility/` (ACR) with the conformance work (#30).
 
 ## Key Files
 | File | Purpose |
 |---|---|
 | `BUILD_PLAN.md` | What we are building (v0.5) |
 | `IMPLEMENTATION_PLAN.md` | How we build it: audit register, standards, work packages, PR order, DoD, schedule, CI placement (v0.3) |
+| `HANDOFF.md` | State of the build at 0.1.0, decisions, open issues, next work package |
+| `CHANGELOG.md` | Keep a Changelog; notable changes per PR |
+| `CLAUDE.md` | Working agreement for AI coding sessions |
 | `LICENSE` | Apache License 2.0 |
 | `NOTICE` | Copyright + third-party notice |
