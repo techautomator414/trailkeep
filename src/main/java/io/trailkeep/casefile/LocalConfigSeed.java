@@ -64,11 +64,15 @@ class LocalConfigSeed implements ApplicationRunner {
                 .forEach(t -> config.saveCaseType(
                         system,
                         null,
-                        new CaseTypeCommand(
-                                t.name(),
-                                policies.getOrDefault(t.slaPolicy(), 0L),
-                                t.retentionYears(),
-                                true,
-                                t.outcomes())));
+                        new CaseTypeCommand(t.name(), policyId(policies, t), t.retentionYears(), true, t.outcomes())));
+    }
+
+    private static long policyId(Map<String, Long> policies, CaseTypeSeed caseType) {
+        Long id = policies.get(caseType.slaPolicy());
+        if (id == null) {
+            throw new IllegalStateException("app.seed: case type '" + caseType.name() + "' names SLA policy '"
+                    + caseType.slaPolicy() + "', which is neither seeded nor already present");
+        }
+        return id;
     }
 }

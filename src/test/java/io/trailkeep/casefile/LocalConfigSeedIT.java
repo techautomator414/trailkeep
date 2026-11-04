@@ -3,6 +3,7 @@
 package io.trailkeep.casefile;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.trailkeep.audit.AuditOrigin;
 import io.trailkeep.audit.AuditRecord;
@@ -10,6 +11,7 @@ import io.trailkeep.audit.AuditTrailService;
 import io.trailkeep.shared.access.CaseScope;
 import io.trailkeep.testsupport.PostgresTestcontainersConfiguration;
 import io.trailkeep.testsupport.RequiresDocker;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.DefaultApplicationArguments;
@@ -60,6 +62,18 @@ class LocalConfigSeedIT {
                 .allSatisfy(e -> assertThat(e.actorId()).isNull())
                 .extracting(AuditRecord::action)
                 .containsOnly("SLA_POLICY_CREATED", "CASE_TYPE_CREATED");
+    }
+
+    @Test
+    void anUnknownPolicyNameFailsNamingTheCaseTypeAndThePolicy() {
+        LocalConfigSeed.Seed typo = new LocalConfigSeed.Seed(
+                List.of(),
+                List.of(new LocalConfigSeed.CaseTypeSeed("Sample type", "Standrad 30 days", 7, List.of("Resolved"))));
+
+        assertThatThrownBy(() -> new LocalConfigSeed(typo, config).run(new DefaultApplicationArguments()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("Sample type")
+                .hasMessageContaining("Standrad 30 days");
     }
 
     private static LocalConfigSeed.Seed localSeed() throws Exception {
