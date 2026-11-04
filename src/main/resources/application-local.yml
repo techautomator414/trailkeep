@@ -15,6 +15,15 @@ spring:
             issuer-uri: http://localhost:8180/realms/trailkeep-dev
 
 app:
+  # Synthetic case configuration for local development (WP-10), loaded by LocalConfigSeed when missing.
+  seed:
+    sla-policies:
+      - { name: Standard 30 days, anchor: IDENTIFIED_ON, target-days: 30, at-risk-pct: 80, overdue-reminder-days: 7, escalate-to: OWNER_AND_MANAGERS }
+      - { name: Urgent 5 days, anchor: OPENED_AT, target-days: 5, at-risk-pct: 60, overdue-reminder-days: 1, escalate-to: OWNER_AND_MANAGERS }
+    case-types:
+      - { name: Policy exception, sla-policy: Standard 30 days, retention-years: 7, outcomes: [Resolved, No Action Required, Duplicate] }
+      - { name: Access review finding, sla-policy: Standard 30 days, retention-years: 7, outcomes: [Resolved, Transferred, Duplicate] }
+      - { name: Vendor incident, sla-policy: Urgent 5 days, retention-years: 10, outcomes: [Resolved, No Action Required, Transferred] }
   proxy:
     # Placeholder router range. The deploying organization sets its own Route/ingress peer pattern.
     pattern: 10\.128\.\d+\.\d+

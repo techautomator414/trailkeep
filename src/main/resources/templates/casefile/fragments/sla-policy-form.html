@@ -1,0 +1,25 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<form th:fragment="form(action, p, submit)" method="post" th:action="${action}" xmlns:th="http://www.thymeleaf.org">
+  <label class="form-label" for="name" th:text="#{tk.config.name}">Name</label>
+  <input class="form-control" id="name" name="name" type="text" required maxlength="120" th:value="${p?.name}">
+  <label class="form-label mt-2" for="anchor" th:text="#{tk.sla.anchor}">The clock starts at</label>
+  <select class="form-select" id="anchor" name="anchor">
+    <option th:each="a : ${anchors}" th:value="${a}" th:selected="${p?.anchor == a}"
+            th:text="#{'tk.sla.anchor.' + ${a}}">Anchor</option>
+  </select>
+  <label class="form-label mt-2" for="targetDays" th:text="#{tk.sla.target.label}">Target</label>
+  <input class="form-control" id="targetDays" name="targetDays" type="number" min="1" max="3650" required
+         th:value="${p?.targetDays ?: 30}">
+  <label class="form-label mt-2" for="atRiskPct" th:text="#{tk.sla.risk.label}">At risk after</label>
+  <input class="form-control" id="atRiskPct" name="atRiskPct" type="number" min="1" max="99" required
+         th:value="${p?.atRiskPct ?: 80}">
+  <label class="form-label mt-2" for="overdueReminderDays" th:text="#{tk.sla.reminder.label}">Reminder every</label>
+  <input class="form-control" id="overdueReminderDays" name="overdueReminderDays" type="number" min="1" max="365"
+         required th:value="${p?.overdueReminderDays ?: 7}">
+  <label class="form-label mt-2" for="escalateTo" th:text="#{tk.sla.escalate}">Escalate to</label>
+  <select class="form-select" id="escalateTo" name="escalateTo">
+    <option th:each="e : ${escalations}" th:value="${e}" th:selected="${p?.escalateTo == e}"
+            th:text="#{'tk.sla.escalate.' + ${e}}">Escalation</option>
+  </select>
+  <button class="btn btn-primary mt-2" type="submit" th:text="${submit}">Save</button>
+</form>
