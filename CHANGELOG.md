@@ -19,6 +19,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   `CASE_CREATED` audit event with subject and description redacted. `/cases/{number}` shows the case header (status,
   SLA, sensitivity and priority chips) and overview in one scoped query; unreadable, absent and malformed numbers all
   answer the same 404.
+- The one-page create form at `/cases/new` (WP-11 part 2b), linked from the dashboard: required fields marked in
+  text, a focused error summary with per-field errors, `Ctrl+S` to save, the "numbers may have gaps" help, and a
+  warning (confirm to save anyway) when the title looks like it holds an SSN, a medical record number or a date of
+  birth. Saving lands on the case page with an announced confirmation. Golden path 1 runs end to end in the browser.
 
 ### Changed
 

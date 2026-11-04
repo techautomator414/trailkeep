@@ -5,6 +5,8 @@ package io.trailkeep.casefile;
 import io.trailkeep.shared.CaseNumber;
 import io.trailkeep.user.UserPermissions;
 import jakarta.validation.Valid;
+import java.util.List;
+import java.util.Set;
 
 /**
  * Creating and reading cases (BUILD_PLAN §4.2, §4.3). Reads go through the actor's {@code CaseScope}, so a case the
@@ -20,6 +22,71 @@ public interface CaseService {
      * @param displayName the actor's display name, kept in the audit trail
      */
     record Actor(UserPermissions permissions, String displayName) {}
+
+    /**
+     * Something the create form offers to pick.
+     *
+     * @param id the id
+     * @param name the name shown
+     */
+    record Choice(long id, String name) {}
+
+    /**
+     * A team the actor may create cases in.
+     *
+     * @param id the team id
+     * @param name the team name
+     * @param owners the people who may own its cases, by name
+     */
+    record TeamChoice(long id, String name, List<Choice> owners) {
+        /**
+         * Copies the owners.
+         *
+         * @param id the team id
+         * @param name the team name
+         * @param owners the people who may own its cases
+         */
+        public TeamChoice {
+            owners = List.copyOf(owners);
+        }
+    }
+
+    /**
+     * What the create form offers.
+     *
+     * @param caseTypes the active case types, by name
+     * @param teams the active teams the actor may create cases in, by name; empty if none
+     */
+    record CreateChoices(List<Choice> caseTypes, List<TeamChoice> teams) {
+        /**
+         * Copies the lists.
+         *
+         * @param caseTypes the active case types
+         * @param teams the teams
+         */
+        public CreateChoices {
+            caseTypes = List.copyOf(caseTypes);
+            teams = List.copyOf(teams);
+        }
+    }
+
+    /**
+     * The choices for the create form: active case types, and the actor's active teams in which the matrix lets them
+     * create cases, each with its eligible owners.
+     *
+     * @param actor the actor
+     * @return the choices
+     */
+    CreateChoices createChoices(Actor actor);
+
+    /**
+     * The intake heuristic for a title that may carry PHI (BUILD_PLAN §18): patterns that look like an SSN, a medical
+     * record number or a date of birth. It only warns; the person may confirm and save anyway.
+     *
+     * @param title the title as entered
+     * @return the patterns found; empty if none
+     */
+    Set<TitleWarning> titleWarnings(String title);
 
     /**
      * Opens a case: draws its number, initialises its SLA row from the case type's policy and its search row from

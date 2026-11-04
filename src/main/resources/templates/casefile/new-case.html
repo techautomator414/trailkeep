@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- The one-page create form (BUILD_PLAN §4.2, §10.1 "Forms"). Required fields say so in their label; each error is
+     tied to its field by aria-describedby and listed in a summary that app.js focuses; Ctrl+S submits
+     (data-tk-ctrl-s). Values come back from the request on a 422 re-render. -->
+<html lang="en" xmlns:th="http://www.thymeleaf.org" th:replace="~{web/layout :: page(~{::title}, ~{::main})}">
+<head><title th:text="#{tk.new.title} + ' · ' + ${@branding.name()}">New case</title></head>
+<body>
+<main id="main" class="container tk-main" tabindex="-1">
+  <h1 th:text="#{tk.new.title}">New case</h1>
+  <div th:unless="${#lists.isEmpty(errors)}" class="alert alert-danger" role="alert" tabindex="-1"
+       data-tk-error-summary aria-labelledby="tk-errors-title">
+    <h2 id="tk-errors-title" class="h5" th:text="#{tk.new.errors}">Correct these fields</h2>
+    <ul><li th:each="f : ${errors}"><a class="alert-link" th:href="'#' + ${f}" th:text="#{'tk.new.error.' + ${f}}">Field</a></li></ul>
+  </div>
+  <div th:if="${warnings != null}" class="alert alert-warning" role="alert" tabindex="-1" data-tk-error-summary
+       aria-labelledby="tk-phi-title">
+    <h2 id="tk-phi-title" class="h5" th:text="#{tk.new.phi.title}">The title may contain sensitive details</h2>
+    <p th:text="#{tk.new.phi.text}">Titles appear in emails. It seems to contain:</p>
+    <ul><li th:each="w : ${warnings}" th:text="#{'tk.new.phi.' + ${w}}">A pattern</li></ul>
+    <p><a class="alert-link" href="#title" th:text="#{tk.new.phi.fix}">Edit the title</a></p>
+  </div>
+  <p th:if="${#lists.isEmpty(choices.teams)}" th:text="#{tk.new.noteams}">No team.</p>
+  <form th:unless="${#lists.isEmpty(choices.teams)}" method="post" th:action="@{/cases}" data-tk-ctrl-s
+        th:with="bad=${errors}">
+    <p th:text="#{tk.new.intro}">Fields marked required must be filled in.</p>
+    <div class="mb-3" th:with="e=${#lists.contains(bad, 'caseTypeId')}">
+      <label class="form-label" for="caseTypeId" th:text="#{tk.new.type}">Case type (required)</label>
+      <select class="form-select" id="caseTypeId" name="caseTypeId" required
+              th:attr="aria-invalid=${e},aria-describedby=${e} ? 'caseTypeId-error' : null">
+        <option value="" th:text="#{tk.new.type.choose}">Choose a case type</option>
+        <option th:each="t : ${choices.caseTypes}" th:value="${t.id}" th:text="${t.name}"
+                th:selected="${values['caseTypeId'] == '' + t.id}">Type</option>
+      </select>
+      <div th:if="${e}" class="invalid-feedback d-block" id="caseTypeId-error" th:text="#{tk.new.error.caseTypeId}">
+        Error</div>
+    </div>
+    <div class="mb-3" th:with="e=${#lists.contains(bad, 'title')}">
+      <label class="form-label" for="title" th:text="#{tk.new.titlefield}">Title (required)</label>
+      <input class="form-control" id="title" name="title" type="text" required maxlength="200"
+             th:value="${values['title']}"
+             th:attr="aria-invalid=${e or warnings != null},
+                      aria-describedby=${e} ? 'title-error title-hint' : 'title-hint'">
+      <div th:if="${e}" class="invalid-feedback d-block" id="title-error" th:text="#{tk.new.error.title}">Error</div>
+      <div class="form-text" id="title-hint" th:text="#{tk.new.title.hint}">No sensitive details.</div>
+      <div class="form-check mt-1" th:if="${warnings != null}">
+        <input class="form-check-input" id="titleConfirmed" name="titleConfirmed" type="checkbox" value="true">
+        <label class="form-check-label" for="titleConfirmed" th:text="#{tk.new.phi.confirm}">Confirm</label>
+      </div>
+    </div>
+    <fieldset class="mb-3" id="priority">
+      <legend class="form-label fs-6" th:text="#{tk.new.priority}">Priority</legend>
+      <div class="form-check" th:each="p : ${ {'NORMAL', 'HIGH'} }">
+        <input class="form-check-input" type="radio" name="priority" th:id="'priority-' + ${p}" th:value="${p}"
+               th:checked="${values['priority'] == p}">
+        <label class="form-check-label" th:for="'priority-' + ${p}" th:text="#{'tk.new.priority.' + ${p}}">P</label>
+      </div>
+    </fieldset>
+    <div class="mb-3" th:with="e=${#lists.contains(bad, 'identifiedOn')}">
+      <label class="form-label" for="identifiedOn" th:text="#{tk.new.identified}">Date identified (required)</label>
+      <input class="form-control" id="identifiedOn" name="identifiedOn" type="date" required
+             th:max="${today}" th:value="${values['identifiedOn']}"
+             th:attr="aria-invalid=${e},aria-describedby=${e} ? 'identifiedOn-error' : null">
+      <div th:if="${e}" class="invalid-feedback d-block" id="identifiedOn-error"
+           th:text="#{tk.new.error.identifiedOn}">Error</div>
+    </div>
+    <div class="mb-3">
+      <label class="form-label" for="teamId" th:text="#{tk.new.team}">Team (required)</label>
+      <select class="form-select" id="teamId" name="teamId" required>
+        <option th:each="t : ${choices.teams}" th:value="${t.id}" th:text="${t.name}"
+                th:selected="${values['teamId'] == '' + t.id}">Team</option>
+      </select>
+    </div>
+    <div class="mb-3">
+      <label class="form-label" for="ownerId" th:text="#{tk.new.owner}">Owner (required)</label>
+      <select class="form-select" id="ownerId" name="ownerId" required aria-describedby="owner-hint">
+        <optgroup th:each="t : ${choices.teams}" th:label="${t.name}">
+          <option th:each="o : ${t.owners}" th:value="${o.id}" th:text="${o.name}"
+                  th:selected="${values['ownerId'] == '' + o.id}">Owner</option>
+        </optgroup>
+      </select>
+      <div class="form-text" id="owner-hint" th:text="#{tk.new.owner.hint}">Pick from the case's team.</div>
+    </div>
+    <div class="mb-3">
+      <label class="form-label" for="subjectText" th:text="#{tk.new.subject}">Subject / involved parties</label>
+      <input class="form-control" id="subjectText" name="subjectText" type="text" maxlength="1000"
+             th:value="${values['subjectText']}">
+    </div>
+    <div class="mb-3" th:with="e=${#lists.contains(bad, 'description')}">
+      <label class="form-label" for="description" th:text="#{tk.new.description}">Description (required)</label>
+      <textarea class="form-control" id="description" name="description" rows="6" required maxlength="20000"
+                th:attr="aria-invalid=${e},aria-describedby=${e} ? 'description-error' : null"
+                th:text="${values['description']}"></textarea>
+      <div th:if="${e}" class="invalid-feedback d-block" id="description-error"
+           th:text="#{tk.new.error.description}">Error</div>
+    </div>
+    <fieldset class="mb-3" id="sensitivity">
+      <legend class="form-label fs-6" th:text="#{tk.new.sensitivity}">Sensitivity</legend>
+      <div class="form-check" th:each="s : ${ {'STANDARD', 'RESTRICTED'} }">
+        <input class="form-check-input" type="radio" name="sensitivity" th:id="'sensitivity-' + ${s}"
+               th:value="${s}" th:checked="${values['sensitivity'] == s}">
+        <label class="form-check-label" th:for="'sensitivity-' + ${s}"
+               th:text="#{'tk.new.sensitivity.' + ${s}}">S</label>
+      </div>
+    </fieldset>
+    <p id="save-hint" th:text="#{tk.new.numbering}">A number is assigned on save; numbers may have gaps.</p>
+    <button class="btn btn-primary" type="submit" aria-describedby="save-hint" th:text="#{tk.new.save}">
+      Create case</button>
+  </form>
+</main>
+</body>
+</html>

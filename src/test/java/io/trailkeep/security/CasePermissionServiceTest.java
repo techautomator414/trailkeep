@@ -51,6 +51,11 @@ class CasePermissionServiceTest {
         public Optional<TeamAdminService.TeamSummary> team(long teamId) {
             return Optional.empty();
         }
+
+        @Override
+        public List<TeamAdminService.UserChoice> eligibleOwners(long teamId) {
+            return List.of();
+        }
     });
 
     @Test

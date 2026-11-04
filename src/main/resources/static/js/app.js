@@ -134,7 +134,27 @@
     resetSessionTimer();
   }
 
+  /** Forms: Ctrl+S (Cmd+S) submits a [data-tk-ctrl-s] form; an error summary takes focus; a toast is announced. */
+  function wireForms() {
+    document.addEventListener('keydown', function (event) {
+      const form = document.querySelector('form[data-tk-ctrl-s]');
+      if (form && (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') {
+        event.preventDefault();
+        form.requestSubmit();
+      }
+    });
+    const summary = document.querySelector('[data-tk-error-summary]');
+    if (summary) {
+      summary.focus();
+    }
+    const toast = document.querySelector('[data-tk-toast]');
+    if (toast) {
+      announce(toast.textContent.trim());
+    }
+  }
+
   document.addEventListener('DOMContentLoaded', function () {
+    wireForms();
     wireDialogs();
     wireHtmx();
     wireSession();
