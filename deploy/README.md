@@ -39,7 +39,7 @@ kube-linter lint deploy/
 
    | Secret | Mounted by | Keys (added by the work packages that need them) |
    |---|---|---|
-   | `trailkeep-web` | web `Deployment`, importer `Job` | `spring.datasource.username`, `spring.datasource.password`, OIDC client secret, SMTP password, audit HMAC key |
+   | `trailkeep-web` | web `Deployment`, importer `Job` | `spring.datasource.username`, `spring.datasource.password`, OIDC client secret, SMTP password, `app.audit.hmac-key` (Base64, ≥ 32 random bytes; the `prod` profile refuses to start without it) |
    | `trailkeep-purge` | purge `CronJob` only | the `TRAILKEEP_PURGE` database credential |
 
 5. **Purge schedule.** Set `suspend: false` on `trailkeep-purge` once retention is enabled.

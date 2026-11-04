@@ -15,6 +15,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Audit module (PR 11, WP-06): `V2__audit.sql` (`AUDIT_EVENT` without foreign keys by decision, indexed on
+  `CASE_ID`, `ACTOR_ID` and entity; `SEQ_AUDIT_EVENT`) with the immutable `AuditEvent` entity; `AuditRecorder`
+  writing synchronously in the caller's transaction (`MANDATORY` propagation) with the application clock, the
+  `requestId` from the MDC and the client address; a record-snapshot diff whose `@Redacted` components are stored
+  only as HMAC-SHA-256 under `app.audit.hmac-key` plus a character count (required in `prod`, random per process
+  elsewhere); `AuditTrailService` over a `@CaseRooted` repository that shows case-less events only to
+  `CaseScope.system()`/`all()` and fails closed for any other scope until WP-16; `CaseScope.isUnrestricted()`.
 - Identity schema with entities and vendor grants (PR 6, WP-03b): `V1__identity.sql` (`APP_USER`, `TEAM`,
   `APP_USER_TEAM` with its reverse index `IX_AUT_TEAM_USER`, `APP_USER_GLOBAL_ROLE`, pooled sequences
   `SEQ_APP_USER`/`SEQ_TEAM` `INCREMENT BY 50`) shipped with the package-private `AppUser`, `Team`, `AppUserTeam`

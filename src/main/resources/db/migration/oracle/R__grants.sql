@@ -17,8 +17,10 @@
 --   TEAM                  S I U      -            teams are deactivated, never deleted
 --   APP_USER_TEAM         S I U D    -            membership and role changes
 --   APP_USER_GLOBAL_ROLE  S I   D    -            re-synced from identity-provider claims at login
+--   AUDIT_EVENT           S I        -            append-only; audit outlives purge (V2)
 --   SEQ_APP_USER          SELECT     -            Oracle's sequence privilege is SELECT (NEXTVAL)
 --   SEQ_TEAM              SELECT     -
+--   SEQ_AUDIT_EVENT       SELECT     -
 --
 -- Later migrations add their rows to the cursor below. Fixed rules for them: the app user has no UPDATE or DELETE
 -- on CASE_COMMENT, AUDIT_EVENT and ALERT_LEDGER; it may DELETE only from CASE_COMMENT_PIN, SAVED_VIEW, USER_ALERT,
@@ -34,7 +36,9 @@ DECLARE
     UNION ALL SELECT 'APP_USER_TEAM', 'SELECT,INSERT,UPDATE,DELETE', UPPER('${app_user}') FROM DUAL
     UNION ALL SELECT 'APP_USER_GLOBAL_ROLE', 'SELECT,INSERT,DELETE', UPPER('${app_user}') FROM DUAL
     UNION ALL SELECT 'SEQ_APP_USER', 'SELECT', UPPER('${app_user}') FROM DUAL
-    UNION ALL SELECT 'SEQ_TEAM', 'SELECT', UPPER('${app_user}') FROM DUAL;
+    UNION ALL SELECT 'AUDIT_EVENT', 'SELECT,INSERT', UPPER('${app_user}') FROM DUAL
+    UNION ALL SELECT 'SEQ_TEAM', 'SELECT', UPPER('${app_user}') FROM DUAL
+    UNION ALL SELECT 'SEQ_AUDIT_EVENT', 'SELECT', UPPER('${app_user}') FROM DUAL;
   keep PLS_INTEGER;
 BEGIN
   FOR w IN wanted LOOP

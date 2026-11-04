@@ -17,6 +17,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 import javax.sql.DataSource;
 import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.MigrationInfo;
@@ -146,10 +147,29 @@ abstract class AbstractVendorSchemaIT {
 
     @Test
     void lastLoginIsTheOnlyNullableIdentityColumn() {
-        assertThat(SchemaMetadataDiff.expectedColumns(entityManagerFactory).values().stream()
-                        .filter(column -> !column.table().equals(PROBE_TABLE) && column.nullable())
-                        .map(column -> column.table() + "." + column.column()))
+        assertThat(nullableColumns(Set.of("APP_USER", "TEAM", "APP_USER_TEAM", "APP_USER_GLOBAL_ROLE")))
                 .containsExactly("APP_USER.LAST_LOGIN_AT");
+    }
+
+    @Test
+    void auditEventNullabilityMatchesV2() {
+        assertThat(nullableColumns(Set.of("AUDIT_EVENT")))
+                .containsExactlyInAnyOrder(
+                        "AUDIT_EVENT.ACTOR_ID",
+                        "AUDIT_EVENT.ACTOR_NAME_SNAPSHOT",
+                        "AUDIT_EVENT.CASE_ID",
+                        "AUDIT_EVENT.ENTITY_ID",
+                        "AUDIT_EVENT.OLD_VALUES_JSON",
+                        "AUDIT_EVENT.NEW_VALUES_JSON",
+                        "AUDIT_EVENT.REQUEST_ID",
+                        "AUDIT_EVENT.CLIENT_IP");
+    }
+
+    private List<String> nullableColumns(Set<String> tables) {
+        return SchemaMetadataDiff.expectedColumns(entityManagerFactory).values().stream()
+                .filter(column -> tables.contains(column.table()) && column.nullable())
+                .map(column -> column.table() + "." + column.column())
+                .toList();
     }
 
     @Test

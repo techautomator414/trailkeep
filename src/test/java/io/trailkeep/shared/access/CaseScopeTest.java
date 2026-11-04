@@ -40,6 +40,25 @@ class CaseScopeTest {
         assertThat(CaseScope.system().canRead(HIDDEN)).isTrue();
         assertThat(CaseScope.all().canRead(HIDDEN)).isTrue();
         assertThatNoException().isThrownBy(() -> CaseScope.system().assertReadable(HIDDEN));
+        assertThat(CaseScope.system().isUnrestricted()).isTrue();
+        assertThat(CaseScope.all().isUnrestricted()).isTrue();
+    }
+
+    @Test
+    void scopesAreRestrictedUnlessTheySayOtherwise() {
+        CaseScope principalLike = new CaseScope() {
+            @Override
+            public Predicate toPredicate(Root<?> caseRoot, CriteriaQuery<?> query, CriteriaBuilder cb) {
+                return cb.disjunction();
+            }
+
+            @Override
+            public boolean canRead(CaseNumber caseNumber) {
+                return false;
+            }
+        };
+
+        assertThat(principalLike.isUnrestricted()).isFalse();
     }
 
     @Test

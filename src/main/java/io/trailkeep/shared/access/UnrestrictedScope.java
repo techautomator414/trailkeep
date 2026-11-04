@@ -25,4 +25,9 @@ enum UnrestrictedScope implements CaseScope {
     public boolean canRead(CaseNumber caseNumber) {
         return true;
     }
+
+    @Override
+    public boolean isUnrestricted() {
+        return true;
+    }
 }
