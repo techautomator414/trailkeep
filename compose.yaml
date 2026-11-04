@@ -37,6 +37,9 @@ services:
       KC_BOOTSTRAP_ADMIN_PASSWORD: admin # dev-only
     ports:
       - "127.0.0.1:8180:8180"
+    # Back-channel logout calls the app on the host (the realm's backchannel.logout.url).
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - ./deploy/local/keycloak/trailkeep-dev-realm.json:/opt/keycloak/data/import/trailkeep-dev-realm.json:ro
 

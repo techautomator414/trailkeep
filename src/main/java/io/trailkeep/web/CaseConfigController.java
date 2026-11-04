@@ -132,8 +132,7 @@ class CaseConfigController {
     }
 
     private Actor actor(TrailkeepOidcUser principal) {
-        long userId = principal.account().id();
-        return new Actor(directory.permissionsOf(userId), principal.account().displayName());
+        return new Actor(directory.permissionsOf(principal.userId()), principal.displayName());
     }
 
     private static String policyChoices(Model model, String view) {

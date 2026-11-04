@@ -51,7 +51,7 @@ class SecurityDefaultsIT {
     }
 
     @Test
-    @WithAppUser(team = "Alpha", teamRole = TeamRole.ANALYST)
+    @WithAppUser(team = 1, teamRole = TeamRole.ANALYST)
     void signedInRequestPassesAndCarriesTheSecurityHeaders() throws Exception {
         mvc.perform(get("/no-such-page"))
                 .andExpect(status().isNotFound())
@@ -61,13 +61,13 @@ class SecurityDefaultsIT {
     }
 
     @Test
-    @WithAppUser(team = "Alpha", teamRole = TeamRole.ANALYST)
+    @WithAppUser(team = 1, teamRole = TeamRole.ANALYST)
     void mutationWithoutCsrfTokenIsForbidden() throws Exception {
         mvc.perform(post("/no-such-page")).andExpect(status().isForbidden());
     }
 
     @Test
-    @WithAppUser(team = "Alpha", teamRole = TeamRole.ANALYST)
+    @WithAppUser(team = 1, teamRole = TeamRole.ANALYST)
     void mutationWithCsrfTokenReachesTheApplication() throws Exception {
         mvc.perform(post("/no-such-page").with(csrf())).andExpect(status().isNotFound());
     }

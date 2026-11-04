@@ -18,6 +18,9 @@
 --   APP_USER_TEAM         S I U D    -            membership and role changes
 --   APP_USER_GLOBAL_ROLE  S I   D    -            re-synced from identity-provider claims at login
 --   AUDIT_EVENT           S I        -            append-only; audit outlives purge (V2)
+--   SPRING_SESSION        S I U D    -            Spring Session JDBC (V3.1)
+--   SPRING_SESSION_ATTRIBUTES S I U D -
+--   OIDC_SESSION          S I U D    -            back-channel logout registry (V3.1)
 --   SEQ_APP_USER          SELECT     -            Oracle's sequence privilege is SELECT (NEXTVAL)
 --   SEQ_TEAM              SELECT     -
 --   SEQ_AUDIT_EVENT       SELECT     -
@@ -48,7 +51,10 @@ DECLARE
     UNION ALL SELECT 'CASE_TYPE', 'SELECT,INSERT,UPDATE', UPPER('${app_user}') FROM DUAL
     UNION ALL SELECT 'CASE_TYPE_OUTCOME', 'SELECT,INSERT,UPDATE,DELETE', UPPER('${app_user}') FROM DUAL
     UNION ALL SELECT 'SEQ_SLA_POLICY', 'SELECT', UPPER('${app_user}') FROM DUAL
-    UNION ALL SELECT 'SEQ_CASE_TYPE', 'SELECT', UPPER('${app_user}') FROM DUAL;
+    UNION ALL SELECT 'SEQ_CASE_TYPE', 'SELECT', UPPER('${app_user}') FROM DUAL
+    UNION ALL SELECT 'SPRING_SESSION', 'SELECT,INSERT,UPDATE,DELETE', UPPER('${app_user}') FROM DUAL
+    UNION ALL SELECT 'SPRING_SESSION_ATTRIBUTES', 'SELECT,INSERT,UPDATE,DELETE', UPPER('${app_user}') FROM DUAL
+    UNION ALL SELECT 'OIDC_SESSION', 'SELECT,INSERT,UPDATE,DELETE', UPPER('${app_user}') FROM DUAL;
   keep PLS_INTEGER;
 BEGIN
   FOR w IN wanted LOOP

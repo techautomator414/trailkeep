@@ -6,14 +6,11 @@ import io.trailkeep.user.ExternalIdentity;
 import io.trailkeep.user.GlobalRole;
 import io.trailkeep.user.SignInOutcome;
 import io.trailkeep.user.UserSignInService;
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
 import org.jspecify.annotations.Nullable;
-import org.springframework.security.core.GrantedAuthority;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.client.oidc.userinfo.OidcUserRequest;
 import org.springframework.security.oauth2.client.oidc.userinfo.OidcUserService;
 import org.springframework.security.oauth2.client.userinfo.OAuth2UserService;
@@ -62,14 +59,15 @@ class TrailkeepOidcUserService implements OAuth2UserService<OidcUserRequest, Oid
         return switch (outcome) {
             case SignInOutcome.Disabled disabled ->
                 throw new OAuth2AuthenticationException(new OAuth2Error(ACCOUNT_DISABLED, "Account disabled", null));
-            case SignInOutcome.SignedIn signedIn -> {
-                List<GrantedAuthority> authorities = new ArrayList<>();
-                signedIn.account()
-                        .globalRoles()
-                        .forEach(role -> authorities.add(new SimpleGrantedAuthority("ROLE_" + role.name())));
-                yield new TrailkeepOidcUser(
-                        signedIn.account(), authorities, oidcUser.getIdToken(), oidcUser.getUserInfo());
-            }
+            // No authorities on the principal or the token: they would be persisted with the session. The
+            // per-request SessionPermissionsFilter derives them from the database instead (ADR-0008).
+            case SignInOutcome.SignedIn signedIn ->
+                new TrailkeepOidcUser(
+                        signedIn.account().id(),
+                        signedIn.account().displayName(),
+                        List.of(),
+                        oidcUser.getIdToken(),
+                        oidcUser.getUserInfo());
         };
     }
 

@@ -4,10 +4,11 @@
   Copyright 2026 Charlie Genova and contributors
 -->
 <!--
-  SpotBugs/FindSecBugs exclusions, each scoped to named classes with its justification below.
-  Every entry must name the bug pattern and class, carry a comment with the justification,
-  and be approved in review by a maintainer with the security role (BUILD_PLAN section 12).
-  Prefer @SuppressFBWarnings(value = "...", justification = "...") at the narrowest scope instead.
+  SpotBugs/FindSecBugs exclusions. Keep this list short.
+  Every entry names the bug pattern, the class and, where possible, the method; carries a comment with the
+  justification; and is approved in review by a maintainer with the security role (BUILD_PLAN section 12).
+  Prefer @SuppressFBWarnings(value = "...", justification = "...") at the narrowest scope where the annotation
+  dependency's license allows it (spotbugs-annotations is LGPL-2.1, not on the allow-list, hence this file).
 -->
 <FindBugsFilter
     xmlns="https://github.com/spotbugs/filter/3.0.0"

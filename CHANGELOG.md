@@ -26,6 +26,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   and refusals rendered by `ErrorAdvice`; `CaseConfigAccessibilityIT` (axe, CSP) covers every screen and its 422
   state; a `local`-profile seed of synthetic SLA policies and case types from `app.seed` in `application-local.yml`,
   inserted when missing and audited as `SYSTEM`.
+- Sessions across replicas (PR 10, WP-04b): Spring Session JDBC with the session tables and `OIDC_SESSION` in
+  one portable migration `V3_1__sessions.sql` (Appendix A placeholders for the vendor types), the vendor
+  `JdbcIndexedSessionRepositoryCustomizer`, JSON attributes through Spring Security's Jackson modules (allow-list
+  extended by `TrailkeepOidcUser` and `java.net.URL` only), `SESSION` cookie (HttpOnly, Secure, SameSite=Lax, raw
+  id). No authority is persisted: the stored principal and token carry none, and `SessionPermissionsFilter`
+  rebuilds them per request from `UserDirectoryService`, ending the session of a disabled user and of any session
+  past the 8-hour absolute lifetime (`app.security.absolute-session-lifetime`, measured from a login-time attribute);
+  30-minute idle timeout (`server.servlet.session.timeout`, also feeding the page's expiry warning). RP-initiated
+  logout (`HX-Redirect` for the htmx sign-out, so the CSP's `form-action 'self'` is not hit); back-channel logout
+  through `JdbcOidcSessionRegistry` over `OIDC_SESSION` with `OidcBackChannelLogoutHandler` on cookie `SESSION`
+  and the loopback `logoutUri`; a daily orphan cleanup; `UserSessionService.endSessionsOf(userId)` for disabling.
+  Grants: app user S/I/U/D on `SPRING_SESSION`, `SPRING_SESSION_ATTRIBUTES`, `OIDC_SESSION`. Spring Session is
+  pinned to 4.1.0 (Apache-2.0) because 4.1.1 is published under a license outside the allow-list.
+  `SharedSessionsIT`: two application instances on one database share a session; a Keycloak back-channel logout
+  ends it on both; disabling or `endSessionsOf` signs the user out on both.
 - Case configuration (WP-10, part 1 of 2): `V3__admin.sql` (`SLA_POLICY` with range CHECKs and anchor/escalation
   enums, `CASE_TYPE`, `CASE_TYPE_OUTCOME`, their sequences) with the `SlaPolicy`, `CaseType` and `CaseTypeOutcome`
   entities in `casefile`; `CaseConfigService` (Compliance Admins only) creates and updates SLA policies and case

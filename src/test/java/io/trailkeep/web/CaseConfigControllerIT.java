@@ -96,7 +96,7 @@ class CaseConfigControllerIT {
     }
 
     @Test
-    @WithAppUser(id = MANAGER, team = "Synthetic Config Team", teamRole = TeamRole.MANAGER)
+    @WithAppUser(id = MANAGER, team = 910_200L, teamRole = TeamRole.MANAGER)
     void managersAreRefused() throws Exception {
         mvc.perform(get("/admin/case-types")).andExpect(status().isForbidden());
         mvc.perform(policy(post("/admin/sla-policies/{id}", POLICY), "Renamed", "9"))

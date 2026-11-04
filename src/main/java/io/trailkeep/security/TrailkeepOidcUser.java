@@ -2,7 +2,6 @@
 // Copyright 2026 Charlie Genova and contributors
 package io.trailkeep.security;
 
-import io.trailkeep.user.UserAccount;
 import java.io.Serial;
 import java.util.Collection;
 import org.jspecify.annotations.Nullable;
@@ -14,54 +13,69 @@ import org.springframework.security.oauth2.core.oidc.user.OidcUser;
 
 /**
  * The authenticated principal: the provider's {@link OidcUser} (kept whole, so RP-initiated logout has the ID token)
- * plus the application account it was provisioned as. The principal's name is the {@code APP_USER.ID}, never an
- * email address.
+ * plus the {@code APP_USER.ID} it was provisioned as, which is also its name (never an email address), and the display
+ * name provisioned with it. It is stored
+ * in the shared session as JSON, so it carries no roles: permissions are rebuilt from the database on every request
+ * ({@link SessionPermissionsFilter}, ADR-0008).
  */
 public final class TrailkeepOidcUser extends DefaultOidcUser {
 
     @Serial
     private static final long serialVersionUID = 1L;
 
-    private final UserAccount account;
+    private final long userId;
+    private final String displayName;
 
     /**
      * Creates the principal.
      *
-     * @param account the provisioned account
-     * @param authorities the granted authorities
+     * @param userId {@code APP_USER.ID}
+     * @param displayName {@code APP_USER.DISPLAY_NAME} at login
+     * @param authorities the granted authorities; empty for the stored principal
      * @param idToken the ID token
      * @param userInfo the user-info claims, if fetched
      */
     public TrailkeepOidcUser(
-            UserAccount account,
+            long userId,
+            String displayName,
             Collection<? extends GrantedAuthority> authorities,
             OidcIdToken idToken,
             @Nullable OidcUserInfo userInfo) {
         super(authorities, idToken, userInfo);
-        this.account = account;
+        this.userId = userId;
+        this.displayName = displayName;
     }
 
     /**
-     * The application account.
+     * The display name provisioned at login.
      *
-     * @return the account
+     * @return the name
      */
-    public UserAccount account() {
-        return account;
+    public String displayName() {
+        return displayName;
+    }
+
+    /**
+     * The application user's id.
+     *
+     * @return {@code APP_USER.ID}
+     */
+    public long userId() {
+        return userId;
     }
 
     @Override
     public String getName() {
-        return Long.toString(account.id());
+        return Long.toString(userId);
     }
 
     @Override
     public boolean equals(@Nullable Object other) {
-        return other instanceof TrailkeepOidcUser user && super.equals(user) && account.equals(user.account);
+        return other instanceof TrailkeepOidcUser user && super.equals(user) && userId == user.userId;
     }
 
     @Override
     public int hashCode() {
-        return 31 * super.hashCode() + account.hashCode();
+        return 31 * super.hashCode() + Long.hashCode(userId);
     }
 }

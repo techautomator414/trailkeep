@@ -13,11 +13,12 @@ import java.lang.annotation.Target;
 import org.springframework.security.test.context.support.WithSecurityContext;
 
 /**
- * Runs a test as a signed-in Trailkeep user: an {@code OAuth2AuthenticationToken} whose principal is a
- * {@link io.trailkeep.security.TrailkeepOidcUser}, exactly what an OIDC login produces. It sets the security context
- * only; it does not create database rows.
+ * Runs a test as a signed-in Trailkeep user: the {@code OAuth2AuthenticationToken} the per-request permission
+ * rebuild produces, whose principal is a {@link io.trailkeep.security.TrailkeepOidcUser} without roles, whose
+ * authorities are the global roles and whose details are the {@link io.trailkeep.user.UserPermissions}. It sets the
+ * security context only (no session, so the rebuild does not run); it does not create database rows.
  *
- * <pre>{@code @WithAppUser(team = "Alpha", teamRole = TeamRole.ANALYST)}</pre>
+ * <pre>{@code @WithAppUser(team = 1, teamRole = TeamRole.ANALYST)}</pre>
  * <pre>{@code @WithAppUser(globalRole = GlobalRole.COMPLIANCE_ADMIN)}</pre>
  */
 @Documented
@@ -42,14 +43,14 @@ public @interface WithAppUser {
     String name() default "Test User";
 
     /**
-     * Team the user belongs to; empty for none.
+     * {@code TEAM.ID} of the team the user belongs to; 0 for none.
      *
-     * @return the team name
+     * @return the team id
      */
-    String team() default "";
+    long team() default 0L;
 
     /**
-     * The user's role in {@link #team()}; ignored when the team is empty.
+     * The user's role in {@link #team()}; ignored when the team is 0.
      *
      * @return the team role
      */
