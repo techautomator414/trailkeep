@@ -11,7 +11,9 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplicat
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.security.autoconfigure.web.servlet.SecurityFilterProperties;
 import org.springframework.boot.web.server.context.WebServerApplicationContext;
+import org.springframework.boot.web.server.context.WebServerInitializedEvent;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
+import org.springframework.context.ApplicationListener;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.Order;
@@ -57,7 +59,7 @@ class SecurityConfig {
             UserDirectoryService directory,
             InstantSource clock,
             SecurityProperties properties,
-            @Value("${server.port:8080}") int serverPort) {
+            OidcBackChannelLogoutHandler backChannelLogout) {
         return http.authorizeHttpRequests(requests -> requests.anyRequest().authenticated())
                 .exceptionHandling(exceptions -> exceptions
                         .authenticationEntryPoint(HtmxAwareResponses.entryPoint(LOGIN_START))
@@ -66,8 +68,7 @@ class SecurityConfig {
                         .oidcSessionRegistry(sessionRegistry)
                         .successHandler(new LoginTimeSuccessHandler(clock)))
                 .oidcLogout(logout -> logout.oidcSessionRegistry(sessionRegistry)
-                        .backChannel(backChannel ->
-                                backChannel.logoutHandler(backChannelLogout(sessionRegistry, serverPort))))
+                        .backChannel(backChannel -> backChannel.logoutHandler(backChannelLogout)))
                 .logout(logout -> logout.logoutSuccessHandler(new HtmxOidcLogoutSuccessHandler(registrations)))
                 .addFilterAfter(
                         new SessionPermissionsFilter(directory, clock, properties.absoluteSessionLifetime()),
@@ -78,13 +79,30 @@ class SecurityConfig {
     /**
      * Back-channel logout (ADR-0008): ends each registered session by POSTing this pod's own {@code /logout} over the
      * loopback interface, with the {@code SESSION} cookie and the CSRF header captured at login. The shared session
-     * store makes that logout effective on every replica.
+     * store makes that logout effective on every replica. The URI starts from the configured port and is replaced by
+     * the port the server actually bound once it is up (see {@link #backChannelLogoutUri}).
      */
-    static OidcBackChannelLogoutHandler backChannelLogout(JdbcOidcSessionRegistry registry, int serverPort) {
+    @Bean
+    OidcBackChannelLogoutHandler backChannelLogoutHandler(
+            JdbcOidcSessionRegistry registry, @Value("${server.port:8080}") int serverPort) {
         OidcBackChannelLogoutHandler handler = new OidcBackChannelLogoutHandler(registry);
         handler.setSessionCookieName(SessionConfig.SESSION_COOKIE);
-        handler.setLogoutUri("http://localhost:" + serverPort + "/logout");
+        handler.setLogoutUri(loopbackLogoutUri(serverPort));
         return handler;
+    }
+
+    /** Points the handler at the application server's real port, which differs from the configured one for port 0. */
+    @Bean
+    ApplicationListener<WebServerInitializedEvent> backChannelLogoutUri(OidcBackChannelLogoutHandler handler) {
+        return event -> {
+            if (!MANAGEMENT_NAMESPACE.equals(event.getApplicationContext().getServerNamespace())) {
+                handler.setLogoutUri(loopbackLogoutUri(event.getWebServer().getPort()));
+            }
+        };
+    }
+
+    private static String loopbackLogoutUri(int port) {
+        return "http://localhost:" + port + "/logout";
     }
 
     /** The CSP nonce filter, ahead of Spring Security so redirects and error pages carry the policy too. */
