@@ -5,6 +5,7 @@ package io.trailkeep.web;
 import io.trailkeep.shared.DomainException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import jakarta.validation.ConstraintViolationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -15,21 +16,26 @@ import org.springframework.web.servlet.ModelAndView;
 /**
  * The single error-handling advice (Part B "Web"): maps {@link DomainException} to its status, rendering the
  * {@code problem} fragment for htmx requests (the fragment contract in {@code app.js}) and the error page otherwise.
- * An unreadable case is a 404 exactly like an absent one. The exception message never reaches the response.
+ * An unreadable case is a 404 exactly like an absent one. A {@link ConstraintViolationException} that reaches the web
+ * layer (a controller that skipped form validation before calling a {@code @Validated} service) is a 422, not a 5xx.
+ * The exception message never reaches the response.
  */
 @ControllerAdvice
 class ErrorAdvice {
 
     private static final Logger LOG = LoggerFactory.getLogger(ErrorAdvice.class);
 
-    @ExceptionHandler(DomainException.class)
-    ModelAndView domain(DomainException exception, HttpServletRequest request, HttpServletResponse response) {
-        HttpStatus status = switch (exception.kind()) {
-            case NOT_FOUND -> HttpStatus.NOT_FOUND;
-            case FORBIDDEN -> HttpStatus.FORBIDDEN;
-            case CONFLICT -> HttpStatus.CONFLICT;
-            case INVALID -> HttpStatus.UNPROCESSABLE_CONTENT;
-        };
+    @ExceptionHandler({DomainException.class, ConstraintViolationException.class})
+    ModelAndView domain(Exception exception, HttpServletRequest request, HttpServletResponse response) {
+        HttpStatus status = HttpStatus.UNPROCESSABLE_CONTENT;
+        if (exception instanceof DomainException domain) {
+            status = switch (domain.kind()) {
+                case NOT_FOUND -> HttpStatus.NOT_FOUND;
+                case FORBIDDEN -> HttpStatus.FORBIDDEN;
+                case CONFLICT -> HttpStatus.CONFLICT;
+                case INVALID -> HttpStatus.UNPROCESSABLE_CONTENT;
+            };
+        }
         LOG.debug("{} -> {}", exception.getClass().getSimpleName(), status.value());
         response.setStatus(status.value());
         boolean htmx = "true".equals(request.getHeader("HX-Request"));

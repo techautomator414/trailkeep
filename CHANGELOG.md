@@ -20,6 +20,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- `ErrorAdvice` maps a `ConstraintViolationException` reaching the web layer to 422 (htmx `problem` fragment or the
+  error page) instead of a 5xx (#27).
 - `.gitignore` excludes `.claude/settings.local.json`, which holds machine-specific Claude Code settings.
 
 ## [0.1.0] - 2026-11-04

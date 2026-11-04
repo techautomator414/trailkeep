@@ -5,6 +5,8 @@ package io.trailkeep.web;
 import io.trailkeep.shared.CaseNotFoundException;
 import io.trailkeep.shared.CaseNumber;
 import io.trailkeep.shared.DomainException;
+import jakarta.validation.ConstraintViolationException;
+import java.util.Set;
 import org.springframework.boot.test.context.TestComponent;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -21,6 +23,11 @@ class ProblemProbeController {
             throw new CaseNotFoundException(CaseNumber.parse("CASE-2026-000001"));
         }
         throw new ProbeException(kind);
+    }
+
+    @GetMapping("/test-only/constraint-violation")
+    String constraintViolation() {
+        throw new ConstraintViolationException("secret-detail-not-for-users", Set.of());
     }
 
     /** A domain exception of any kind, carrying a message that must never reach the response. */
