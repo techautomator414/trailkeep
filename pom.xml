@@ -51,6 +51,7 @@
     <error-prone.version>2.52.0</error-prone.version>
     <nullaway.version>0.14.3</nullaway.version>
     <spotbugs.version>4.10.5</spotbugs.version>
+    <playwright.version>1.63.0</playwright.version>
     <findsecbugs.version>1.14.0</findsecbugs.version>
 
     <!-- Spring Modulith and ArchUnit (architecture verification). -->
@@ -170,6 +171,13 @@
       <!-- Security test support (@WithSecurityContext, MockMvc request post-processors). Apache-2.0. -->
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-security-oauth2-client-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <!-- Browser E2E with axe-core (BUILD_PLAN §10.2, Part G). Version matches the CI/session browsers. Apache-2.0. -->
+      <groupId>com.microsoft.playwright</groupId>
+      <artifactId>playwright</artifactId>
+      <version>${playwright.version}</version>
       <scope>test</scope>
     </dependency>
     <dependency>

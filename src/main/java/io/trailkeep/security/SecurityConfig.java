@@ -6,7 +6,9 @@ import io.trailkeep.user.UserSignInService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.boot.security.autoconfigure.web.servlet.SecurityFilterProperties;
 import org.springframework.boot.web.server.context.WebServerApplicationContext;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.Order;
@@ -28,6 +30,9 @@ class SecurityConfig {
 
     private static final String MANAGEMENT_NAMESPACE = "management";
 
+    /** Where an unauthenticated full-page request goes: the start of the {@code idp} authorization-code flow. */
+    private static final String LOGIN_START = "/oauth2/authorization/idp";
+
     @Bean
     @Order(1)
     SecurityFilterChain managementChain(HttpSecurity http) {
@@ -40,8 +45,19 @@ class SecurityConfig {
     @Order(2)
     SecurityFilterChain applicationChain(HttpSecurity http, TrailkeepOidcUserService oidcUserService) {
         return http.authorizeHttpRequests(requests -> requests.anyRequest().authenticated())
+                .exceptionHandling(exceptions -> exceptions
+                        .authenticationEntryPoint(HtmxAwareResponses.entryPoint(LOGIN_START))
+                        .accessDeniedHandler(HtmxAwareResponses.accessDenied()))
                 .oauth2Login(login -> login.userInfoEndpoint(userInfo -> userInfo.oidcUserService(oidcUserService)))
                 .build();
+    }
+
+    /** The CSP nonce filter, ahead of Spring Security so redirects and error pages carry the policy too. */
+    @Bean
+    FilterRegistrationBean<CspNonceFilter> cspNonceFilter() {
+        FilterRegistrationBean<CspNonceFilter> registration = new FilterRegistrationBean<>(new CspNonceFilter());
+        registration.setOrder(SecurityFilterProperties.DEFAULT_FILTER_ORDER - 10);
+        return registration;
     }
 
     /** True for a request served by the management server's context (Spring Boot's "management" namespace). */
