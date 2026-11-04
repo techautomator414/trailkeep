@@ -192,7 +192,7 @@ public final class KeycloakDevRealm {
 
     private static boolean isFree(int port) {
         try (ServerSocket socket = new ServerSocket(port)) {
-            return true; // bound and released: a bind to an explicit port either gets it or throws
+            return socket.isBound(); // bound and released; a bind to an explicit port either gets it or throws
         } catch (IOException e) {
             return false;
         }
