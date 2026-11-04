@@ -15,9 +15,9 @@ the password `dev-password` (every user) are deliberately obvious and are never 
 
 - **Global roles** come from groups. The `groups` claim (group-membership mapper, short names) is mapped by
   `app.security.group-roles`.
-- **Team roles** are never in the identity provider (BUILD_PLAN §3.1): they live in `APP_USER_TEAM`. A local seed
-  for teams Alpha and Beta and these memberships is not written yet (issue #29); until then a `system.admin` grants
-  them at `/admin/teams`, and the user names document the intent.
+- **Team roles** are never in the identity provider (BUILD_PLAN §3.1): they live in `APP_USER_TEAM`. With the `local` profile,
+  `app.seed.teams` in `application-local.yml` creates teams Alpha and Beta and these memberships at start-up, keyed
+  by the user ids below (the OIDC subject), when missing; a `system.admin` can still change them at `/admin/teams`.
 - **`disabled.user`** is enabled in Keycloak on purpose. Disabling is the application's decision
   (`APP_USER.DISABLED`), and the login must reach Trailkeep for Trailkeep to refuse it. `KeycloakLoginIT` disables
   it in the database and proves the refusal.

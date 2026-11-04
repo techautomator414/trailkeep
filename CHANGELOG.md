@@ -9,6 +9,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- `local` profile seed for teams Alpha and Beta and the dev-realm users' team roles (`app.seed.teams`), created when
+  missing and audited as `SYSTEM` (#29).
 - Case schema (`V4`: `CASE_RECORD`, `CASE_SLA`, `CASE_SEARCH`, case sequences) and the principal-backed `CaseScope`,
   derived from the permission matrix, with a scoped case repository (WP-11 part 1).
 - Case creation service and the case page (WP-11 part 2a): numbers drawn from `SEQ_CASE_NUMBER` with the
@@ -26,6 +28,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   with `server.port=0` can end sessions too (#28).
 - `JdbcOidcSessionRegistryIT` now has an Oracle variant (`OracleJdbcOidcSessionRegistryIT`, tag `oracle`) sharing
   its tests through an abstract base, so the registry's SQL runs on XE 21 and Free 23 in the `-Poracle-it` run (#26).
+- The local seed fails with a message naming the case type and the SLA policy when the policy is unknown (#29).
 - `.gitignore` excludes `.claude/settings.local.json`, which holds machine-specific Claude Code settings.
 
 ## [0.1.0] - 2026-11-04

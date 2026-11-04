@@ -24,6 +24,21 @@ app:
       - { name: Policy exception, sla-policy: Standard 30 days, retention-years: 7, outcomes: [Resolved, No Action Required, Duplicate] }
       - { name: Access review finding, sla-policy: Standard 30 days, retention-years: 7, outcomes: [Resolved, Transferred, Duplicate] }
       - { name: Vendor incident, sla-policy: Urgent 5 days, retention-years: 10, outcomes: [Resolved, No Action Required, Transferred] }
+    # Teams Alpha and Beta with the dev-realm users' team roles (deploy/local/keycloak/trailkeep-dev-realm.json), loaded
+    # by LocalTeamSeed when missing. external-id is the user's id in the dev realm, which is the OIDC subject.
+    teams:
+      - name: Alpha
+        members:
+          - { user: alpha.reader, external-id: "00000000-0000-4000-8000-000000000001", role: READER }
+          - { user: alpha.analyst, external-id: "00000000-0000-4000-8000-000000000002", role: ANALYST }
+          - { user: alpha.manager1, external-id: "00000000-0000-4000-8000-000000000003", role: MANAGER }
+          - { user: alpha.manager2, external-id: "00000000-0000-4000-8000-000000000004", role: MANAGER }
+      - name: Beta
+        members:
+          - { user: beta.reader, external-id: "00000000-0000-4000-8000-000000000005", role: READER }
+          - { user: beta.analyst, external-id: "00000000-0000-4000-8000-000000000006", role: ANALYST }
+          - { user: beta.manager1, external-id: "00000000-0000-4000-8000-000000000007", role: MANAGER }
+          - { user: beta.manager2, external-id: "00000000-0000-4000-8000-000000000008", role: MANAGER }
   proxy:
     # Placeholder router range. The deploying organization sets its own Route/ingress peer pattern.
     pattern: 10\.128\.\d+\.\d+
