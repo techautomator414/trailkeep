@@ -9,3 +9,22 @@ app:
   proxy:
     # Placeholder router range, as in the 'test' profile.
     pattern: 10\.128\.\d+\.\d+
+  # As in the 'test' profile: contexts start without an identity provider (PR 8 added the 'idp' registration to
+  # application.yml, so a profile without these values fails with "Unknown provider ID 'idp'").
+  security:
+    oidc:
+      client-id: trailkeep
+      client-secret: dev-only-client-secret # dev-only, the same value as the 'test' profile
+
+spring:
+  security:
+    oauth2:
+      client:
+        provider:
+          idp:
+            # Unreachable on purpose, as in the 'test' profile.
+            authorization-uri: http://127.0.0.1:9/realms/test/protocol/openid-connect/auth
+            token-uri: http://127.0.0.1:9/realms/test/protocol/openid-connect/token
+            jwk-set-uri: http://127.0.0.1:9/realms/test/protocol/openid-connect/certs
+            user-info-uri: http://127.0.0.1:9/realms/test/protocol/openid-connect/userinfo
+            user-name-attribute: sub
