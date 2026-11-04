@@ -136,6 +136,27 @@ All are recorded where they were made; this is the index.
 | #29 | Local seed: name the unknown SLA policy; seed teams Alpha and Beta for the dev realm |
 | #24 | Spring Session license tracker (stay on 4.1.0) |
 
+### Open owner items
+
+Things only the repository owner can do (accounts, secrets, a real identity provider, a human tester). None is a
+code change.
+
+1. **OpenSSF Best Practices badge.** Register the project at bestpractices.dev, then add the badge to `README.md`.
+   This closes Scorecard alert #8.
+2. **Repository secrets `SONAR_TOKEN` and `NVD_API_KEY`**, for the `main.yml` SonarCloud and Dependency-Check steps
+   (they are skipped with a notice without them; #30). Alternatively record on #30 that the two scanners are off
+   for 0.1.0.
+3. **One real sign-in against the organization's identity provider in DEV**, following
+   [`deploy/OIDC_PROVIDER.md`](deploy/OIDC_PROVIDER.md). Record the outcome on #30, not the values.
+4. **Manual accessibility testing** to finish the draft report [`accessibility/ACR-shell.md`](accessibility/ACR-shell.md):
+   the script is in its section 6 (keyboard only, screen reader, 200 % and 400 % zoom, reflow, text spacing). Until it
+   is done every "needs manual confirmation" row stays unconfirmed (#30).
+5. **Spring Session stays pinned at 4.1.0** by owner decision on #24 (license metadata of 4.1.1 and 4.0.5). Watch
+   the Spring Session security advisories; revisit before any upgrade.
+
+Items 2 to 4 are the open Phase 1 exit items from #30; until they are done Phase 1 is not complete in the plan's own
+terms.
+
 Not defects, but worth knowing:
 
 - Without JavaScript, the sign-out form's redirect to the identity provider is blocked by the CSP's
