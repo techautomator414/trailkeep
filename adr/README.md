@@ -15,3 +15,4 @@ Format: [MADR](https://adr.github.io/madr/); copy [`0000-adr-template.md`](0000-
 | [0008](0008-sessions-and-oidc-logout.md) | JDBC sessions without persisted authorities, with a custom OIDC session registry | Accepted | 2026-11-03 |
 | [0009](0009-server-rendered-ui-csp.md) | Server-rendered UI with Thymeleaf, htmx and Bootstrap CSS only, under an exact CSP | Accepted | 2026-11-03 |
 | [0010](0010-reports-html-csv-v1-pdf-v1_1.md) | Reports ship as accessible HTML and CSV in v1; tagged PDF follows in v1.1 | Accepted | 2026-11-03 |
+| [0011](0011-case-configuration-owned-by-casefile.md) | Case configuration (SLA policies, case types, outcomes) is owned by `casefile` | Accepted | 2026-11-04 |

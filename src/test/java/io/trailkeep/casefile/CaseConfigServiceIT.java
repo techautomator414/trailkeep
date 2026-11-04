@@ -61,7 +61,7 @@ class CaseConfigServiceIT {
 
         assertThat(config.policy(COMPLIANCE_ADMIN, id).values().targetDays()).isEqualTo(45);
         List<AuditRecord> events = events("SLA_POLICY", id);
-        assertThat(events).extracting(AuditRecord::action).containsExactly("UPDATE", "CREATE");
+        assertThat(events).extracting(AuditRecord::action).containsExactly("SLA_POLICY_UPDATED", "SLA_POLICY_CREATED");
         assertThat(events.get(0).changes().oldValuesJson()).isEqualTo("{\"targetDays\":30}");
         assertThat(events.get(0).changes().newValuesJson()).isEqualTo("{\"targetDays\":45}");
         assertThat(events.get(0).actorId()).isEqualTo(41L);
@@ -143,6 +143,7 @@ class CaseConfigServiceIT {
         assertThat(stored.outcomes()).containsExactly("Transferred", "Resolved");
         assertThat(stored.active()).isFalse();
         AuditRecord update = events("CASE_TYPE", type).get(0);
+        assertThat(update.action()).isEqualTo("CASE_TYPE_UPDATED");
         assertThat(update.changes().oldValuesJson()).contains("\"active\":true", "Duplicate");
         assertThat(update.changes().newValuesJson()).contains("\"active\":false");
     }

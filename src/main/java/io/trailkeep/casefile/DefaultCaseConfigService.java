@@ -70,7 +70,7 @@ class DefaultCaseConfigService implements CaseConfigService {
                 actor,
                 "SLA_POLICY",
                 savedId,
-                before == null ? "CREATE" : "UPDATE",
+                before == null ? "SLA_POLICY_CREATED" : "SLA_POLICY_UPDATED",
                 audit.diff(before, policy.toCommand()));
         return savedId;
     }
@@ -115,7 +115,12 @@ class DefaultCaseConfigService implements CaseConfigService {
         }
         CaseTypeCommand after = new CaseTypeCommand(
                 caseType.getName(), command.slaPolicyId(), command.retentionYears(), command.active(), cleanOutcomes);
-        record(actor, "CASE_TYPE", savedId, before == null ? "CREATE" : "UPDATE", audit.diff(before, after));
+        record(
+                actor,
+                "CASE_TYPE",
+                savedId,
+                before == null ? "CASE_TYPE_CREATED" : "CASE_TYPE_UPDATED",
+                audit.diff(before, after));
         return savedId;
     }
 
