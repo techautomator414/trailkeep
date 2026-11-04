@@ -4,6 +4,10 @@
  * Users and teams module. Application users, teams, team membership and global roles, and the services behind
  * the user and team admin screens. Users are provisioned from the identity provider; no passwords are stored.
  *
+ * <p>Persistence ({@code V1__identity}): the entities {@code AppUser}, {@code Team}, {@code AppUserTeam} and
+ * {@code AppUserGlobalRole} and their repositories are package-private; none of these tables is case-rooted. The
+ * public types are the role enums {@link io.trailkeep.user.TeamRole} and {@link io.trailkeep.user.GlobalRole}.
+ *
  * <p>May call: {@code shared}, {@code audit}. Other modules use only the {@code *Service} interfaces and records in
  * this package.
  */

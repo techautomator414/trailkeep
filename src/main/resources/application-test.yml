@@ -1,6 +1,11 @@
 # SPDX-License-Identifier: Apache-2.0
 # Copyright 2026 Charlie Genova and contributors
+# The grantees below are created before migration by the test-only TestDatabaseUsers Flyway callback;
+# DatabaseGrantsIT logs in as each of them.
 app:
   proxy:
     # Placeholder router range. Loopback (the test client) is deliberately outside it.
     pattern: 10\.128\.\d+\.\d+
+  db:
+    app-user: trailkeep_app
+    purge-user: trailkeep_purge

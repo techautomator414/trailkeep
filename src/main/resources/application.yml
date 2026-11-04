@@ -43,6 +43,11 @@ spring:
     clean-disabled: true
     # Placeholder values per vendor (BUILD_PLAN Appendix A) live in application-{oracle,postgresql}.yml.
     placeholder-replacement: true
+    placeholders:
+      # Grantees of the vendor R__grants.sql (BUILD_PLAN section 8 rule 7). Deliberately no defaults here: a
+      # deployment that does not name its runtime and purge users fails at start-up instead of granting to a guess.
+      app_user: ${app.db.app-user}
+      purge_user: ${app.db.purge-user}
 
   task:
     scheduling:

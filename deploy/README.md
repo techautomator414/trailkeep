@@ -30,6 +30,8 @@ kube-linter lint deploy/
    --certificate-oidc-issuer https://token.actions.githubusercontent.com`.
 2. **`APP_PROXY_PATTERN`** in `trailkeep-config`: a regular expression for the router's pod addresses. Only these
    peers may set `X-Forwarded-For`/`X-Forwarded-Proto`. The app does not start without it.
+   **`APP_DB_APP_USER`** and **`APP_DB_PURGE_USER`**: the existing database users that the vendor `R__grants.sql`
+   grants to (runtime and retention purge). The app does not start without them.
 3. **NetworkPolicy targets** in `trailkeep-egress`: database, identity provider, SMTP relay and clamd. The base uses
    RFC 5737 documentation addresses.
 4. **Secrets.** Create them from the platform's secret store; the manifests only reference them. Each key is a file

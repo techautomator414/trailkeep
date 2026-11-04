@@ -15,6 +15,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Identity schema with entities and vendor grants (PR 6, WP-03b): `V1__identity.sql` (`APP_USER`, `TEAM`,
+  `APP_USER_TEAM` with its reverse index `IX_AUT_TEAM_USER`, `APP_USER_GLOBAL_ROLE`, pooled sequences
+  `SEQ_APP_USER`/`SEQ_TEAM` `INCREMENT BY 50`) shipped with the package-private `AppUser`, `Team`, `AppUserTeam`
+  and `AppUserGlobalRole` entities and `Repository`-based repositories in module `user`, and the public
+  `TeamRole`/`GlobalRole` enums; vendor `R__grants.sql` for PostgreSQL (declarative revoke-and-grant in one
+  transaction) and Oracle (grant the matrix, then revoke only what it no longer lists) with `${app_user}` /
+  `${purge_user}` bound from the new required `app.db.app-user` / `app.db.purge-user`; `DatabaseGrantsIT` on both
+  vendors logs in as each grantee (test-only `TestDatabaseUsers` Flyway callback, random passwords) and executes
+  every table x privilege x user cell, the sequence draws and DDL; the schema harness now asserts the identity
+  columns, the only nullable column and the reverse index; local compose creates the two grantee roles.
 - Migration tooling and three-image validation harness (PR 5, WP-03a): Spring Data JPA, Flyway Community with the
   Oracle and PostgreSQL database modules, `ojdbc17` and the PostgreSQL driver; Flyway locations
   `db/migration/common` plus `db/migration/{vendor}`, the Appendix A placeholders per vendor profile
