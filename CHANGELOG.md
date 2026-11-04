@@ -17,6 +17,10 @@ starts with WP-11. `HANDOFF.md` records the state, the decisions taken and the o
 
 ### Fixed
 
+- The `DEFINED_PORT` integration tests (`KeycloakLoginIT`, `SharedSessionsIT`, the accessibility ITs) chose their
+  application port from the kernel's ephemeral range, which Docker also publishes container ports into, so a
+  Testcontainers start could take the port before the context bound it (`PortInUseException`). The port is now
+  probed in 20000 to 29999.
 - The `oracle-test` profile could not start a Spring context after PR 8: the OIDC client registration pointed at a
   provider defined only for `test`. Both Testcontainers profile groups now include `application-test-common.yml`,
   which holds every setting a test context needs to start.
