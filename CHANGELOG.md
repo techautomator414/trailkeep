@@ -7,6 +7,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- Case schema (`V4`: `CASE_RECORD`, `CASE_SLA`, `CASE_SEARCH`, case sequences) and the principal-backed `CaseScope`,
+  derived from the permission matrix, with a scoped case repository (WP-11 part 1).
+
 ### Changed
 
 - `.gitignore` excludes `.claude/settings.local.json`, which holds machine-specific Claude Code settings.

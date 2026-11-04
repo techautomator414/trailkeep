@@ -16,9 +16,8 @@ import org.jspecify.annotations.Nullable;
  *
  * <p>Scope rule: an unrestricted scope sees every event, including those with no case. Any other scope sees
  * nothing yet and so fails closed: {@code AUDIT_EVENT} has no association to {@code CASE_RECORD} (no foreign keys by
- * decision) and that entity does not exist before WP-11, so there is no case root to hand to
- * {@link CaseScope#toPredicate}. WP-16 (History tab) adds an entity join on {@code CASE_ID} and applies the scope to
- * it; events with no case stay invisible to principal scopes.
+ * decision), so there is no case root to hand to {@link CaseScope#toPredicate}. WP-16 (History tab) adds an entity
+ * join on {@code CASE_ID} and applies the scope to it; events with no case stay invisible to principal scopes.
  */
 class AuditEventQueriesImpl implements AuditEventQueries {
 

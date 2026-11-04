@@ -52,7 +52,10 @@ abstract class AbstractDatabaseGrantsIT {
         DENIED
     }
 
-    /** Identity (V1), audit (V2) and admin (V3) tables, and the column each probe touches: the first key column. */
+    /**
+     * Identity (V1), audit (V2), admin (V3) and case (V4) tables, and the column each probe touches: the first key
+     * column.
+     */
     static final Map<String, String> TABLES = Map.ofEntries(
             Map.entry("APP_USER", "ID"),
             Map.entry("TEAM", "ID"),
@@ -62,6 +65,9 @@ abstract class AbstractDatabaseGrantsIT {
             Map.entry("SLA_POLICY", "ID"),
             Map.entry("CASE_TYPE", "ID"),
             Map.entry("CASE_TYPE_OUTCOME", "CASE_TYPE_ID"),
+            Map.entry("CASE_RECORD", "ID"),
+            Map.entry("CASE_SLA", "CASE_ID"),
+            Map.entry("CASE_SEARCH", "CASE_ID"),
             Map.entry("SPRING_SESSION", "PRIMARY_ID"),
             Map.entry("SPRING_SESSION_ATTRIBUTES", "SESSION_PRIMARY_ID"),
             Map.entry("OIDC_SESSION", "SESSION_ID"));
@@ -76,15 +82,24 @@ abstract class AbstractDatabaseGrantsIT {
             Map.entry("SLA_POLICY", EnumSet.of(Privilege.SELECT, Privilege.INSERT, Privilege.UPDATE)),
             Map.entry("CASE_TYPE", EnumSet.of(Privilege.SELECT, Privilege.INSERT, Privilege.UPDATE)),
             Map.entry("CASE_TYPE_OUTCOME", EnumSet.allOf(Privilege.class)),
+            Map.entry("CASE_RECORD", EnumSet.of(Privilege.SELECT, Privilege.INSERT, Privilege.UPDATE)),
+            Map.entry("CASE_SLA", EnumSet.of(Privilege.SELECT, Privilege.INSERT, Privilege.UPDATE)),
+            Map.entry("CASE_SEARCH", EnumSet.of(Privilege.SELECT, Privilege.INSERT, Privilege.UPDATE)),
             Map.entry("SPRING_SESSION", EnumSet.allOf(Privilege.class)),
             Map.entry("SPRING_SESSION_ATTRIBUTES", EnumSet.allOf(Privilege.class)),
             Map.entry("OIDC_SESSION", EnumSet.allOf(Privilege.class)));
 
-    /** What the purge user may do on these tables: nothing (it deletes case data, which arrives with V4). */
+    /** What the purge user may do on these tables: nothing yet; its case-data grants arrive with WP-24 (purge). */
     static final Map<String, Set<Privilege>> PURGE_USER_GRANTS = Map.of();
 
-    static final List<String> SEQUENCES =
-            List.of("SEQ_APP_USER", "SEQ_TEAM", "SEQ_AUDIT_EVENT", "SEQ_SLA_POLICY", "SEQ_CASE_TYPE");
+    static final List<String> SEQUENCES = List.of(
+            "SEQ_APP_USER",
+            "SEQ_TEAM",
+            "SEQ_AUDIT_EVENT",
+            "SEQ_SLA_POLICY",
+            "SEQ_CASE_TYPE",
+            "SEQ_CASE_RECORD",
+            "SEQ_CASE_NUMBER");
 
     @Autowired
     private TestDatabaseUsers users;
