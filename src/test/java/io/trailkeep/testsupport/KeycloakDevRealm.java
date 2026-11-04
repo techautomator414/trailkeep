@@ -12,6 +12,7 @@ import java.net.http.HttpResponse;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -28,6 +29,12 @@ public final class KeycloakDevRealm {
 
     /** Same image as compose.yaml. */
     public static final String IMAGE = "keycloak/keycloak:26.0.7";
+
+    /** Application ports are probed in [20000, 30000), below the ephemeral range Docker publishes into. */
+    private static final int PORT_RANGE_START = 20_000;
+
+    private static final int PORT_RANGE_END = 30_000;
+    private static final int PORT_ATTEMPTS = 50;
 
     /** Realm name. */
     public static final String REALM = "trailkeep-dev";
@@ -165,11 +172,28 @@ public final class KeycloakDevRealm {
         }
     }
 
+    /**
+     * A port the application binds minutes after this call, once Keycloak and the database containers are up. The
+     * kernel's ephemeral range (32768 and up on Linux) is also where Docker publishes container ports, so a port from
+     * {@code new ServerSocket(0)} can be taken by the next Testcontainers start before the context binds it (seen as
+     * {@code PortInUseException} in {@code SharedSessionsIT}). Probing below that range avoids the race.
+     */
     private static int freePort() {
-        try (ServerSocket socket = new ServerSocket(0)) {
-            return socket.getLocalPort();
+        ThreadLocalRandom random = ThreadLocalRandom.current();
+        for (int attempt = 0; attempt < PORT_ATTEMPTS; attempt++) {
+            int candidate = random.nextInt(PORT_RANGE_START, PORT_RANGE_END);
+            if (isFree(candidate)) {
+                return candidate;
+            }
+        }
+        throw new IllegalStateException("No free application port found in " + PORT_RANGE_START + "-" + PORT_RANGE_END);
+    }
+
+    private static boolean isFree(int port) {
+        try (ServerSocket socket = new ServerSocket(port)) {
+            return socket.getLocalPort() == port;
         } catch (IOException e) {
-            throw new UncheckedIOException(e);
+            return false;
         }
     }
 }
