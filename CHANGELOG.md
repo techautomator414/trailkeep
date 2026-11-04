@@ -21,6 +21,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Web shell, CSP and htmx contract (PR 9, WP-05): one Thymeleaf layout (landmarks, skip link first, polite live
+  region, `lang`, session-expiry `<dialog>`), a dashboard behind login, error pages `error/404`, `4xx`, `5xx`
+  without exception details, and UI strings in `messages.properties`. `CspNonceFilter` sets the exact BUILD_PLAN §9
+  policy with a per-request nonce on every script tag; the `htmx-config` meta tag fixes `allowEval=false`,
+  `allowScriptTags=false`, `selfRequestsOnly=true`, `includeIndicatorStyles=false`, `historyCacheSize=0`,
+  `refreshOnHistoryMiss=true`. Vendored htmx 2.0.11 (0BSD) and Bootstrap 5.3.8 CSS only (MIT), content-hashed asset
+  URLs cached for a year; `app.css` and `app.js` (htmx 200/403/404/409/422/5xx contract, focus management, live
+  region, native `<dialog>` helper, CSRF header on htmx requests, session warning calling `POST /session/extend`).
+  `shared.DomainException` (NOT_FOUND/FORBIDDEN/CONFLICT/INVALID, `CaseNotFoundException` now one) mapped by the
+  single `ErrorAdvice` to the page or the htmx `problem` fragment; htmx requests get `HX-Redirect` from the
+  authentication entry point (401) and access-denied handler (403). Tests: MockMvc for CSP/nonce, htmx config,
+  landmarks, asset hashing, CSRF, `HX-Redirect`, the advice; Playwright 1.63 (Chromium) + axe-core 4.14 after a
+  real Keycloak login: 0 WCAG 2.x A/AA violations on the dashboard, the open session dialog, 404 and 500 pages, no
+  CSP violation, skip link first tab stop, htmx config applied. CI installs the Playwright browser.
 - OIDC login and roles (PR 8, WP-04a): `spring-boot-starter-security-oauth2-client`; one client registration
   (`idp`) whose id and secret come from `app.security.oidc.*` and whose provider is found by issuer discovery in
   `local`/`prod`; every application request requires a login, Spring Security defaults (CSRF, headers) stay on,

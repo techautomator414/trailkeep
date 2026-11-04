@@ -24,4 +24,38 @@
     <Method name="doFilterInternal"/>
     <Bug pattern="SERVLET_HEADER"/>
   </Match>
+  <!--
+    FindSecBugs SPRING_ENDPOINT marks every controller for review; these were reviewed in PR 9 (WP-05).
+    DashboardController: GET only, renders the signed-in user's own display name, behind anyRequest().authenticated().
+    SessionController: POST only, CSRF-protected, behind login, changes nothing but the session's idle clock.
+  -->
+  <Match>
+    <Bug pattern="SPRING_ENDPOINT"/>
+    <Or>
+      <Class name="io.trailkeep.web.DashboardController"/>
+      <Class name="io.trailkeep.web.SessionController"/>
+    </Or>
+  </Match>
+  <!--
+    FindSecBugs SERVLET_HEADER: these read htmx's own request headers as rendering hints, never as a trust decision.
+    HX-Request only selects a fragment or an HX-Redirect instead of a full page; authorization is unchanged.
+    HX-Current-URL is reduced to a same-origin absolute path (no scheme, host or "//"), so the HX-Redirect built from
+    it cannot leave the application (HtmxAwareResponses.currentPath, tested in WebShellIT).
+  -->
+  <Match>
+    <Bug pattern="SERVLET_HEADER"/>
+    <Or>
+      <And>
+        <Class name="io.trailkeep.security.HtmxAwareResponses"/>
+        <Or>
+          <Method name="isHtmx"/>
+          <Method name="currentPath"/>
+        </Or>
+      </And>
+      <And>
+        <Class name="io.trailkeep.web.ErrorAdvice"/>
+        <Method name="domain"/>
+      </And>
+    </Or>
+  </Match>
 </FindBugsFilter>

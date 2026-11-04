@@ -35,6 +35,11 @@ jobs:
           java-version: "21"
           cache: maven
 
+      - name: Install the Playwright browser for the E2E/axe tests
+        # Same Playwright version as playwright.version in pom.xml, so the Java client finds this Chromium build.
+        # --with-deps installs the system libraries; CI=true makes ShellAccessibilityIT fail rather than skip.
+        run: npx --yes playwright@1.63.0 install --with-deps chromium
+
       - name: Verify
         run: ./mvnw -B -ntp verify
 

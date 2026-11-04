@@ -45,6 +45,7 @@ public final class WithAppUserSecurityContextFactory implements WithSecurityCont
                 .issuedAt(now)
                 .expiresAt(now.plusSeconds(300))
                 .claim("email", "user-" + user.id() + "@example.test")
+                .claim("name", user.name())
                 .build();
         TrailkeepOidcUser principal = new TrailkeepOidcUser(account, authorities, idToken, null);
 

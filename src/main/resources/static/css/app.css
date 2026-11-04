@@ -1,0 +1,49 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+/* Application styles on top of Bootstrap 5 CSS (no Bootstrap JS). BUILD_PLAN §10.1: focus >= 3:1, targets >= 24px,
+   reduced motion, forced colors. Also carries the htmx indicator CSS, because htmx is configured not to inject
+   its own <style> (includeIndicatorStyles=false; style-src 'self'). */
+:root {
+  --tk-ink: #1b1f24;
+  --tk-header: #1f3a5f;
+  --tk-focus: #ffbf47;
+}
+
+body { color: var(--tk-ink); display: flex; flex-direction: column; min-height: 100vh; }
+
+.tk-skip-link {
+  position: absolute; left: 0.5rem; top: -3rem; z-index: 1000;
+  padding: 0.5rem 1rem; background: #fff; color: var(--tk-ink); border: 2px solid var(--tk-ink);
+}
+.tk-skip-link:focus { top: 0.5rem; }
+
+:focus-visible { outline: 3px solid var(--tk-focus); outline-offset: 2px; box-shadow: 0 0 0 5px var(--tk-ink); }
+
+.tk-header { background: var(--tk-header); color: #fff; }
+.tk-header-inner { display: flex; flex-wrap: wrap; align-items: center; gap: 1rem; padding-block: 0.75rem; }
+.tk-brand { color: #fff; font-weight: 600; font-size: 1.25rem; text-decoration: none; }
+.tk-nav { display: flex; gap: 1rem; list-style: none; margin: 0; padding: 0; }
+.tk-nav a { color: #fff; display: inline-block; min-height: 24px; padding: 0.25rem 0; }
+.tk-signout { margin-left: auto; }
+
+.tk-main { flex: 1; padding-block: 1.5rem; }
+.tk-main:focus { outline: none; }
+.tk-footer { border-top: 1px solid #d0d7de; padding-block: 1rem; color: #4a5560; }
+
+.tk-dialog { max-width: 32rem; border: 2px solid var(--tk-ink); border-radius: 0.5rem; padding: 1.5rem; }
+.tk-dialog::backdrop { background: rgb(0 0 0 / 50%); }
+.tk-dialog-actions { display: flex; gap: 0.75rem; flex-wrap: wrap; }
+
+.tk-problem { border-left: 4px solid #b3261e; padding: 0.75rem 1rem; background: #fdf2f1; }
+
+/* htmx indicators (normally injected by htmx itself). */
+.htmx-indicator { opacity: 0; }
+.htmx-request .htmx-indicator, .htmx-request.htmx-indicator { opacity: 1; transition: opacity 200ms ease-in; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
+}
+
+@media (forced-colors: active) {
+  :focus-visible { outline: 3px solid CanvasText; box-shadow: none; }
+  .tk-header, .tk-problem { border: 1px solid CanvasText; }
+}

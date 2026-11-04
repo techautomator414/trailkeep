@@ -1,0 +1,7 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- htmx error fragment (ADR-0009 contract): swapped for 403/404/409/422; app.js moves focus to its heading. -->
+<section xmlns:th="http://www.thymeleaf.org" th:fragment="problem" class="tk-problem" role="alert"
+         th:attr="data-tk-announce=#{'tk.problem.' + ${status} + '.title'}">
+  <h2 tabindex="-1" th:text="#{'tk.problem.' + ${status} + '.title'}">Something went wrong</h2>
+  <p th:text="#{'tk.problem.' + ${status} + '.text'}">Please try again.</p>
+</section>
