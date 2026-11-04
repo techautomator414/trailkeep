@@ -9,8 +9,10 @@ spring:
     # (app.db.vendor is @NotNull) instead of migrating Oracle with PostgreSQL placeholders.
     group:
       local: postgresql
-      test: postgresql
-      oracle-test: oracle
+      # The two Testcontainers profiles share application-test-common.yml (proxy placeholder, grantees, OIDC test
+      # client and unreachable provider endpoints), so a context-start requirement is never set for one vendor only.
+      test: postgresql, test-common
+      oracle-test: oracle, test-common
 
   jpa:
     open-in-view: false

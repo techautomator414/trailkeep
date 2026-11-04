@@ -1,30 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 # Copyright 2026 Charlie Genova and contributors
-# 'oracle-test' profile (Oracle Testcontainers, -Poracle-it). The grantees are created before migration by the
-# test-only TestDatabaseUsers Flyway callback; DatabaseGrantsIT logs in as each of them.
-app:
-  db:
-    app-user: trailkeep_app
-    purge-user: trailkeep_purge
-  proxy:
-    # Placeholder router range, as in the 'test' profile.
-    pattern: 10\.128\.\d+\.\d+
-  # As in the 'test' profile: contexts start without an identity provider (PR 8 added the 'idp' registration to
-  # application.yml, so a profile without these values fails with "Unknown provider ID 'idp'").
-  security:
-    oidc:
-      client-id: trailkeep
-      client-secret: dev-only-client-secret # dev-only, the same value as the 'test' profile
-
-spring:
-  security:
-    oauth2:
-      client:
-        provider:
-          idp:
-            # Unreachable on purpose, as in the 'test' profile.
-            authorization-uri: http://127.0.0.1:9/realms/test/protocol/openid-connect/auth
-            token-uri: http://127.0.0.1:9/realms/test/protocol/openid-connect/token
-            jwk-set-uri: http://127.0.0.1:9/realms/test/protocol/openid-connect/certs
-            user-info-uri: http://127.0.0.1:9/realms/test/protocol/openid-connect/userinfo
-            user-name-attribute: sub
+# 'oracle-test' profile (Oracle Testcontainers, -Poracle-it). Everything a test context needs lives in
+# application-test-common.yml, which the profile group in application.yml adds alongside 'oracle'. Put a setting
+# here only if it is Oracle-only and absent from application-test-common.yml: group members load after this
+# file, so a key set in both takes the test-common value.

@@ -1,0 +1,38 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Charlie Genova and contributors
+#
+# Settings shared by every Testcontainers profile. The profile groups in application.yml pull this file into both
+# 'test' (PostgreSQL) and 'oracle-test' (Oracle), so a value that a Spring context needs in order to start is set
+# once, here, and the two vendors cannot drift apart again (the first main run after PR 8 failed on Oracle because the
+# OIDC client registration existed only in application-test.yml).
+#
+# The grantees below are created before migration by the test-only TestDatabaseUsers Flyway callback;
+# DatabaseGrantsIT logs in as each of them.
+app:
+  proxy:
+    # Placeholder router range. Loopback (the test client) is deliberately outside it.
+    pattern: 10\.128\.\d+\.\d+
+  db:
+    app-user: trailkeep_app
+    purge-user: trailkeep_purge
+  security:
+    oidc:
+      client-id: trailkeep
+      client-secret: dev-only-client-secret # dev-only, matches the dev realm KeycloakLoginIT imports
+    group-roles:
+      trailkeep-compliance-admins: COMPLIANCE_ADMIN
+      trailkeep-system-admins: SYSTEM_ADMIN
+
+spring:
+  security:
+    oauth2:
+      client:
+        provider:
+          idp:
+            # Unreachable on purpose: contexts start without an identity provider. KeycloakLoginIT points these at a
+            # real Keycloak.
+            authorization-uri: http://127.0.0.1:9/realms/test/protocol/openid-connect/auth
+            token-uri: http://127.0.0.1:9/realms/test/protocol/openid-connect/token
+            jwk-set-uri: http://127.0.0.1:9/realms/test/protocol/openid-connect/certs
+            user-info-uri: http://127.0.0.1:9/realms/test/protocol/openid-connect/userinfo
+            user-name-attribute: sub
