@@ -63,6 +63,11 @@ spring:
       cache:
         cachecontrol:
           max-age: 365d
+  session:
+    # Spring Session JDBC (ADR-0008). The schema is V3_1__sessions; Spring Session never creates tables.
+    jdbc:
+      initialize-schema: never
+      table-name: SPRING_SESSION
   thymeleaf:
     servlet:
       # Render the whole page before writing, so a template error yields the error page, not half a page.
@@ -101,6 +106,11 @@ app:
 
 server:
   port: 8080
+  servlet:
+    session:
+      # Idle timeout (BUILD_PLAN §9). The 8-hour absolute lifetime is app.security.absolute-session-lifetime; the
+      # page's expiry warning reads this value too.
+      timeout: 30m
   error:
     include-message: never
     include-stacktrace: never

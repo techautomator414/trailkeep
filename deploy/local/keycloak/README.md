@@ -22,3 +22,7 @@ the password `dev-password` (every user) are deliberately obvious and are never 
   (`APP_USER.DISABLED`), and the login must reach Trailkeep for Trailkeep to refuse it. `KeycloakLoginIT` disables
   it in the database and proves the refusal.
 - User ids are fixed UUIDs so tests can refer to a subject (`sub`) before the user's first login.
+- **Back-channel logout:** the client's `backchannel.logout.url` is
+  `http://host.docker.internal:8080/logout/connect/back-channel/idp`, so a logout at Keycloak (for example from
+  the admin console) ends the Trailkeep session too. `compose.yaml` maps `host.docker.internal` to the host;
+  `KeycloakDevRealm` does the same in tests and rewrites the port.

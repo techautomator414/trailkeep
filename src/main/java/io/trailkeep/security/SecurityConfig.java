@@ -2,8 +2,11 @@
 // Copyright 2026 Charlie Genova and contributors
 package io.trailkeep.security;
 
+import io.trailkeep.user.UserDirectoryService;
 import io.trailkeep.user.UserSignInService;
 import jakarta.servlet.http.HttpServletRequest;
+import java.time.InstantSource;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.security.autoconfigure.web.servlet.SecurityFilterProperties;
@@ -13,7 +16,10 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.Order;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configurers.oauth2.client.OidcBackChannelLogoutHandler;
+import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.context.SecurityContextHolderFilter;
 import org.springframework.web.context.WebApplicationContext;
 import org.springframework.web.context.support.WebApplicationContextUtils;
 
@@ -43,13 +49,42 @@ class SecurityConfig {
 
     @Bean
     @Order(2)
-    SecurityFilterChain applicationChain(HttpSecurity http, TrailkeepOidcUserService oidcUserService) {
+    SecurityFilterChain applicationChain(
+            HttpSecurity http,
+            TrailkeepOidcUserService oidcUserService,
+            ClientRegistrationRepository registrations,
+            JdbcOidcSessionRegistry sessionRegistry,
+            UserDirectoryService directory,
+            InstantSource clock,
+            SecurityProperties properties,
+            @Value("${server.port:8080}") int serverPort) {
         return http.authorizeHttpRequests(requests -> requests.anyRequest().authenticated())
                 .exceptionHandling(exceptions -> exceptions
                         .authenticationEntryPoint(HtmxAwareResponses.entryPoint(LOGIN_START))
                         .accessDeniedHandler(HtmxAwareResponses.accessDenied()))
-                .oauth2Login(login -> login.userInfoEndpoint(userInfo -> userInfo.oidcUserService(oidcUserService)))
+                .oauth2Login(login -> login.userInfoEndpoint(userInfo -> userInfo.oidcUserService(oidcUserService))
+                        .oidcSessionRegistry(sessionRegistry)
+                        .successHandler(new LoginTimeSuccessHandler(clock)))
+                .oidcLogout(logout -> logout.oidcSessionRegistry(sessionRegistry)
+                        .backChannel(backChannel ->
+                                backChannel.logoutHandler(backChannelLogout(sessionRegistry, serverPort))))
+                .logout(logout -> logout.logoutSuccessHandler(new HtmxOidcLogoutSuccessHandler(registrations)))
+                .addFilterAfter(
+                        new SessionPermissionsFilter(directory, clock, properties.absoluteSessionLifetime()),
+                        SecurityContextHolderFilter.class)
                 .build();
+    }
+
+    /**
+     * Back-channel logout (ADR-0008): ends each registered session by POSTing this pod's own {@code /logout} over the
+     * loopback interface, with the {@code SESSION} cookie and the CSRF header captured at login. The shared session
+     * store makes that logout effective on every replica.
+     */
+    static OidcBackChannelLogoutHandler backChannelLogout(JdbcOidcSessionRegistry registry, int serverPort) {
+        OidcBackChannelLogoutHandler handler = new OidcBackChannelLogoutHandler(registry);
+        handler.setSessionCookieName(SessionConfig.SESSION_COOKIE);
+        handler.setLogoutUri("http://localhost:" + serverPort + "/logout");
+        return handler;
     }
 
     /** The CSP nonce filter, ahead of Spring Security so redirects and error pages carry the policy too. */

@@ -33,7 +33,10 @@
         "http://localhost:8080"
       ],
       "attributes": {
-        "post.logout.redirect.uris": "http://localhost:8080/*"
+        "post.logout.redirect.uris": "http://localhost:8080/*",
+        "backchannel.logout.url": "http://host.docker.internal:8080/logout/connect/back-channel/idp",
+        "backchannel.logout.session.required": "true",
+        "backchannel.logout.revoke.offline.tokens": "false"
       },
       "protocolMappers": [
         {
@@ -49,7 +52,8 @@
             "userinfo.token.claim": "true"
           }
         }
-      ]
+      ],
+      "frontchannelLogout": false
     }
   ],
   "users": [

@@ -9,6 +9,11 @@
  * Security's defaults on; {@code TrailkeepOidcUserService} provisions the user through
  * {@link io.trailkeep.user.UserSignInService} and yields a {@link io.trailkeep.security.TrailkeepOidcUser}.
  *
+ * <p>Sessions (WP-04b, ADR-0008): Spring Session JDBC with JSON attributes ({@code SessionConfig}); permissions are
+ * rebuilt from the database on every request and never stored ({@code SessionPermissionsFilter}); back-channel
+ * logout goes through {@code JdbcOidcSessionRegistry}; {@link io.trailkeep.security.UserSessionService} ends a
+ * user's sessions on every replica.
+ *
  * <p>May call: {@code shared}, {@code user}, {@code audit}. Other modules use only the {@code *Service} interfaces and
  * records in this package.
  */

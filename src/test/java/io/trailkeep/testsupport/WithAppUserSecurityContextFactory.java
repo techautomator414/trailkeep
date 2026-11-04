@@ -4,7 +4,7 @@ package io.trailkeep.testsupport;
 
 import io.trailkeep.security.TrailkeepOidcUser;
 import io.trailkeep.user.GlobalRole;
-import io.trailkeep.user.UserAccount;
+import io.trailkeep.user.UserPermissions;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.EnumSet;
@@ -30,12 +30,8 @@ public final class WithAppUserSecurityContextFactory implements WithSecurityCont
         Set<GlobalRole> globalRoles = EnumSet.noneOf(GlobalRole.class);
         globalRoles.addAll(Arrays.asList(user.globalRole()));
         String subject = "test-subject-" + user.id();
-        UserAccount account = new UserAccount(
-                user.id(),
-                subject,
-                user.name(),
-                globalRoles,
-                user.team().isEmpty() ? Map.of() : Map.of(user.team(), user.teamRole()));
+        UserPermissions permissions = new UserPermissions(
+                user.id(), false, globalRoles, user.team() == 0L ? Map.of() : Map.of(user.team(), user.teamRole()));
         List<GrantedAuthority> authorities = globalRoles.stream()
                 .<GrantedAuthority>map(role -> new SimpleGrantedAuthority("ROLE_" + role.name()))
                 .toList();
@@ -47,10 +43,12 @@ public final class WithAppUserSecurityContextFactory implements WithSecurityCont
                 .claim("email", "user-" + user.id() + "@example.test")
                 .claim("name", user.name())
                 .build();
-        TrailkeepOidcUser principal = new TrailkeepOidcUser(account, authorities, idToken, null);
+        TrailkeepOidcUser principal = new TrailkeepOidcUser(user.id(), user.name(), List.of(), idToken, null);
 
+        OAuth2AuthenticationToken token = new OAuth2AuthenticationToken(principal, authorities, REGISTRATION_ID);
+        token.setDetails(permissions);
         SecurityContext context = SecurityContextHolder.createEmptyContext();
-        context.setAuthentication(new OAuth2AuthenticationToken(principal, authorities, REGISTRATION_ID));
+        context.setAuthentication(token);
         return context;
     }
 }

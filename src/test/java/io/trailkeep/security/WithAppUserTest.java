@@ -7,6 +7,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import io.trailkeep.testsupport.WithAppUser;
 import io.trailkeep.user.GlobalRole;
 import io.trailkeep.user.TeamRole;
+import io.trailkeep.user.UserPermissions;
 import java.util.Map;
 import java.util.Objects;
 import org.junit.jupiter.api.Test;
@@ -22,13 +23,15 @@ class WithAppUserTest {
     static class Empty {}
 
     @Test
-    @WithAppUser(id = 42, team = "Alpha", teamRole = TeamRole.ANALYST)
+    @WithAppUser(id = 42, team = 7, teamRole = TeamRole.ANALYST)
     void teamUserHasTeamRoleAndNoAuthorities() {
         TrailkeepOidcUser user = principal();
 
         assertThat(user.getName()).isEqualTo("42");
-        assertThat(user.account().teamRoles()).containsExactlyEntriesOf(Map.of("Alpha", TeamRole.ANALYST));
-        assertThat(user.account().globalRoles()).isEmpty();
+        assertThat(user.userId()).isEqualTo(42L);
+        assertThat(user.getAuthorities()).isEmpty();
+        assertThat(permissions().teamRoles()).containsExactlyEntriesOf(Map.of(7L, TeamRole.ANALYST));
+        assertThat(permissions().globalRoles()).isEmpty();
         assertThat(authentication().getAuthorities()).isEmpty();
     }
 
@@ -43,11 +46,16 @@ class WithAppUserTest {
         assertThat(authentication.getAuthorities())
                 .extracting(GrantedAuthority::getAuthority)
                 .containsExactly("ROLE_COMPLIANCE_ADMIN");
-        assertThat(principal().account().teamRoles()).isEmpty();
+        assertThat(permissions().teamRoles()).isEmpty();
+        assertThat(permissions().has(GlobalRole.COMPLIANCE_ADMIN)).isTrue();
     }
 
     private static Authentication authentication() {
         return Objects.requireNonNull(SecurityContextHolder.getContext().getAuthentication());
+    }
+
+    private static UserPermissions permissions() {
+        return (UserPermissions) Objects.requireNonNull(authentication().getDetails());
     }
 
     private static TrailkeepOidcUser principal() {

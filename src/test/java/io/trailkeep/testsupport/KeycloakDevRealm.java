@@ -5,9 +5,15 @@ package io.trailkeep.testsupport;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.net.ServerSocket;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.wait.strategy.Wait;
@@ -26,8 +32,15 @@ public final class KeycloakDevRealm {
     /** Realm name. */
     public static final String REALM = "trailkeep-dev";
 
+    /** Throwaway administrator of the test container's master realm (never used outside tests). */
+    private static final String ADMIN = "admin";
+
+    private static final String ADMIN_PASSWORD = "admin-test-only";
+
     /** Every dev user's password (deliberately obvious; dev realm only). */
     public static final String PASSWORD = "dev-password";
+
+    private static final Pattern ACCESS_TOKEN = Pattern.compile("\"access_token\"\\s*:\\s*\"([^\"]+)\"");
 
     private final int appPort;
     private final GenericContainer<?> container;
@@ -47,12 +60,23 @@ public final class KeycloakDevRealm {
         String realm;
         try {
             realm = Files.readString(Path.of("deploy/local/keycloak/trailkeep-dev-realm.json"))
-                    .replace("http://localhost:8080", "http://localhost:" + port);
+                    .replace("http://localhost:8080", "http://localhost:" + port)
+                    .replace("http://host.docker.internal:8080", "http://host.docker.internal:" + port);
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
         GenericContainer<?> container = new GenericContainer<>(IMAGE)
+                // Back-channel logout: Keycloak, inside Docker, calls the application on the host (as in compose).
+                .withExtraHost("host.docker.internal", "host-gateway")
+                .withLogConsumer(frame -> {
+                    String line = frame.getUtf8String();
+                    if (line.contains("WARN") || line.contains("ERROR")) {
+                        System.out.print("[keycloak] " + line);
+                    }
+                })
                 .withCommand("start-dev", "--import-realm")
+                .withEnv("KC_BOOTSTRAP_ADMIN_USERNAME", ADMIN)
+                .withEnv("KC_BOOTSTRAP_ADMIN_PASSWORD", ADMIN_PASSWORD)
                 .withCopyToContainer(Transferable.of(realm), "/opt/keycloak/data/import/" + REALM + ".json")
                 .withExposedPorts(8080)
                 .waitingFor(Wait.forHttp("/realms/" + REALM + "/.well-known/openid-configuration")
@@ -105,6 +129,40 @@ public final class KeycloakDevRealm {
         registry.add("spring.security.oauth2.client.provider.idp.token-uri", () -> endpoints + "/token");
         registry.add("spring.security.oauth2.client.provider.idp.jwk-set-uri", () -> endpoints + "/certs");
         registry.add("spring.security.oauth2.client.provider.idp.user-info-uri", () -> endpoints + "/userinfo");
+    }
+
+    /**
+     * Logs a user out at the provider, as an administrator would. Keycloak then sends a back-channel logout token
+     * to every client holding one of the user's sessions.
+     *
+     * @param userId the realm user's id (the {@code sub} claim)
+     * @throws IOException on I/O failure
+     * @throws InterruptedException if interrupted
+     */
+    public void logoutAtProvider(String userId) throws IOException, InterruptedException {
+        String base = "http://localhost:" + container.getMappedPort(8080);
+        try (HttpClient http = HttpClient.newHttpClient()) {
+            HttpResponse<String> token = http.send(
+                    HttpRequest.newBuilder(URI.create(base + "/realms/master/protocol/openid-connect/token"))
+                            .header("Content-Type", "application/x-www-form-urlencoded")
+                            .POST(HttpRequest.BodyPublishers.ofString("grant_type=password&client_id=admin-cli"
+                                    + "&username=" + ADMIN + "&password=" + ADMIN_PASSWORD))
+                            .build(),
+                    HttpResponse.BodyHandlers.ofString());
+            Matcher accessToken = ACCESS_TOKEN.matcher(token.body());
+            if (!accessToken.find()) {
+                throw new IllegalStateException("No admin token: " + token.statusCode());
+            }
+            HttpResponse<String> logout = http.send(
+                    HttpRequest.newBuilder(URI.create(base + "/admin/realms/" + REALM + "/users/" + userId + "/logout"))
+                            .header("Authorization", "Bearer " + accessToken.group(1))
+                            .POST(HttpRequest.BodyPublishers.noBody())
+                            .build(),
+                    HttpResponse.BodyHandlers.ofString());
+            if (logout.statusCode() / 100 != 2) {
+                throw new IllegalStateException("Provider logout failed: " + logout.statusCode() + " " + logout.body());
+            }
+        }
     }
 
     private static int freePort() {

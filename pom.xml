@@ -52,6 +52,10 @@
     <nullaway.version>0.14.3</nullaway.version>
     <spotbugs.version>4.10.5</spotbugs.version>
     <playwright.version>1.63.0</playwright.version>
+    <!-- Overrides Spring Boot 4.1.2's 4.1.1: Spring Session 4.1.1 (and 4.0.5) are published under the "Broadcom
+         Foundation License", which is not on security/licenses-allowed.txt; 4.1.0 is the latest Apache-2.0 release
+         of this line. Revisit with the maintainers before any upgrade (PR 10 "Plan deviations"). -->
+    <spring-session.version>4.1.0</spring-session.version>
     <findsecbugs.version>1.14.0</findsecbugs.version>
 
     <!-- Spring Modulith and ArchUnit (architecture verification). -->
@@ -95,6 +99,33 @@
       <!-- OIDC login against the organization's identity provider (BUILD_PLAN §9 Identity). Apache-2.0. -->
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-security-oauth2-client</artifactId>
+    </dependency>
+    <dependency>
+      <!-- Sessions shared by every replica (BUILD_PLAN §9 Identity, ADR-0008). Apache-2.0. -->
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-session-jdbc</artifactId>
+      <exclusions>
+        <!-- spring-session-core 4.1.1 asks for 1.4.0; Spring Framework's managed 1.3.6 stays the one on the
+             classpath (requireUpperBoundDeps). -->
+        <exclusion>
+          <groupId>commons-logging</groupId>
+          <artifactId>commons-logging</artifactId>
+        </exclusion>
+        <!-- Spring Session itself is declared below at ${spring-session.version} (license, see the property). -->
+        <exclusion>
+          <groupId>org.springframework.session</groupId>
+          <artifactId>spring-session-core</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.springframework.session</groupId>
+          <artifactId>spring-session-jdbc</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+    <dependency>
+      <!-- Apache-2.0 at the pinned version. -->
+      <groupId>org.springframework.session</groupId>
+      <artifactId>spring-session-jdbc</artifactId>
     </dependency>
     <dependency>
       <groupId>org.springframework.boot</groupId>

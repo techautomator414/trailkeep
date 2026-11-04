@@ -45,3 +45,13 @@ Replicas must share sessions, a disabled user must lose access immediately, and 
 - Lifetime-filter and idle-timeout tests; disable ⇒ session purge test (WP-04b, WP-09).
 - 90 % line coverage gate for the `security` package (Part B).
 - Grants test: the app user may DELETE from `SPRING_SESSION*` and `OIDC_SESSION` (WP-03b).
+
+## Amendment (PR 10)
+
+Implementation of WP-04b changed the shape of `OIDC_SESSION`. The decision above is otherwise unchanged.
+
+- **Key.** `OIDC_SESSION` is keyed by `SESSION_ID`, not `SID`. Spring Security's `OidcSessionRegistry` saves and removes a registration by the client's session id, so that is the natural key. A replayed login for the same session replaces its row.
+- **`SID` is nullable and indexed.** The OpenID Connect back-channel specification lets a provider omit `sid` from the ID token and the logout token. A primary key on `SID` would refuse such sessions.
+- **Lookup.** A logout token with `sid` removes only the rows with that `sid`. A logout token without `sid` removes every row of its subject (`PRINCIPAL`, the ID token's `sub`).
+- **Cleanup grace.** The daily orphan cleanup spares rows younger than one hour. The registry row is written during the login request, before Spring Session commits the `SPRING_SESSION` row at the end of that response.
+- **Columns.** The table also carries `CREATED_AT`, which the cleanup grace uses.

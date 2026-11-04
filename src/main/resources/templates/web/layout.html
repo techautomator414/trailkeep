@@ -20,8 +20,7 @@
   <script defer th:src="@{/vendor/htmx/htmx.min.js}" th:attr="nonce=${cspNonce}"></script>
   <script defer th:src="@{/js/app.js}" th:attr="nonce=${cspNonce}"></script>
 </head>
-<!-- data-tk-session-seconds matches the 30-minute idle timeout (BUILD_PLAN §9); PR 10 makes both configurable. -->
-<body data-tk-session-seconds="1800"
+<body th:with="idleSeconds=${@sessionTimeouts.idleSeconds()}" th:data-tk-session-seconds="${idleSeconds}"
       th:attr="data-tk-error-text=#{tk.problem.5xx.text},data-tk-extended-text=#{tk.session.extended}">
 <a class="tk-skip-link" href="#main" th:text="#{tk.skip}">Skip to main content</a>
 <header class="tk-header">
@@ -32,7 +31,9 @@
         <li><a th:href="@{/}" th:text="#{tk.nav.dashboard}">Dashboard</a></li>
       </ul>
     </nav>
-    <form class="tk-signout" method="post" th:action="@{/logout}" th:if="${_csrf != null}">
+    <!-- htmx posts the sign-out so the provider's end-session URL comes back as HX-Redirect: a form redirect to
+         another origin would be blocked by the CSP's form-action 'self'. -->
+    <form class="tk-signout" method="post" th:action="@{/logout}" th:attr="hx-post=@{/logout}" th:if="${_csrf != null}">
       <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
       <button class="btn btn-outline-light" type="submit" th:text="#{tk.signout}">Sign out</button>
     </form>

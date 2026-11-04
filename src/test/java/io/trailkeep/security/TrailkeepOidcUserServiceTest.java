@@ -15,6 +15,7 @@ import io.trailkeep.user.GlobalRole;
 import io.trailkeep.user.SignInOutcome;
 import io.trailkeep.user.UserAccount;
 import io.trailkeep.user.UserSignInService;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.EnumSet;
 import java.util.List;
@@ -22,7 +23,6 @@ import java.util.Map;
 import java.util.Set;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
-import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.oauth2.client.oidc.userinfo.OidcUserRequest;
 import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
 import org.springframework.security.oauth2.core.oidc.OidcIdToken;
@@ -35,7 +35,8 @@ class TrailkeepOidcUserServiceTest {
             "groups",
             Map.of(
                     "trailkeep-compliance-admins", GlobalRole.COMPLIANCE_ADMIN,
-                    "trailkeep-system-admins", GlobalRole.SYSTEM_ADMIN));
+                    "trailkeep-system-admins", GlobalRole.SYSTEM_ADMIN),
+            Duration.ofHours(8));
 
     private final UserSignInService signIn = mock(UserSignInService.class);
     private final OidcUserRequest request = mock(OidcUserRequest.class);
@@ -60,19 +61,9 @@ class TrailkeepOidcUserServiceTest {
         assertThat(user).isInstanceOf(TrailkeepOidcUser.class);
         assertThat(user.getName()).isEqualTo("7");
         assertThat(user.getIdToken()).isSameAs(provider.getIdToken());
-        assertThat(user.getAuthorities())
-                .extracting(GrantedAuthority::getAuthority)
-                .containsExactly("ROLE_COMPLIANCE_ADMIN");
-    }
-
-    @Test
-    void theAppliedRolesComeFromTheAccountNotFromTheClaim() {
-        // The conflict rule may withhold SYSTEM_ADMIN; the principal must reflect what was applied.
-        OidcUser provider = providerUser("sub-2", "Sample", "s@example.test", List.of("trailkeep-system-admins"));
-        when(signIn.signIn(any(), any()))
-                .thenReturn(new SignInOutcome.SignedIn(new UserAccount(8L, "sub-2", "Sample", Set.of(), Map.of())));
-
-        assertThat(service(provider).loadUser(request).getAuthorities()).isEmpty();
+        // The stored principal carries no roles; SessionPermissionsFilter derives them per request (ADR-0008).
+        assertThat(user.getAuthorities()).isEmpty();
+        assertThat(((TrailkeepOidcUser) user).userId()).isEqualTo(7L);
     }
 
     @Test
