@@ -2,8 +2,11 @@
 // Copyright 2026 Charlie Genova and contributors
 package io.trailkeep.testsupport;
 
+import io.trailkeep.shared.persistence.DatabaseVendor;
 import java.time.Duration;
 import java.util.Locale;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.jdbc.autoconfigure.JdbcConnectionDetails;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.context.annotation.Bean;
@@ -14,7 +17,8 @@ import org.testcontainers.utility.DockerImageName;
  * The Oracle container for {@code -Poracle-it}. The image comes from the system property {@value #IMAGE_PROPERTY}
  * (set per Failsafe execution in the {@code oracle-it} profile), defaulting to {@value #DEFAULT_IMAGE}. Images named
  * {@code gvenzl/oracle-xe} use the Testcontainers {@code oracle-xe} module (PDB {@code XEPDB1}); anything else uses
- * the {@code oracle-free} module (PDB {@code FREEPDB1}).
+ * the {@code oracle-free} module (PDB {@code FREEPDB1}). Also registers {@link TestDatabaseUsers}, so the grantees
+ * exist before migration.
  */
 @TestConfiguration(proxyBeanMethods = false)
 public class OracleTestcontainersConfiguration {
@@ -45,5 +49,13 @@ public class OracleTestcontainersConfiguration {
             return new org.testcontainers.containers.OracleContainer(name).withStartupTimeout(STARTUP);
         }
         return new org.testcontainers.oracle.OracleContainer(name).withStartupTimeout(STARTUP);
+    }
+
+    @Bean
+    TestDatabaseUsers testDatabaseUsers(
+            JdbcConnectionDetails connection,
+            @Value("${app.db.app-user}") String appUser,
+            @Value("${app.db.purge-user}") String purgeUser) {
+        return new TestDatabaseUsers(DatabaseVendor.ORACLE, connection, appUser, purgeUser);
     }
 }

@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Charlie Genova and contributors
+# 'oracle-test' profile (Oracle Testcontainers, -Poracle-it). The grantees are created before migration by the
+# test-only TestDatabaseUsers Flyway callback; DatabaseGrantsIT logs in as each of them.
+app:
+  db:
+    app-user: trailkeep_app
+    purge-user: trailkeep_purge
+  proxy:
+    # Placeholder router range, as in the 'test' profile.
+    pattern: 10\.128\.\d+\.\d+

@@ -11,3 +11,7 @@ app:
   proxy:
     # Placeholder router range. The deploying organization sets its own Route/ingress peer pattern.
     pattern: 10\.128\.\d+\.\d+
+  db:
+    # Roles created by deploy/local/postgres/01-roles.sql. Locally the app still connects as the owner.
+    app-user: trailkeep_app
+    purge-user: trailkeep_purge

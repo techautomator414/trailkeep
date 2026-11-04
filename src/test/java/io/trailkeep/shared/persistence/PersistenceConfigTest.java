@@ -16,6 +16,7 @@ import java.util.Map;
 import javax.sql.DataSource;
 import org.flywaydb.core.api.configuration.FluentConfiguration;
 import org.hibernate.cfg.MappingSettings;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 
 class PersistenceConfigTest {
@@ -25,7 +26,7 @@ class PersistenceConfigTest {
     @Test
     void migrationIsRefusedWhenTheConfiguredVendorIsNotTheConnectedOne() throws SQLException {
         FluentConfiguration flyway = new FluentConfiguration().dataSource(dataSourceReporting("Oracle"));
-        DatabaseProperties postgres = new DatabaseProperties(DatabaseVendor.POSTGRESQL, null);
+        DatabaseProperties postgres = properties(DatabaseVendor.POSTGRESQL, null);
 
         assertThatIllegalStateException()
                 .isThrownBy(() -> config.vendorGuard(postgres).customize(flyway))
@@ -35,7 +36,7 @@ class PersistenceConfigTest {
     @Test
     void migrationProceedsWhenTheVendorsAgree() throws SQLException {
         FluentConfiguration flyway = new FluentConfiguration().dataSource(dataSourceReporting("PostgreSQL"));
-        DatabaseProperties postgres = new DatabaseProperties(DatabaseVendor.POSTGRESQL, null);
+        DatabaseProperties postgres = properties(DatabaseVendor.POSTGRESQL, null);
 
         assertThatCode(() -> config.vendorGuard(postgres).customize(flyway)).doesNotThrowAnyException();
     }
@@ -45,10 +46,9 @@ class PersistenceConfigTest {
         Map<String, Object> withSchema = new HashMap<>();
         Map<String, Object> blank = new HashMap<>();
 
-        config.defaultSchemaCustomizer(new DatabaseProperties(DatabaseVendor.ORACLE, "TRAILKEEP_OWNER"))
+        config.defaultSchemaCustomizer(properties(DatabaseVendor.ORACLE, "TRAILKEEP_OWNER"))
                 .customize(withSchema);
-        config.defaultSchemaCustomizer(new DatabaseProperties(DatabaseVendor.ORACLE, " "))
-                .customize(blank);
+        config.defaultSchemaCustomizer(properties(DatabaseVendor.ORACLE, " ")).customize(blank);
 
         assertThat(withSchema).containsEntry(MappingSettings.DEFAULT_SCHEMA, "TRAILKEEP_OWNER");
         assertThat(blank).doesNotContainKey(MappingSettings.DEFAULT_SCHEMA);
@@ -59,6 +59,10 @@ class PersistenceConfigTest {
         assertThat(DatabaseVendor.ORACLE.matches("Oracle")).isTrue();
         assertThat(DatabaseVendor.POSTGRESQL.matches("PostgreSQL")).isTrue();
         assertThat(DatabaseVendor.ORACLE.matches("PostgreSQL")).isFalse();
+    }
+
+    private static DatabaseProperties properties(DatabaseVendor vendor, @Nullable String schema) {
+        return new DatabaseProperties(vendor, schema, "trailkeep_app", "trailkeep_purge");
     }
 
     private static DataSource dataSourceReporting(String productName) throws SQLException {

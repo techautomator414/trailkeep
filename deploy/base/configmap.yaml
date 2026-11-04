@@ -11,6 +11,11 @@ data:
   # PLACEHOLDER: a regular expression (not a CIDR) matching the Route/ingress router's pod addresses. Only these
   # peers may set X-Forwarded-For / X-Forwarded-Proto. The application refuses to start if it is empty.
   APP_PROXY_PATTERN: 10\.128\.\d+\.\d+
+  # PLACEHOLDER: the database users R__grants.sql grants to (BUILD_PLAN section 8 rule 7). The migration grants the
+  # runtime privileges to APP_DB_APP_USER and the case-data deletions to APP_DB_PURGE_USER; both must already exist.
+  # The application refuses to start if either is empty.
+  APP_DB_APP_USER: TRAILKEEP_APP
+  APP_DB_PURGE_USER: TRAILKEEP_PURGE
   APP_TIMEZONE: UTC
   APP_BRANDING_NAME: Trailkeep
   # Secret values are files under this directory (one file per property name), never environment variables.

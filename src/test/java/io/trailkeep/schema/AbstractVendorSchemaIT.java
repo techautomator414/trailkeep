@@ -9,16 +9,21 @@ import io.trailkeep.shared.persistence.DatabaseVendor;
 import io.trailkeep.testsupport.RequiresDocker;
 import jakarta.persistence.EntityManagerFactory;
 import java.sql.Connection;
+import java.sql.DatabaseMetaData;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 import javax.sql.DataSource;
 import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.MigrationInfo;
 import org.hibernate.SessionFactory;
 import org.hibernate.dialect.DatabaseVersion;
 import org.hibernate.engine.spi.SessionFactoryImplementor;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -111,6 +116,65 @@ abstract class AbstractVendorSchemaIT {
                         PROBE_TABLE + "." + PROBE_COLUMN,
                         new SchemaMetadataDiff.ExpectedColumn(PROBE_TABLE, PROBE_COLUMN, false, (long) PROBE_LENGTH))
                 .containsKeys(PROBE_TABLE + ".ID", PROBE_TABLE + ".ACTIVE", PROBE_TABLE + ".NOTE");
+    }
+
+    @Test
+    void identityMigrationAndGrantsAreApplied() {
+        assertThat(Arrays.stream(flyway.info().applied()).map(MigrationInfo::getScript))
+                .contains("V1__identity.sql", "R__grants.sql");
+    }
+
+    @Test
+    void metadataDiffCoversTheIdentityEntities() {
+        assertThat(SchemaMetadataDiff.expectedColumns(entityManagerFactory))
+                .containsEntry("APP_USER.EXTERNAL_ID", column("APP_USER", "EXTERNAL_ID", false, 255L))
+                .containsEntry("APP_USER.EMAIL", column("APP_USER", "EMAIL", false, 320L))
+                .containsEntry("TEAM.NAME", column("TEAM", "NAME", false, 120L))
+                .containsEntry("APP_USER_TEAM.ROLE_IN_TEAM", column("APP_USER_TEAM", "ROLE_IN_TEAM", false, 10L))
+                .containsEntry(
+                        "APP_USER_GLOBAL_ROLE.GLOBAL_ROLE", column("APP_USER_GLOBAL_ROLE", "GLOBAL_ROLE", false, 16L))
+                .containsKeys(
+                        "APP_USER.ID",
+                        "APP_USER.LAST_LOGIN_AT",
+                        "APP_USER.DISABLED",
+                        "APP_USER.CREATED_AT",
+                        "TEAM.ACTIVE",
+                        "APP_USER_TEAM.USER_ID",
+                        "APP_USER_TEAM.TEAM_ID",
+                        "APP_USER_GLOBAL_ROLE.USER_ID");
+    }
+
+    @Test
+    void lastLoginIsTheOnlyNullableIdentityColumn() {
+        assertThat(SchemaMetadataDiff.expectedColumns(entityManagerFactory).values().stream()
+                        .filter(column -> !column.table().equals(PROBE_TABLE) && column.nullable())
+                        .map(column -> column.table() + "." + column.column()))
+                .containsExactly("APP_USER.LAST_LOGIN_AT");
+    }
+
+    @Test
+    void teamMembershipHasTheReverseIndexForItsTeamForeignKey() throws SQLException {
+        List<String> indexes = new ArrayList<>();
+        try (Connection connection = dataSource.getConnection()) {
+            DatabaseMetaData metaData = connection.getMetaData();
+            String table = metaData.storesLowerCaseIdentifiers() ? "app_user_team" : "APP_USER_TEAM";
+            try (ResultSet rows = metaData.getIndexInfo(null, databaseProperties.schema(), table, false, true)) {
+                while (rows.next()) {
+                    String name = rows.getString("INDEX_NAME");
+                    if (name != null && rows.getShort("ORDINAL_POSITION") == 1) {
+                        indexes.add(name.toUpperCase(Locale.ROOT) + ":"
+                                + rows.getString("COLUMN_NAME").toUpperCase(Locale.ROOT));
+                    }
+                }
+            }
+        }
+
+        assertThat(indexes).contains("IX_AUT_TEAM_USER:TEAM_ID", "PK_APP_USER_TEAM:USER_ID");
+    }
+
+    private static SchemaMetadataDiff.ExpectedColumn column(
+            String table, String column, boolean nullable, @Nullable Long length) {
+        return new SchemaMetadataDiff.ExpectedColumn(table, column, nullable, length);
     }
 
     @Test

@@ -34,7 +34,10 @@ import tools.jackson.databind.json.JsonMapper;
         properties = {
             "management.server.port=0",
             "trailkeep.test.context=json-logging",
-            "app.proxy.pattern=10\\.128\\.\\d+\\.\\d+"
+            "app.proxy.pattern=10\\.128\\.\\d+\\.\\d+",
+            // prod requires the R__grants.sql grantees (no defaults); TestDatabaseUsers creates these.
+            "app.db.app-user=trailkeep_app",
+            "app.db.purge-user=trailkeep_purge"
         })
 @ActiveProfiles({"prod", "postgresql"})
 @Import({RemoteAddressController.class, PostgresTestcontainersConfiguration.class})
