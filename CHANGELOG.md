@@ -21,6 +21,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Case configuration screens (WP-10, part 2 of 2): `/admin/sla-policies` and `/admin/case-types` on the shell
+  layout (list, create, edit; outcomes one per line), Compliance Admins only, with out-of-range input answered 422
+  and refusals rendered by `ErrorAdvice`; `CaseConfigAccessibilityIT` (axe, CSP) covers every screen and its 422
+  state; a `local`-profile seed of synthetic SLA policies and case types from `app.seed` in `application-local.yml`,
+  inserted when missing and audited as `SYSTEM`.
 - Case configuration (WP-10, part 1 of 2): `V3__admin.sql` (`SLA_POLICY` with range CHECKs and anchor/escalation
   enums, `CASE_TYPE`, `CASE_TYPE_OUTCOME`, their sequences) with the `SlaPolicy`, `CaseType` and `CaseTypeOutcome`
   entities in `casefile`; `CaseConfigService` (Compliance Admins only) creates and updates SLA policies and case

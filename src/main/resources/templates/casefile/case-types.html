@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<html lang="en" xmlns:th="http://www.thymeleaf.org" th:replace="~{web/layout :: page(~{::title}, ~{::main})}">
+<head><title th:text="#{tk.types.title} + ' · ' + ${@branding.name()}">Trailkeep</title></head>
+<body>
+<main id="main" class="container tk-main" tabindex="-1">
+  <h1 th:text="#{tk.types.title}">Case types</h1>
+  <p th:if="${invalid}" class="alert alert-danger" role="alert" th:text="#{tk.types.invalid}">Not saved.</p>
+  <table class="table">
+    <caption th:text="#{tk.types.caption}">All case types</caption>
+    <thead><tr><th scope="col" th:text="#{tk.config.name}">Name</th>
+      <th scope="col" th:text="#{tk.types.outcomes}">Outcomes</th><th scope="col" th:text="#{tk.types.status}">Status</th></tr></thead>
+    <tbody>
+    <tr th:each="t : ${caseTypes}">
+      <th scope="row"><a th:href="@{/admin/case-types/{id}(id=${t.id})}" th:text="${t.values.name}">Name</a></th>
+      <td th:text="${#strings.listJoin(t.values.outcomes, ', ')}">Resolved</td>
+      <td th:text="${t.values.active} ? #{tk.types.active} : #{tk.types.inactive}">Active</td>
+    </tr>
+    <tr th:if="${#lists.isEmpty(caseTypes)}"><td colspan="3" th:text="#{tk.types.none}">No case types yet.</td></tr>
+    </tbody>
+  </table>
+  <h2 th:text="#{tk.types.create}">Create a case type</h2>
+  <p th:if="${#lists.isEmpty(policies)}"><a th:href="@{/admin/sla-policies}" th:text="#{tk.types.needpolicy}">Create
+    an SLA policy first.</a></p>
+  <div th:unless="${#lists.isEmpty(policies)}">
+    <form th:replace="~{casefile/fragments/case-type-form :: form(@{/admin/case-types}, null, #{tk.types.create.submit})}"></form>
+  </div>
+</main>
+</body>
+</html>

@@ -8,10 +8,13 @@ import io.trailkeep.audit.AuditOrigin;
 import io.trailkeep.audit.AuditRecorder;
 import io.trailkeep.shared.DomainException.Kind;
 import io.trailkeep.user.GlobalRole;
+import io.trailkeep.user.UserPermissions;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,6 +24,10 @@ import org.springframework.validation.annotation.Validated;
 @Validated
 @Transactional
 class DefaultCaseConfigService implements CaseConfigService {
+
+    /** The application itself, for the local seed: audited with origin {@code SYSTEM} and no actor id. */
+    static final Actor SYSTEM =
+            new Actor(new UserPermissions(0, false, Set.of(GlobalRole.COMPLIANCE_ADMIN), Map.of()), "Trailkeep");
 
     private final SlaPolicyRepository policies;
     private final CaseTypeRepository caseTypes;
@@ -168,8 +175,10 @@ class DefaultCaseConfigService implements CaseConfigService {
 
     private void record(Actor actor, String type, long id, String action, AuditChanges changes) {
         if (!changes.equals(AuditChanges.none())) {
-            long by = actor.permissions().userId();
-            audit.record(new AuditEntry(by, actor.displayName(), AuditOrigin.UI, null, type, id, action, changes));
+            boolean system = SYSTEM.equals(actor); // no real user has id 0
+            Long by = system ? null : actor.permissions().userId();
+            AuditOrigin origin = system ? AuditOrigin.SYSTEM : AuditOrigin.UI;
+            audit.record(new AuditEntry(by, actor.displayName(), origin, null, type, id, action, changes));
         }
     }
 }

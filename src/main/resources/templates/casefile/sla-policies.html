@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<html lang="en" xmlns:th="http://www.thymeleaf.org" th:replace="~{web/layout :: page(~{::title}, ~{::main})}">
+<head><title th:text="#{tk.sla.title} + ' · ' + ${@branding.name()}">Trailkeep</title></head>
+<body>
+<main id="main" class="container tk-main" tabindex="-1">
+  <h1 th:text="#{tk.sla.title}">SLA policies</h1>
+  <p th:if="${invalid}" class="alert alert-danger" role="alert" th:text="#{tk.sla.invalid}">Not saved.</p>
+  <table class="table">
+    <caption th:text="#{tk.sla.caption}">All SLA policies</caption>
+    <thead><tr><th scope="col" th:text="#{tk.config.name}">Name</th>
+      <th scope="col" th:text="#{tk.sla.target}">Target</th><th scope="col" th:text="#{tk.sla.risk}">At risk</th></tr></thead>
+    <tbody>
+    <tr th:each="p : ${policies}">
+      <th scope="row"><a th:href="@{/admin/sla-policies/{id}(id=${p.id})}" th:text="${p.values.name}">Name</a></th>
+      <td th:text="#{tk.sla.days(${p.values.targetDays})}">30 days</td>
+      <td th:text="#{tk.sla.pct(${p.values.atRiskPct})}">80%</td>
+    </tr>
+    <tr th:if="${#lists.isEmpty(policies)}"><td colspan="3" th:text="#{tk.sla.none}">No policies yet.</td></tr>
+    </tbody>
+  </table>
+  <h2 th:text="#{tk.sla.create}">Create a policy</h2>
+  <form th:replace="~{casefile/fragments/sla-policy-form :: form(@{/admin/sla-policies}, null, #{tk.sla.create.submit})}"></form>
+</main>
+</body>
+</html>

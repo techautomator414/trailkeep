@@ -1,0 +1,24 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<form th:fragment="form(action, t, submit)" method="post" th:action="${action}" xmlns:th="http://www.thymeleaf.org">
+  <label class="form-label" for="name" th:text="#{tk.config.name}">Name</label>
+  <input class="form-control" id="name" name="name" type="text" required maxlength="120" th:value="${t?.name}">
+  <label class="form-label mt-2" for="slaPolicyId" th:text="#{tk.types.policy}">SLA policy</label>
+  <select class="form-select" id="slaPolicyId" name="slaPolicyId" required>
+    <option th:each="p : ${policies}" th:value="${p.id}" th:selected="${t?.slaPolicyId == p.id}"
+            th:text="${p.values.name}">Policy</option>
+  </select>
+  <label class="form-label mt-2" for="retentionYears" th:text="#{tk.types.retention}">Retention</label>
+  <input class="form-control" id="retentionYears" name="retentionYears" type="number" min="0" max="100" required
+         th:value="${t?.retentionYears ?: 7}">
+  <label class="form-label mt-2" for="outcomes" th:text="#{tk.types.outcomes.label}">Outcomes</label>
+  <textarea class="form-control" id="outcomes" name="outcomes" rows="5" required aria-describedby="outcomes-hint"
+            th:text="${t == null} ? '' : ${#strings.listJoin(t.outcomes, '&#10;')}"></textarea>
+  <div class="form-text" id="outcomes-hint" th:text="#{tk.types.outcomes.hint}">One per line.</div>
+  <div class="form-check mt-2">
+    <input type="hidden" name="_active" value="on">
+    <input class="form-check-input" id="active" name="active" type="checkbox" value="true"
+           th:checked="${t == null or t.active}">
+    <label class="form-check-label" for="active" th:text="#{tk.types.active.label}">Active</label>
+  </div>
+  <button class="btn btn-primary mt-2" type="submit" th:text="${submit}">Save</button>
+</form>

@@ -30,6 +30,9 @@
     SessionController (PR 9, WP-05): POST only, CSRF-protected, behind login, changes only the session's idle clock.
     TeamAdminController (WP-09): behind login, CSRF on every POST; TeamAdminService refuses anyone but a System Admin,
     rebuilding permissions from the database per request. Covered by TeamAdminControllerIT (403, 404, 422, CSRF).
+    CaseConfigController (WP-10): behind login, CSRF on every POST; CaseConfigService refuses anyone but a Compliance
+    Admin, rebuilding permissions from the database per request. Covered by CaseConfigControllerIT (403, 404, 422,
+    CSRF). Needs security-role approval.
     Approved in the security-reviewer role on #20. Listed by class, never by pattern alone, so each new controller
     is reviewed the same way.
   -->
@@ -39,6 +42,7 @@
       <Class name="io.trailkeep.web.DashboardController"/>
       <Class name="io.trailkeep.web.SessionController"/>
       <Class name="io.trailkeep.web.TeamAdminController"/>
+      <Class name="io.trailkeep.web.CaseConfigController"/>
     </Or>
   </Match>
   <!--
