@@ -24,6 +24,12 @@ app:
       trailkeep-system-admins: SYSTEM_ADMIN
 
 spring:
+  datasource:
+    hikari:
+      # Small pool: every Spring context in a run keeps its own pool open on the one shared database container, and
+      # Oracle Free 23 runs out of server processes under a large total (ORA-12516). No test needs more.
+      maximum-pool-size: 4
+      minimum-idle: 1
   security:
     oauth2:
       client:
