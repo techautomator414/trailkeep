@@ -275,8 +275,8 @@ jobs:
   oracle-it:
     # One job, no image override: the oracle-it Maven profile's two Failsafe executions (oracle-xe-21,
     # oracle-free-23) each fix their image, so a matrix passing -Dtrailkeep.oracle.image would run both executions
-    # against one image per leg (issue #13). A deploying organization runs its own image locally with
-    # ./mvnw verify -Poracle-it -Dtrailkeep.oracle.image=<image>.
+    # against one image per leg (issue #13). A deploying organization verifies its own image locally with
+    # ./mvnw verify -Poracle-it -Dtrailkeep.oracle.image=<image>, which runs that one image under both executions.
     name: oracle-it (xe 21 and free 23)
     runs-on: ubuntu-24.04
     timeout-minutes: 90
