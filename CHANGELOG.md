@@ -15,6 +15,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- `main.yml` runs `oracle-it` as one job without an image override (issue #13, owner decision: simplest option). The
+  Maven profile's two Failsafe executions already fix `gvenzl/oracle-xe:21-slim` and `gvenzl/oracle-free:23-slim`, so
+  the former two-leg matrix passing `-Dtrailkeep.oracle.image` ran both executions against one image per leg: four
+  Oracle runs instead of two, with misleading per-execution report directories. One `oracle-it-reports` artifact,
+  which `release.yml` now zips into the evidence pack by name; the job timeout is 90 minutes for the two sequential
+  container starts.
 - CI image scan policy (issue #11, owner decision): the Trivy gates on the built image in `main.yml` and
   `release.yml` run with `--ignore-unfixed`, so only HIGH or CRITICAL findings that have a fixed version fail the
   build. Unfixed base-image findings still appear in the JSON and SARIF reports and in the release evidence pack.

@@ -273,17 +273,15 @@ jobs:
           retention-days: 30
 
   oracle-it:
-    name: oracle-it (${{ matrix.image }})
+    # One job, no image override: the oracle-it Maven profile's two Failsafe executions (oracle-xe-21,
+    # oracle-free-23) each fix their image, so a matrix passing -Dtrailkeep.oracle.image would run both executions
+    # against one image per leg (issue #13). A deploying organization verifies its own image locally with
+    # ./mvnw verify -Poracle-it -Dtrailkeep.oracle.image=<image>, which runs that one image under both executions.
+    name: oracle-it (xe 21 and free 23)
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    timeout-minutes: 90
     permissions:
       contents: read
-    strategy:
-      fail-fast: false
-      matrix:
-        image:
-          - gvenzl/oracle-xe:21-slim
-          - gvenzl/oracle-free:23-slim
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -308,17 +306,15 @@ jobs:
           java-version: "21"
           cache: maven
 
-      - name: Verify against Oracle
+      - name: Verify against both Oracle images
         if: steps.profile.outputs.present == 'true'
-        env:
-          ORACLE_IMAGE: ${{ matrix.image }}
-        run: ./mvnw -B -ntp verify -Poracle-it -Dtrailkeep.oracle.image="${ORACLE_IMAGE}"
+        run: ./mvnw -B -ntp verify -Poracle-it
 
       - name: Upload test reports
         if: always() && steps.profile.outputs.present == 'true'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: oracle-it-reports-${{ strategy.job-index }}
+          name: oracle-it-reports
           path: |
             target/surefire-reports
             target/failsafe-reports
