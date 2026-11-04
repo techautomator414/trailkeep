@@ -7,6 +7,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- Oracle Free 23 `oracle-it` failures (ORA-12516) in `OracleDatabaseGrantsIT`: the grants probes share one connection per grantee and test contexts use a small Hikari pool.
+
 ### Added
 
 - `deploy/OIDC_PROVIDER.md`: vendor-neutral checklist for registering Trailkeep with a real OIDC provider (client, redirect,

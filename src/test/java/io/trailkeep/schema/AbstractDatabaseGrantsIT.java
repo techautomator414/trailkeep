@@ -11,10 +11,12 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.EnumSet;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Stream;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -100,6 +102,13 @@ abstract class AbstractDatabaseGrantsIT {
             "SEQ_CASE_TYPE",
             "SEQ_CASE_RECORD",
             "SEQ_CASE_NUMBER");
+
+    /**
+     * One open connection per grantee for the whole class. Opening a connection per probe (about 100 in a burst, each
+     * also taking an administrator connection to reset the password) exhausts the server processes or listener
+     * handlers of Oracle Free 23 (ORA-12516). Every probe rolls back, so sharing a connection leaks no state.
+     */
+    private static final Map<String, Connection> CONNECTIONS = new HashMap<>();
 
     @Autowired
     private TestDatabaseUsers users;
@@ -206,24 +215,53 @@ abstract class AbstractDatabaseGrantsIT {
         return "app".equals(who) ? appUser : purgeUser;
     }
 
-    /** Runs one statement as {@code user} and rolls back whatever it did. */
-    private Outcome run(String user, String sql) throws SQLException {
-        try (Connection connection = users.login(user)) {
-            connection.setAutoCommit(false);
-            try (Statement statement = connection.createStatement()) {
-                statement.execute(sql);
-                return Outcome.ALLOWED;
+    /** Closes the shared grantee connections once every probe of the class has run. */
+    @AfterAll
+    static void closeConnections() throws SQLException {
+        SQLException failure = null;
+        for (Connection connection : CONNECTIONS.values()) {
+            try {
+                connection.close();
             } catch (SQLException e) {
-                if (isPrivilegeDenied(e)) {
-                    return Outcome.DENIED;
+                if (failure == null) {
+                    failure = e;
+                } else {
+                    failure.addSuppressed(e);
                 }
-                if (isNotNullViolation(e)) {
-                    return Outcome.ALLOWED;
-                }
-                throw e;
-            } finally {
-                connection.rollback();
             }
+        }
+        CONNECTIONS.clear();
+        if (failure != null) {
+            throw failure;
+        }
+    }
+
+    private Connection connectionFor(String user) throws SQLException {
+        Connection connection = CONNECTIONS.get(user);
+        if (connection == null || connection.isClosed()) {
+            connection = users.login(user);
+            connection.setAutoCommit(false);
+            CONNECTIONS.put(user, connection);
+        }
+        return connection;
+    }
+
+    /** Runs one statement as {@code user} on that user's shared connection and rolls back whatever it did. */
+    private Outcome run(String user, String sql) throws SQLException {
+        Connection connection = connectionFor(user);
+        try (Statement statement = connection.createStatement()) {
+            statement.execute(sql);
+            return Outcome.ALLOWED;
+        } catch (SQLException e) {
+            if (isPrivilegeDenied(e)) {
+                return Outcome.DENIED;
+            }
+            if (isNotNullViolation(e)) {
+                return Outcome.ALLOWED;
+            }
+            throw e;
+        } finally {
+            connection.rollback();
         }
     }
 }
