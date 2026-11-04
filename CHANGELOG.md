@@ -9,6 +9,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- `deploy/OIDC_PROVIDER.md`: vendor-neutral checklist for registering Trailkeep with a real OIDC provider (client, redirect,
+  post-logout and back-channel logout URLs, claims, `app.security.*` keys, secret handling, verification) (#30).
 - `local` profile seed for teams Alpha and Beta and the dev-realm users' team roles (`app.seed.teams`), created when
   missing and audited as `SYSTEM` (#29).
 - Case schema (`V4`: `CASE_RECORD`, `CASE_SLA`, `CASE_SEARCH`, case sequences) and the principal-backed `CaseScope`,
