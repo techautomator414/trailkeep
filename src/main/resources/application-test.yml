@@ -2,4 +2,5 @@
 # Copyright 2026 Charlie Genova and contributors
 # 'test' profile (PostgreSQL Testcontainers, every build). Everything a test context needs lives in
 # application-test-common.yml, which the profile group in application.yml adds alongside 'postgresql'. Put a setting
-# here only if it must differ between PostgreSQL and Oracle test runs.
+# here only if it is PostgreSQL-only and absent from application-test-common.yml: group members load after this
+# file, so a key set in both takes the test-common value.

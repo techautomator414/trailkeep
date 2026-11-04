@@ -7,6 +7,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- The `oracle-test` profile could not start a Spring context after PR 8: the OIDC client registration pointed at a
+  provider defined only for `test`. Both Testcontainers profile groups now include `application-test-common.yml`,
+  which holds every setting a test context needs to start.
+
 ### Changed
 
 - CI image scan policy (issue #11, owner decision): the Trivy gates on the built image in `main.yml` and
