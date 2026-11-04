@@ -2,6 +2,8 @@
 // Copyright 2026 Charlie Genova and contributors
 package io.trailkeep.user;
 
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import org.springframework.data.repository.Repository;
 
@@ -11,6 +13,8 @@ interface AppUserRepository extends Repository<AppUser, Long> {
     AppUser save(AppUser user);
 
     Optional<AppUser> findById(Long id);
+
+    List<AppUser> findByIdIn(Collection<Long> ids);
 
     Optional<AppUser> findByExternalId(String externalId);
 }

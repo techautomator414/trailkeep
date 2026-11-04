@@ -1,0 +1,41 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Charlie Genova and contributors
+#
+# The case permission matrix (BUILD_PLAN §3.2, IMPLEMENTATION_PLAN A.2 #18): the single source of truth that
+# CasePermissionService evaluates. Rows are tried top to bottom; the FIRST row whose every column matches decides.
+#
+# role:         the actor's effective role for the case's team: SYSTEM_ADMIN and COMPLIANCE_ADMIN (global roles,
+#               in that order) win over team roles; NONE = no role in the case's team.
+# relationship: OWNER when the actor owns the case, otherwise NOT_OWNER.
+# A column holds one value, several joined by |, or * for any. CREATE is decided for the team, not a case.
+#
+# role,relationship,sensitivity,status,action,decision
+SYSTEM_ADMIN,*,*,*,*,DENY
+NONE,*,*,*,*,DENY
+ANALYST|MANAGER|COMPLIANCE_ADMIN,*,*,*,CREATE,ALLOW
+*,*,*,*,CREATE,DENY
+# Restricted cases: hidden from Readers and from Analysts who do not own them.
+READER,*,RESTRICTED,*,*,DENY
+ANALYST,NOT_OWNER,RESTRICTED,*,*,DENY
+*,*,*,*,VIEW|DOWNLOAD_ATTACHMENT,ALLOW
+# Readers only read; archived cases are read-only for everyone.
+READER,*,*,*,*,DENY
+*,*,*,ARCHIVED,*,DENY
+# Working a case: Analysts, Managers and Compliance Admins of the team.
+*,*,*,OPEN,EDIT,ALLOW
+*,*,*,OPEN|PENDING_CLOSURE,COMMENT|REQUEST_UPDATE,ALLOW
+*,*,*,OPEN,REQUEST_CLOSURE,ALLOW
+# Analysts may restrict (never unrestrict) and reassign only their own cases; nothing else below applies to them.
+ANALYST,OWNER,STANDARD,*,RESTRICT,ALLOW
+ANALYST,OWNER,*,OPEN|CLOSED,REASSIGN,ALLOW
+ANALYST,*,*,*,*,DENY
+# Managers and Compliance Admins. The owner never decides their own closure request.
+*,*,STANDARD,*,RESTRICT,ALLOW
+*,*,RESTRICTED,*,UNRESTRICT,ALLOW
+*,OWNER,*,*,DECIDE_CLOSURE,DENY
+*,*,*,PENDING_CLOSURE,DECIDE_CLOSURE|REASSIGN_APPROVER,ALLOW
+*,*,*,CLOSED,REOPEN,ALLOW
+# Reassignment is blocked while a closure request is pending.
+*,*,*,OPEN|CLOSED,REASSIGN,ALLOW
+COMPLIANCE_ADMIN,*,*,*,RELEASE_QUARANTINE,ALLOW
+*,*,*,*,*,DENY
