@@ -35,3 +35,6 @@ nbproject/
 # OS
 Thumbs.db
 desktop.ini
+
+# Claude Code local settings (server-specific; never commit)
+.claude/settings.local.json
