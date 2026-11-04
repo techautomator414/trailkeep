@@ -12,5 +12,7 @@ interface AppUserGlobalRoleRepository extends Repository<AppUserGlobalRole, AppU
 
     List<AppUserGlobalRole> findByIdUserId(Long userId);
 
+    List<AppUserGlobalRole> findByIdRole(GlobalRole role);
+
     void delete(AppUserGlobalRole role);
 }
