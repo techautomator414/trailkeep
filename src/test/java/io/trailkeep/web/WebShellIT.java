@@ -165,6 +165,22 @@ class WebShellIT {
 
     @Test
     @WithAppUser
+    void constraintViolationsReachingTheWebLayerAreUnprocessable() throws Exception {
+        String fragment = mvc.perform(get("/test-only/constraint-violation").header("HX-Request", "true"))
+                .andExpect(status().isUnprocessableContent())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        assertThat(fragment)
+                .startsWith("<section")
+                .contains("Please correct the highlighted fields")
+                .doesNotContain("secret-detail");
+
+        mvc.perform(get("/test-only/constraint-violation")).andExpect(status().isUnprocessableContent());
+    }
+
+    @Test
+    @WithAppUser
     void anUnreadableCaseIsTheFullNotFoundPage() throws Exception {
         String page = mvc.perform(get("/test-only/problem/NOT_FOUND"))
                 .andExpect(status().isNotFound())
