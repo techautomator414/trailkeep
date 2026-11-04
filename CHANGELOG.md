@@ -27,6 +27,7 @@ starts with WP-11. `HANDOFF.md` records the state, the decisions taken and the o
 
 ### Changed
 
+- `.gitignore` excludes `.claude/settings.local.json`, which holds machine-specific Claude Code settings.
 - `main.yml` runs `oracle-it` as one job without an image override (issue #13, owner decision: simplest option). The
   Maven profile's two Failsafe executions already fix `gvenzl/oracle-xe:21-slim` and `gvenzl/oracle-free:23-slim`, so
   the former two-leg matrix passing `-Dtrailkeep.oracle.image` ran both executions against one image per leg: four
