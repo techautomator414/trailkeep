@@ -47,3 +47,12 @@ body { color: var(--tk-ink); display: flex; flex-direction: column; min-height: 
   :focus-visible { outline: 3px solid CanvasText; box-shadow: none; }
   .tk-header, .tk-problem { border: 1px solid CanvasText; }
 }
+
+.tk-case-number { display: block; font-size: 1rem; color: #4a5560; }
+.tk-chips { display: flex; flex-wrap: wrap; gap: 0.5rem; list-style: none; padding: 0; }
+.tk-chip { border: 1px solid var(--tk-ink); border-radius: 1rem; padding: 0.125rem 0.75rem; }
+.tk-sla-AT_RISK { background: #fff4d6; }
+.tk-sla-OVERDUE, .tk-sla-BREACHED { background: #fdf2f1; }
+.tk-facts { display: grid; grid-template-columns: max-content 1fr; gap: 0.25rem 1rem; }
+.tk-facts dd { margin: 0; }
+.tk-description { white-space: pre-wrap; }

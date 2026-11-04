@@ -141,6 +141,28 @@ class CaseRecord {
         return title;
     }
 
+    @Nullable
+    String getDescription() {
+        return description;
+    }
+
+    @Nullable
+    String getSubjectText() {
+        return subjectText;
+    }
+
+    CasePriority getPriority() {
+        return priority;
+    }
+
+    LocalDate getIdentifiedOn() {
+        return identifiedOn;
+    }
+
+    Instant getOpenedAt() {
+        return openedAt;
+    }
+
     long getTeamId() {
         return teamId;
     }
