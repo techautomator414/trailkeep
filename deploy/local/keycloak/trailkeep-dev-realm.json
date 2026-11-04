@@ -1,0 +1,248 @@
+{
+  "realm": "trailkeep-dev",
+  "enabled": true,
+  "sslRequired": "external",
+  "registrationAllowed": false,
+  "resetPasswordAllowed": false,
+  "rememberMe": false,
+  "groups": [
+    {
+      "name": "trailkeep-compliance-admins"
+    },
+    {
+      "name": "trailkeep-system-admins"
+    }
+  ],
+  "clients": [
+    {
+      "clientId": "trailkeep",
+      "name": "Trailkeep (local development)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "dev-only-client-secret",
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "serviceAccountsEnabled": false,
+      "redirectUris": [
+        "http://localhost:8080/login/oauth2/code/idp"
+      ],
+      "webOrigins": [
+        "http://localhost:8080"
+      ],
+      "attributes": {
+        "post.logout.redirect.uris": "http://localhost:8080/*"
+      },
+      "protocolMappers": [
+        {
+          "name": "groups",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-group-membership-mapper",
+          "consentRequired": false,
+          "config": {
+            "full.path": "false",
+            "claim.name": "groups",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        }
+      ]
+    }
+  ],
+  "users": [
+    {
+      "id": "00000000-0000-4000-8000-000000000001",
+      "username": "alpha.reader",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Alpha",
+      "lastName": "Reader",
+      "email": "alpha.reader@example.test",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "dev-password",
+          "temporary": false
+        }
+      ],
+      "groups": []
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000002",
+      "username": "alpha.analyst",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Alpha",
+      "lastName": "Analyst",
+      "email": "alpha.analyst@example.test",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "dev-password",
+          "temporary": false
+        }
+      ],
+      "groups": []
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000003",
+      "username": "alpha.manager1",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Alpha",
+      "lastName": "Manager One",
+      "email": "alpha.manager1@example.test",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "dev-password",
+          "temporary": false
+        }
+      ],
+      "groups": []
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000004",
+      "username": "alpha.manager2",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Alpha",
+      "lastName": "Manager Two",
+      "email": "alpha.manager2@example.test",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "dev-password",
+          "temporary": false
+        }
+      ],
+      "groups": []
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000005",
+      "username": "beta.reader",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Beta",
+      "lastName": "Reader",
+      "email": "beta.reader@example.test",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "dev-password",
+          "temporary": false
+        }
+      ],
+      "groups": []
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000006",
+      "username": "beta.analyst",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Beta",
+      "lastName": "Analyst",
+      "email": "beta.analyst@example.test",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "dev-password",
+          "temporary": false
+        }
+      ],
+      "groups": []
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000007",
+      "username": "beta.manager1",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Beta",
+      "lastName": "Manager One",
+      "email": "beta.manager1@example.test",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "dev-password",
+          "temporary": false
+        }
+      ],
+      "groups": []
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000008",
+      "username": "beta.manager2",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Beta",
+      "lastName": "Manager Two",
+      "email": "beta.manager2@example.test",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "dev-password",
+          "temporary": false
+        }
+      ],
+      "groups": []
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000101",
+      "username": "compliance.admin",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Compliance",
+      "lastName": "Admin",
+      "email": "compliance.admin@example.test",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "dev-password",
+          "temporary": false
+        }
+      ],
+      "groups": [
+        "/trailkeep-compliance-admins"
+      ]
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000102",
+      "username": "system.admin",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "System",
+      "lastName": "Admin",
+      "email": "system.admin@example.test",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "dev-password",
+          "temporary": false
+        }
+      ],
+      "groups": [
+        "/trailkeep-system-admins"
+      ]
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000103",
+      "username": "disabled.user",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Disabled",
+      "lastName": "User",
+      "email": "disabled.user@example.test",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "dev-password",
+          "temporary": false
+        }
+      ],
+      "groups": []
+    }
+  ]
+}

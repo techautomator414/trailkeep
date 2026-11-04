@@ -25,7 +25,7 @@ import org.springframework.test.context.ActiveProfiles;
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         properties = {"management.server.port=0", "app.proxy.pattern=127\\.0\\.0\\.1"})
 @ActiveProfiles("test")
-@Import({RemoteAddressController.class, PostgresTestcontainersConfiguration.class})
+@Import({RemoteAddressController.class, TestOnlyEndpointsSecurity.class, PostgresTestcontainersConfiguration.class})
 class ForwardedHeadersTrustedProxyIT {
 
     @LocalServerPort

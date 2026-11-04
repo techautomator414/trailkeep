@@ -91,6 +91,11 @@
       <artifactId>spring-boot-starter-validation</artifactId>
     </dependency>
     <dependency>
+      <!-- OIDC login against the organization's identity provider (BUILD_PLAN §9 Identity). Apache-2.0. -->
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-security-oauth2-client</artifactId>
+    </dependency>
+    <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-data-jpa</artifactId>
     </dependency>
@@ -159,6 +164,12 @@
     <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-validation-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <!-- Security test support (@WithSecurityContext, MockMvc request post-processors). Apache-2.0. -->
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-security-oauth2-client-test</artifactId>
       <scope>test</scope>
     </dependency>
     <dependency>
@@ -628,7 +639,7 @@
               <includedLicenses>file://${project.basedir}/security/licenses-allowed.txt</includedLicenses>
               <useMissingFile>false</useMissingFile>
               <licenseMerges>
-                <licenseMerge>Apache-2.0|Apache License, Version 2.0|The Apache Software License, Version 2.0|The Apache License, Version 2.0|Apache License 2.0|Apache 2.0|Apache 2|Apache License Version 2.0|Apache Software License - Version 2.0|ASF 2.0|Apache License v2.0</licenseMerge>
+                <licenseMerge>Apache-2.0|Apache License, Version 2.0|The Apache Software License, Version 2.0|The Apache License, Version 2.0|Apache License 2.0|Apache 2.0|Apache 2|Apache License Version 2.0|Apache Software License - Version 2.0|ASF 2.0|Apache License v2.0|Apache License, version 2.0</licenseMerge>
                 <licenseMerge>MIT|The MIT License|MIT License|The MIT License (MIT)|MIT-0</licenseMerge>
                 <licenseMerge>BSD-2-Clause|BSD 2-Clause License|The BSD 2-Clause License|BSD-2|Simplified BSD License</licenseMerge>
                 <licenseMerge>BSD-3-Clause|BSD 3-Clause License|The BSD 3-Clause License|BSD-3|New BSD License|Modified BSD License|BSD License 3|Revised BSD|Eclipse Distribution License - v 1.0|EDL 1.0|Eclipse Distribution License v. 1.0</licenseMerge>

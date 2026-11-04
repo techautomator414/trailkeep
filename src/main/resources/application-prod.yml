@@ -4,6 +4,8 @@
 # Production profile. Required values come from the environment (ConfigMap) and from mounted secret files
 # (spring.config.import=configtree:...), never from this file:
 #   - app.proxy.pattern has no default, so startup fails until the deploying organization sets it.
+#   - app.security.oidc.issuer-uri, client-id and client-secret (a secret file) have no default either; the
+#     provider is found by issuer discovery at startup.
 #   - spring.jpa.hibernate.ddl-auto is deliberately absent; the persistence PR owns JPA settings and prod runs
 #     "validate" only.
 # Logging: this profile switches logback-spring.xml to one JSON object per line.
@@ -12,6 +14,12 @@ server:
   tomcat:
     basedir: /var/lib/trailkeep/tomcat
 spring:
+  security:
+    oauth2:
+      client:
+        provider:
+          idp:
+            issuer-uri: ${app.security.oidc.issuer-uri}
   servlet:
     multipart:
       location: /var/lib/trailkeep/uploads
