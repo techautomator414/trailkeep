@@ -2,6 +2,7 @@
 // Copyright 2026 Charlie Genova and contributors
 package io.trailkeep.security;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.time.InstantSource;
 import java.time.OffsetDateTime;
@@ -34,6 +35,12 @@ class JdbcOidcSessionRegistry implements OidcSessionRegistry {
     private static final String BY_SESSION = COLUMNS + "SESSION_ID = ?";
     private static final String BY_SID = COLUMNS + "SID = ?";
     private static final String BY_PRINCIPAL = COLUMNS + "PRINCIPAL = ?";
+
+    /**
+     * Rows younger than this survive the cleanup: the registry row is written during the login request, before Spring
+     * Session commits the {@code SPRING_SESSION} row at the end of that response.
+     */
+    static final Duration ORPHAN_GRACE = Duration.ofHours(1);
 
     private final JdbcClient jdbc;
     private final InstantSource clock;
@@ -98,10 +105,15 @@ class JdbcOidcSessionRegistry implements OidcSessionRegistry {
                 .update());
     }
 
-    /** Daily: drop rows whose session expired or was deleted without a logout (ADR-0008). */
+    /**
+     * Daily: drop rows whose session expired or was deleted without a logout (ADR-0008), sparing rows younger than
+     * {@link #ORPHAN_GRACE} whose login response may not have committed its session yet.
+     */
     @Scheduled(cron = "${app.security.oidc-session-cleanup-cron:0 23 3 * * *}")
     void removeOrphans() {
-        jdbc.sql("DELETE FROM OIDC_SESSION WHERE SESSION_ID NOT IN (SELECT SESSION_ID FROM SPRING_SESSION)")
+        jdbc.sql("DELETE FROM OIDC_SESSION WHERE CREATED_AT < ?"
+                        + " AND SESSION_ID NOT IN (SELECT SESSION_ID FROM SPRING_SESSION)")
+                .param(OffsetDateTime.ofInstant(clock.instant().minus(ORPHAN_GRACE), ZoneOffset.UTC))
                 .update();
     }
 

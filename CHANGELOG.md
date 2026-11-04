@@ -36,7 +36,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   30-minute idle timeout (`server.servlet.session.timeout`, also feeding the page's expiry warning). RP-initiated
   logout (`HX-Redirect` for the htmx sign-out, so the CSP's `form-action 'self'` is not hit); back-channel logout
   through `JdbcOidcSessionRegistry` over `OIDC_SESSION` with `OidcBackChannelLogoutHandler` on cookie `SESSION`
-  and the loopback `logoutUri`; a daily orphan cleanup; `UserSessionService.endSessionsOf(userId)` for disabling.
+  and the loopback `logoutUri`; a daily orphan cleanup that spares rows younger than one hour (ADR-0008 amendment);
+  `UserSessionService.endSessionsOf(userId)`, which has no caller yet: the WP that adds disabling a user must call
+  it, and until then `SessionPermissionsFilter`'s next-request check is what ends a disabled user's sessions.
   Grants: app user S/I/U/D on `SPRING_SESSION`, `SPRING_SESSION_ATTRIBUTES`, `OIDC_SESSION`. Spring Session is
   pinned to 4.1.0 (Apache-2.0) because 4.1.1 is published under a license outside the allow-list.
   `SharedSessionsIT`: two application instances on one database share a session; a Keycloak back-channel logout

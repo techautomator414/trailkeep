@@ -7,6 +7,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import io.trailkeep.testsupport.PostgresTestcontainersConfiguration;
 import io.trailkeep.testsupport.RequiresDocker;
 import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -94,14 +96,35 @@ class JdbcOidcSessionRegistryIT {
     }
 
     @Test
-    void dailyCleanupRemovesRowsWhoseSessionNoLongerExists() {
+    void dailyCleanupRemovesOldRowsWhoseSessionNoLongerExists() {
         String orphan = UUID.randomUUID().toString();
         registry.saveSessionInformation(information(orphan, "sid-orphan", "sub-3"));
+        jdbc.update(
+                "UPDATE OIDC_SESSION SET CREATED_AT = ? WHERE SESSION_ID = ?",
+                OffsetDateTime.now(ZoneOffset.UTC)
+                        .minus(JdbcOidcSessionRegistry.ORPHAN_GRACE)
+                        .minusMinutes(1),
+                orphan);
 
         registry.removeOrphans();
 
-        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM OIDC_SESSION WHERE SESSION_ID = ?", Integer.class, orphan))
-                .isZero();
+        assertThat(rows(orphan)).isZero();
+    }
+
+    @Test
+    void dailyCleanupSparesAFreshRowWhoseLoginHasNotCommittedItsSessionYet() {
+        String fresh = UUID.randomUUID().toString();
+        registry.saveSessionInformation(information(fresh, "sid-fresh", "sub-4"));
+
+        registry.removeOrphans();
+
+        assertThat(rows(fresh)).isOne();
+        registry.removeSessionInformation(fresh);
+    }
+
+    private int rows(String sessionId) {
+        return Objects.requireNonNull(jdbc.queryForObject(
+                "SELECT COUNT(*) FROM OIDC_SESSION WHERE SESSION_ID = ?", Integer.class, sessionId));
     }
 
     private static OidcSessionInformation information(String sessionId, @Nullable String sid, String subject) {
