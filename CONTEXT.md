@@ -16,7 +16,7 @@ parity, Thymeleaf + htmx UI, SSO via the deploying organization's identity provi
 **0.1.0 — walking skeleton merged; case handling not started.** `IMPLEMENTATION_PLAN.md` Phase 1
 (Part D PRs 1–12) and WP-09, WP-10 are on `main`, every workflow green on both database vendors.
 About a third of the work packages are done; WP-11 (`V4__case`, principal `CaseScope`) is next.
-`HANDOFF.md` is the authoritative state-of-the-build document; `CHANGELOG.md` lists every merged PR.
+`HANDOFF.md` is the authoritative state-of-the-build document; `CHANGELOG.md` lists the notable changes per PR.
 The two plans remain the contract. **Where the two disagree, the implementation plan wins.** Lines of
 the plans superseded during implementation are recorded by ADRs (`adr/README.md`), not by editing the plans.
 
@@ -37,7 +37,7 @@ the plans superseded during implementation are recorded by ADRs (`adr/README.md`
 | `BUILD_PLAN.md` | What we are building (v0.5) |
 | `IMPLEMENTATION_PLAN.md` | How we build it: audit register, standards, work packages, PR order, DoD, schedule, CI placement (v0.3) |
 | `HANDOFF.md` | State of the build at 0.1.0, decisions, open issues, next work package |
-| `CHANGELOG.md` | Keep a Changelog; one entry per merged PR |
+| `CHANGELOG.md` | Keep a Changelog; notable changes per PR |
 | `CLAUDE.md` | Working agreement for AI coding sessions |
 | `LICENSE` | Apache License 2.0 |
 | `NOTICE` | Copyright + third-party notice |
