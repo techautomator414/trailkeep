@@ -27,6 +27,7 @@ import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -184,6 +185,13 @@ class DefaultCaseService implements CaseService {
                 allowed(actor, record, CaseAction.UNRESTRICT),
                 allowed(actor, record, CaseAction.COMMENT),
                 allowed(actor, record, CaseAction.PIN));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public long attachableCaseId(Actor actor, String caseNumber) {
+        return Objects.requireNonNull(
+                loader.load(actor.permissions(), caseNumber, CaseAction.COMMENT).getId());
     }
 
     @Override

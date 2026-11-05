@@ -11,75 +11,21 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.Optional;
-import org.jspecify.annotations.Nullable;
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.util.unit.DataSize;
-import org.testcontainers.containers.GenericContainer;
-import org.testcontainers.containers.wait.strategy.Wait;
-import org.testcontainers.utility.DockerImageName;
-import org.testcontainers.utility.MountableFile;
 
 /**
- * The upload pipeline against a real clamd (the official ClamAV image, the same tag as {@code compose.yaml}) behind a
- * ghostunnel TLS sidecar sharing its network namespace, as in the deployment (ADR-0012): clamd's plaintext port is
- * never published, only the sidecar's. The sidecar's certificate is issued at run time by {@link TestTls}. The image
- * ships with signature databases, so freshclam is switched off: the test needs no network beyond the image pulls, and
- * EICAR is in every database. EICAR itself is assembled at run time, never committed.
+ * The upload pipeline against a real clamd behind its TLS sidecar ({@link RealClamd}), as in the deployment
+ * (ADR-0012). EICAR is assembled at run time, never committed.
  */
 // "IT" is the Failsafe suffix Part B mandates for integration tests, not an abbreviation.
 @SuppressWarnings("checkstyle:AbbreviationAsWordInName")
 @RequiresDocker
 class ClamdClientIT {
 
-    static final DockerImageName IMAGE = DockerImageName.parse("clamav/clamav:1.4.3");
-
-    static final DockerImageName SIDECAR = DockerImageName.parse("ghostunnel/ghostunnel:v1.8.4");
-
-    private static final int TLS_PORT = 3311;
-
-    private static final GenericContainer<?> CLAMD = new GenericContainer<>(IMAGE)
-            .withEnv("CLAMAV_NO_FRESHCLAMD", "true")
-            // The sidecar listens in this container's network namespace, so its port is published here.
-            .withExposedPorts(TLS_PORT)
-            .waitingFor(
-                    Wait.forLogMessage(".*socket found, clamd started.*", 1).withStartupTimeout(Duration.ofMinutes(3)));
-
-    private static @Nullable GenericContainer<?> tunnel;
-
     @TempDir
     Path tempDir;
-
-    @BeforeAll
-    static void start() {
-        CLAMD.start();
-        Path chain = TestTls.shared().writePem();
-        GenericContainer<?> sidecar = new GenericContainer<>(SIDECAR)
-                .withNetworkMode("container:" + CLAMD.getContainerId())
-                .withCopyFileToContainer(MountableFile.forHostPath(chain, 0444), "/tls/chain.pem")
-                .withCopyFileToContainer(
-                        MountableFile.forHostPath(chain.resolveSibling("server-key.pem"), 0444), "/tls/key.pem")
-                .withCommand(
-                        "server",
-                        "--listen=0.0.0.0:" + TLS_PORT,
-                        "--target=localhost:3310",
-                        "--cert=/tls/chain.pem",
-                        "--key=/tls/key.pem",
-                        "--disable-authentication")
-                .waitingFor(Wait.forLogMessage(".*listening.*", 1).withStartupTimeout(Duration.ofMinutes(1)));
-        sidecar.start();
-        tunnel = sidecar;
-    }
-
-    @AfterAll
-    static void stop() {
-        if (tunnel != null) {
-            tunnel.stop();
-        }
-        CLAMD.stop();
-    }
 
     private UploadIntake intake(int port) {
         AttachmentProperties properties = new AttachmentProperties(
@@ -100,7 +46,7 @@ class ClamdClientIT {
     }
 
     private UploadIntake intake() {
-        return intake(CLAMD.getMappedPort(TLS_PORT));
+        return intake(RealClamd.tlsPort());
     }
 
     @Test

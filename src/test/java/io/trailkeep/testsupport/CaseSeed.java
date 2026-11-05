@@ -143,6 +143,34 @@ public final class CaseSeed {
     }
 
     /**
+     * Inserts a one-byte attachment row, without content, uploaded by a seeded user. A quarantined one carries a
+     * synthetic signature.
+     *
+     * @param caseId the case
+     * @param uploaderId the uploader
+     * @param fileName the name as uploaded
+     * @param scanStatus {@code CLEAN}, {@code QUARANTINED} or {@code NOT_SCANNED}
+     * @return the new attachment's id
+     */
+    public long attachment(long caseId, long uploaderId, String fileName, String scanStatus) {
+        long id = NEXT.incrementAndGet();
+        jdbc.update(
+                "INSERT INTO CASE_ATTACHMENT (ID, CASE_ID, FILE_NAME, CONTENT_TYPE, SIZE_BYTES, SHA256, SCAN_STATUS,"
+                        + " SCAN_DETAIL, UPLOADED_AT, UPLOADED_BY) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                id,
+                caseId,
+                fileName,
+                "text/plain",
+                1L,
+                "0".repeat(64),
+                scanStatus,
+                "QUARANTINED".equals(scanStatus) ? "Synthetic.Test.Signature" : null,
+                NOW,
+                uploaderId);
+        return id;
+    }
+
+    /**
      * Gives a user a role in a team.
      *
      * @param userId the user

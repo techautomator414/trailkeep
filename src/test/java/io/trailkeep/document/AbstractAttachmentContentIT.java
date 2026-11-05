@@ -4,12 +4,18 @@ package io.trailkeep.document;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.tuple;
 
+import io.trailkeep.casefile.CaseScopeService;
 import io.trailkeep.document.CaseAttachment.StoredFile;
+import io.trailkeep.shared.CaseNumber;
 import io.trailkeep.shared.CaseStatus;
 import io.trailkeep.shared.Sensitivity;
+import io.trailkeep.shared.access.CaseScope;
 import io.trailkeep.testsupport.CaseSeed;
 import io.trailkeep.testsupport.RequiresDocker;
+import io.trailkeep.user.TeamRole;
+import io.trailkeep.user.UserPermissions;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityManagerFactory;
 import java.io.ByteArrayInputStream;
@@ -22,7 +28,9 @@ import java.time.Instant;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.TreeSet;
 import org.hibernate.engine.spi.SessionFactoryImplementor;
 import org.jspecify.annotations.Nullable;
@@ -63,15 +71,42 @@ abstract class AbstractAttachmentContentIT {
     @Autowired
     private JdbcTemplate jdbc;
 
+    @Autowired
+    private CaseAttachmentRepository attachments;
+
+    @Autowired
+    private CaseScopeService scopes;
+
+    private long team;
     private long caseId;
     private long uploader;
 
     @BeforeEach
     void seed() {
         CaseSeed seed = new CaseSeed(jdbc);
-        long team = seed.team();
+        team = seed.team();
         uploader = seed.user();
         caseId = seed.caseId(seed.caseRow(team, uploader, Sensitivity.STANDARD, CaseStatus.OPEN));
+    }
+
+    @Test
+    void attachmentsAreListedOldestFirstOnlyThroughAScopeThatReadsTheirCase() {
+        CaseSeed seed = new CaseSeed(jdbc);
+        long first = seed.attachment(caseId, uploader, "first-synthetic.txt", "CLEAN");
+        long second = seed.attachment(caseId, uploader, "second-synthetic.txt", "QUARANTINED");
+        CaseNumber number = Objects.requireNonNull(jdbc.queryForObject(
+                "SELECT CASE_NUMBER FROM CASE_RECORD WHERE ID = ?",
+                (row, n) -> CaseNumber.parse(row.getString(1)),
+                caseId));
+        CaseScope member =
+                scopes.forUser(new UserPermissions(uploader, false, Set.of(), Map.of(team, TeamRole.READER)));
+        CaseScope outsider = scopes.forUser(
+                new UserPermissions(seed.user(), false, Set.of(), Map.of(seed.team(), TeamRole.MANAGER)));
+
+        assertThat(attachments.findForCase(member, number))
+                .extracting(CaseAttachment::getId, CaseAttachment::getScanStatus)
+                .containsExactly(tuple(first, ScanStatus.CLEAN), tuple(second, ScanStatus.QUARANTINED));
+        assertThat(attachments.findForCase(outsider, number)).isEmpty();
     }
 
     @Test

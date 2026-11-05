@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- The Attachments section of the case page (BUILD_PLAN §4.3, §9, §10.1). Names are plain text (no download link
+     until WP-14 part 4). Each scan badge is an icon and text, never colour alone, and NOT_SCANNED says that Trailkeep
+     did not scan the file; it is never shown as Verified. The upload form is offered only when the server would
+     allow it: a native, labelled file input in a plain multipart form, with the allowed types and the maximum size
+     beside it and no script. A refused upload comes back with its reason in the error summary, which app.js focuses,
+     and on the input's description. -->
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<body>
+<th:block th:fragment="attachments(number, list, limits, uploadable, error)">
+  <h2 id="attachments" tabindex="-1" th:text="#{tk.attachment.title}">Attachments</h2>
+  <p th:if="${#lists.isEmpty(list)}" th:text="#{tk.attachment.none}">No attachments yet.</p>
+  <div class="table-responsive" th:unless="${#lists.isEmpty(list)}">
+    <table class="table tk-attachments">
+      <caption class="visually-hidden" th:text="#{tk.attachment.caption}">Files attached to this case</caption>
+      <thead><tr>
+        <th scope="col" th:text="#{tk.attachment.name}">File</th>
+        <th scope="col" th:text="#{tk.attachment.size}">Size</th>
+        <th scope="col" th:text="#{tk.attachment.uploaded}">Uploaded</th>
+        <th scope="col" th:text="#{tk.attachment.scan}">Virus scan</th>
+      </tr></thead>
+      <tbody>
+      <tr th:each="a : ${list}" th:id="'attachment-' + ${a.id}">
+        <td class="text-break" th:text="${a.fileName}">report.pdf</td>
+        <td><th:block th:replace="~{document/fragments/attachments :: size(${a.sizeBytes})}">1.2 MB</th:block></td>
+        <td th:text="#{tk.attachment.by(${a.uploadedBy}, ${#temporals.format(a.uploadedAt, 'yyyy-MM-dd HH:mm')})}">
+          Someone on 2026-11-05 10:30</td>
+        <td><span class="tk-chip" th:classappend="'tk-scan-' + ${a.status}">
+          <span aria-hidden="true" th:text="#{'tk.attachment.scan.icon.' + ${a.status}}">✓</span>
+          <span th:text="#{'tk.attachment.scan.' + ${a.status}}">Verified</span></span></td>
+      </tr>
+      </tbody>
+    </table>
+  </div>
+  <form th:if="${uploadable}" method="post" enctype="multipart/form-data"
+        th:action="@{/cases/{n}/attachments(n=${number})}" th:with="e=${error != null}">
+    <div th:if="${e}" class="alert alert-danger" role="alert" tabindex="-1" data-tk-error-summary
+         aria-labelledby="tk-upload-errors-title">
+      <h3 id="tk-upload-errors-title" class="h5" th:text="#{tk.attachment.errors}">The file was not uploaded.</h3>
+      <ul><li><a class="alert-link" href="#file" th:text="#{'tk.attachment.error.' + ${error}}">Reason</a></li></ul>
+    </div>
+    <div class="mb-3">
+      <label class="form-label" for="file" th:text="#{tk.attachment.field}">Choose a file to upload (required)</label>
+      <input class="form-control" id="file" name="file" type="file" required
+             th:accept="'.' + ${#strings.listJoin(limits.extensions, ',.')}"
+             th:attr="aria-invalid=${e},aria-describedby=${e} ? 'file-error file-hint' : 'file-hint'">
+      <div th:if="${e}" class="invalid-feedback d-block" id="file-error"
+           th:text="#{'tk.attachment.error.' + ${error}}">Error</div>
+      <div class="form-text" id="file-hint">
+        <span th:text="#{tk.attachment.types(${#strings.toUpperCase(#strings.listJoin(limits.extensions, ', '))})}">
+          Allowed types: PDF.</span>
+        <span th:text="#{tk.attachment.max}">Maximum size:</span>
+        <th:block th:replace="~{document/fragments/attachments :: size(${limits.maxBytes})}">25 MB</th:block></div>
+    </div>
+    <button class="btn btn-primary" type="submit" th:text="#{tk.attachment.upload}">Upload file</button>
+  </form>
+</th:block>
+
+<th:block th:fragment="size(b)"
+          th:text="${b < 1024} ? #{tk.attachment.bytes(${b})} : (${b < 1048576}
+                   ? #{tk.attachment.kb(${#numbers.formatDecimal(b / 1024.0, 1, 1)})}
+                   : #{tk.attachment.mb(${#numbers.formatDecimal(b / 1048576.0, 1, 1)})})">1.2 MB</th:block>
+</body>
+</html>

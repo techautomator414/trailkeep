@@ -6,7 +6,8 @@
      their Markdown shown only as SafeHtml through tk:safe, and posted with a plain form (422 re-renders this page
      with the error summary). Pinned comments are listed again above all comments and marked "Pinned" in the full
      list; Pin and Unpin are one-button forms (no menu, so no JavaScript), and after either the page opens at that
-     comment. The other actions and the tabs arrive with WP-14 to WP-19. -->
+     comment. Attachments follow, from document/fragments/attachments; their upload form is offered with the comment
+     form, because one matrix row covers both. The other actions and the tabs arrive with WP-14 to WP-19. -->
 <html lang="en" xmlns:th="http://www.thymeleaf.org" th:replace="~{web/layout :: page(~{::title}, ~{::main})}">
 <head><title th:text="${c.number} + ' ' + ${c.title} + ' · ' + ${@branding.name()}">Case</title></head>
 <body>
@@ -94,6 +95,8 @@
       <button class="btn btn-primary" type="submit" th:text="#{tk.comment.post}">Post comment</button>
     </form>
   </th:block>
+  <th:block th:replace="~{document/fragments/attachments :: attachments(${c.number}, ${attachments}, ${limits},
+                         ${c.commentable}, ${uploadError})}"></th:block>
 </main>
 </body>
 </html>

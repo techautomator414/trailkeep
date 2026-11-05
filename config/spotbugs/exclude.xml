@@ -52,6 +52,14 @@
     case's comment. The id is parsed leniently, so a malformed one cannot answer before those checks, and the redirect
     carries only the parsed number. Covered by CaseCommentPinControllerIT (Analyst allowed, Reader 403, unreadable
     404, CSRF 403, 422). Approved in the security-reviewer role on #53.
+    WP-14 part 3 adds POST /cases/{number}/attachments (multipart, CSRF, behind login): CaseAttachmentService reads
+    through the person's CaseScope (404 if unreadable) and checks COMMENT ("add comment / attachment") against the
+    matrix (403), rebuilding permissions from the database per request, before the file is read; then UploadIntake
+    validates (422) and scans it (503 if the scanner gives no verdict) with no transaction open, and only then is
+    anything stored. The browser's file name never forms a path (the temp file is named by Files.createTempFile), is
+    never logged, is audited only as an HMAC, and is echoed only through th:text. Covered by CaseAttachmentUploadIT
+    and ExternalScanningUploadIT (Analyst allowed, Reader 403, unreadable 404, CSRF 403, 422 per reason, 503 with
+    nothing stored, temp file gone). Needs security-role approval.
     CaseEditController (WP-12): GET and POST /cases/{number}/edit, behind login, CSRF on the POST. Every request first
     calls CaseService.editable, which reads through the person's CaseScope (404 if unreadable) and checks EDIT against
     the matrix (403), rebuilding permissions from the database per request; the save is checked again in the service
