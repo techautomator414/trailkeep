@@ -10,6 +10,7 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.Optional;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -85,6 +86,7 @@ class ClamdClientIT {
                 tempDir,
                 DataSize.ofMegabytes(25),
                 25_000_000,
+                ScanMode.CLAMD,
                 new AttachmentProperties.Clamd(
                         "localhost",
                         port,
@@ -93,7 +95,8 @@ class ClamdClientIT {
                         Duration.ofSeconds(30),
                         Duration.ofMinutes(1)));
         return new UploadIntake(
-                properties, new ClamdClient(properties, TestTls.shared().bundles()));
+                properties,
+                Optional.of(new ClamdClient(properties, TestTls.shared().bundles())));
     }
 
     private UploadIntake intake() {

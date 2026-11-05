@@ -15,9 +15,11 @@ import java.nio.file.Path;
  * @param contentType the type detected from the bytes
  * @param sizeBytes the size in bytes
  * @param sha256 the lower-case hex SHA-256 of the bytes
- * @param verdict the scanner's verdict
+ * @param verdict the scanner's verdict, or {@link ScanVerdict#notScanned()} in {@code external} mode
+ * @param scanMode the scan mode in force when the file was received; the upload's audit entry records it (ADR-0013)
  */
-record ScannedUpload(Path file, String contentType, long sizeBytes, String sha256, ScanVerdict verdict)
+record ScannedUpload(
+        Path file, String contentType, long sizeBytes, String sha256, ScanVerdict verdict, ScanMode scanMode)
         implements AutoCloseable {
 
     /**

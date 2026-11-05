@@ -1,0 +1,89 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Charlie Genova and contributors
+# Example overlay for organizations that scan uploads upstream (a gateway or ICAP proxy) or at the endpoints
+# (ADR-0013). It sets app.attachments.scanning=external and removes what only clamd mode needs: the ClamAV
+# Deployment, Service and NetworkPolicy from clamav.yaml, the clamd ConfigMap entries, the clamav-ca mounts and the
+# egress rule to ClamAV. The clamav-tls and clamav-ca Secrets are then not created. Files are stored as NOT_SCANNED,
+# never as clean. Point your own overlay's resources at this directory instead of ../../base, or copy its patches.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+
+patches:
+  # The ClamAV pod, its Service and its ingress NetworkPolicy (clamav.yaml).
+  - patch: |-
+      $patch: delete
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: clamav
+  - patch: |-
+      $patch: delete
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: clamav
+  - patch: |-
+      $patch: delete
+      apiVersion: networking.k8s.io/v1
+      kind: NetworkPolicy
+      metadata:
+        name: clamav
+  # The mode, and no clamd host or SSL bundle.
+  - patch: |-
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: trailkeep-config
+      data:
+        APP_ATTACHMENTS_SCANNING: external
+        APP_ATTACHMENTS_CLAMD_HOST: null
+        SPRING_SSL_BUNDLE_PEM_CLAMD_TRUSTSTORE_CERTIFICATE: null
+  # No clamav-ca Secret to mount.
+  - patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: trailkeep
+      spec:
+        template:
+          spec:
+            containers:
+              - name: trailkeep
+                volumeMounts:
+                  - mountPath: /etc/trailkeep/clamav-ca
+                    $patch: delete
+            volumes:
+              - name: clamav-ca
+                $patch: delete
+  - patch: |-
+      apiVersion: batch/v1
+      kind: CronJob
+      metadata:
+        name: trailkeep-purge
+      spec:
+        jobTemplate:
+          spec:
+            template:
+              spec:
+                containers:
+                  - name: purge
+                    volumeMounts:
+                      - mountPath: /etc/trailkeep/clamav-ca
+                        $patch: delete
+                volumes:
+                  - name: clamav-ca
+                    $patch: delete
+  # The egress rule to ClamAV is the fifth in trailkeep-egress. The test op fails the build, rather than remove
+  # another rule, if the base ever reorders them.
+  - target:
+      kind: NetworkPolicy
+      name: trailkeep-egress
+    patch: |-
+      - op: test
+        path: /spec/egress/4/to/0/podSelector/matchLabels/app.kubernetes.io~1name
+        value: clamav
+      - op: remove
+        path: /spec/egress/4

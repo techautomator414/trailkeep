@@ -13,6 +13,7 @@ Reference manifests for OpenShift, usable on plain Kubernetes. They follow BUILD
 |---|---|
 | `base/` | Kustomize base: `Deployment` (2 replicas), `Service`, `Route`, `NetworkPolicy`, `ConfigMap`, `ServiceAccount`, `PodDisruptionBudget`, and the suspended purge `CronJob`. |
 | `base/ingress-alternative.yaml` | Commented `Ingress` to use instead of `route.yaml` on plain Kubernetes. |
+| `overlays/external-scanning/` | Example overlay without ClamAV, for `APP_ATTACHMENTS_SCANNING=external` (see "Scanning mode"). |
 | `jobs/importer-job.yaml` | One-off importer `Job`, applied by hand because applying a `Job` runs it. |
 
 Render and check locally:
@@ -44,7 +45,33 @@ kube-linter lint deploy/
    | `clamav-tls` | ClamAV `Deployment` (TLS sidecar) only | `tls.crt`, `tls.key`: the sidecar's server certificate, naming the host in `APP_ATTACHMENTS_CLAMD_HOST` (the `clamav` Service by default); for example a cert-manager `Certificate` with `secretName: clamav-tls` (ADR-0012) |
    | `clamav-ca` | web `Deployment`, importer `Job`, purge `CronJob` | `ca.crt` only: the CA that issued `clamav-tls`, loaded as the `clamd` SSL bundle; never the key |
 
-5. **Purge schedule.** Set `suspend: false` on `trailkeep-purge` once retention is enabled.
+5. **Scanning mode.** See below; the default needs nothing.
+6. **Purge schedule.** Set `suspend: false` on `trailkeep-purge` once retention is enabled.
+
+## Scanning mode
+
+`APP_ATTACHMENTS_SCANNING` (`app.attachments.scanning`, ADR-0013) chooses who scans uploads for malware. It is read
+at startup, so changing it is a redeploy and shows in change control; nothing in the application can change it.
+
+- **`clamd`** (the default, also when unset): every upload is scanned by the ClamAV in `base/clamav.yaml` over TLS
+  before it is stored, and refused while the scanner is unreachable. Everything in step 3 and 4 above applies.
+- **`external`**: for organizations that scan upstream of the application (a web gateway or an ICAP proxy) or at
+  the user endpoints. Trailkeep still enforces the size cap, the type allow-list, the extension cross-check and the
+  image cap, but calls no scanner; files are stored as `NOT_SCANNED`, shown as "Not scanned by Trailkeep (scanned
+  upstream)", never as clean, and the upload's audit entry records the mode. The application logs a warning at
+  startup. An unknown value fails startup.
+
+To run without ClamAV, point your overlay's `resources:` at `overlays/external-scanning` instead of `base`, or copy
+its patches. It sets `APP_ATTACHMENTS_SCANNING: external` and removes:
+
+- the ClamAV `Deployment`, `Service` and `NetworkPolicy` (`base/clamav.yaml`);
+- `APP_ATTACHMENTS_CLAMD_HOST` and `SPRING_SSL_BUNDLE_PEM_CLAMD_TRUSTSTORE_CERTIFICATE` from `trailkeep-config`;
+- the `clamav-ca` volume and mount from the web `Deployment` and the purge `CronJob`;
+- the ClamAV egress rule from `trailkeep-egress`.
+
+The `clamav-tls` and `clamav-ca` Secrets are then not created. For the importer `Job`, which is applied by hand,
+delete its `clamav-ca` volume and volume mount. Make sure every path into the application passes your scanner: a
+file that bypasses it is stored unscanned and can be downloaded.
 
 ## Runtime properties
 
