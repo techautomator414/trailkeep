@@ -7,6 +7,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Documentation
+
+- Importer design (`docs/design/importer.md`) and ADR-0014 (Proposed): import compliance case history from SQL Server,
+  Oracle or PostgreSQL, or from files exported from them, through a canonical staging model, a validated mapping file,
+  a dry run with an authenticated in-app sign-off by any Compliance Admin, bound to the recorded scanning mode, an
+  idempotent load through import-only domain APIs that never touches the source, and a reconciliation report.
+  ADR-0014 records the owner's decisions of 2026-11-05: two non-login import principals, a separate
+  `TRAILKEEP_IMPORT` login, go-live alerts pre-marked, cases past purge or on legacy legal hold imported and held,
+  legacy change history in an insert-only `CASE_IMPORTED_EVENT` table on the History tab, default owners with a
+  later `relink-owners`, and delta changes reported, never overwritten, with a closure worklist. It also records the
+  owner-accepted risk that imported attachments are stored `NOT_SCANNED` in `external` scanning mode (ADR-0013),
+  amends Part B to allow one importer source-query DAO and profile-filtered staging entities, and lists the new
+  dependencies with their licences. WP-26 is planned as 31 PRs.
+
 ### Fixed
 
 - ADR-0006 no longer says both drivers accept the character-stream bind; on Oracle the search append binds a CLOB.

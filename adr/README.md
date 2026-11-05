@@ -18,3 +18,4 @@ Format: [MADR](https://adr.github.io/madr/); copy [`0000-adr-template.md`](0000-
 | [0011](0011-case-configuration-owned-by-casefile.md) | Case configuration (SLA policies, case types, outcomes) is owned by `casefile` | Accepted | 2026-11-04 |
 | [0012](0012-clamd-over-tls.md) | Reach clamd over server-authenticated TLS | Accepted | 2026-11-05 |
 | [0013](0013-scanning-mode.md) | Let the deployment choose who scans uploads, clamd by default | Accepted | 2026-11-05 |
+| [0014](0014-importer-sources-and-canonical-model.md) | Import from SQL Server, Oracle, PostgreSQL or their exports through one canonical staging model | Proposed | 2026-11-05 |
