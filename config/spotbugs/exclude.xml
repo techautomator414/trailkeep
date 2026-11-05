@@ -51,7 +51,7 @@
     of that case, read through the same scope, is 422, and the database's composite key refuses a pin on another
     case's comment. The id is parsed leniently, so a malformed one cannot answer before those checks, and the redirect
     carries only the parsed number. Covered by CaseCommentPinControllerIT (Analyst allowed, Reader 403, unreadable
-    404, CSRF 403, 422). Needs security-role approval.
+    404, CSRF 403, 422). Approved in the security-reviewer role on #53.
     CaseEditController (WP-12): GET and POST /cases/{number}/edit, behind login, CSRF on the POST. Every request first
     calls CaseService.editable, which reads through the person's CaseScope (404 if unreadable) and checks EDIT against
     the matrix (403), rebuilding permissions from the database per request; the save is checked again in the service
