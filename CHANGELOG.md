@@ -9,9 +9,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Documentation
 
-- Importer design (`docs/design/importer.md`) and ADR-0014: import compliance case history from SQL Server, Oracle or
-  PostgreSQL, or from files exported from them, through a canonical staging model, a validated mapping file, a dry
-  run with sign-off, an idempotent service-based load and a reconciliation report.
+- Importer design (`docs/design/importer.md`) and ADR-0014 (Proposed): import compliance case history from SQL Server,
+  Oracle or PostgreSQL, or from files exported from them, through a canonical staging model, a validated mapping file,
+  a dry run with an authenticated sign-off, an idempotent load through import-only domain APIs that never touches the
+  source, and a reconciliation report. ADR-0014 records the owner-accepted risk that imported attachments are stored
+  `NOT_SCANNED` in `external` scanning mode (ADR-0013), amends Part B to allow one importer source-query DAO, and lists
+  the new dependencies with their licences.
 
 ### Fixed
 
