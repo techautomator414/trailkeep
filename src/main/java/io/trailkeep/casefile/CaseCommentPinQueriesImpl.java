@@ -48,8 +48,7 @@ class CaseCommentPinQueriesImpl implements CaseCommentPinQueries {
         if (commentId != null) {
             where.add(cb.equal(pin.get("commentId"), commentId));
         }
-        return entityManager
-                .createQuery(query.select(pin).where(where.toArray(Predicate[]::new)))
-                .getResultList();
+        query.select(pin).where(where.toArray(Predicate[]::new));
+        return entityManager.createQuery(query).getResultList();
     }
 }
