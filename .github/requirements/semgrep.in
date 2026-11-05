@@ -2,6 +2,8 @@
 # Copyright 2026 Charlie Genova and contributors
 #
 # Semgrep CLI version for the CI semgrep job. Regenerate the hashed lockfile after changing it:
-#   uv pip compile .github/requirements/semgrep.in --generate-hashes --python-version 3.13 \
-#     --python-platform linux --no-header -o .github/requirements/semgrep.txt
+#   uv pip compile .github/requirements/semgrep.in --override .github/requirements/semgrep-overrides.in \
+#     --generate-hashes --python-version 3.13 --python-platform linux --no-header \
+#     -o .github/requirements/semgrep.txt
+# semgrep-overrides.in lifts transitive pins that carry open security alerts.
 semgrep==1.183.0

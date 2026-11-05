@@ -1,0 +1,14 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Charlie Genova and contributors
+#
+# Overrides for the Semgrep lockfile (see semgrep.in). Every Semgrep release up to 1.184.0 pins mcp==1.29.0 and
+# opentelemetry-api>=1.37,<1.38, which carry open Dependabot alerts (mcp fixed in 1.30.0, opentelemetry-api in 1.45.1).
+# CI installs the lockfile with --no-deps and uses only `semgrep scan` and `semgrep --test`, never `semgrep mcp`, so
+# the lock takes the fixed releases and the whole opentelemetry family moves together to keep it consistent.
+# Remove an override once a Semgrep release no longer pins the package below its fixed version.
+mcp>=1.30.0,<2
+opentelemetry-api>=1.45.1
+opentelemetry-sdk>=1.45.1
+opentelemetry-proto>=1.45.1
+opentelemetry-exporter-otlp-proto-common>=1.45.1
+opentelemetry-exporter-otlp-proto-http>=1.45.1
