@@ -94,8 +94,9 @@
     the security-reviewer role on #62.
     UserAdminController (#31): behind login, CSRF on every POST; UserAdminService refuses anyone but a System Admin,
     rebuilding permissions from the database per request, and refuses disabling oneself. Covered by
-    UserAdminServiceIT (System Admin allowed, Compliance Admin 403, unknown user 404, self 422) and SharedSessionsIT
-    (CSRF-protected POST through a real login). PENDING approval in the security-reviewer role: see PR for #31.
+    UserAdminControllerIT (System Admin allowed, Compliance Admin 403, unknown user 404, self 422, CSRF, anonymous),
+    UserAdminServiceIT and SharedSessionsIT (CSRF-protected POST through a real login). Approved in the
+    security-reviewer role on #63.
     Approved in the security-reviewer role on #20. Listed by class, never by pattern alone, so each new controller
     is reviewed the same way.
   -->
