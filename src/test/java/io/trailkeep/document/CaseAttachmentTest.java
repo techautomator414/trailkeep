@@ -44,6 +44,26 @@ class CaseAttachmentTest {
     }
 
     @Test
+    void notScannedFileIsDownloadableCarriesNoSignatureAndIsNeverReleased() {
+        CaseAttachment attachment = CaseAttachment.scanned(7, FILE, ScanStatus.NOT_SCANNED, null, 3, NOW);
+
+        assertThat(attachment.getScanStatus().isDownloadable()).isTrue();
+        assertThat(attachment.getScanDetail()).isNull();
+        assertThatThrownBy(() -> attachment.release(9, "Scanned upstream", NOW))
+                .isInstanceOf(IllegalStateException.class);
+        assertThat(attachment.getScanStatus()).isEqualTo(ScanStatus.NOT_SCANNED);
+        assertThatThrownBy(() -> CaseAttachment.scanned(7, FILE, ScanStatus.NOT_SCANNED, "Synthetic", 3, NOW))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void onlyQuarantinedFilesAreWithheldFromDownload() {
+        assertThat(ScanStatus.values())
+                .filteredOn(status -> !status.isDownloadable())
+                .containsExactly(ScanStatus.QUARANTINED);
+    }
+
+    @Test
     void nothingIsReleasedAtUpload() {
         assertThatThrownBy(() -> CaseAttachment.scanned(7, FILE, ScanStatus.RELEASED, null, 3, NOW))
                 .isInstanceOf(IllegalArgumentException.class);

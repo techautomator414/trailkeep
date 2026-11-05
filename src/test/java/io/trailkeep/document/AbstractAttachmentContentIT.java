@@ -190,6 +190,69 @@ abstract class AbstractAttachmentContentIT {
     }
 
     @Test
+    void notScannedAttachmentIsAcceptedByTheDatabaseAndRoundTrips() {
+        long id = persisted(synthetic(10), ScanStatus.NOT_SCANNED, null);
+        entityManager.clear();
+
+        CaseAttachment stored = Objects.requireNonNull(entityManager.find(CaseAttachment.class, id));
+        assertThat(stored.getScanStatus()).isEqualTo(ScanStatus.NOT_SCANNED);
+        assertThat(stored.getScanDetail()).isNull();
+        assertThat(stored.getReleasedBy()).isNull();
+    }
+
+    @Test
+    void theDatabaseRefusesAnUnknownScanStatus() {
+        assertThatThrownBy(() -> insertRaw(-8L, "PENDING")).isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void theDatabaseRefusesANotScannedAttachmentWithReleaseColumns() {
+        assertThatThrownBy(() -> jdbc.update(
+                        "INSERT INTO CASE_ATTACHMENT (ID, CASE_ID, FILE_NAME, CONTENT_TYPE, SIZE_BYTES, SHA256,"
+                                + " SCAN_STATUS, RELEASED_BY, RELEASED_AT, RELEASED_REASON, UPLOADED_AT, UPLOADED_BY)"
+                                + " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                        -9L,
+                        caseId,
+                        "synthetic.txt",
+                        "text/plain",
+                        1L,
+                        "b".repeat(64),
+                        "NOT_SCANNED",
+                        uploader,
+                        Timestamp.from(UPLOADED),
+                        "Synthetic reason",
+                        Timestamp.from(UPLOADED),
+                        uploader))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void theDatabaseAcceptsEveryStatusTheEntityKnowsBesidesARelease() {
+        long id = -10L;
+        for (ScanStatus status : ScanStatus.values()) {
+            if (status != ScanStatus.RELEASED) {
+                assertThat(insertRaw(id--, status.name())).isEqualTo(1);
+            }
+        }
+    }
+
+    private int insertRaw(long id, String status) {
+        return jdbc.update(
+                "INSERT INTO CASE_ATTACHMENT (ID, CASE_ID, FILE_NAME, CONTENT_TYPE, SIZE_BYTES, SHA256, SCAN_STATUS,"
+                        + " SCAN_DETAIL, UPLOADED_AT, UPLOADED_BY) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                id,
+                caseId,
+                "synthetic.txt",
+                "text/plain",
+                1L,
+                "b".repeat(64),
+                status,
+                "QUARANTINED".equals(status) ? "Synthetic.Sig" : null,
+                Timestamp.from(UPLOADED),
+                uploader);
+    }
+
+    @Test
     void theDatabaseRefusesAChunkWithoutItsAttachment() {
         assertThatThrownBy(() -> content.write(-7L, new ByteArrayInputStream(synthetic(3))))
                 .isInstanceOf(DataIntegrityViolationException.class);

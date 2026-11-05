@@ -32,6 +32,7 @@ class ClamdClientTest {
                         Path.of("unused"),
                         DataSize.ofMegabytes(25),
                         25_000_000,
+                        ScanMode.CLAMD,
                         new AttachmentProperties.Clamd(
                                 host, port, "clamd", Duration.ofSeconds(2), readTimeout, scanTimeout)),
                 trust);
@@ -198,6 +199,14 @@ class ClamdClientTest {
     }
 
     @Test
+    void missingHostFailsConstructionEvenIfValidationWereBypassed() {
+        Duration second = Duration.ofSeconds(1);
+        assertThatThrownBy(() -> client(" ", 9, second, second, TestTls.shared().bundles()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("app.attachments.clamd.host");
+    }
+
+    @Test
     void onlyTls12AndAboveAreOffered() throws IOException {
         try (FakeClamd clamd = FakeClamd.answering(bytes -> "stream: OK")) {
             assertThat(client(clamd.port()).scan(file(new byte[1]))).isEqualTo(ScanVerdict.clean());
@@ -212,6 +221,10 @@ class ClamdClientTest {
         assertThatThrownBy(() -> new ScanVerdict(ScanStatus.QUARANTINED, null))
                 .isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> new ScanVerdict(ScanStatus.CLEAN, "Sig")).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new ScanVerdict(ScanStatus.NOT_SCANNED, "Sig"))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThat(ScanVerdict.notScanned().status()).isEqualTo(ScanStatus.NOT_SCANNED);
+        assertThat(ScanVerdict.notScanned().signature()).isNull();
         assertThatThrownBy(() -> ScanVerdict.found(" ")).isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> ScanVerdict.found("S".repeat(201))).isInstanceOf(IllegalArgumentException.class);
     }

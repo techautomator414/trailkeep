@@ -14,6 +14,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.Arrays;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Stream;
@@ -31,20 +32,26 @@ class UploadIntakeTest {
 
     private final AtomicReference<Path> scanned = new AtomicReference<>();
 
+    private AttachmentProperties properties(Path dir, ScanMode mode) {
+        return new AttachmentProperties(
+                dir,
+                DataSize.ofBytes(CAP),
+                25_000_000,
+                mode,
+                new AttachmentProperties.Clamd(
+                        "127.0.0.1", 9, "clamd", Duration.ofSeconds(1), Duration.ofSeconds(1), Duration.ofSeconds(1)));
+    }
+
     private UploadIntake intake(VirusScanner scanner) {
-        return new UploadIntake(
-                new AttachmentProperties(
-                        tempDir,
-                        DataSize.ofBytes(CAP),
-                        25_000_000,
-                        new AttachmentProperties.Clamd(
-                                "127.0.0.1",
-                                9,
-                                "clamd",
-                                Duration.ofSeconds(1),
-                                Duration.ofSeconds(1),
-                                Duration.ofSeconds(1))),
-                scanner);
+        return new UploadIntake(properties(tempDir, ScanMode.CLAMD), Optional.of(scanner));
+    }
+
+    /** External mode, given a scanner that fails the test if it is ever called. */
+    private UploadIntake external() {
+        return new UploadIntake(properties(tempDir, ScanMode.EXTERNAL), Optional.of(file -> {
+            scanned.set(file);
+            throw new AssertionError("no scanner is called in external mode");
+        }));
     }
 
     private UploadIntake clean() {
@@ -72,6 +79,7 @@ class UploadIntakeTest {
             assertThat(upload.sizeBytes()).isEqualTo(3);
             assertThat(upload.sha256()).isEqualTo("ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
             assertThat(upload.verdict()).isEqualTo(ScanVerdict.clean());
+            assertThat(upload.scanMode()).isEqualTo(ScanMode.CLAMD);
             assertThat(upload.file())
                     .isEqualTo(scanned.get())
                     .hasParent(tempDir)
@@ -221,24 +229,70 @@ class UploadIntakeTest {
 
     @Test
     void missingTempDirectoryFailsWithoutScanning() {
-        UploadIntake intake = new UploadIntake(
-                new AttachmentProperties(
-                        tempDir.resolve("missing"),
-                        DataSize.ofBytes(CAP),
-                        25_000_000,
-                        new AttachmentProperties.Clamd(
-                                "127.0.0.1",
-                                9,
-                                "clamd",
-                                Duration.ofSeconds(1),
-                                Duration.ofSeconds(1),
-                                Duration.ofSeconds(1))),
-                file -> {
+        UploadIntake intake =
+                new UploadIntake(properties(tempDir.resolve("missing"), ScanMode.CLAMD), Optional.of(file -> {
                     scanned.set(file);
                     return ScanVerdict.clean();
-                });
+                }));
         assertThatThrownBy(() -> intake.receive("notes.txt", bytes(UploadSamples.ascii("abc"))))
                 .isInstanceOf(UncheckedIOException.class);
         assertThat(scanned.get()).isNull();
+    }
+
+    @Test
+    void clamdModeWithoutScannerFailsAtConstruction() {
+        assertThatThrownBy(() -> new UploadIntake(properties(tempDir, ScanMode.CLAMD), Optional.empty()))
+                .isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
+    void externalModeStoresValidFileAsNotScannedWithoutCallingAnyScanner() throws IOException {
+        ScannedUpload upload = external().receive("notes.txt", bytes(UploadSamples.ascii("abc")));
+        try (upload) {
+            assertThat(upload.verdict()).isEqualTo(ScanVerdict.notScanned());
+            assertThat(upload.verdict().status()).isNotEqualTo(ScanStatus.CLEAN);
+            assertThat(upload.scanMode()).isEqualTo(ScanMode.EXTERNAL);
+            assertThat(upload.contentType()).isEqualTo("text/plain");
+            assertThat(upload.sha256()).isEqualTo("ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
+            assertThat(upload.file()).hasContent("abc");
+        }
+        assertThat(scanned.get()).isNull();
+        assertThat(tempFiles()).isZero();
+    }
+
+    @Test
+    void externalModeStillRefusesDisguisedExecutable() throws IOException {
+        assertThatThrownBy(() -> external().receive("invoice.pdf", bytes(UploadSamples.windowsExecutable())))
+                .isInstanceOfSatisfying(
+                        AttachmentRejectedException.class,
+                        e -> assertThat(e.reason()).isEqualTo(Reason.TYPE_NOT_ALLOWED));
+        assertThatThrownBy(() -> external().receive("memo.docx", bytes(UploadSamples.pdf())))
+                .isInstanceOfSatisfying(
+                        AttachmentRejectedException.class,
+                        e -> assertThat(e.reason()).isEqualTo(Reason.EXTENSION_MISMATCH));
+        assertThat(scanned.get()).isNull();
+        assertThat(tempFiles()).isZero();
+    }
+
+    @Test
+    void externalModeStillEnforcesTheSizeCap() throws IOException {
+        byte[] content = new byte[CAP + 1];
+        Arrays.fill(content, (byte) 'a');
+        assertThatThrownBy(() -> external().receive("big.txt", bytes(content)))
+                .isInstanceOfSatisfying(
+                        AttachmentRejectedException.class,
+                        e -> assertThat(e.reason()).isEqualTo(Reason.TOO_LARGE));
+        assertThat(scanned.get()).isNull();
+        assertThat(tempFiles()).isZero();
+    }
+
+    @Test
+    void externalModeStillEnforcesTheImageCap() throws IOException {
+        assertThatThrownBy(() -> external().receive("bomb.png", bytes(UploadSamples.pngHeaderOnly(20_000, 20_000))))
+                .isInstanceOfSatisfying(
+                        AttachmentRejectedException.class,
+                        e -> assertThat(e.reason()).isEqualTo(Reason.IMAGE));
+        assertThat(scanned.get()).isNull();
+        assertThat(tempFiles()).isZero();
     }
 }
