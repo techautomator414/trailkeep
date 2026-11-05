@@ -7,6 +7,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Documentation
+
+- Importer design (`docs/design/importer.md`) and ADR-0014: import compliance case history from SQL Server, Oracle or
+  PostgreSQL, or from files exported from them, through a canonical staging model, a validated mapping file, a dry
+  run with sign-off, an idempotent service-based load and a reconciliation report.
+
 ### Fixed
 
 - ADR-0006 no longer says both drivers accept the character-stream bind; on Oracle the search append binds a CLOB.
