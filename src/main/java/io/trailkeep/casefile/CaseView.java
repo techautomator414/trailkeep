@@ -30,6 +30,7 @@ import org.jspecify.annotations.Nullable;
  * @param reassignable whether the viewer may reassign it, so the page offers Reassign
  * @param restrictable whether the viewer may mark it restricted
  * @param unrestrictable whether the viewer may mark it standard again
+ * @param commentable whether the viewer may comment on it, so the page offers the comment form
  */
 public record CaseView(
         CaseNumber number,
@@ -49,7 +50,8 @@ public record CaseView(
         boolean editable,
         boolean reassignable,
         boolean restrictable,
-        boolean unrestrictable) {
+        boolean unrestrictable,
+        boolean commentable) {
 
     /**
      * The SLA chip (BUILD_PLAN §4.3): the state, the due day and the whole days left (negative once overdue).

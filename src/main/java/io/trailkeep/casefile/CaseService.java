@@ -122,9 +122,10 @@ public interface CaseService {
 
     /**
      * Saves an edit made against {@code version} and records {@code CASE_UPDATED} with the changed fields (subject
-     * and description redacted), rebuilding the search text under its row lock. Saving unchanged values writes
-     * nothing. {@code NOT_FOUND} and {@code FORBIDDEN} as for {@link #editable}; {@code CONFLICT} if someone saved
-     * since {@code version} was read, which the edit form answers with Reload, never with an overwrite.
+     * and description redacted), rebuilding the search text from title, description and every comment under its row
+     * lock. Saving unchanged values writes nothing. {@code NOT_FOUND} and {@code FORBIDDEN} as for {@link #editable};
+     * {@code CONFLICT} if someone saved since {@code version} was read, which the edit form answers with Reload, never
+     * with an overwrite.
      *
      * @param actor the actor
      * @param caseNumber the case number as it appears in the URL

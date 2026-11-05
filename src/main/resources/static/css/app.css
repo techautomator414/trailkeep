@@ -56,3 +56,7 @@ body { color: var(--tk-ink); display: flex; flex-direction: column; min-height: 
 .tk-facts { display: grid; grid-template-columns: max-content 1fr; gap: 0.25rem 1rem; }
 .tk-facts dd { margin: 0; }
 .tk-description { white-space: pre-wrap; }
+.tk-comments { list-style: none; padding: 0; }
+.tk-comments > li { border-left: 0.25rem solid var(--bs-border-color); padding-left: 0.75rem; margin-bottom: 1rem; }
+.tk-comment-body { overflow-wrap: anywhere; }
+.tk-comment-body pre { white-space: pre-wrap; }

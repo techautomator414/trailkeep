@@ -3,12 +3,16 @@
 package io.trailkeep.web;
 
 import io.trailkeep.casefile.CaseAssignmentService;
+import io.trailkeep.casefile.CaseCommentService;
+import io.trailkeep.casefile.CaseException;
 import io.trailkeep.casefile.CaseFields;
 import io.trailkeep.casefile.CaseService;
 import io.trailkeep.casefile.CaseService.Actor;
 import io.trailkeep.casefile.CaseView;
 import io.trailkeep.casefile.TitleWarning;
 import io.trailkeep.security.TrailkeepOidcUser;
+import io.trailkeep.shared.CaseNumber;
+import io.trailkeep.shared.DomainException.Kind;
 import io.trailkeep.shared.config.AppProperties;
 import io.trailkeep.user.UserDirectoryService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -35,7 +39,9 @@ import org.springframework.web.bind.annotation.RequestParam;
  * The one-page create form (BUILD_PLAN §4.2) and the case page (§4.3), which shows a one-shot {@link CaseNotice}. The
  * case number is the only identifier in a URL; a case the person may not read answers 404 like an absent one, decided
  * by {@link CaseService} through the person's scope, which also decides who may create. The form is re-rendered with
- * 422 when a field is invalid or the title trips the PHI heuristic and has not been confirmed.
+ * 422 when a field is invalid or the title trips the PHI heuristic and has not been confirmed. A comment is posted
+ * from the case page as a plain form; a blank or too long one re-renders the page with 422, the text kept, after
+ * {@link CaseCommentService} has decided 404 and 403.
  */
 @Controller
 class CaseController {
@@ -56,6 +62,7 @@ class CaseController {
 
     private final CaseService cases;
     private final CaseAssignmentService assignments;
+    private final CaseCommentService comments;
     private final UserDirectoryService directory;
     private final InstantSource clock;
     private final AppProperties app;
@@ -63,11 +70,13 @@ class CaseController {
     CaseController(
             CaseService cases,
             CaseAssignmentService assignments,
+            CaseCommentService comments,
             UserDirectoryService directory,
             InstantSource clock,
             AppProperties app) {
         this.cases = cases;
         this.assignments = assignments;
+        this.comments = comments;
         this.directory = directory;
         this.clock = clock;
         this.app = app;
@@ -118,11 +127,41 @@ class CaseController {
             @RequestParam(required = false) @Nullable String created,
             HttpServletRequest request,
             Model model) {
+        model.addAttribute("created", created != null);
+        return render(actor(principal), number, request, null, model);
+    }
+
+    @PostMapping("/cases/{number}/comments")
+    String comment(
+            @AuthenticationPrincipal TrailkeepOidcUser principal,
+            @PathVariable String number,
+            @RequestParam(defaultValue = "") String body,
+            HttpServletRequest request,
+            HttpServletResponse response,
+            Model model) {
         Actor actor = actor(principal);
+        try {
+            comments.post(actor, number, body);
+        } catch (CaseException refused) {
+            if (refused.kind() != Kind.INVALID) {
+                throw refused;
+            }
+            response.setStatus(HttpStatus.UNPROCESSABLE_CONTENT.value());
+            return render(actor, number, request, body, model);
+        }
+        CaseNotice.COMMENTED.leaveFor(request, CaseNumber.parse(number));
+        return "redirect:/cases/" + number + "#comments";
+    }
+
+    /** The case page; {@code rejected} is a comment refused as invalid, shown again with the error summary. */
+    private String render(
+            Actor actor, String number, HttpServletRequest request, @Nullable String rejected, Model model) {
         CaseView view = cases.view(actor, number);
         model.addAttribute("c", view);
-        model.addAttribute("created", created != null);
         model.addAttribute("reassign", view.reassignable() ? assignments.reassignment(actor, number) : null);
+        model.addAttribute("comments", comments.comments(actor, number));
+        model.addAttribute("comment", rejected == null ? "" : rejected);
+        model.addAttribute("errors", rejected == null ? List.of() : List.of("body"));
         // Taken only once the case has been read, so a page that answers 404 never consumes a notice.
         model.addAttribute("notice", CaseNotice.take(request, view.number()));
         return "casefile/case";
