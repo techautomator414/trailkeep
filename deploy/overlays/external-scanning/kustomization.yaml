@@ -2,8 +2,8 @@
 # Copyright 2026 Charlie Genova and contributors
 # Example overlay for organizations that scan uploads upstream (a gateway or ICAP proxy) or at the endpoints
 # (ADR-0013). It sets app.attachments.scanning=external and removes what only clamd mode needs: the ClamAV
-# Deployment, Service and NetworkPolicy from clamav.yaml, the clamd ConfigMap entries, the clamav-ca mounts and the
-# egress rule to ClamAV. The clamav-tls and clamav-ca Secrets are then not created. Files are stored as NOT_SCANNED,
+# Deployment, Service, NetworkPolicy and clamd.conf ConfigMap from clamav.yaml, the clamd ConfigMap entries, the
+# clamav-ca mounts and the egress rule to ClamAV. The clamav-tls and clamav-ca Secrets are then not created. Files are stored as NOT_SCANNED,
 # never as clean. Point your own overlay's resources at this directory instead of ../../base, or copy its patches.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
@@ -31,6 +31,12 @@ patches:
       kind: NetworkPolicy
       metadata:
         name: clamav
+  - patch: |-
+      $patch: delete
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: clamav-clamd
   # The mode, and no clamd host or SSL bundle.
   - patch: |-
       apiVersion: v1

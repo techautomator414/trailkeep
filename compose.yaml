@@ -68,20 +68,26 @@ services:
       - ./.local/clamd-tls:/tls
 
   clamav:
-    # Same image as ClamdClientIT. It ships with signature databases; freshclam updates them on start. Only the TLS
-    # sidecar's port is published: clamd's own 3310 stays inside this service's network namespace.
+    # Same image as ClamdClientIT. clamd runs directly, as in the pod (deploy/base/clamav.yaml), bypassing the image's
+    # /init, which would wait for a unix socket this config deliberately lacks and exit after 30 minutes. So freshclam
+    # does not run on start: the signatures are the ones baked into the image tag. Only the TLS sidecar's port is
+    # published: clamd's own 3310 stays inside this service's network namespace, on 127.0.0.1.
     image: clamav/clamav:1.4.3
+    command: ["clamd", "--foreground=true"]
     ports:
       - "127.0.0.1:3311:3311"
+    volumes:
+      # clamd on 127.0.0.1 only, as in the pod (deploy/base/clamd.conf).
+      - ./deploy/base/clamd.conf:/etc/clamav/clamd.conf:ro
     healthcheck:
-      test: ["CMD", "clamdcheck.sh"]
+      test: ["CMD", "clamdscan", "--ping", "1"]
       interval: 10s
       timeout: 5s
       retries: 30
 
   clamav-tls:
     # The TLS sidecar (ADR-0012), sharing clamav's network namespace as it does in the pod: TLS on 3311, forwarded to
-    # clamd on localhost:3310. Server-authenticated only (mTLS is optional and not used).
+    # clamd on 127.0.0.1:3310. Server-authenticated only (mTLS is optional and not used).
     image: ghostunnel/ghostunnel:v1.8.4
     network_mode: "service:clamav"
     depends_on:
@@ -92,7 +98,7 @@ services:
     command:
       - server
       - --listen=0.0.0.0:3311
-      - --target=localhost:3310
+      - --target=127.0.0.1:3310
       - --cert=/tls/server.crt
       - --key=/tls/server.key
       - --disable-authentication

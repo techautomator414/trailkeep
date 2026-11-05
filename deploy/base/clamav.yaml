@@ -11,6 +11,8 @@
 #     names clamav, clamav.<namespace>.svc). cert-manager can issue it with a Certificate whose secretName is
 #     clamav-tls; renewals are picked up when the pod restarts.
 #   - Secret clamav-ca   (key ca.crt) for the application pods: only the issuing CA's certificate, no key.
+# clamd itself (clamd.conf, shipped as the clamav-clamd ConfigMap) binds 127.0.0.1 only, so neither the pod IP nor the
+# Service can reach it, and its probes are exec probes (clamdscan --ping) run inside the container.
 # Signatures: freshclam is not run here (no egress to a signature mirror in the base). The official image is rebuilt
 # with current databases, so roll the image tag regularly, or add freshclam with a writable volume and mirror egress
 # in an overlay.
@@ -48,12 +50,8 @@ spec:
           imagePullPolicy: IfNotPresent
           # clamd directly, not the image's init script (which chowns the read-only database directory).
           command: ["clamd", "--foreground=true"]
-          # Plaintext, for the probes and the sidecar on localhost only: the Service does not expose it and the
-          # NetworkPolicy below admits 3311 alone.
-          ports:
-            - name: clamd
-              containerPort: 3310
-              protocol: TCP
+          # Plaintext on 127.0.0.1:3310 for the sidecar alone (clamd.conf), so no containerPort is declared. The
+          # kubelet cannot reach a loopback listener, hence the exec probes. clamdscan reads /etc/clamav/clamd.conf.
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
@@ -67,14 +65,21 @@ spec:
               cpu: "1"
               memory: 2Gi
           startupProbe:
-            tcpSocket:
-              port: clamd
+            exec:
+              command: ["clamdscan", "--ping", "1"]
             periodSeconds: 10
+            timeoutSeconds: 5
             failureThreshold: 30
+          readinessProbe:
+            exec:
+              command: ["clamdscan", "--ping", "1"]
+            periodSeconds: 10
+            timeoutSeconds: 5
           livenessProbe:
-            tcpSocket:
-              port: clamd
+            exec:
+              command: ["clamdscan", "--ping", "1"]
             periodSeconds: 20
+            timeoutSeconds: 5
           volumeMounts:
             - name: tmp
               mountPath: /tmp
@@ -82,13 +87,17 @@ spec:
               mountPath: /var/log/clamav
             - name: run
               mountPath: /run/clamav
+            - name: clamd-conf
+              mountPath: /etc/clamav/clamd.conf
+              subPath: clamd.conf
+              readOnly: true
         - name: tls
           image: ghostunnel/ghostunnel:v1.8.4
           imagePullPolicy: IfNotPresent
           args:
             - server
             - --listen=0.0.0.0:3311
-            - --target=localhost:3310
+            - --target=127.0.0.1:3310
             - --cert=/etc/clamav-tls/tls.crt
             - --key=/etc/clamav-tls/tls.key
             # Server-authenticated TLS (ADR-0012); mTLS is optional and would replace this with --cacert/--allow-*.
@@ -131,6 +140,9 @@ spec:
         - name: run
           emptyDir:
             sizeLimit: 1Mi
+        - name: clamd-conf
+          configMap:
+            name: clamav-clamd
         - name: clamav-tls
           secret:
             secretName: clamav-tls
