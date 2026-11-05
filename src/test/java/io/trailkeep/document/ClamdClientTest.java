@@ -34,7 +34,8 @@ class ClamdClientTest {
                         25_000_000,
                         ScanMode.CLAMD,
                         new AttachmentProperties.Clamd(
-                                host, port, "clamd", Duration.ofSeconds(2), readTimeout, scanTimeout)),
+                                host, port, "clamd", Duration.ofSeconds(2), readTimeout, scanTimeout),
+                        8),
                 trust);
     }
 

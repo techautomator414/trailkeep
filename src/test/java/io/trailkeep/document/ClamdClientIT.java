@@ -39,7 +39,8 @@ class ClamdClientIT {
                         "clamd",
                         Duration.ofSeconds(2),
                         Duration.ofSeconds(30),
-                        Duration.ofMinutes(1)));
+                        Duration.ofMinutes(1)),
+                8);
         return new UploadIntake(
                 properties,
                 Optional.of(new ClamdClient(properties, TestTls.shared().bundles())));

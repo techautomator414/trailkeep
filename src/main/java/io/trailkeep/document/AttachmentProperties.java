@@ -26,6 +26,8 @@ import org.springframework.validation.annotation.Validated;
  * @param scanning who scans uploads for malware (ADR-0013): {@code clamd}, the default, or {@code external}. An unset
  *     value never turns scanning off, and an unknown one fails startup.
  * @param clamd the antivirus daemon; used, and its host required, only when {@code scanning} is {@code clamd}
+ * @param maxConcurrentDownloads how many downloads may stream at once on one replica; each holds a database
+ *     connection while it streams, so keep it below the connection pool's size
  */
 @Validated
 @ConfigurationProperties("app.attachments")
@@ -34,7 +36,8 @@ record AttachmentProperties(
         @NotNull @DefaultValue("25MB") DataSize maxBytes,
         @Positive @DefaultValue("25000000") long maxImagePixels,
         @NotNull @DefaultValue("clamd") ScanMode scanning,
-        @Valid @NotNull @DefaultValue Clamd clamd) {
+        @Valid @NotNull @DefaultValue Clamd clamd,
+        @Positive @DefaultValue("8") int maxConcurrentDownloads) {
 
     /** The property that selects the scan mode, read by {@link ClamdScanningCondition} too. */
     static final String SCANNING = "app.attachments.scanning";

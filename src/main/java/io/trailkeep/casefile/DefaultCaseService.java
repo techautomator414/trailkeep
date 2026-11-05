@@ -184,7 +184,8 @@ class DefaultCaseService implements CaseService {
                 allowed(actor, record, CaseAction.RESTRICT),
                 allowed(actor, record, CaseAction.UNRESTRICT),
                 allowed(actor, record, CaseAction.COMMENT),
-                allowed(actor, record, CaseAction.PIN));
+                allowed(actor, record, CaseAction.PIN),
+                allowed(actor, record, CaseAction.RELEASE_QUARANTINE));
     }
 
     @Override
@@ -192,6 +193,20 @@ class DefaultCaseService implements CaseService {
     public long attachableCaseId(Actor actor, String caseNumber) {
         return Objects.requireNonNull(
                 loader.load(actor.permissions(), caseNumber, CaseAction.COMMENT).getId());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public long downloadableCaseId(Actor actor, String caseNumber) {
+        return Objects.requireNonNull(loader.load(actor.permissions(), caseNumber, CaseAction.DOWNLOAD_ATTACHMENT)
+                .getId());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public long releasableCaseId(Actor actor, String caseNumber) {
+        return Objects.requireNonNull(loader.load(actor.permissions(), caseNumber, CaseAction.RELEASE_QUARANTINE)
+                .getId());
     }
 
     @Override

@@ -33,7 +33,9 @@ enum CaseNotice {
     /** File uploaded, a signature found: stored quarantined. */
     QUARANTINED,
     /** File uploaded in {@code external} scan mode: stored without a scan by Trailkeep. */
-    UPLOADED_NOT_SCANNED;
+    UPLOADED_NOT_SCANNED,
+    /** A quarantined file released by a Compliance Admin. */
+    RELEASED;
 
     private static final String ATTRIBUTE = "tk.caseNotice";
 

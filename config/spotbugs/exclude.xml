@@ -73,6 +73,18 @@
     malformed one cannot answer before those checks. Values are echoed only through th:value/th:text. Covered by
     CaseAssignmentControllerIT (allowed role, nearest disallowed role 403, unreadable 404, CSRF 403, stale 409).
     Approved in the security-reviewer role on #50.
+    CaseAttachmentController (WP-14 part 4): GET /cases/{number}/attachments/{id} (download), and GET and POST
+    /cases/{number}/attachments/{id}/release, behind login, CSRF on the POST. CaseAttachmentService first reads through
+    the person's CaseScope (404 if unreadable), checks DOWNLOAD_ATTACHMENT or RELEASE_QUARANTINE against the matrix
+    (403), rebuilding permissions from the database per request, and finds the id only among that case's attachments
+    through the same scope (404 for another case's id, so ids cannot be probed); a quarantined file is 403 and never
+    read. The id is parsed leniently, so a malformed one cannot answer before those checks. The download carries
+    Content-Disposition: attachment built by AttachmentDisposition (ASCII fallback with every non-printable, quote,
+    backslash and percent replaced, and an RFC 5987 percent-encoded filename*, so no CR, LF or quote from the name
+    reaches the header), nosniff and Cache-Control: private, no-store; the release reason is echoed only through
+    th:text and audited only as an HMAC. Covered by CaseAttachmentDownloadIT, CaseAttachmentReleaseIT and
+    AttachmentDispositionTest (allowed role, nearest disallowed role 403, unreadable 404, another case's id 404,
+    CSRF 403, 422, hostile names). Approved in the security-reviewer role on #59.
     Approved in the security-reviewer role on #20. Listed by class, never by pattern alone, so each new controller
     is reviewed the same way.
   -->
@@ -86,6 +98,7 @@
       <Class name="io.trailkeep.web.CaseController"/>
       <Class name="io.trailkeep.web.CaseEditController"/>
       <Class name="io.trailkeep.web.CaseAssignmentController"/>
+      <Class name="io.trailkeep.web.CaseAttachmentController"/>
     </Or>
   </Match>
   <!--

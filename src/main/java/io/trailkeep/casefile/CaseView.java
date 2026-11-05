@@ -32,6 +32,7 @@ import org.jspecify.annotations.Nullable;
  * @param unrestrictable whether the viewer may mark it standard again
  * @param commentable whether the viewer may comment on it, so the page offers the comment form
  * @param pinnable whether the viewer may pin and unpin its comments, so the page offers Pin and Unpin
+ * @param releasable whether the viewer may release its quarantined attachments, so the page offers Release
  */
 public record CaseView(
         CaseNumber number,
@@ -53,7 +54,8 @@ public record CaseView(
         boolean restrictable,
         boolean unrestrictable,
         boolean commentable,
-        boolean pinnable) {
+        boolean pinnable,
+        boolean releasable) {
 
     /**
      * The SLA chip (BUILD_PLAN §4.3): the state, the due day and the whole days left (negative once overdue).

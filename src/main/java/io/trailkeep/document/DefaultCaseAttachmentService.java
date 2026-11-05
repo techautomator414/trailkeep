@@ -11,12 +11,15 @@ import io.trailkeep.casefile.CaseService;
 import io.trailkeep.casefile.CaseService.Actor;
 import io.trailkeep.document.CaseAttachment.StoredFile;
 import io.trailkeep.shared.CaseNumber;
+import io.trailkeep.shared.DomainException.Kind;
 import io.trailkeep.shared.access.CaseAccessPath;
 import io.trailkeep.shared.config.AppProperties;
 import io.trailkeep.user.UserDirectoryService;
 import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.time.InstantSource;
@@ -27,15 +30,21 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * Lists and uploads attachments. An upload is checked against the case first (404, 403), then received by {@link
+ * Lists, uploads, downloads and releases attachments. A download takes one of the replica's download slots after its
+ * checks and streams later, in a read-only transaction of its own, freeing the slot when it ends. A release locks
+ * the file's row ({@code SELECT ... FOR UPDATE}) before reading its status, so concurrent releases serialize and the
+ * second finds it released. An upload is checked against the case first (404, 403), then received by {@link
  * UploadIntake} with no transaction open, because the scan is network I/O (Part B "Transactions"). Only then does one
  * transaction re-check the case, insert the row, write the chunks and record the audit event; the temp file is
  * deleted when the {@link ScannedUpload} closes, whichever way the upload ends.
@@ -55,6 +64,10 @@ class DefaultCaseAttachmentService implements CaseAttachmentService {
     private final UserDirectoryService directory;
     private final EntityManager entityManager;
     private final TransactionTemplate transactions;
+    private final TransactionTemplate readOnly;
+    /** Downloads streaming at once on this replica; a full gate refuses at once (503), so no request thread waits. */
+    private final Semaphore downloads;
+
     private final AuditRecorder audit;
     private final InstantSource clock;
     private final ZoneId zone;
@@ -69,6 +82,7 @@ class DefaultCaseAttachmentService implements CaseAttachmentService {
             UserDirectoryService directory,
             EntityManager entityManager,
             TransactionTemplate transactions,
+            PlatformTransactionManager transactionManager,
             AuditRecorder audit,
             InstantSource clock,
             AppProperties app) {
@@ -81,6 +95,9 @@ class DefaultCaseAttachmentService implements CaseAttachmentService {
         this.directory = directory;
         this.entityManager = entityManager;
         this.transactions = transactions;
+        this.readOnly = new TransactionTemplate(transactionManager);
+        this.readOnly.setReadOnly(true);
+        this.downloads = new Semaphore(properties.maxConcurrentDownloads());
         this.audit = audit;
         this.clock = clock;
         this.zone = app.timezone();
@@ -127,6 +144,127 @@ class DefaultCaseAttachmentService implements CaseAttachmentService {
         }
     }
 
+    @Override
+    public Download download(Actor actor, String caseNumber, long attachmentId) {
+        // The checks' read-only transaction has ended before a slot is taken, so its commit cannot strand one.
+        CaseAttachment attachment = Objects.requireNonNull(readOnly.execute(status -> {
+            cases.downloadableCaseId(actor, caseNumber);
+            CaseAttachment found = find(actor, caseNumber, attachmentId);
+            if (!found.getScanStatus().isDownloadable()) {
+                throw new AttachmentException(Kind.FORBIDDEN, "a quarantined file is never served");
+            }
+            return found;
+        }));
+        if (!downloads.tryAcquire()) {
+            throw new DownloadsBusyException();
+        }
+        LOG.debug("Attachment {} download opened", attachmentId);
+        return new StreamedDownload(attachment);
+    }
+
+    /** A download holding a slot; its content is read when the response streams, in a transaction of its own. */
+    private final class StreamedDownload implements Download {
+
+        private final CaseAttachment attachment;
+        private final AtomicBoolean released = new AtomicBoolean();
+
+        StreamedDownload(CaseAttachment attachment) {
+            this.attachment = attachment;
+        }
+
+        @Override
+        public String fileName() {
+            return attachment.getFileName();
+        }
+
+        @Override
+        public String contentType() {
+            return attachment.getContentType();
+        }
+
+        @Override
+        public long sizeBytes() {
+            return attachment.getSizeBytes();
+        }
+
+        @Override
+        public void writeTo(OutputStream out) throws IOException {
+            if (released.get()) {
+                throw new IllegalStateException("a download is written once, while it holds its slot");
+            }
+            try {
+                // Its own transaction, in the thread that streams, after the request's has ended (Part B).
+                readOnly.executeWithoutResult(
+                        status -> content.copy(Objects.requireNonNull(attachment.getId()), sizeBytes(), out));
+            } catch (UncheckedIOException failed) {
+                throw failed.getCause();
+            } finally {
+                release();
+            }
+        }
+
+        @Override
+        public void release() {
+            if (released.compareAndSet(false, true)) {
+                downloads.release();
+            }
+        }
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Quarantined quarantined(Actor actor, String caseNumber, long attachmentId) {
+        cases.releasableCaseId(actor, caseNumber);
+        CaseAttachment attachment = find(actor, caseNumber, attachmentId);
+        if (attachment.getScanStatus() != ScanStatus.QUARANTINED) {
+            throw new AttachmentException(Kind.INVALID, "only a quarantined file is released");
+        }
+        return new Quarantined(attachmentId, attachment.getFileName(), attachment.getScanDetail());
+    }
+
+    @Override
+    @Transactional
+    public boolean release(Actor actor, String caseNumber, long attachmentId, String reason) {
+        cases.releasableCaseId(actor, caseNumber);
+        CaseAttachment attachment = find(actor, caseNumber, attachmentId);
+        // A browser submits a textarea's line breaks as CRLF; counted as one, as the form's maxlength counts them.
+        String text = reason.replace("\r\n", "\n");
+        if (text.isBlank() || text.length() > CaseAttachment.MAX_REASON) {
+            throw new AttachmentException(Kind.INVALID, "a release reason is 1 to 1000 characters");
+        }
+        // Releases of one file are serialized on its row: a second waits here, then finds it released and writes
+        // nothing (no second audit event, no constraint error).
+        entityManager.refresh(attachment, LockModeType.PESSIMISTIC_WRITE);
+        if (attachment.getScanStatus() == ScanStatus.RELEASED) {
+            return false;
+        }
+        if (attachment.getScanStatus() != ScanStatus.QUARANTINED) {
+            throw new AttachmentException(Kind.INVALID, "only a quarantined file is released");
+        }
+        long actorId = actor.permissions().userId();
+        attachment.release(actorId, text, clock.instant());
+        entityManager.flush();
+        audit.record(new AuditEntry(
+                actorId,
+                actor.displayName(),
+                AuditOrigin.UI,
+                attachment.getCaseId(),
+                "ATTACHMENT",
+                attachmentId,
+                "ATTACHMENT_RELEASED",
+                audit.diff(
+                        new ReleaseState(ScanStatus.QUARANTINED, null), new ReleaseState(ScanStatus.RELEASED, text))));
+        LOG.info("Attachment {} on case id {} released", attachmentId, attachment.getCaseId());
+        return true;
+    }
+
+    /** An attachment of a case the actor reads; an id of another case is as absent as an unknown one. */
+    private CaseAttachment find(Actor actor, String caseNumber, long attachmentId) {
+        return attachments
+                .findOne(scopes.forUser(actor.permissions()), CaseNumber.parse(caseNumber), attachmentId)
+                .orElseThrow(() -> new AttachmentException(Kind.NOT_FOUND, "no such attachment on this case"));
+    }
+
     /** Stores a scanned upload in the caller's transaction, re-checking the case as it stands after the scan. */
     private ScanStatus store(Actor actor, String caseNumber, String name, ScannedUpload upload) {
         long caseId = cases.attachableCaseId(actor, caseNumber);
@@ -155,6 +293,16 @@ class DefaultCaseAttachmentService implements CaseAttachmentService {
         LOG.info("Attachment {} added to case id {}", id, caseId);
         return verdict.status();
     }
+
+    /**
+     * The audit snapshot of a release. The reason is free text and possible PHI, so the trail holds only an HMAC and
+     * a length, like a description.
+     *
+     * @param scanStatus {@code QUARANTINED} before, {@code RELEASED} after
+     * @param reason why it was released; {@code null} before
+     */
+    record ReleaseState(
+            ScanStatus scanStatus, @Redacted @Nullable String reason) {}
 
     /**
      * The audit snapshot of a stored upload. The name is possible PHI, so the trail holds only an HMAC and a length;

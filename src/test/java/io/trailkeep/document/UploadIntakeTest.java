@@ -39,7 +39,8 @@ class UploadIntakeTest {
                 25_000_000,
                 mode,
                 new AttachmentProperties.Clamd(
-                        "127.0.0.1", 9, "clamd", Duration.ofSeconds(1), Duration.ofSeconds(1), Duration.ofSeconds(1)));
+                        "127.0.0.1", 9, "clamd", Duration.ofSeconds(1), Duration.ofSeconds(1), Duration.ofSeconds(1)),
+                8);
     }
 
     private UploadIntake intake(VirusScanner scanner) {
