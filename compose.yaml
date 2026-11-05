@@ -68,9 +68,12 @@ services:
       - ./.local/clamd-tls:/tls
 
   clamav:
-    # Same image as ClamdClientIT. It ships with signature databases; freshclam updates them on start. Only the TLS
-    # sidecar's port is published: clamd's own 3310 stays inside this service's network namespace, on 127.0.0.1.
+    # Same image as ClamdClientIT. clamd runs directly, as in the pod (deploy/base/clamav.yaml), bypassing the image's
+    # /init, which would wait for a unix socket this config deliberately lacks and exit after 30 minutes. So freshclam
+    # does not run on start: the signatures are the ones baked into the image tag. Only the TLS sidecar's port is
+    # published: clamd's own 3310 stays inside this service's network namespace, on 127.0.0.1.
     image: clamav/clamav:1.4.3
+    command: ["clamd", "--foreground=true"]
     ports:
       - "127.0.0.1:3311:3311"
     volumes:
