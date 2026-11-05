@@ -15,6 +15,7 @@ import io.trailkeep.shared.access.CaseScope;
 import io.trailkeep.shared.config.AppProperties;
 import io.trailkeep.shared.html.MarkdownRenderer;
 import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
 import java.time.Instant;
 import java.time.InstantSource;
 import java.time.LocalDateTime;
@@ -129,6 +130,9 @@ class DefaultCaseCommentService implements CaseCommentService {
     @Override
     public void setPinned(Actor actor, String caseNumber, long commentId, boolean pinned) {
         CaseRecord record = loader.load(actor.permissions(), caseNumber, CaseAction.PIN);
+        // Pins of a case are serialized on its row: a second request waits, then re-reads the state the first left
+        // and, if that is the state asked for, writes nothing (no duplicate key, no stale delete).
+        entityManager.lock(record, LockModeType.PESSIMISTIC_WRITE);
         CaseScope scope = scopes.forUser(actor.permissions());
         CaseNumber number = CaseLoader.parse(caseNumber);
         if (comments.findOne(scope, number, commentId).isEmpty()) {

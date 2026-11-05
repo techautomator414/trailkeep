@@ -39,8 +39,9 @@ import org.springframework.transaction.support.TransactionTemplate;
  * the point: a comment over 4000 bytes, and one at the 20 000-character cap in two-byte characters, append through
  * the character-stream bind; an edit after a comment rebuilds the text with the comment in it; two comments posted
  * at once both land, the second waiting on the first's row lock; and an edit that waits on a comment's lock rebuilds
- * with that comment. Each test uses two worker transactions at most, within the four-connection test pool, and
- * removes what it committed.
+ * with that comment. Two pins (or two unpins) of one comment at once leave one audit event, the second request
+ * waiting on the case row and then doing nothing. Each test uses two worker transactions at most, within the
+ * four-connection test pool, and removes what it committed.
  */
 // "IT" is the Failsafe suffix Part B mandates for integration tests, not an abbreviation.
 @SuppressWarnings("checkstyle:AbbreviationAsWordInName")
@@ -98,6 +99,7 @@ abstract class AbstractCaseSearchIT {
         workers.shutdownNow();
         long caseId = caseId();
         jdbc.update("DELETE FROM AUDIT_EVENT WHERE CASE_ID = ?", caseId);
+        jdbc.update("DELETE FROM CASE_COMMENT_PIN WHERE CASE_ID = ?", caseId);
         jdbc.update("DELETE FROM CASE_COMMENT WHERE CASE_ID = ?", caseId);
         jdbc.update("DELETE FROM CASE_SEARCH WHERE CASE_ID = ?", caseId);
         jdbc.update("DELETE FROM CASE_SLA WHERE CASE_ID = ?", caseId);
@@ -178,6 +180,61 @@ abstract class AbstractCaseSearchIT {
 
         assertThat(searchText())
                 .isEqualTo("Raced title\n" + DESCRIPTION + "\nSynthetic comment written during an edit");
+    }
+
+    @Test
+    void twoConcurrentPinsOfOneCommentPinItOnce() throws Exception {
+        long comment = commentId();
+
+        racePins(comment, true);
+
+        assertThat(pinCount(comment)).isEqualTo(1);
+        assertThat(auditCount("COMMENT_PINNED")).isEqualTo(1);
+    }
+
+    @Test
+    void twoConcurrentUnpinsOfOneCommentUnpinItOnce() throws Exception {
+        long comment = commentId();
+        transactions.executeWithoutResult(status -> comments.setPinned(analyst, number.toString(), comment, true));
+
+        racePins(comment, false);
+
+        assertThat(pinCount(comment)).isZero();
+        assertThat(auditCount("COMMENT_UNPINNED")).isEqualTo(1);
+    }
+
+    /** Two requests for the same pin state; the second must wait on the first, then return without writing. */
+    private void racePins(long comment, boolean pinned) throws Exception {
+        CountDownLatch changed = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        final Future<?> first = inTransaction(() -> {
+            comments.setPinned(analyst, number.toString(), comment, pinned);
+            changed.countDown();
+            await(release);
+        });
+        assertThat(changed.await(30, TimeUnit.SECONDS)).isTrue();
+        Future<?> second = inTransaction(() -> comments.setPinned(analyst, number.toString(), comment, pinned));
+
+        assertThatThrownBy(() -> second.get(1, TimeUnit.SECONDS)).isInstanceOf(TimeoutException.class);
+        release.countDown();
+        first.get(30, TimeUnit.SECONDS);
+        second.get(30, TimeUnit.SECONDS);
+    }
+
+    private long commentId() {
+        post("Synthetic comment to pin");
+        return Objects.requireNonNull(
+                jdbc.queryForObject("SELECT MAX(ID) FROM CASE_COMMENT WHERE CASE_ID = ?", Long.class, caseId()));
+    }
+
+    private long pinCount(long comment) {
+        return Objects.requireNonNull(
+                jdbc.queryForObject("SELECT COUNT(*) FROM CASE_COMMENT_PIN WHERE COMMENT_ID = ?", Long.class, comment));
+    }
+
+    private long auditCount(String action) {
+        return Objects.requireNonNull(jdbc.queryForObject(
+                "SELECT COUNT(*) FROM AUDIT_EVENT WHERE CASE_ID = ? AND ACTION = ?", Long.class, caseId(), action));
     }
 
     private void post(String body) {
