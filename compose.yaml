@@ -6,7 +6,8 @@
 #   docker compose up -d                    # PostgreSQL 16 for the 'local' profile
 #   docker compose --profile oracle up -d   # adds Oracle Free 23 for local Oracle parity work
 #   Keycloak (dev realm) at http://localhost:8180, for the 'local' profile's OIDC login.
-# Mailpit and ClamAV join this file with the work packages that need them (WP-17, WP-14).
+#   ClamAV clamd at localhost:3310, which scans every upload before it is stored (WP-14).
+# Mailpit joins this file with the work package that needs it (WP-17).
 name: trailkeep
 
 services:
@@ -42,6 +43,17 @@ services:
       - "host.docker.internal:host-gateway"
     volumes:
       - ./deploy/local/keycloak/trailkeep-dev-realm.json:/opt/keycloak/data/import/trailkeep-dev-realm.json:ro
+
+  clamav:
+    # Same image as ClamdClientIT. It ships with signature databases; freshclam updates them on start.
+    image: clamav/clamav:1.4.3
+    ports:
+      - "127.0.0.1:3310:3310"
+    healthcheck:
+      test: ["CMD", "clamdcheck.sh"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
 
   oracle:
     profiles: ["oracle"]

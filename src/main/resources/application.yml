@@ -73,6 +73,13 @@ spring:
       # Render the whole page before writing, so a template error yields the error page, not half a page.
       produce-partial-output-while-processing: false
 
+  servlet:
+    multipart:
+      # Aligned with the attachment cap (BUILD_PLAN §9). The request may be a little larger than the file: the form's
+      # CSRF token and the multipart framing come with it.
+      max-file-size: ${app.attachments.max-bytes}
+      max-request-size: 26MB
+
   task:
     scheduling:
       pool:
@@ -103,6 +110,11 @@ app:
     groups-claim: groups
   branding:
     name: Trailkeep
+  # Uploads (WP-14). app.attachments.clamd.host has no default here on purpose: a deployment names its scanner or
+  # does not start (the local and test profiles set one). The prod temp directory is an emptyDir.
+  attachments:
+    temp-dir: ${java.io.tmpdir}
+    max-bytes: 25MB
 
 server:
   port: 8080

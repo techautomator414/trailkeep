@@ -40,7 +40,9 @@ import tools.jackson.databind.json.JsonMapper;
             "app.proxy.pattern=10\\.128\\.\\d+\\.\\d+",
             // prod requires the R__grants.sql grantees (no defaults); TestDatabaseUsers creates these.
             "app.db.app-user=trailkeep_app",
-            "app.db.purge-user=trailkeep_purge"
+            "app.db.purge-user=trailkeep_purge",
+            // prod requires the scanner's host too; nothing here uploads, so an unreachable one will do.
+            "app.attachments.clamd.host=127.0.0.1"
         })
 @ActiveProfiles({"prod", "postgresql"})
 @Import({RemoteAddressController.class, TestOnlyEndpointsSecurity.class, PostgresTestcontainersConfiguration.class})

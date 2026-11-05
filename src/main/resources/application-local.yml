@@ -15,6 +15,10 @@ spring:
             issuer-uri: http://localhost:8180/realms/trailkeep-dev
 
 app:
+  attachments:
+    clamd:
+      # The compose ClamAV.
+      host: localhost
   # Synthetic case configuration for local development (WP-10), loaded by LocalConfigSeed when missing.
   seed:
     sla-policies:

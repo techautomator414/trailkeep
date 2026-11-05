@@ -16,6 +16,10 @@ data:
   # The application refuses to start if either is empty.
   APP_DB_APP_USER: TRAILKEEP_APP
   APP_DB_PURGE_USER: TRAILKEEP_PURGE
+  # PLACEHOLDER: the clamd Service (or "localhost" for a sidecar). Every upload is scanned before it is stored and is
+  # refused while clamd is unreachable. clamd's StreamMaxLength must be at least app.attachments.max-bytes (25MB);
+  # its defaults (100M) are.
+  APP_ATTACHMENTS_CLAMD_HOST: clamav
   APP_TIMEZONE: UTC
   APP_BRANDING_NAME: Trailkeep
   # Secret values are files under this directory (one file per property name), never environment variables.
