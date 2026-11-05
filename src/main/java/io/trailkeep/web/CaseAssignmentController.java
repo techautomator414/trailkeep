@@ -75,8 +75,9 @@ class CaseAssignmentController {
             response.setStatus(conflict ? HttpStatus.CONFLICT.value() : HttpStatus.UNPROCESSABLE_CONTENT.value());
             return reassignPage(assignments.reassignment(actor, number), teamId, ownerId, refused.kind(), model);
         }
-        CaseNotice.REASSIGNED.leaveFor(request, CaseNumber.parse(number));
-        return "redirect:/cases/" + number;
+        CaseNumber parsed = CaseNumber.parse(number);
+        CaseNotice.REASSIGNED.leaveFor(request, parsed);
+        return "redirect:/cases/" + parsed;
     }
 
     @GetMapping("/cases/{number}/{change:restrict|unrestrict}")
@@ -116,8 +117,9 @@ class CaseAssignmentController {
             return SENSITIVITY;
         }
         CaseNotice notice = target == Sensitivity.RESTRICTED ? CaseNotice.RESTRICTED : CaseNotice.UNRESTRICTED;
-        notice.leaveFor(request, CaseNumber.parse(number));
-        return "redirect:/cases/" + number;
+        CaseNumber parsed = CaseNumber.parse(number);
+        notice.leaveFor(request, parsed);
+        return "redirect:/cases/" + parsed;
     }
 
     private static String reassignPage(

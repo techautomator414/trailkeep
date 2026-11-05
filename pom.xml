@@ -72,6 +72,9 @@
     <!-- Upload type detection (WP-14, BUILD_PLAN 11.1): the core jar only, never the parser bundle. The 3.x line,
          because tika-core 4.x pulls in commonmark extensions a magic-byte detector does not need. -->
     <tika.version>3.3.3</tika.version>
+    <!-- Empty unless JaCoCo's prepare-agent sets it, so the heap-256m execution's @{argLine} resolves with
+         -Djacoco.skip too. -->
+    <argLine/>
   </properties>
 
   <dependencyManagement>
@@ -771,8 +774,8 @@
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-failsafe-plugin</artifactId>
         <configuration>
-          <!-- Oracle ITs run only in the oracle-it profile's per-image executions. -->
-          <excludedGroups>oracle</excludedGroups>
+          <!-- Oracle ITs run only in the oracle-it profile's per-image executions; heap ITs only in heap-256m. -->
+          <excludedGroups>oracle,heap</excludedGroups>
         </configuration>
         <executions>
           <execution>
@@ -780,6 +783,23 @@
               <goal>integration-test</goal>
               <goal>verify</goal>
             </goals>
+          </execution>
+          <execution>
+            <!-- WP-14 acceptance: ITs tagged "heap" in a JVM of their own with a 256 MiB heap, in every build
+                 (IMPLEMENTATION_PLAN Part G, PostgreSQL ITs). An OutOfMemoryError anywhere ends the fork and fails
+                 the build. The default execution's heap is unchanged. -->
+            <id>heap-256m</id>
+            <goals>
+              <goal>integration-test</goal>
+              <goal>verify</goal>
+            </goals>
+            <configuration>
+              <groups>heap</groups>
+              <excludedGroups combine.self="override"/>
+              <argLine>@{argLine} -Xmx256m -XX:+ExitOnOutOfMemoryError</argLine>
+              <reportsDirectory>${project.build.directory}/failsafe-reports/heap-256m</reportsDirectory>
+              <summaryFile>${project.build.directory}/failsafe-reports/heap-256m/failsafe-summary.xml</summaryFile>
+            </configuration>
           </execution>
         </executions>
       </plugin>

@@ -133,6 +133,27 @@ public interface CaseService {
     long attachableCaseId(Actor actor, String caseNumber);
 
     /**
+     * The id of a case the actor may download attachments of, for the {@code document} module: {@code NOT_FOUND} as
+     * for {@link #view}; {@code FORBIDDEN} if the matrix denies {@code DOWNLOAD_ATTACHMENT}.
+     *
+     * @param actor the actor
+     * @param caseNumber the case number as it appears in the URL
+     * @return the case's id
+     */
+    long downloadableCaseId(Actor actor, String caseNumber);
+
+    /**
+     * The id of a case on which the actor may release a quarantined attachment, for the {@code document} module:
+     * {@code NOT_FOUND} as for {@link #view}; {@code FORBIDDEN} if the matrix denies {@code RELEASE_QUARANTINE}. It
+     * runs in the caller's transaction if there is one.
+     *
+     * @param actor the actor
+     * @param caseNumber the case number as it appears in the URL
+     * @return the case's id
+     */
+    long releasableCaseId(Actor actor, String caseNumber);
+
+    /**
      * Saves an edit made against {@code version} and records {@code CASE_UPDATED} with the changed fields (subject
      * and description redacted), rebuilding the search text from title, description and every comment under its row
      * lock. Saving unchanged values writes nothing. {@code NOT_FOUND} and {@code FORBIDDEN} as for {@link #editable};

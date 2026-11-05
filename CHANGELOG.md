@@ -28,6 +28,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Attachment download and quarantine Release (WP-14 part 4): `GET /cases/{number}/attachments/{id}` answers 404 for
+  an unreadable case or an id not of that case, 403 for a quarantined file, and 503 with `Retry-After` when all
+  `app.attachments.max-concurrent-downloads` (default 8) are streaming; otherwise it streams the file one 1 MiB chunk
+  per query in its own read-only transaction, as `attachment` with an RFC 6266/5987 file name, `nosniff`, the
+  detected type, `Content-Length` and `Cache-Control: private, no-store`. File names are download links only for
+  downloadable files. A Compliance Admin releases a quarantined file with a reason (1 to 1000 characters) from a
+  native dialog or the no-JavaScript page; it is audited as `ATTACHMENT_RELEASED` with the reason redacted, and a
+  second concurrent release is a no-op. A file over the container's multipart limit now gets the case page with the
+  same 422 "too large" summary, after the same 404 and 403 checks. Eight concurrent 25 MB downloads succeed with
+  `-Xmx256m` (`ConcurrentDownloadHeapIT`, Failsafe execution `heap-256m`, every build).
 - Attachment upload and the Attachments section of the case page (WP-14 part 3): `POST /cases/{number}/attachments`
   answers 404 for an unreadable case, then 403 unless the matrix allows `COMMENT` ("add comment / attachment"),
   before the file is read; a refused file is 422 with its reason and an unavailable scanner is 503 with "try again",

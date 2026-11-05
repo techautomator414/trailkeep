@@ -250,6 +250,9 @@ abstract class AbstractDatabaseGrantsIT {
                     .isEqualTo(Outcome.DENIED);
         }
         assertThat(run(appUser, "UPDATE " + chunks + " SET CHUNK = NULL")).isEqualTo(Outcome.DENIED);
+        // A release locks the row first (WP-14 part 4), which PostgreSQL allows only with an UPDATE grant.
+        assertThat(run(appUser, "SELECT ID FROM " + attachments + " WHERE 1 = 0 FOR UPDATE"))
+                .isEqualTo(Outcome.ALLOWED);
         assertThat(run(appUser, "DELETE FROM " + attachments)).isEqualTo(Outcome.DENIED);
         assertThat(run(appUser, "DELETE FROM " + chunks)).isEqualTo(Outcome.DENIED);
         assertThat(run(purgeUser, "UPDATE " + attachments + " SET RELEASED_REASON = NULL WHERE 1 = 0"))

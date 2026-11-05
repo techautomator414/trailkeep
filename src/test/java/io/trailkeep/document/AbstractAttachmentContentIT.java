@@ -18,6 +18,7 @@ import io.trailkeep.user.TeamRole;
 import io.trailkeep.user.UserPermissions;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityManagerFactory;
+import jakarta.persistence.LockModeType;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -107,6 +108,31 @@ abstract class AbstractAttachmentContentIT {
                 .extracting(CaseAttachment::getId, CaseAttachment::getScanStatus)
                 .containsExactly(tuple(first, ScanStatus.CLEAN), tuple(second, ScanStatus.QUARANTINED));
         assertThat(attachments.findForCase(outsider, number)).isEmpty();
+    }
+
+    @Test
+    void oneAttachmentIsFoundOnlyOnItsOwnCaseThroughTheScopeAndLockedForItsRelease() {
+        CaseSeed seed = new CaseSeed(jdbc);
+        long quarantined = seed.attachment(caseId, uploader, "locked-synthetic.txt", "QUARANTINED");
+        CaseNumber number = Objects.requireNonNull(jdbc.queryForObject(
+                "SELECT CASE_NUMBER FROM CASE_RECORD WHERE ID = ?",
+                (row, n) -> CaseNumber.parse(row.getString(1)),
+                caseId));
+        CaseNumber sibling = seed.caseRow(team, uploader, Sensitivity.STANDARD, CaseStatus.OPEN);
+        CaseScope member =
+                scopes.forUser(new UserPermissions(uploader, false, Set.of(), Map.of(team, TeamRole.READER)));
+        CaseScope outsider = scopes.forUser(
+                new UserPermissions(seed.user(), false, Set.of(), Map.of(seed.team(), TeamRole.MANAGER)));
+
+        assertThat(attachments.findOne(outsider, number, quarantined)).isEmpty();
+        assertThat(attachments.findOne(member, sibling, quarantined)).isEmpty();
+        CaseAttachment found = attachments.findOne(member, number, quarantined).orElseThrow();
+        entityManager.refresh(found, LockModeType.PESSIMISTIC_WRITE);
+        found.release(uploader, "Synthetic release under a row lock", UPLOADED);
+        entityManager.flush();
+        assertThat(jdbc.queryForObject(
+                        "SELECT SCAN_STATUS FROM CASE_ATTACHMENT WHERE ID = ?", String.class, quarantined))
+                .isEqualTo("RELEASED");
     }
 
     @Test

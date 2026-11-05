@@ -2,14 +2,11 @@
 // Copyright 2026 Charlie Genova and contributors
 package io.trailkeep.web;
 
-import io.trailkeep.casefile.CaseAssignmentService;
 import io.trailkeep.casefile.CaseCommentService;
-import io.trailkeep.casefile.CaseCommentService.CommentView;
 import io.trailkeep.casefile.CaseException;
 import io.trailkeep.casefile.CaseFields;
 import io.trailkeep.casefile.CaseService;
 import io.trailkeep.casefile.CaseService.Actor;
-import io.trailkeep.casefile.CaseView;
 import io.trailkeep.casefile.TitleWarning;
 import io.trailkeep.document.AttachmentRejectedException;
 import io.trailkeep.document.CaseAttachmentService;
@@ -18,7 +15,6 @@ import io.trailkeep.security.TrailkeepOidcUser;
 import io.trailkeep.shared.CaseNumber;
 import io.trailkeep.shared.DomainException.Kind;
 import io.trailkeep.shared.config.AppProperties;
-import io.trailkeep.user.UserDirectoryService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
@@ -71,26 +67,23 @@ class CaseController {
             "sensitivity");
 
     private final CaseService cases;
-    private final CaseAssignmentService assignments;
     private final CaseCommentService comments;
     private final CaseAttachmentService attachments;
-    private final UserDirectoryService directory;
+    private final CasePage page;
     private final InstantSource clock;
     private final AppProperties app;
 
     CaseController(
             CaseService cases,
-            CaseAssignmentService assignments,
             CaseCommentService comments,
             CaseAttachmentService attachments,
-            UserDirectoryService directory,
+            CasePage page,
             InstantSource clock,
             AppProperties app) {
         this.cases = cases;
-        this.assignments = assignments;
         this.comments = comments;
         this.attachments = attachments;
-        this.directory = directory;
+        this.page = page;
         this.clock = clock;
         this.app = app;
     }
@@ -102,7 +95,7 @@ class CaseController {
         values.put("ownerId", Long.toString(principal.userId()));
         values.put("priority", "NORMAL");
         values.put("sensitivity", "STANDARD");
-        return form(actor(principal), values, List.of(), model);
+        return form(page.actor(principal), values, List.of(), model);
     }
 
     @PostMapping("/cases")
@@ -114,7 +107,7 @@ class CaseController {
             @RequestParam Map<String, String> values,
             HttpServletResponse response,
             Model model) {
-        Actor actor = actor(principal);
+        Actor actor = page.actor(principal);
         if (binding.hasErrors()) {
             response.setStatus(HttpStatus.UNPROCESSABLE_CONTENT.value());
             return form(
@@ -141,7 +134,7 @@ class CaseController {
             HttpServletRequest request,
             Model model) {
         model.addAttribute("created", created != null);
-        return render(actor(principal), number, request, null, model);
+        return page.render(page.actor(principal), number, request, null, model);
     }
 
     @PostMapping("/cases/{number}/comments")
@@ -152,7 +145,7 @@ class CaseController {
             HttpServletRequest request,
             HttpServletResponse response,
             Model model) {
-        Actor actor = actor(principal);
+        Actor actor = page.actor(principal);
         try {
             comments.post(actor, number, body);
         } catch (CaseException refused) {
@@ -160,10 +153,11 @@ class CaseController {
                 throw refused;
             }
             response.setStatus(HttpStatus.UNPROCESSABLE_CONTENT.value());
-            return render(actor, number, request, body, model);
+            return page.render(actor, number, request, body, model);
         }
-        CaseNotice.COMMENTED.leaveFor(request, CaseNumber.parse(number));
-        return "redirect:/cases/" + number + "#comments";
+        CaseNumber parsed = CaseNumber.parse(number);
+        CaseNotice.COMMENTED.leaveFor(request, parsed);
+        return "redirect:/cases/" + parsed + "#comments";
     }
 
     @PostMapping("/cases/{number}/comments/{change:pin|unpin}")
@@ -175,9 +169,10 @@ class CaseController {
             HttpServletRequest request) {
         boolean pin = "pin".equals(change);
         long commentId = parse(comment);
-        comments.setPinned(actor(principal), number, commentId, pin);
-        (pin ? CaseNotice.PINNED : CaseNotice.UNPINNED).leaveFor(request, CaseNumber.parse(number));
-        return "redirect:/cases/" + number + "#comment-" + commentId;
+        comments.setPinned(page.actor(principal), number, commentId, pin);
+        CaseNumber parsed = CaseNumber.parse(number);
+        (pin ? CaseNotice.PINNED : CaseNotice.UNPINNED).leaveFor(request, parsed);
+        return "redirect:/cases/" + parsed + "#comment-" + commentId;
     }
 
     @PostMapping("/cases/{number}/attachments")
@@ -189,7 +184,7 @@ class CaseController {
             HttpServletResponse response,
             Model model)
             throws IOException {
-        Actor actor = actor(principal);
+        Actor actor = page.actor(principal);
         String name = file == null ? "" : String.valueOf(file.getOriginalFilename());
         try (InputStream content = file == null ? InputStream.nullInputStream() : file.getInputStream()) {
             CaseNotice notice = switch (attachments.upload(actor, number, name, content)) {
@@ -198,8 +193,9 @@ class CaseController {
                 case NOT_SCANNED -> CaseNotice.UPLOADED_NOT_SCANNED;
                 case RELEASED -> throw new IllegalStateException("an upload is never stored released");
             };
-            notice.leaveFor(request, CaseNumber.parse(number));
-            return "redirect:/cases/" + number + "#attachments";
+            CaseNumber parsed = CaseNumber.parse(number);
+            notice.leaveFor(request, parsed);
+            return "redirect:/cases/" + parsed + "#attachments";
         } catch (AttachmentRejectedException rejected) {
             response.setStatus(HttpStatus.UNPROCESSABLE_CONTENT.value());
             model.addAttribute("uploadError", rejected.reason().name());
@@ -208,7 +204,7 @@ class CaseController {
             response.setStatus(HttpStatus.SERVICE_UNAVAILABLE.value());
             model.addAttribute("uploadError", "SCANNER");
         }
-        return render(actor, number, request, null, model);
+        return page.render(actor, number, request, null, model);
     }
 
     /** A submitted comment id; anything unreadable names no comment, which the service refuses after 404 and 403. */
@@ -218,24 +214,6 @@ class CaseController {
         } catch (NumberFormatException unreadable) {
             return -1;
         }
-    }
-
-    /** The case page; {@code rejected} is a comment refused as invalid, shown again with the error summary. */
-    private String render(
-            Actor actor, String number, HttpServletRequest request, @Nullable String rejected, Model model) {
-        CaseView view = cases.view(actor, number);
-        model.addAttribute("c", view);
-        model.addAttribute("reassign", view.reassignable() ? assignments.reassignment(actor, number) : null);
-        List<CommentView> all = comments.comments(actor, number);
-        model.addAttribute("comments", all);
-        model.addAttribute("pinned", all.stream().filter(CommentView::pinned).toList());
-        model.addAttribute("comment", rejected == null ? "" : rejected);
-        model.addAttribute("errors", rejected == null ? List.of() : List.of("body"));
-        model.addAttribute("attachments", attachments.attachments(actor, number));
-        model.addAttribute("limits", attachments.limits());
-        // Taken only once the case has been read, so a page that answers 404 never consumes a notice.
-        model.addAttribute("notice", CaseNotice.take(request, view.number()));
-        return "casefile/case";
     }
 
     private String form(Actor actor, Map<String, String> values, List<String> errors, Model model) {
@@ -248,9 +226,5 @@ class CaseController {
 
     private LocalDate today() {
         return LocalDate.ofInstant(clock.instant(), app.timezone());
-    }
-
-    private Actor actor(TrailkeepOidcUser principal) {
-        return new Actor(directory.permissionsOf(principal.userId()), principal.displayName());
     }
 }

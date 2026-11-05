@@ -1,14 +1,16 @@
 <!DOCTYPE html>
 <!-- SPDX-License-Identifier: Apache-2.0 -->
-<!-- The Attachments section of the case page (BUILD_PLAN §4.3, §9, §10.1). Names are plain text (no download link
-     until WP-14 part 4). Each scan badge is an icon and text, never colour alone, and NOT_SCANNED says that Trailkeep
-     did not scan the file; it is never shown as Verified. The upload form is offered only when the server would
+<!-- The Attachments section of the case page (BUILD_PLAN §4.3, §9, §10.1). A downloadable file's name is its download
+     link; a quarantined file's name is plain text, never a link. Each scan badge is an icon and text, never colour
+     alone, and NOT_SCANNED says that Trailkeep did not scan the file; it is never shown as Verified. A Compliance
+     Admin sees Release beside a quarantined file: a link to the release form as a page, which app.js opens as a native
+     dialog instead (the reason is required, 1 to 1000 characters); NOT_SCANNED has nothing to release. The upload form is offered only when the server would
      allow it: a native, labelled file input in a plain multipart form, with the allowed types and the maximum size
      beside it and no script. A refused upload comes back with its reason in the error summary, which app.js focuses,
      and on the input's description. -->
 <html lang="en" xmlns:th="http://www.thymeleaf.org">
 <body>
-<th:block th:fragment="attachments(number, list, limits, uploadable, error)">
+<th:block th:fragment="attachments(number, list, limits, uploadable, releasable, error)">
   <h2 id="attachments" tabindex="-1" th:text="#{tk.attachment.title}">Attachments</h2>
   <p th:if="${#lists.isEmpty(list)}" th:text="#{tk.attachment.none}">No attachments yet.</p>
   <div class="table-responsive" th:unless="${#lists.isEmpty(list)}">
@@ -22,17 +24,31 @@
       </tr></thead>
       <tbody>
       <tr th:each="a : ${list}" th:id="'attachment-' + ${a.id}">
-        <td class="text-break" th:text="${a.fileName}">report.pdf</td>
+        <td class="text-break" th:id="'attachment-' + ${a.id} + '-name'">
+          <a th:if="${a.status.downloadable}" th:href="@{/cases/{n}/attachments/{i}(n=${number},i=${a.id})}"
+             th:text="${a.fileName}">report.pdf</a>
+          <th:block th:unless="${a.status.downloadable}" th:text="${a.fileName}">eicar.txt</th:block></td>
         <td><th:block th:replace="~{document/fragments/attachments :: size(${a.sizeBytes})}">1.2 MB</th:block></td>
         <td th:text="#{tk.attachment.by(${a.uploadedBy}, ${#temporals.format(a.uploadedAt, 'yyyy-MM-dd HH:mm')})}">
           Someone on 2026-11-05 10:30</td>
         <td><span class="tk-chip" th:classappend="'tk-scan-' + ${a.status}">
           <span aria-hidden="true" th:text="#{'tk.attachment.scan.icon.' + ${a.status}}">✓</span>
-          <span th:text="#{'tk.attachment.scan.' + ${a.status}}">Verified</span></span></td>
+          <span th:text="#{'tk.attachment.scan.' + ${a.status}}">Verified</span></span>
+          <a th:if="${releasable and a.status.name() == 'QUARANTINED'}" class="btn btn-sm btn-outline-primary ms-2"
+             th:href="@{/cases/{n}/attachments/{i}/release(n=${number},i=${a.id})}"
+             th:data-tk-dialog-open="'tk-release-' + ${a.id}" aria-haspopup="dialog"
+             th:aria-describedby="'attachment-' + ${a.id} + '-name'" th:text="#{tk.release.open}">Release</a></td>
       </tr>
       </tbody>
     </table>
   </div>
+  <th:block th:each="a : ${list}" th:if="${releasable and a.status.name() == 'QUARANTINED'}">
+    <dialog th:id="'tk-release-' + ${a.id}" class="tk-dialog" th:aria-labelledby="'tk-release-title-' + ${a.id}">
+      <h2 th:id="'tk-release-title-' + ${a.id}" th:text="#{tk.release.title}">Release a quarantined file</h2>
+      <form th:replace="~{document/fragments/attachments :: release(${number}, ${a.id}, ${a.fileName}, '', false,
+                         true)}"></form>
+    </dialog>
+  </th:block>
   <form th:if="${uploadable}" method="post" enctype="multipart/form-data"
         th:action="@{/cases/{n}/attachments(n=${number})}" th:with="e=${error != null}">
     <div th:if="${e}" class="alert alert-danger" role="alert" tabindex="-1" data-tk-error-summary
@@ -56,6 +72,23 @@
     <button class="btn btn-primary" type="submit" th:text="#{tk.attachment.upload}">Upload file</button>
   </form>
 </th:block>
+
+<form th:fragment="release(number, id, name, reason, invalid, inDialog)" method="post"
+      th:action="@{/cases/{n}/attachments/{i}/release(n=${number},i=${id})}"
+      th:with="r='reason-' + ${id}">
+  <p class="text-break" th:text="#{tk.release.file(${name})}">File: eicar.txt</p>
+  <p th:text="#{tk.release.text}">Releasing the file makes it downloadable.</p>
+  <div class="mb-3">
+    <label class="form-label" th:for="${r}" th:text="#{tk.release.reason}">Reason for releasing it (required)</label>
+    <textarea class="form-control" th:id="${r}" name="reason" rows="3" required maxlength="1000"
+              th:attr="aria-invalid=${invalid},aria-describedby=${invalid} ? ${r + '-error ' + r + '-hint'} : ${r + '-hint'}"
+              th:text="${reason}"></textarea>
+    <div th:if="${invalid}" class="invalid-feedback d-block" th:id="${r} + '-error'" th:text="#{tk.release.error}">
+      Error</div>
+    <div class="form-text" th:id="${r} + '-hint'" th:text="#{tk.release.hint}">Up to 1000 characters.</div>
+  </div>
+  <div th:replace="~{casefile/fragments/case-actions :: actions(${number}, #{tk.release.save}, ${inDialog})}"></div>
+</form>
 
 <th:block th:fragment="size(b)"
           th:text="${b < 1024} ? #{tk.attachment.bytes(${b})} : (${b < 1048576}

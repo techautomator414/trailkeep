@@ -5,6 +5,7 @@ package io.trailkeep.e2e;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.microsoft.playwright.Browser;
+import com.microsoft.playwright.Download;
 import com.microsoft.playwright.FileChooser;
 import com.microsoft.playwright.Page;
 import com.microsoft.playwright.Playwright;
@@ -53,7 +54,10 @@ import org.springframework.test.context.DynamicPropertySource;
  * by keyboard and gets the 422 page with the focused error summary, follows it back to the file input, and uploads a
  * text file, which the page then lists as "Not scanned by Trailkeep (scanned upstream)" after the one-shot notice.
  * Every state has 0 axe violations and no CSP violation in the console. The rows the test commits are removed
- * afterwards. Browser handling follows {@link ShellAccessibilityIT}.
+ * afterwards. Browser handling follows {@link ShellAccessibilityIT}. The dev realm's {@code compliance.admin} (WP-14
+ * part 4) downloads a file by keyboard from its name, sees the seeded quarantined file without a link, opens Release
+ * from the keyboard, closes it with Escape (focus returns to the opener), opens it again, types a reason and releases
+ * it; the page then shows the one-shot notice and the file as Released, now a download link.
  */
 // "IT" is the Failsafe suffix Part B mandates for integration tests, not an abbreviation.
 @SuppressWarnings("checkstyle:AbbreviationAsWordInName")
@@ -76,6 +80,7 @@ class CaseAttachmentsIT {
     private Page page;
     private long team;
     private long caseType;
+    private long owner;
 
     @Autowired
     private CaseService cases;
@@ -141,6 +146,9 @@ class CaseAttachmentsIT {
             Long policy = jdbc.queryForObject("SELECT SLA_POLICY_ID FROM CASE_TYPE WHERE ID = ?", Long.class, caseType);
             jdbc.update("DELETE FROM CASE_TYPE WHERE ID = ?", caseType);
             jdbc.update("DELETE FROM SLA_POLICY WHERE ID = ?", policy);
+            if (owner != 0) {
+                jdbc.update("DELETE FROM APP_USER WHERE ID = ?", owner);
+            }
         }
     }
 
@@ -197,6 +205,64 @@ class CaseAttachmentsIT {
         page.reload();
         assertClean();
         assertThat(page.querySelector("[data-tk-toast]")).isNull();
+    }
+
+    @Test
+    void complianceAdminDownloadsByKeyboardAndReleasesTheQuarantinedFile() {
+        page.navigate(KEYCLOAK.app("/"));
+        new SignInPage(page).signIn("compliance.admin", KeycloakDevRealm.PASSWORD, KEYCLOAK.app(""));
+        page.waitForLoadState();
+        consoleProblems.clear();
+        CaseSeed seed = new CaseSeed(jdbc);
+        team = seed.team();
+        caseType = seed.caseType();
+        owner = seed.user();
+        seed.member(owner, team, TeamRole.ANALYST);
+        CaseNumber number = cases.create(actor(owner), fields(owner));
+        long clean = seed.attachment(seed.caseId(number), owner, "synthetic-clean.txt", "CLEAN");
+        long quarantined = seed.attachment(seed.caseId(number), owner, "seeded-evidence.txt", "QUARANTINED");
+        for (long id : List.of(clean, quarantined)) {
+            jdbc.update(
+                    "INSERT INTO CASE_ATTACHMENT_CHUNK (ATTACHMENT_ID, SEQ, CHUNK) VALUES (?, 0, ?)",
+                    id,
+                    new byte[] {'x'});
+        }
+        page.navigate(KEYCLOAK.app("/cases/" + number));
+        assertClean();
+        String link = "a[href$='/attachments/";
+        assertThat(page.querySelector(link + quarantined + "']")).isNull();
+
+        page.focus(link + clean + "']");
+        Download download = page.waitForDownload(() -> page.keyboard().press("Enter"));
+        assertThat(download.suggestedFilename()).isEqualTo("synthetic-clean.txt");
+
+        String opener = "a[data-tk-dialog-open='tk-release-" + quarantined + "']";
+        String dialog = "#tk-release-" + quarantined;
+        page.focus(opener);
+        page.keyboard().press("Enter");
+        page.waitForSelector(dialog + "[open]");
+        assertThat(page.evaluate("s => document.querySelector(s).contains(document.activeElement)", dialog))
+                .isEqualTo(true);
+        assertClean();
+        page.keyboard().press("Escape");
+        assertThat(page.isVisible(dialog)).isFalse();
+        assertThat(page.evaluate("s => document.activeElement === document.querySelector(s)", opener))
+                .isEqualTo(true);
+        page.keyboard().press("Enter");
+        page.waitForSelector(dialog + "[open]");
+        page.keyboard().press("Tab");
+        assertThat(page.evaluate("() => document.activeElement.name")).isEqualTo("reason");
+        page.keyboard().type("Synthetic reason: a known false positive");
+        page.keyboard().press("Tab");
+        assertThat(page.evaluate("() => document.activeElement.textContent.trim()"))
+                .isEqualTo("Release file");
+        page.keyboard().press("Enter");
+        page.waitForURL(url -> url.endsWith("/cases/" + number + "#attachment-" + quarantined));
+        assertClean();
+        assertThat(page.textContent("[data-tk-toast]")).contains("The file was released.");
+        assertThat(page.textContent("#attachment-" + quarantined)).contains("seeded-evidence.txt", "Released");
+        assertThat(page.querySelector(link + quarantined + "']")).isNotNull();
+        assertThat(page.querySelector(opener)).isNull();
     }
 
     /** With focus on the file input, opens the native chooser by keyboard and picks a file. */
