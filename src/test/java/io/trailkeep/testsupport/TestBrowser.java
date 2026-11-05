@@ -86,7 +86,16 @@ public final class TestBrowser {
                         .orElse(null);
     }
 
-    private HttpResponse<String> post(String url, Map<String, String> form) throws IOException, InterruptedException {
+    /**
+     * Submits a form without following redirects, with this browser's cookies.
+     *
+     * @param url the form action
+     * @param form the fields
+     * @return the response
+     * @throws IOException on I/O failure
+     * @throws InterruptedException if interrupted
+     */
+    public HttpResponse<String> post(String url, Map<String, String> form) throws IOException, InterruptedException {
         String body = form.entrySet().stream()
                 .map(e -> e.getKey() + "=" + URLEncoder.encode(e.getValue(), StandardCharsets.UTF_8))
                 .collect(Collectors.joining("&"));

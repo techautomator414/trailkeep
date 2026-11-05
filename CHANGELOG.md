@@ -21,6 +21,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   clamd's startup, readiness and liveness probes are `clamdscan --ping` exec probes instead of TCP-socket probes. The
   compose service runs `clamd --foreground=true` directly, as the pod does, so signatures are the image's. The
   NetworkPolicy is unchanged (it only admits 3311).
+### Fixed
+
+- Disabling a user now ends their sessions (#31). The System Admin screen `/admin/users` lists users and disables or
+  enables them; `UserAdminService.disable` writes `DISABLED = TRUE` and then calls `endSessionsOf` (through the new
+  `UserSessionEnder` port, which `security`'s `UserSessionService` extends) in the same transaction, and audits
+  `USER_DISABLED` with the number of ended sessions (`USER_ENABLED` for the reverse). A System Admin cannot disable
+  themselves. This closes the "no caller yet" note under 0.1.0 below.
 
 ### Fixed
 
