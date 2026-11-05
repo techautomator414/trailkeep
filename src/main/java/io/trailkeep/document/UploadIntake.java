@@ -31,7 +31,7 @@ import org.springframework.stereotype.Component;
  * path before the exception leaves; on success its {@link ScannedUpload} owns it.
  */
 @Component
-class UploadIntake {
+final class UploadIntake {
 
     private static final Logger log = LoggerFactory.getLogger(UploadIntake.class);
 
