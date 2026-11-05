@@ -13,6 +13,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Comments on the case page (WP-13 part 2): a Comments section lists them oldest first, rendered only through
+  `tk:safe`, and `POST /cases/{number}/comments` posts one with the author's name as a snapshot (404, then 403 for
+  roles without `COMMENT`, then 422 for a blank comment or one over 20 000 characters, the text kept). Each comment
+  is audited as `COMMENT_ADDED` with the body redacted and appended to `CASE_SEARCH` in one atomic statement with a
+  character-stream bind, so concurrent comments and comments over 4000 bytes on Oracle both land. An edit now
+  rebuilds the search text from title, description and every comment under the row lock, so it no longer drops
+  comment text from search. Pins follow in part 3.
 - Comment foundations (WP-13 part 1): `V4_1__comment` adds the insert-only `CASE_COMMENT` table (author name snapshot,
   20 000-character body cap) with the `@Immutable` `CaseComment` entity and its scoped repository; the runtime user
   may only SELECT and INSERT it. `MarkdownRenderer` turns comment Markdown into `SafeHtml` through `commonmark-java`

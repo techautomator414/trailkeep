@@ -40,6 +40,11 @@
     WP-11 part 2b adds POST /cases (CSRF, behind login): CaseService checks CREATE against the matrix and every
     reference before writing; form values are echoed only through th:value/th:text. Covered by CaseCreateControllerIT
     (403 for Reader and System Admin, CSRF, 422). POST approved in the security-reviewer role on #41.
+    WP-13 part 2 adds POST /cases/{number}/comments (CSRF, behind login): CaseCommentService reads through the
+    person's CaseScope (404 if unreadable) and checks COMMENT against the matrix (403), rebuilding permissions from
+    the database per request, before the body is looked at (422). The body is echoed only through th:text and shown
+    only as SafeHtml through tk:safe. Covered by CaseCommentControllerIT (Analyst allowed, Reader 403, unreadable
+    404, CSRF 403, 422). Approved in the security-reviewer role on #52.
     CaseEditController (WP-12): GET and POST /cases/{number}/edit, behind login, CSRF on the POST. Every request first
     calls CaseService.editable, which reads through the person's CaseScope (404 if unreadable) and checks EDIT against
     the matrix (403), rebuilding permissions from the database per request; the save is checked again in the service

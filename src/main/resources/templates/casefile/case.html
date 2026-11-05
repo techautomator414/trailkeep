@@ -2,8 +2,9 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- The case page (BUILD_PLAN §4.3). Chips carry an icon and text, never colour alone. Each action is offered only
      when the server would allow it. Reassign and Mark restricted / standard open native dialogs; their openers are
-     links to the same forms as pages, which is how they work without JavaScript. The other actions and the tabs
-     arrive with WP-13 to WP-19. -->
+     links to the same forms as pages, which is how they work without JavaScript. Comments are listed oldest first,
+     their Markdown shown only as SafeHtml through tk:safe, and posted with a plain form (422 re-renders this page
+     with the error summary). The other actions and the tabs arrive with WP-13 to WP-19. -->
 <html lang="en" xmlns:th="http://www.thymeleaf.org" th:replace="~{web/layout :: page(~{::title}, ~{::main})}">
 <head><title th:text="${c.number} + ' ' + ${c.title} + ' · ' + ${@branding.name()}">Case</title></head>
 <body>
@@ -60,6 +61,31 @@
   </dl>
   <h3 th:text="#{tk.case.description}">Description</h3>
   <p class="tk-description" th:text="${c.description}">Description</p>
+  <h2 id="comments" tabindex="-1" th:text="#{tk.comment.title}">Comments</h2>
+  <p th:if="${#lists.isEmpty(comments)}" th:text="#{tk.comment.none}">No comments yet.</p>
+  <ol class="tk-comments" th:unless="${#lists.isEmpty(comments)}">
+    <li th:each="k : ${comments}">
+      <p class="text-body-secondary mb-1"
+         th:text="#{tk.comment.by(${k.author}, ${#temporals.format(k.writtenAt, 'yyyy-MM-dd HH:mm')})}">
+        Someone wrote on 2026-11-05 10:30</p>
+      <div class="tk-comment-body" tk:safe="${k.body}">Comment</div>
+    </li>
+  </ol>
+  <th:block th:if="${c.commentable}">
+    <th:block th:replace="~{casefile/fragments/case-fields :: summary(#{tk.comment.errors})}"></th:block>
+    <form method="post" th:action="@{/cases/{n}/comments(n=${c.number})}"
+          th:with="e=${#lists.contains(errors, 'body')}">
+      <div class="mb-3">
+        <label class="form-label" for="body" th:text="#{tk.comment.field}">Add a comment (required)</label>
+        <textarea class="form-control" id="body" name="body" rows="4" required maxlength="20000"
+                  th:attr="aria-invalid=${e},aria-describedby=${e} ? 'body-error body-hint' : 'body-hint'"
+                  th:text="${comment}"></textarea>
+        <div th:if="${e}" class="invalid-feedback d-block" id="body-error" th:text="#{tk.new.error.body}">Error</div>
+        <div class="form-text" id="body-hint" th:text="#{tk.comment.hint}">Up to 20000 characters.</div>
+      </div>
+      <button class="btn btn-primary" type="submit" th:text="#{tk.comment.post}">Post comment</button>
+    </form>
+  </th:block>
 </main>
 </body>
 </html>

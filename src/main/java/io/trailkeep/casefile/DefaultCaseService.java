@@ -18,7 +18,6 @@ import io.trailkeep.shared.config.AppProperties;
 import io.trailkeep.user.TeamAdminService.TeamSummary;
 import io.trailkeep.user.UserDirectoryService;
 import jakarta.persistence.EntityManager;
-import jakarta.persistence.LockModeType;
 import jakarta.persistence.OptimisticLockException;
 import java.time.Instant;
 import java.time.InstantSource;
@@ -56,6 +55,7 @@ class DefaultCaseService implements CaseService {
     private final EntityManager entityManager;
     private final CaseScopeService scopes;
     private final CaseLoader loader;
+    private final CaseSearchWriter search;
     private final CasePermissionService permissions;
     private final UserDirectoryService directory;
     private final AuditRecorder audit;
@@ -71,6 +71,7 @@ class DefaultCaseService implements CaseService {
             EntityManager entityManager,
             CaseScopeService scopes,
             CaseLoader loader,
+            CaseSearchWriter search,
             CasePermissionService permissions,
             UserDirectoryService directory,
             AuditRecorder audit,
@@ -84,6 +85,7 @@ class DefaultCaseService implements CaseService {
         this.entityManager = entityManager;
         this.scopes = scopes;
         this.loader = loader;
+        this.search = search;
         this.permissions = permissions;
         this.directory = directory;
         this.audit = audit;
@@ -179,7 +181,8 @@ class DefaultCaseService implements CaseService {
                 allowed(actor, record, CaseAction.EDIT),
                 allowed(actor, record, CaseAction.REASSIGN),
                 allowed(actor, record, CaseAction.RESTRICT),
-                allowed(actor, record, CaseAction.UNRESTRICT));
+                allowed(actor, record, CaseAction.UNRESTRICT),
+                allowed(actor, record, CaseAction.COMMENT));
     }
 
     @Override
@@ -205,22 +208,17 @@ class DefaultCaseService implements CaseService {
         if (diff.equals(AuditChanges.none())) {
             return;
         }
-        long caseId = id(record.getId());
         long actorId = actor.permissions().userId();
         Instant now = clock.instant();
         record.apply(changes, actorId, now);
-        String text = changes.title() + "\n" + changes.description();
-        CaseSearch search = entityManager.find(CaseSearch.class, caseId, LockModeType.PESSIMISTIC_WRITE);
-        if (search == null) {
-            entityManager.persist(new CaseSearch(caseId, text, now));
-        } else {
-            search.rebuild(text, now);
-        }
         try {
             entityManager.flush();
         } catch (OptimisticLockException concurrent) {
             throw new CaseException(Kind.CONFLICT, "saved concurrently");
         }
+        // After the flush, so the comment query that follows cannot raise the version conflict outside the catch.
+        search.rebuild(actor.permissions(), record, now);
+        long caseId = id(record.getId());
         audit.record(new AuditEntry(
                 actorId, actor.displayName(), AuditOrigin.UI, caseId, "CASE", caseId, "CASE_UPDATED", diff));
         LOG.info("Case id {} edited", caseId);
