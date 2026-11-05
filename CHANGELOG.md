@@ -13,6 +13,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Reassign, Mark restricted and Mark standard on the case page (WP-12 part 2), each in a native dialog with a
+  no-JavaScript page at `/cases/{number}/reassign`, `/restrict` and `/unrestrict`. The new owner must hold Analyst or
+  Manager in the team, a team change goes only into a team the actor may open cases in, and Reassign is refused
+  while a closure request is pending. Analyst-owners may restrict (and keep reading) but not unrestrict. A stale
+  version answers 409 with Reload. `CASE_REASSIGNED`, `CASE_RESTRICTED` and `CASE_UNRESTRICTED` hold only what
+  changed.
 - Edit on the case page (WP-12 part 1): `/cases/{number}/edit` changes title, priority, subject and description of an
   open case, saved against the version the form was loaded with. A stale save answers 409 with "This case was updated
   by _name_ at _time_", the person's input kept and Reload offered (no Force Save). The title's PHI heuristic applies

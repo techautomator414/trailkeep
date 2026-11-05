@@ -50,6 +50,8 @@
       if (opener) {
         const dialog = document.getElementById(opener.getAttribute('data-tk-dialog-open'));
         if (dialog) {
+          // An opener may be a link to the same form as a page, which is what it does without JavaScript.
+          event.preventDefault();
           dialogs.open(dialog, opener);
         }
       }

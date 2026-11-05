@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- The Reassign and Mark restricted / Mark standard forms (BUILD_PLAN §4.3), shared by the case page's native
+     dialogs and the pages that work without JavaScript and show a refused save. In a dialog, Cancel closes it and
+     focus returns to the opener; on a page, Cancel goes back to the case. -->
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<body>
+<form th:fragment="reassign(r, team, owner, invalid, inDialog)" method="post"
+      th:action="@{/cases/{n}/reassign(n=${r.number})}">
+  <input type="hidden" name="version" th:value="${r.version}">
+  <div class="mb-3">
+    <label class="form-label" for="teamId" th:text="#{tk.new.team}">Team (required)</label>
+    <select class="form-select" id="teamId" name="teamId" required aria-describedby="teamId-hint">
+      <option th:each="t : ${r.teams}" th:value="${t.id}" th:text="${t.name}" th:selected="${t.id == team}">T</option>
+    </select>
+    <div class="form-text" id="teamId-hint" th:text="#{tk.assign.team.hint}">Teams you may open cases in.</div>
+  </div>
+  <div class="mb-3">
+    <label class="form-label" for="ownerId" th:text="#{tk.new.owner}">Owner (required)</label>
+    <select class="form-select" id="ownerId" name="ownerId" required
+            th:attr="aria-invalid=${invalid},aria-describedby=${invalid} ? 'ownerId-error owner-hint' : 'owner-hint'">
+      <optgroup th:each="t : ${r.teams}" th:label="${t.name}">
+        <option th:each="o : ${t.owners}" th:value="${o.id}" th:text="${o.name}"
+                th:selected="${t.id == team and o.id == owner}">Owner</option>
+      </optgroup>
+    </select>
+    <div th:if="${invalid}" class="invalid-feedback d-block" id="ownerId-error" th:text="#{tk.assign.error}">E</div>
+    <div class="form-text" id="owner-hint" th:text="#{tk.new.owner.hint}">Choose someone listed under the team.</div>
+  </div>
+  <div th:replace="~{casefile/fragments/case-actions :: actions(${r.number}, #{tk.assign.save}, ${inDialog})}"></div>
+</form>
+
+<form th:fragment="sensitivity(number, version, target, inDialog)" method="post"
+      th:action="@{/cases/{n}/{a}(n=${number},a=${target == 'RESTRICTED' ? 'restrict' : 'unrestrict'})}">
+  <p th:text="#{'tk.sensitivity.text.' + ${target}}">Who will see the case.</p>
+  <input type="hidden" name="version" th:value="${version}">
+  <div th:replace="~{casefile/fragments/case-actions :: actions(${number}, #{${'tk.sensitivity.save.' + target}}, ${inDialog})}"></div>
+</form>
+
+<div th:fragment="actions(number, label, inDialog)" class="tk-dialog-actions">
+  <button class="btn btn-primary" type="submit" th:text="${label}">Confirm</button>
+  <button th:if="${inDialog}" type="button" class="btn btn-outline-secondary" data-tk-dialog-close
+          th:text="#{tk.edit.cancel}">Cancel</button>
+  <a th:unless="${inDialog}" class="btn btn-outline-secondary" th:href="@{/cases/{n}(n=${number})}"
+     th:text="#{tk.edit.cancel}">Cancel</a>
+</div>
+</body>
+</html>

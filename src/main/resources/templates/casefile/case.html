@@ -1,7 +1,9 @@
 <!DOCTYPE html>
 <!-- SPDX-License-Identifier: Apache-2.0 -->
-<!-- The case page (BUILD_PLAN §4.3). Chips carry an icon and text, never colour alone. Edit is offered only when the
-     server would allow it; the other actions and the tabs arrive with WP-12 part 2 to WP-19. -->
+<!-- The case page (BUILD_PLAN §4.3). Chips carry an icon and text, never colour alone. Each action is offered only
+     when the server would allow it. Reassign and Mark restricted / standard open native dialogs; their openers are
+     links to the same forms as pages, which is how they work without JavaScript. The other actions and the tabs
+     arrive with WP-13 to WP-19. -->
 <html lang="en" xmlns:th="http://www.thymeleaf.org" th:replace="~{web/layout :: page(~{::title}, ~{::main})}">
 <head><title th:text="${c.number} + ' ' + ${c.title} + ' · ' + ${@branding.name()}">Case</title></head>
 <body>
@@ -23,8 +25,27 @@
     <li class="tk-chip" th:if="${c.priority.name() == 'HIGH'}">
       <span aria-hidden="true">!</span> <span th:text="#{tk.case.high}">High priority</span></li>
   </ul>
-  <p th:if="${c.editable}"><a class="btn btn-primary" th:href="@{/cases/{n}/edit(n=${c.number})}"
-     th:text="#{tk.case.edit}">Edit</a></p>
+  <p class="tk-dialog-actions" th:if="${c.editable or c.reassignable or c.restrictable or c.unrestrictable}">
+    <a th:if="${c.editable}" class="btn btn-primary" th:href="@{/cases/{n}/edit(n=${c.number})}"
+       th:text="#{tk.case.edit}">Edit</a>
+    <a th:if="${reassign != null}" class="btn btn-outline-primary" th:href="@{/cases/{n}/reassign(n=${c.number})}"
+       data-tk-dialog-open="tk-reassign-dialog" aria-haspopup="dialog" th:text="#{tk.assign.save}">Reassign</a>
+    <a th:each="s : ${ {'RESTRICTED', 'STANDARD'} }"
+       th:if="${s == 'RESTRICTED' ? c.restrictable : c.unrestrictable}" class="btn btn-outline-primary"
+       th:href="@{/cases/{n}/{a}(n=${c.number},a=${s == 'RESTRICTED' ? 'restrict' : 'unrestrict'})}"
+       th:data-tk-dialog-open="'tk-' + ${s} + '-dialog'" aria-haspopup="dialog"
+       th:text="#{'tk.sensitivity.save.' + ${s}}">Mark restricted</a>
+  </p>
+  <dialog th:if="${reassign != null}" id="tk-reassign-dialog" class="tk-dialog" aria-labelledby="tk-reassign-title">
+    <h2 id="tk-reassign-title" th:text="#{tk.assign.title(${c.number})}">Reassign</h2>
+    <form th:replace="~{casefile/fragments/case-actions :: reassign(${reassign}, ${reassign.teamId},
+                       ${reassign.ownerId}, false, true)}"></form>
+  </dialog>
+  <dialog th:each="s : ${ {'RESTRICTED', 'STANDARD'} }" th:if="${s == 'RESTRICTED' ? c.restrictable : c.unrestrictable}"
+          th:id="'tk-' + ${s} + '-dialog'" class="tk-dialog" th:aria-labelledby="'tk-' + ${s} + '-title'">
+    <h2 th:id="'tk-' + ${s} + '-title'" th:text="#{${'tk.sensitivity.title.' + s}(${c.number})}">Mark restricted</h2>
+    <form th:replace="~{casefile/fragments/case-actions :: sensitivity(${c.number}, ${c.version}, ${s}, true)}"></form>
+  </dialog>
   <h2 th:text="#{tk.case.overview}">Overview</h2>
   <dl class="tk-facts">
     <dt th:text="#{tk.case.owner}">Owner</dt><dd th:text="${c.ownerName}">Owner</dd>
