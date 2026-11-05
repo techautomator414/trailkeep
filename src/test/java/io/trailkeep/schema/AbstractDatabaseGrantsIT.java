@@ -55,8 +55,8 @@ abstract class AbstractDatabaseGrantsIT {
     }
 
     /**
-     * Identity (V1), audit (V2), admin (V3), case (V4) and comment (V4.1) tables, and the column each probe touches:
-     * the first key column.
+     * Identity (V1), audit (V2), admin (V3), case (V4), comment (V4.1) and pin (V4.2) tables, and the column each
+     * probe touches: the first key column.
      */
     static final Map<String, String> TABLES = Map.ofEntries(
             Map.entry("APP_USER", "ID"),
@@ -71,6 +71,7 @@ abstract class AbstractDatabaseGrantsIT {
             Map.entry("CASE_SLA", "CASE_ID"),
             Map.entry("CASE_SEARCH", "CASE_ID"),
             Map.entry("CASE_COMMENT", "ID"),
+            Map.entry("CASE_COMMENT_PIN", "COMMENT_ID"),
             Map.entry("SPRING_SESSION", "PRIMARY_ID"),
             Map.entry("SPRING_SESSION_ATTRIBUTES", "SESSION_PRIMARY_ID"),
             Map.entry("OIDC_SESSION", "SESSION_ID"));
@@ -89,6 +90,7 @@ abstract class AbstractDatabaseGrantsIT {
             Map.entry("CASE_SLA", EnumSet.of(Privilege.SELECT, Privilege.INSERT, Privilege.UPDATE)),
             Map.entry("CASE_SEARCH", EnumSet.of(Privilege.SELECT, Privilege.INSERT, Privilege.UPDATE)),
             Map.entry("CASE_COMMENT", EnumSet.of(Privilege.SELECT, Privilege.INSERT)),
+            Map.entry("CASE_COMMENT_PIN", EnumSet.of(Privilege.SELECT, Privilege.INSERT, Privilege.DELETE)),
             Map.entry("SPRING_SESSION", EnumSet.allOf(Privilege.class)),
             Map.entry("SPRING_SESSION_ATTRIBUTES", EnumSet.allOf(Privilege.class)),
             Map.entry("OIDC_SESSION", EnumSet.allOf(Privilege.class)));

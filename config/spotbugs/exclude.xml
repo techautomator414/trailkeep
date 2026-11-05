@@ -45,6 +45,13 @@
     the database per request, before the body is looked at (422). The body is echoed only through th:text and shown
     only as SafeHtml through tk:safe. Covered by CaseCommentControllerIT (Analyst allowed, Reader 403, unreadable
     404, CSRF 403, 422). Approved in the security-reviewer role on #52.
+    WP-13 part 3 adds POST /cases/{number}/comments/pin and /unpin (CSRF, behind login): CaseCommentService reads
+    through the person's CaseScope (404 if unreadable) and checks PIN against the matrix (403), rebuilding
+    permissions from the database per request, before the submitted comment id is looked at; an id naming no comment
+    of that case, read through the same scope, is 422, and the database's composite key refuses a pin on another
+    case's comment. The id is parsed leniently, so a malformed one cannot answer before those checks, and the redirect
+    carries only the parsed number. Covered by CaseCommentPinControllerIT (Analyst allowed, Reader 403, unreadable
+    404, CSRF 403, 422). Approved in the security-reviewer role on #53.
     CaseEditController (WP-12): GET and POST /cases/{number}/edit, behind login, CSRF on the POST. Every request first
     calls CaseService.editable, which reads through the person's CaseScope (404 if unreadable) and checks EDIT against
     the matrix (403), rebuilding permissions from the database per request; the save is checked again in the service

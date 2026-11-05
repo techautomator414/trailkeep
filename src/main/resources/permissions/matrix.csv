@@ -24,6 +24,8 @@ READER,*,*,*,*,DENY
 # Working a case: Analysts, Managers and Compliance Admins of the team.
 *,*,*,OPEN,EDIT,ALLOW
 *,*,*,OPEN|PENDING_CLOSURE,COMMENT|REQUEST_UPDATE,ALLOW
+# Pinning and unpinning a comment (§1.2, §4.3) is part of working the comment trail: whoever may comment.
+*,*,*,OPEN|PENDING_CLOSURE,PIN,ALLOW
 *,*,*,OPEN,REQUEST_CLOSURE,ALLOW
 # Analysts may restrict (never unrestrict) and reassign only their own cases; nothing else below applies to them.
 ANALYST,OWNER,STANDARD,*,RESTRICT,ALLOW

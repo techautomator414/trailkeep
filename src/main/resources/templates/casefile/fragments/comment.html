@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- One comment on the case page (BUILD_PLAN §4.3), in the pinned list or the full list: its byline, a "Pinned" marker
+     in text, the body only as SafeHtml through tk:safe, and, when the viewer may pin, a one-button Pin or Unpin form.
+     The button is described by the byline, so each one says whose comment it acts on. -->
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<body>
+<th:block th:fragment="comment(k, where, number, pinnable)" th:with="by=${where} + '-by-' + ${k.id}">
+  <p class="text-body-secondary mb-1" th:id="${by}">
+    <span th:text="#{tk.comment.by(${k.author}, ${#temporals.format(k.writtenAt, 'yyyy-MM-dd HH:mm')})}">
+      Someone wrote on 2026-11-05 10:30</span>
+    <span th:if="${k.pinned}" class="tk-chip ms-2"><span aria-hidden="true">&#x1F4CC;</span>
+      <span th:text="#{tk.comment.pinned}">Pinned</span></span></p>
+  <div class="tk-comment-body" tk:safe="${k.body}">Comment</div>
+  <form th:if="${pinnable}" method="post"
+        th:action="@{/cases/{n}/comments/{a}(n=${number},a=${k.pinned ? 'unpin' : 'pin'})}">
+    <input type="hidden" name="comment" th:value="${k.id}">
+    <button class="btn btn-sm btn-outline-secondary" type="submit" th:aria-describedby="${by}"
+            th:text="${k.pinned} ? #{tk.comment.unpin} : #{tk.comment.pin}">Pin comment</button>
+  </form>
+</th:block>
+</body>
+</html>

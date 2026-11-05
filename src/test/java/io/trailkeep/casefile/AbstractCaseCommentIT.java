@@ -3,6 +3,7 @@
 package io.trailkeep.casefile;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.trailkeep.shared.CaseNumber;
 import io.trailkeep.shared.CaseStatus;
@@ -22,13 +23,16 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
  * {@code CASE_COMMENT} and its scoped repository, once per vendor (WP-13): a comment is stored as written, with its
  * author snapshot, and read back oldest first only through a scope that reads its case; and a body longer than 4000
- * bytes, up to the 20 000-character cap, survives the round trip (Oracle's {@code VARCHAR2} ceiling, A.1 #7).
+ * bytes, up to the 20 000-character cap, survives the round trip (Oracle's {@code VARCHAR2} ceiling, A.1 #7). Pins
+ * ({@code CASE_COMMENT_PIN}) are read through the same scope, removed by the runtime user, and a pin naming a comment
+ * of another case is refused by the composite foreign key.
  */
 // "IT" is the Failsafe suffix Part B mandates for integration tests, not an abbreviation.
 @SuppressWarnings("checkstyle:AbbreviationAsWordInName")
@@ -44,6 +48,9 @@ abstract class AbstractCaseCommentIT {
 
     @Autowired
     private CaseCommentRepository comments;
+
+    @Autowired
+    private CaseCommentPinRepository pins;
 
     @Autowired
     private CaseScopeService scopes;
@@ -108,6 +115,60 @@ abstract class AbstractCaseCommentIT {
 
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM CASE_COMMENT WHERE CASE_ID = ?", Long.class, caseId))
                 .isEqualTo(1L);
+    }
+
+    @Test
+    void pinsAreWrittenReadThroughTheScopeAndRemoved() {
+        final long colleague = seed.user();
+        CaseNumber restricted = seed.caseRow(team, author, Sensitivity.RESTRICTED, CaseStatus.OPEN);
+        long caseId = seed.caseId(restricted);
+        long pinnedComment = seed.comment(caseId, author, "A synthetic pinned comment");
+        final long otherComment = seed.comment(caseId, author, "A synthetic unpinned comment");
+        entityManager.persist(new CaseCommentPin(pinnedComment, caseId, author, WRITTEN));
+        entityManager.flush();
+        entityManager.clear();
+
+        assertThat(pins.findForCase(scopes.forUser(analyst(author)), restricted))
+                .singleElement()
+                .satisfies(pin -> {
+                    assertThat(pin.getCommentId()).isEqualTo(pinnedComment);
+                    assertThat(pin.getCaseId()).isEqualTo(caseId);
+                    assertThat(pin.getPinnedBy()).isEqualTo(author);
+                    assertThat(pin.getPinnedAt()).isEqualTo(WRITTEN);
+                });
+        assertThat(pins.findForCase(scopes.forUser(analyst(colleague)), restricted))
+                .isEmpty();
+        assertThat(pins.findOne(scopes.forUser(analyst(colleague)), restricted, pinnedComment))
+                .isEmpty();
+        assertThat(pins.findOne(scopes.forUser(analyst(author)), restricted, otherComment))
+                .isEmpty();
+
+        entityManager.remove(pins.findOne(scopes.forUser(analyst(author)), restricted, pinnedComment)
+                .orElseThrow());
+        entityManager.flush();
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM CASE_COMMENT_PIN WHERE CASE_ID = ?", Long.class, caseId))
+                .isZero();
+    }
+
+    @Test
+    void commentsAreFoundOnlyOnTheirOwnCase() {
+        CaseNumber first = seed.caseRow(team, author, Sensitivity.STANDARD, CaseStatus.OPEN);
+        CaseNumber second = seed.caseRow(team, author, Sensitivity.STANDARD, CaseStatus.OPEN);
+        long comment = seed.comment(seed.caseId(first), author, "A synthetic comment on the first case");
+
+        assertThat(comments.findOne(scopes.forUser(analyst(author)), first, comment))
+                .isPresent();
+        assertThat(comments.findOne(scopes.forUser(analyst(author)), second, comment))
+                .isEmpty();
+    }
+
+    @Test
+    void theDatabaseRefusesAPinNamingACommentOfAnotherCase() {
+        long first = seed.caseId(seed.caseRow(team, author, Sensitivity.STANDARD, CaseStatus.OPEN));
+        long second = seed.caseId(seed.caseRow(team, author, Sensitivity.STANDARD, CaseStatus.OPEN));
+        long comment = seed.comment(first, author, "A synthetic comment on the first case");
+
+        assertThatThrownBy(() -> seed.pin(comment, second, author)).isInstanceOf(DataIntegrityViolationException.class);
     }
 
     private void insert(long caseId, String body) {

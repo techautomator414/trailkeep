@@ -4,6 +4,7 @@ package io.trailkeep.web;
 
 import io.trailkeep.casefile.CaseAssignmentService;
 import io.trailkeep.casefile.CaseCommentService;
+import io.trailkeep.casefile.CaseCommentService.CommentView;
 import io.trailkeep.casefile.CaseException;
 import io.trailkeep.casefile.CaseFields;
 import io.trailkeep.casefile.CaseService;
@@ -41,7 +42,8 @@ import org.springframework.web.bind.annotation.RequestParam;
  * by {@link CaseService} through the person's scope, which also decides who may create. The form is re-rendered with
  * 422 when a field is invalid or the title trips the PHI heuristic and has not been confirmed. A comment is posted
  * from the case page as a plain form; a blank or too long one re-renders the page with 422, the text kept, after
- * {@link CaseCommentService} has decided 404 and 403.
+ * {@link CaseCommentService} has decided 404 and 403. Pin and Unpin are one-button forms per comment, decided in the
+ * same order; an id naming no comment of the case is 422.
  */
 @Controller
 class CaseController {
@@ -153,13 +155,38 @@ class CaseController {
         return "redirect:/cases/" + number + "#comments";
     }
 
+    @PostMapping("/cases/{number}/comments/{change:pin|unpin}")
+    String pin(
+            @AuthenticationPrincipal TrailkeepOidcUser principal,
+            @PathVariable String number,
+            @PathVariable String change,
+            @RequestParam(required = false) @Nullable String comment,
+            HttpServletRequest request) {
+        boolean pin = "pin".equals(change);
+        long commentId = parse(comment);
+        comments.setPinned(actor(principal), number, commentId, pin);
+        (pin ? CaseNotice.PINNED : CaseNotice.UNPINNED).leaveFor(request, CaseNumber.parse(number));
+        return "redirect:/cases/" + number + "#comment-" + commentId;
+    }
+
+    /** A submitted comment id; anything unreadable names no comment, which the service refuses after 404 and 403. */
+    private static long parse(@Nullable String value) {
+        try {
+            return Long.parseLong(String.valueOf(value));
+        } catch (NumberFormatException unreadable) {
+            return -1;
+        }
+    }
+
     /** The case page; {@code rejected} is a comment refused as invalid, shown again with the error summary. */
     private String render(
             Actor actor, String number, HttpServletRequest request, @Nullable String rejected, Model model) {
         CaseView view = cases.view(actor, number);
         model.addAttribute("c", view);
         model.addAttribute("reassign", view.reassignable() ? assignments.reassignment(actor, number) : null);
-        model.addAttribute("comments", comments.comments(actor, number));
+        List<CommentView> all = comments.comments(actor, number);
+        model.addAttribute("comments", all);
+        model.addAttribute("pinned", all.stream().filter(CommentView::pinned).toList());
         model.addAttribute("comment", rejected == null ? "" : rejected);
         model.addAttribute("errors", rejected == null ? List.of() : List.of("body"));
         // Taken only once the case has been read, so a page that answers 404 never consumes a notice.

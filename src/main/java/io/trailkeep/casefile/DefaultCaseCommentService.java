@@ -8,11 +8,14 @@ import io.trailkeep.audit.AuditRecorder;
 import io.trailkeep.audit.Redacted;
 import io.trailkeep.casefile.CaseService.Actor;
 import io.trailkeep.security.CaseAction;
+import io.trailkeep.shared.CaseNumber;
 import io.trailkeep.shared.DomainException.Kind;
 import io.trailkeep.shared.access.CaseAccessPath;
+import io.trailkeep.shared.access.CaseScope;
 import io.trailkeep.shared.config.AppProperties;
 import io.trailkeep.shared.html.MarkdownRenderer;
 import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
 import java.time.Instant;
 import java.time.InstantSource;
 import java.time.LocalDateTime;
@@ -20,14 +23,18 @@ import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Reads and posts comments. A comment, its search-text append and its audit event are written in one transaction;
- * the append takes no lock on the case row, so posting never conflicts with an edit (BUILD_PLAN §8 rule 4).
+ * Reads, posts and pins comments. A comment, its search-text append and its audit event are written in one
+ * transaction; the append takes no lock on the case row, so posting never conflicts with an edit (BUILD_PLAN §8 rule
+ * 4). A pin is a {@code CASE_COMMENT_PIN} row, inserted or deleted with its audit event; the comment is untouched.
  */
 @Service
 @Transactional
@@ -38,6 +45,7 @@ class DefaultCaseCommentService implements CaseCommentService {
 
     private final CaseLoader loader;
     private final CaseCommentRepository comments;
+    private final CaseCommentPinRepository pins;
     private final CaseScopeService scopes;
     private final CaseSearchWriter search;
     private final MarkdownRenderer markdown;
@@ -49,6 +57,7 @@ class DefaultCaseCommentService implements CaseCommentService {
     DefaultCaseCommentService(
             CaseLoader loader,
             CaseCommentRepository comments,
+            CaseCommentPinRepository pins,
             CaseScopeService scopes,
             CaseSearchWriter search,
             MarkdownRenderer markdown,
@@ -58,6 +67,7 @@ class DefaultCaseCommentService implements CaseCommentService {
             AppProperties app) {
         this.loader = loader;
         this.comments = comments;
+        this.pins = pins;
         this.scopes = scopes;
         this.search = search;
         this.markdown = markdown;
@@ -70,11 +80,22 @@ class DefaultCaseCommentService implements CaseCommentService {
     @Override
     @Transactional(readOnly = true)
     public List<CommentView> comments(Actor actor, String caseNumber) {
-        return comments.findForCase(scopes.forUser(actor.permissions()), CaseLoader.parse(caseNumber)).stream()
-                .map(comment -> new CommentView(
-                        comment.getAuthorName(),
-                        LocalDateTime.ofInstant(comment.getCreatedAt(), zone).truncatedTo(ChronoUnit.MINUTES),
-                        markdown.render(comment.getBody())))
+        CaseScope scope = scopes.forUser(actor.permissions());
+        CaseNumber number = CaseLoader.parse(caseNumber);
+        Set<Long> pinned = pins.findForCase(scope, number).stream()
+                .map(CaseCommentPin::getCommentId)
+                .collect(Collectors.toUnmodifiableSet());
+        return comments.findForCase(scope, number).stream()
+                .map(comment -> {
+                    long id = Objects.requireNonNull(comment.getId());
+                    return new CommentView(
+                            id,
+                            comment.getAuthorName(),
+                            LocalDateTime.ofInstant(comment.getCreatedAt(), zone)
+                                    .truncatedTo(ChronoUnit.MINUTES),
+                            markdown.render(comment.getBody()),
+                            pinned.contains(id));
+                })
                 .toList();
     }
 
@@ -105,6 +126,48 @@ class DefaultCaseCommentService implements CaseCommentService {
                 audit.diff(null, new PostedComment(text))));
         LOG.info("Comment {} added to case id {}", commentId, caseId);
     }
+
+    @Override
+    public void setPinned(Actor actor, String caseNumber, long commentId, boolean pinned) {
+        CaseRecord record = loader.load(actor.permissions(), caseNumber, CaseAction.PIN);
+        // Pins of a case are serialized on its row: a second request waits, then re-reads the state the first left
+        // and, if that is the state asked for, writes nothing (no duplicate key, no stale delete).
+        entityManager.lock(record, LockModeType.PESSIMISTIC_WRITE);
+        CaseScope scope = scopes.forUser(actor.permissions());
+        CaseNumber number = CaseLoader.parse(caseNumber);
+        if (comments.findOne(scope, number, commentId).isEmpty()) {
+            throw new CaseException(Kind.INVALID, "no such comment on this case");
+        }
+        Optional<CaseCommentPin> pin = pins.findOne(scope, number, commentId);
+        if (pin.isPresent() == pinned) {
+            return;
+        }
+        long caseId = Objects.requireNonNull(record.getId());
+        long actorId = actor.permissions().userId();
+        if (pinned) {
+            entityManager.persist(new CaseCommentPin(commentId, caseId, actorId, clock.instant()));
+        } else {
+            entityManager.remove(pin.orElseThrow());
+        }
+        entityManager.flush();
+        audit.record(new AuditEntry(
+                actorId,
+                actor.displayName(),
+                AuditOrigin.UI,
+                caseId,
+                "COMMENT",
+                commentId,
+                pinned ? "COMMENT_PINNED" : "COMMENT_UNPINNED",
+                audit.diff(new PinState(!pinned), new PinState(pinned))));
+        LOG.info("Comment {} on case id {} pinned: {}", commentId, caseId, pinned);
+    }
+
+    /**
+     * The audit snapshot of a comment's pin.
+     *
+     * @param pinned whether the comment is pinned
+     */
+    record PinState(boolean pinned) {}
 
     /**
      * The audit snapshot of a new comment: its text is possible PHI, so the trail holds only an HMAC and a length.

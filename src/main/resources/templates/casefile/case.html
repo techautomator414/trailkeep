@@ -4,7 +4,9 @@
      when the server would allow it. Reassign and Mark restricted / standard open native dialogs; their openers are
      links to the same forms as pages, which is how they work without JavaScript. Comments are listed oldest first,
      their Markdown shown only as SafeHtml through tk:safe, and posted with a plain form (422 re-renders this page
-     with the error summary). The other actions and the tabs arrive with WP-13 to WP-19. -->
+     with the error summary). Pinned comments are listed again above all comments and marked "Pinned" in the full
+     list; Pin and Unpin are one-button forms (no menu, so no JavaScript), and after either the page opens at that
+     comment. The other actions and the tabs arrive with WP-14 to WP-19. -->
 <html lang="en" xmlns:th="http://www.thymeleaf.org" th:replace="~{web/layout :: page(~{::title}, ~{::main})}">
 <head><title th:text="${c.number} + ' ' + ${c.title} + ' · ' + ${@branding.name()}">Case</title></head>
 <body>
@@ -63,13 +65,19 @@
   <p class="tk-description" th:text="${c.description}">Description</p>
   <h2 id="comments" tabindex="-1" th:text="#{tk.comment.title}">Comments</h2>
   <p th:if="${#lists.isEmpty(comments)}" th:text="#{tk.comment.none}">No comments yet.</p>
+  <th:block th:unless="${#lists.isEmpty(pinned)}">
+    <h3 id="pinned-comments" th:text="#{tk.comment.pinned.title}">Pinned comments</h3>
+    <ol class="tk-comments tk-pinned" aria-labelledby="pinned-comments">
+      <li th:each="k : ${pinned}">
+        <th:block th:replace="~{casefile/fragments/comment :: comment(${k}, 'pinned', ${c.number}, ${c.pinnable})}">
+        </th:block></li>
+    </ol>
+    <h3 id="all-comments" th:text="#{tk.comment.all}">All comments</h3>
+  </th:block>
   <ol class="tk-comments" th:unless="${#lists.isEmpty(comments)}">
-    <li th:each="k : ${comments}">
-      <p class="text-body-secondary mb-1"
-         th:text="#{tk.comment.by(${k.author}, ${#temporals.format(k.writtenAt, 'yyyy-MM-dd HH:mm')})}">
-        Someone wrote on 2026-11-05 10:30</p>
-      <div class="tk-comment-body" tk:safe="${k.body}">Comment</div>
-    </li>
+    <li th:each="k : ${comments}" th:id="'comment-' + ${k.id}" tabindex="-1">
+      <th:block th:replace="~{casefile/fragments/comment :: comment(${k}, 'comment', ${c.number}, ${c.pinnable})}">
+      </th:block></li>
   </ol>
   <th:block th:if="${c.commentable}">
     <th:block th:replace="~{casefile/fragments/case-fields :: summary(#{tk.comment.errors})}"></th:block>

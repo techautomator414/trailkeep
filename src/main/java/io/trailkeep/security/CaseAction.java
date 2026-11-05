@@ -14,6 +14,8 @@ public enum CaseAction {
     EDIT,
     /** Add a comment or an attachment. */
     COMMENT,
+    /** Pin a comment or unpin it again (BUILD_PLAN §4.3); one action, as the plan gives both the same roles. */
+    PIN,
     /** Mark the case restricted. */
     RESTRICT,
     /** Mark the case standard again. */
