@@ -54,6 +54,8 @@ class AuditRecorderIT {
 
     @AfterEach
     void clearRequestContext() {
+        // Committed events with fixed case ids would collide with real case ids in later tests.
+        jdbc.update("DELETE FROM AUDIT_EVENT");
         MDC.clear();
         RequestContextHolder.resetRequestAttributes();
     }

@@ -2,6 +2,7 @@
 // Copyright 2026 Charlie Genova and contributors
 package io.trailkeep.casefile;
 
+import io.trailkeep.audit.AuditChanges;
 import io.trailkeep.audit.AuditEntry;
 import io.trailkeep.audit.AuditOrigin;
 import io.trailkeep.audit.AuditRecorder;
@@ -17,9 +18,12 @@ import io.trailkeep.shared.config.AppProperties;
 import io.trailkeep.user.TeamAdminService.TeamSummary;
 import io.trailkeep.user.UserDirectoryService;
 import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
+import jakarta.persistence.OptimisticLockException;
 import java.time.Instant;
 import java.time.InstantSource;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.Comparator;
@@ -33,8 +37,8 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
 
 /**
- * Creates cases and reads them for their page. The case row, its SLA row and its search row are written together
- * with the audit event in one transaction; the side tables are persisted directly because no read goes through
+ * Creates cases, reads them for their page and edits them. The case row, its SLA row and its search row are written
+ * together with the audit event in one transaction; the side tables are persisted directly because no read goes through
  * them here.
  */
 @Service
@@ -148,12 +152,7 @@ class DefaultCaseService implements CaseService {
     @Override
     @Transactional(readOnly = true)
     public CaseView view(Actor actor, String caseNumber) {
-        CaseNumber number;
-        try {
-            number = CaseNumber.parse(caseNumber);
-        } catch (IllegalArgumentException malformed) {
-            throw new CaseException(Kind.NOT_FOUND, "not a case number");
-        }
+        CaseNumber number = parse(caseNumber);
         CaseRow row = cases.findRow(scopes.forUser(actor.permissions()), number)
                 .orElseThrow(() -> new CaseException(Kind.NOT_FOUND, "case not found"));
         CaseRecord record = row.record();
@@ -172,7 +171,74 @@ class DefaultCaseService implements CaseService {
                 LocalDate.ofInstant(record.getOpenedAt(), zone),
                 record.getSubjectText(),
                 record.getDescription(),
-                sla(row.slaState(), row.slaDueAt()));
+                sla(row.slaState(), row.slaDueAt()),
+                permissions.isAllowed(actor.permissions(), facts(record), CaseAction.EDIT));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public EditableCase editable(Actor actor, String caseNumber) {
+        CaseRecord record = load(actor, caseNumber, CaseAction.EDIT);
+        return new EditableCase(
+                record.getCaseNumber(),
+                record.changes(),
+                record.getVersion(),
+                directory.displayName(record.getUpdatedBy()).orElse(""),
+                LocalDateTime.ofInstant(record.getUpdatedAt(), zone).truncatedTo(ChronoUnit.MINUTES));
+    }
+
+    @Override
+    public void edit(Actor actor, String caseNumber, int version, CaseChanges entered) {
+        CaseRecord record = load(actor, caseNumber, CaseAction.EDIT);
+        if (record.getVersion() != version) {
+            throw new CaseException(Kind.CONFLICT, "saved since the form was loaded");
+        }
+        CaseChanges changes = normalized(entered);
+        AuditChanges diff = audit.diff(record.changes(), changes);
+        if (diff.equals(AuditChanges.none())) {
+            return;
+        }
+        long caseId = id(record.getId());
+        long actorId = actor.permissions().userId();
+        Instant now = clock.instant();
+        record.apply(changes, actorId, now);
+        String text = changes.title() + "\n" + changes.description();
+        CaseSearch search = entityManager.find(CaseSearch.class, caseId, LockModeType.PESSIMISTIC_WRITE);
+        if (search == null) {
+            entityManager.persist(new CaseSearch(caseId, text, now));
+        } else {
+            search.rebuild(text, now);
+        }
+        try {
+            entityManager.flush();
+        } catch (OptimisticLockException concurrent) {
+            throw new CaseException(Kind.CONFLICT, "saved concurrently");
+        }
+        audit.record(new AuditEntry(
+                actorId, actor.displayName(), AuditOrigin.UI, caseId, "CASE", caseId, "CASE_UPDATED", diff));
+        LOG.info("Case id {} edited", caseId);
+    }
+
+    /** A readable case on which the actor may perform an action: 404 if unreadable, then 403 if not allowed. */
+    private CaseRecord load(Actor actor, String caseNumber, CaseAction action) {
+        CaseRecord record = cases.findOne(scopes.forUser(actor.permissions()), parse(caseNumber))
+                .orElseThrow(() -> new CaseException(Kind.NOT_FOUND, "case not found"));
+        if (!permissions.isAllowed(actor.permissions(), facts(record), action)) {
+            throw new CaseException(Kind.FORBIDDEN, "action not allowed on this case");
+        }
+        return record;
+    }
+
+    private static CaseNumber parse(String caseNumber) {
+        try {
+            return CaseNumber.parse(caseNumber);
+        } catch (IllegalArgumentException malformed) {
+            throw new CaseException(Kind.NOT_FOUND, "not a case number");
+        }
+    }
+
+    private static CaseFacts facts(CaseRecord record) {
+        return new CaseFacts(record.getTeamId(), record.getOwnerId(), record.getSensitivity(), record.getStatus());
     }
 
     /** Checks what the form offers as choices, and returns the case type's policy. */
@@ -216,6 +282,15 @@ class DefaultCaseService implements CaseService {
                 subject == null || subject.isBlank() ? null : subject.strip(),
                 fields.description().strip(),
                 fields.sensitivity());
+    }
+
+    private static CaseChanges normalized(CaseChanges changes) {
+        String subject = changes.subjectText();
+        return new CaseChanges(
+                changes.title().strip(),
+                changes.priority(),
+                subject == null || subject.isBlank() ? null : subject.strip(),
+                changes.description().strip());
     }
 
     private static long id(@Nullable Long id) {
