@@ -7,6 +7,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import io.trailkeep.testsupport.PostgresTestcontainersConfiguration;
 import io.trailkeep.testsupport.RequiresDocker;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -82,6 +83,23 @@ class UserDirectoryIT {
 
         assertThat(directory.activeManagersOf(team)).containsExactly(manager);
         assertThat(directory.activeComplianceAdmins()).contains(reader).doesNotContain(leaver, manager);
+    }
+
+    @Test
+    void namesAndTeamsAreLookedUpManyAtOnceAndUnknownIdsAreLeftOut() {
+        long first = user();
+        long second = user();
+        long team = team();
+
+        assertThat(directory.displayNames(List.of(first, second, Long.MAX_VALUE)))
+                .containsOnlyKeys(first, second)
+                .containsValue("Synthetic User");
+        assertThat(directory.teams(List.of(team, Long.MAX_VALUE)))
+                .containsOnlyKeys(team)
+                .hasEntrySatisfying(
+                        team, summary -> assertThat(summary.active()).isTrue());
+        assertThat(directory.displayNames(List.of())).isEmpty();
+        assertThat(directory.teams(List.of())).isEmpty();
     }
 
     private long user() {

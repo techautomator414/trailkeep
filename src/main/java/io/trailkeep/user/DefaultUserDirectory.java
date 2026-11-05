@@ -74,6 +74,25 @@ class DefaultUserDirectory implements UserDirectoryService {
     }
 
     @Override
+    public Map<Long, String> displayNames(Collection<Long> userIds) {
+        return userIds.isEmpty()
+                ? Map.of()
+                : users.findByIdIn(userIds).stream()
+                        .collect(Collectors.toUnmodifiableMap(AppUser::getId, AppUser::getDisplayName));
+    }
+
+    @Override
+    public Map<Long, TeamAdminService.TeamSummary> teams(Collection<Long> teamIds) {
+        return teamIds.isEmpty()
+                ? Map.of()
+                : teams.findByIdIn(teamIds).stream()
+                        .collect(Collectors.toUnmodifiableMap(
+                                Team::getId,
+                                team -> new TeamAdminService.TeamSummary(
+                                        Objects.requireNonNull(team.getId()), team.getName(), team.isActive())));
+    }
+
+    @Override
     public List<TeamAdminService.UserChoice> eligibleOwners(long teamId) {
         Set<Long> systemAdmins = globalRoles.findByIdRole(GlobalRole.SYSTEM_ADMIN).stream()
                 .map(role -> role.getId().userId())

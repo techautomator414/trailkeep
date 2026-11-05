@@ -11,6 +11,7 @@ import io.trailkeep.user.TeamAdminService;
 import io.trailkeep.user.TeamRole;
 import io.trailkeep.user.UserDirectoryService;
 import io.trailkeep.user.UserPermissions;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -50,6 +51,16 @@ class CasePermissionServiceTest {
         @Override
         public Optional<TeamAdminService.TeamSummary> team(long teamId) {
             return Optional.empty();
+        }
+
+        @Override
+        public Map<Long, String> displayNames(Collection<Long> userIds) {
+            return Map.of();
+        }
+
+        @Override
+        public Map<Long, TeamAdminService.TeamSummary> teams(Collection<Long> teamIds) {
+            return Map.of();
         }
 
         @Override

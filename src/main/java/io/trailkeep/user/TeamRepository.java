@@ -2,6 +2,7 @@
 // Copyright 2026 Charlie Genova and contributors
 package io.trailkeep.user;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.repository.Repository;
@@ -14,6 +15,8 @@ interface TeamRepository extends Repository<Team, Long> {
     Optional<Team> findById(Long id);
 
     Optional<Team> findByName(String name);
+
+    List<Team> findByIdIn(Collection<Long> ids);
 
     List<Team> findAllByOrderByNameAsc();
 }

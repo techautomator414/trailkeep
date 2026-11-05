@@ -5,7 +5,10 @@ package io.trailkeep.casefile;
 import io.trailkeep.shared.CaseNumber;
 import io.trailkeep.shared.CaseStatus;
 import io.trailkeep.shared.Sensitivity;
+import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneId;
+import java.time.temporal.ChronoUnit;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -64,5 +67,15 @@ public record CaseView(
      * @param dueOn the due day, or {@code null} when no SLA applies
      * @param daysLeft whole days from today to the due day, or 0 when no SLA applies
      */
-    public record Sla(SlaState state, @Nullable LocalDate dueOn, long daysLeft) {}
+    public record Sla(SlaState state, @Nullable LocalDate dueOn, long daysLeft) {
+
+        /** The chip of an SLA row as read; no row, or no due instant, is "no SLA". */
+        static Sla of(@Nullable SlaState state, @Nullable Instant dueAt, LocalDate today, ZoneId zone) {
+            if (state == null || dueAt == null) {
+                return new Sla(SlaState.NOT_APPLICABLE, null, 0);
+            }
+            LocalDate dueOn = LocalDate.ofInstant(dueAt, zone);
+            return new Sla(state, dueOn, ChronoUnit.DAYS.between(today, dueOn));
+        }
+    }
 }

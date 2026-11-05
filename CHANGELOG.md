@@ -38,6 +38,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Cases list (WP-15 part 1a): `GET /cases` (and "Cases" in the main navigation) lists the cases the person may read,
+  archived ones aside, 25 a page, from projections with no entity loaded, in four statements per page. Sort by case
+  number, title, priority, SLA due date or opening date from an allow-list; any other column, and any other value no
+  page offers, is 422. Unreadable cases are absent from rows and counts exactly as if they did not exist. The table
+  has a caption, scoped headers and `aria-sort`; sorting and paging swap the results with htmx, keep focus on the
+  control used and announce the count, and work as plain links without JavaScript. `UserDirectoryService` gains batch
+  `displayNames` and `teams` lookups.
+
 - Attachment download and quarantine Release (WP-14 part 4): `GET /cases/{number}/attachments/{id}` answers 404 for
   an unreadable case or an id not of that case, 403 for a quarantined file, and 503 with `Retry-After` when all
   `app.attachments.max-concurrent-downloads` (default 8) are streaming; otherwise it streams the file one 1 MiB chunk

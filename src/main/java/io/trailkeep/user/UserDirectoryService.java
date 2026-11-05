@@ -2,7 +2,9 @@
 // Copyright 2026 Charlie Genova and contributors
 package io.trailkeep.user;
 
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 /** Read access to users' authority, for {@code security} and the case modules. */
@@ -46,6 +48,22 @@ public interface UserDirectoryService {
      * @return the team, or empty for an unknown team
      */
     Optional<TeamAdminService.TeamSummary> team(long teamId);
+
+    /**
+     * Display names of several users in one lookup, for lists.
+     *
+     * @param userIds the users' ids
+     * @return each known user's name by id; unknown ids are absent
+     */
+    Map<Long, String> displayNames(Collection<Long> userIds);
+
+    /**
+     * Several teams in one lookup, for lists.
+     *
+     * @param teamIds the team ids
+     * @return each known team by id; unknown ids are absent
+     */
+    Map<Long, TeamAdminService.TeamSummary> teams(Collection<Long> teamIds);
 
     /**
      * The enabled members who may own a team's cases (Analysts and Managers, never a System Admin), by name.
