@@ -9,6 +9,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Documentation
 
+- `HANDOFF.md` open owner items 6 and 7: the bnd annotations licence metadata (pinned at 4.3.1) and how ClamAV
+  signatures are kept current in a cluster.
 - Importer design (`docs/design/importer.md`) and ADR-0014 (Proposed): import compliance case history from SQL Server,
   Oracle or PostgreSQL, or from files exported from them, through a canonical staging model, a validated mapping file,
   a dry run with an authenticated in-app sign-off by any Compliance Admin, bound to the recorded scanning mode, an

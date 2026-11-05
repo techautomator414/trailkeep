@@ -153,6 +153,21 @@ code change.
    is done every "needs manual confirmation" row stays unconfirmed (#30).
 5. **Spring Session stays pinned at 4.1.0** by owner decision on #24 (license metadata of 4.1.1 and 4.0.5). Watch
    the Spring Session security advisories; revisit before any upgrade.
+6. **bnd annotations licence metadata.** `pom.xml` pins `biz.aQute.bnd:biz.aQute.bnd.annotation` at 4.3.1, `provided`
+   scope: compile-time only, not shipped. `tika-core`'s package-info classes carry bnd's `@Version`, and without the
+   annotation type javac warns, which `-Werror` turns into an error (#55). 4.3.1 declares Apache-2.0 and EPL-2.0 as two
+   separate licences, both on `security/licenses-allowed.txt`, so the third-party licence check passes. Later releases
+   declare one string, `(Apache-2.0 OR EPL-2.0)`, which the check does not recognise. Decide: keep the pin as is; or
+   before upgrading, add a `licenseMerge` for that string or list it in the allow-list (a gate change, so recorded in
+   its own PR); or drop the dependency, which needs another way to compile `tika-core`'s annotated classes without
+   the warning. Nothing is required while the pin stays.
+7. **ClamAV signature updates in a cluster.** `deploy/base/clamav.yaml` runs clamd from the official image with no
+   `freshclam` and no egress (ADR-0012), so signatures are those baked into the image tag (the file's header says the
+   same). Decide how they stay current: roll the image tag on a fixed cadence (rebuild or re-pull with current
+   databases); add a `freshclam` sidecar, with a writable volume and egress to the signature mirror in an overlay,
+   which also relaxes the pod's no-egress `NetworkPolicy`; or point `freshclam` at a private mirror. Setting
+   `app.attachments.scanning: external` (ADR-0013, `deploy/overlays/external-scanning`) removes the ClamAV pod and
+   with it this decision, at the cost of files being stored `NOT_SCANNED`.
 
 Items 2 to 4 are the open Phase 1 exit items from #30; until they are done Phase 1 is not complete in the plan's own
 terms.
