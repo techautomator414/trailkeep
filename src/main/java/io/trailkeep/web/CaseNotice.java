@@ -27,7 +27,13 @@ enum CaseNotice {
     /** Comment pinned. */
     PINNED,
     /** Comment unpinned. */
-    UNPINNED;
+    UNPINNED,
+    /** File uploaded and scanned clean. */
+    UPLOADED,
+    /** File uploaded, a signature found: stored quarantined. */
+    QUARANTINED,
+    /** File uploaded in {@code external} scan mode: stored without a scan by Trailkeep. */
+    UPLOADED_NOT_SCANNED;
 
     private static final String ATTRIBUTE = "tk.caseNotice";
 

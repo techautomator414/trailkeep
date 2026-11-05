@@ -14,6 +14,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Attachment upload and the Attachments section of the case page (WP-14 part 3): `POST /cases/{number}/attachments`
+  answers 404 for an unreadable case, then 403 unless the matrix allows `COMMENT` ("add comment / attachment"),
+  before the file is read; a refused file is 422 with its reason and an unavailable scanner is 503 with "try again",
+  storing nothing. The scan runs with no transaction open; the row, its chunks and `ATTACHMENT_ADDED` (file name
+  redacted, scan mode recorded) are then written in one transaction. Files are listed with size, uploader, time and
+  a Verified, Quarantined or "Not scanned by Trailkeep (scanned upstream)" badge; the form states the allowed types
+  and maximum size. Downloads and Release follow in part 4.
 - Scanning mode (ADR-0013): `app.attachments.scanning` (`APP_ATTACHMENTS_SCANNING`) is `clamd` by default, or
   `external` for organizations that scan upstream or at endpoints. It is deployment configuration read at startup,
   so no account in the application can turn scanning off. In `external` mode no clamd host, SSL bundle or ClamAV pod

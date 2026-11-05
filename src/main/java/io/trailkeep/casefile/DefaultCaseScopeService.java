@@ -5,11 +5,17 @@ package io.trailkeep.casefile;
 import io.trailkeep.security.CaseAction;
 import io.trailkeep.security.CaseFacts;
 import io.trailkeep.security.CasePermissionService;
+import io.trailkeep.shared.CaseNumber;
 import io.trailkeep.shared.CaseStatus;
 import io.trailkeep.shared.Sensitivity;
 import io.trailkeep.shared.access.CaseAccessPath;
 import io.trailkeep.shared.access.CaseScope;
 import io.trailkeep.user.UserPermissions;
+import jakarta.persistence.criteria.CriteriaBuilder;
+import jakarta.persistence.criteria.CriteriaQuery;
+import jakarta.persistence.criteria.Expression;
+import jakarta.persistence.criteria.Predicate;
+import jakarta.persistence.criteria.Root;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -55,6 +61,16 @@ class DefaultCaseScopeService implements CaseScopeService {
             }
         }
         return new PrincipalCaseScope(user.userId(), grants, cases::exists);
+    }
+
+    @Override
+    public Predicate readableCase(
+            CaseScope scope, CaseNumber caseNumber, Expression<?> caseId, CriteriaQuery<?> query, CriteriaBuilder cb) {
+        Root<CaseRecord> record = query.from(CaseRecord.class);
+        return cb.and(
+                cb.equal(caseId, record.get("id")),
+                cb.equal(record.get("caseNumber"), caseNumber.toString()),
+                scope.toPredicate(record, query, cb));
     }
 
     private boolean views(UserPermissions user, long teamId, Sensitivity sensitivity, boolean owner) {

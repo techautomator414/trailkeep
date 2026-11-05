@@ -121,6 +121,18 @@ public interface CaseService {
     EditableCase editable(Actor actor, String caseNumber);
 
     /**
+     * The id of a case the actor may attach a file to, for the {@code document} module: {@code NOT_FOUND} as for
+     * {@link #view}; {@code FORBIDDEN} if the matrix denies {@code COMMENT}, because "add comment / attachment" is one
+     * row of BUILD_PLAN §3.2. It runs in the caller's transaction if there is one, so a store re-checks the case as it
+     * stands then.
+     *
+     * @param actor the actor
+     * @param caseNumber the case number as it appears in the URL
+     * @return the case's id
+     */
+    long attachableCaseId(Actor actor, String caseNumber);
+
+    /**
      * Saves an edit made against {@code version} and records {@code CASE_UPDATED} with the changed fields (subject
      * and description redacted), rebuilding the search text from title, description and every comment under its row
      * lock. Saving unchanged values writes nothing. {@code NOT_FOUND} and {@code FORBIDDEN} as for {@link #editable};

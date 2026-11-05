@@ -11,6 +11,9 @@ import io.trailkeep.casefile.CaseService;
 import io.trailkeep.casefile.CaseService.Actor;
 import io.trailkeep.casefile.CaseView;
 import io.trailkeep.casefile.TitleWarning;
+import io.trailkeep.document.AttachmentRejectedException;
+import io.trailkeep.document.CaseAttachmentService;
+import io.trailkeep.document.ScannerUnavailableException;
 import io.trailkeep.security.TrailkeepOidcUser;
 import io.trailkeep.shared.CaseNumber;
 import io.trailkeep.shared.DomainException.Kind;
@@ -19,6 +22,8 @@ import io.trailkeep.user.UserDirectoryService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
+import java.io.IOException;
+import java.io.InputStream;
 import java.time.InstantSource;
 import java.time.LocalDate;
 import java.util.HashMap;
@@ -35,6 +40,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.multipart.MultipartFile;
 
 /**
  * The one-page create form (BUILD_PLAN §4.2) and the case page (§4.3), which shows a one-shot {@link CaseNotice}. The
@@ -43,7 +49,9 @@ import org.springframework.web.bind.annotation.RequestParam;
  * 422 when a field is invalid or the title trips the PHI heuristic and has not been confirmed. A comment is posted
  * from the case page as a plain form; a blank or too long one re-renders the page with 422, the text kept, after
  * {@link CaseCommentService} has decided 404 and 403. Pin and Unpin are one-button forms per comment, decided in the
- * same order; an id naming no comment of the case is 422.
+ * same order; an id naming no comment of the case is 422. A file is uploaded from the same page as a plain multipart
+ * form, decided by {@link CaseAttachmentService} in the same order; a refused file re-renders the page with 422, and
+ * an unavailable scanner with 503 and "try again" (nothing is stored either way).
  */
 @Controller
 class CaseController {
@@ -65,6 +73,7 @@ class CaseController {
     private final CaseService cases;
     private final CaseAssignmentService assignments;
     private final CaseCommentService comments;
+    private final CaseAttachmentService attachments;
     private final UserDirectoryService directory;
     private final InstantSource clock;
     private final AppProperties app;
@@ -73,12 +82,14 @@ class CaseController {
             CaseService cases,
             CaseAssignmentService assignments,
             CaseCommentService comments,
+            CaseAttachmentService attachments,
             UserDirectoryService directory,
             InstantSource clock,
             AppProperties app) {
         this.cases = cases;
         this.assignments = assignments;
         this.comments = comments;
+        this.attachments = attachments;
         this.directory = directory;
         this.clock = clock;
         this.app = app;
@@ -169,6 +180,37 @@ class CaseController {
         return "redirect:/cases/" + number + "#comment-" + commentId;
     }
 
+    @PostMapping("/cases/{number}/attachments")
+    String attach(
+            @AuthenticationPrincipal TrailkeepOidcUser principal,
+            @PathVariable String number,
+            @RequestParam(required = false) @Nullable MultipartFile file,
+            HttpServletRequest request,
+            HttpServletResponse response,
+            Model model)
+            throws IOException {
+        Actor actor = actor(principal);
+        String name = file == null ? "" : String.valueOf(file.getOriginalFilename());
+        try (InputStream content = file == null ? InputStream.nullInputStream() : file.getInputStream()) {
+            CaseNotice notice = switch (attachments.upload(actor, number, name, content)) {
+                case CLEAN -> CaseNotice.UPLOADED;
+                case QUARANTINED -> CaseNotice.QUARANTINED;
+                case NOT_SCANNED -> CaseNotice.UPLOADED_NOT_SCANNED;
+                case RELEASED -> throw new IllegalStateException("an upload is never stored released");
+            };
+            notice.leaveFor(request, CaseNumber.parse(number));
+            return "redirect:/cases/" + number + "#attachments";
+        } catch (AttachmentRejectedException rejected) {
+            response.setStatus(HttpStatus.UNPROCESSABLE_CONTENT.value());
+            model.addAttribute("uploadError", rejected.reason().name());
+        } catch (ScannerUnavailableException unavailable) {
+            // Not a client error: the service cannot scan now, so nothing was stored and the person may try again.
+            response.setStatus(HttpStatus.SERVICE_UNAVAILABLE.value());
+            model.addAttribute("uploadError", "SCANNER");
+        }
+        return render(actor, number, request, null, model);
+    }
+
     /** A submitted comment id; anything unreadable names no comment, which the service refuses after 404 and 403. */
     private static long parse(@Nullable String value) {
         try {
@@ -189,6 +231,8 @@ class CaseController {
         model.addAttribute("pinned", all.stream().filter(CommentView::pinned).toList());
         model.addAttribute("comment", rejected == null ? "" : rejected);
         model.addAttribute("errors", rejected == null ? List.of() : List.of("body"));
+        model.addAttribute("attachments", attachments.attachments(actor, number));
+        model.addAttribute("limits", attachments.limits());
         // Taken only once the case has been read, so a page that answers 404 never consumes a notice.
         model.addAttribute("notice", CaseNotice.take(request, view.number()));
         return "casefile/case";

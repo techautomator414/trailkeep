@@ -82,9 +82,11 @@ class CaseRootedInvisibilityIT {
         CaseNumber restricted = seed.caseRow(team, owner, Sensitivity.RESTRICTED, CaseStatus.OPEN);
         long restrictedId = seed.caseId(restricted);
         seed.pin(seed.comment(restrictedId, owner, "A synthetic comment on the restricted case"), restrictedId, owner);
+        seed.attachment(restrictedId, owner, "restricted-synthetic.txt", "CLEAN");
         CaseNumber otherTeam = seed.caseRow(seed.team(), owner, Sensitivity.STANDARD, CaseStatus.OPEN);
         long otherTeamId = seed.caseId(otherTeam);
         seed.pin(seed.comment(otherTeamId, owner, "A synthetic comment in another team"), otherTeamId, owner);
+        seed.attachment(otherTeamId, owner, "other-team-synthetic.txt", "QUARANTINED");
         CaseNumber absent = new CaseNumber("SEED", 2026, 1);
         CaseScope ownerScope = scopes.forUser(analyst(owner, team));
         CaseScope colleagueScope = scopes.forUser(analyst(colleague, team));
@@ -94,7 +96,11 @@ class CaseRootedInvisibilityIT {
         assertThat(methods)
                 .extracting(rooted -> rooted.repository().getSimpleName())
                 .as("repositories found by the scan")
-                .contains("CaseRecordRepository", "CaseCommentRepository", "CaseCommentPinRepository");
+                .contains(
+                        "CaseRecordRepository",
+                        "CaseCommentRepository",
+                        "CaseCommentPinRepository",
+                        "CaseAttachmentRepository");
         int distinguishing = 0;
         for (Rooted rooted : methods) {
             Method method = rooted.method();
