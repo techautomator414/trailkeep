@@ -23,6 +23,8 @@
 --   CASE_SEARCH           S I U      -            search text side table (V4)
 --   CASE_COMMENT          S I        -            insert-only; a correction is a new comment (V4.1)
 --   CASE_COMMENT_PIN      S I   D    -            pins; unpinning deletes the row (V4.2)
+--   CASE_ATTACHMENT       S I (U)    -            UPDATE of the four release columns only (V4.3)
+--   CASE_ATTACHMENT_CHUNK S I        -            content is never changed (V4.3)
 --   SPRING_SESSION        S I U D    -            Spring Session JDBC (V3.1)
 --   SPRING_SESSION_ATTRIBUTES S I U D -
 --   OIDC_SESSION          S I U D    -            back-channel logout registry (V3.1)
@@ -37,9 +39,10 @@
 --   SEQ_CASE_RECORD       SELECT     -
 --   SEQ_CASE_NUMBER       SELECT     -            case numbers, one at a time
 --   SEQ_CASE_COMMENT      SELECT     -
+--   SEQ_CASE_ATTACHMENT   SELECT     -
 --
 -- Later migrations add their rows to the cursor below. Fixed rules for them: the app user has no UPDATE or DELETE
--- on CASE_COMMENT, AUDIT_EVENT and ALERT_LEDGER; it may DELETE only from CASE_COMMENT_PIN, SAVED_VIEW, USER_ALERT,
+-- on CASE_COMMENT, CASE_ATTACHMENT_CHUNK, AUDIT_EVENT and ALERT_LEDGER, and no DELETE on CASE_ATTACHMENT; it may DELETE only from CASE_COMMENT_PIN, SAVED_VIEW, USER_ALERT,
 -- SPRING_SESSION*, OIDC_SESSION, SHEDLOCK and importer staging tables, besides the membership tables above.
 -- DatabaseGrantsIT asserts this matrix by executing each statement as each user.
 --
@@ -68,6 +71,9 @@ DECLARE
     UNION ALL SELECT 'CASE_COMMENT', 'SELECT,INSERT', UPPER('${app_user}') FROM DUAL
     UNION ALL SELECT 'SEQ_CASE_COMMENT', 'SELECT', UPPER('${app_user}') FROM DUAL
     UNION ALL SELECT 'CASE_COMMENT_PIN', 'SELECT,INSERT,DELETE', UPPER('${app_user}') FROM DUAL
+    UNION ALL SELECT 'CASE_ATTACHMENT', 'SELECT,INSERT', UPPER('${app_user}') FROM DUAL
+    UNION ALL SELECT 'CASE_ATTACHMENT_CHUNK', 'SELECT,INSERT', UPPER('${app_user}') FROM DUAL
+    UNION ALL SELECT 'SEQ_CASE_ATTACHMENT', 'SELECT', UPPER('${app_user}') FROM DUAL
     UNION ALL SELECT 'SPRING_SESSION', 'SELECT,INSERT,UPDATE,DELETE', UPPER('${app_user}') FROM DUAL
     UNION ALL SELECT 'SPRING_SESSION_ATTRIBUTES', 'SELECT,INSERT,UPDATE,DELETE', UPPER('${app_user}') FROM DUAL
     UNION ALL SELECT 'OIDC_SESSION', 'SELECT,INSERT,UPDATE,DELETE', UPPER('${app_user}') FROM DUAL;
@@ -94,5 +100,10 @@ BEGIN
       EXECUTE IMMEDIATE 'REVOKE ' || held.PRIVILEGE || ' ON ' || held.TABLE_NAME || ' FROM ' || held.GRANTEE;
     END IF;
   END LOOP;
+
+  -- Release (WP-14) is the only change an attachment row sees. Column privileges live in USER_COL_PRIVS, not in
+  -- USER_TAB_PRIVS, so the loop above neither sees nor revokes this grant; it is granted last regardless.
+  EXECUTE IMMEDIATE 'GRANT UPDATE (SCAN_STATUS, RELEASED_BY, RELEASED_AT, RELEASED_REASON) ON CASE_ATTACHMENT TO '
+    || UPPER('${app_user}');
 END;
 /
