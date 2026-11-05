@@ -4,6 +4,7 @@ package io.trailkeep.casefile;
 
 import io.trailkeep.shared.CaseNumber;
 import io.trailkeep.shared.access.CaseScope;
+import java.util.List;
 import java.util.Optional;
 
 /** The scoped case queries; implemented with the Criteria API in {@link CaseRecordQueriesImpl}. */
@@ -36,4 +37,25 @@ interface CaseRecordQueries {
      * @return the case page's row, or empty
      */
     Optional<CaseRow> findRow(CaseScope scope, CaseNumber caseNumber);
+
+    /**
+     * How many cases the scope reads that match a filter. The same predicate as {@link #list}, so a case missing
+     * from the rows is missing from the count.
+     *
+     * @param scope the caller's scope
+     * @param filter the filter
+     * @return the number of matching readable cases
+     */
+    long count(CaseScope scope, CaseFilter filter);
+
+    /**
+     * One page of the cases the scope reads that match a query's filter, in its order, with the case type's name and
+     * the SLA state, in one statement. Ties are broken by id, so pages never overlap.
+     *
+     * @param scope the caller's scope
+     * @param query the filter, order and page
+     * @param pageSize the rows per page
+     * @return the page's rows
+     */
+    List<CaseListRow> list(CaseScope scope, CaseListQuery query, int pageSize);
 }
