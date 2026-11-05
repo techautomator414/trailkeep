@@ -127,6 +127,22 @@ public final class CaseSeed {
     }
 
     /**
+     * Pins a seeded comment.
+     *
+     * @param commentId the comment
+     * @param caseId the comment's case
+     * @param pinnedBy who pinned it
+     */
+    public void pin(long commentId, long caseId, long pinnedBy) {
+        jdbc.update(
+                "INSERT INTO CASE_COMMENT_PIN (COMMENT_ID, CASE_ID, PINNED_BY, PINNED_AT) VALUES (?, ?, ?, ?)",
+                commentId,
+                caseId,
+                pinnedBy,
+                NOW);
+    }
+
+    /**
      * Gives a user a role in a team.
      *
      * @param userId the user

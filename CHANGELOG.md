@@ -9,10 +9,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- ADR-0006 no longer says both drivers accept the character-stream bind; on Oracle the search append binds a CLOB.
 - Oracle Free 23 `oracle-it` failures (ORA-12516) in `OracleDatabaseGrantsIT`: the grants probes share one connection per grantee and test contexts use a small Hikari pool.
 
 ### Added
 
+- Comment pins (WP-13 part 3): `V4_2__comment_pin` adds `CASE_COMMENT_PIN` with the `CaseCommentPin` entity and a
+  scoped `@CaseRooted` repository; a composite foreign key ties each pin to a comment of its own case, and the runtime
+  user may SELECT, INSERT and DELETE pins while `CASE_COMMENT` stays insert-only. A new `PIN` matrix action (whoever
+  may comment) gates **Pin comment** / **Unpin comment** buttons on the case page, `POST
+  /cases/{number}/comments/pin` and `/unpin` (404, 403, then 422 for an id naming no comment of the case), audited as
+  `COMMENT_PINNED` / `COMMENT_UNPINNED`. Pinned comments are listed above all comments and marked "Pinned".
 - Comments on the case page (WP-13 part 2): a Comments section lists them oldest first, rendered only through
   `tk:safe`, and `POST /cases/{number}/comments` posts one with the author's name as a snapshot (404, then 403 for
   roles without `COMMENT`, then 422 for a blank comment or one over 20 000 characters, the text kept). Each comment

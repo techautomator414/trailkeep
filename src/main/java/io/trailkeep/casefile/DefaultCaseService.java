@@ -182,7 +182,8 @@ class DefaultCaseService implements CaseService {
                 allowed(actor, record, CaseAction.REASSIGN),
                 allowed(actor, record, CaseAction.RESTRICT),
                 allowed(actor, record, CaseAction.UNRESTRICT),
-                allowed(actor, record, CaseAction.COMMENT));
+                allowed(actor, record, CaseAction.COMMENT),
+                allowed(actor, record, CaseAction.PIN));
     }
 
     @Override

@@ -9,6 +9,7 @@ import com.microsoft.playwright.Page;
 import com.microsoft.playwright.Playwright;
 import com.microsoft.playwright.PlaywrightException;
 import com.microsoft.playwright.Response;
+import io.trailkeep.casefile.CaseCommentService;
 import io.trailkeep.casefile.CaseFields;
 import io.trailkeep.casefile.CasePriority;
 import io.trailkeep.casefile.CaseService;
@@ -47,7 +48,9 @@ import org.springframework.test.context.DynamicPropertySource;
  * Comments in a real browser (WP-13, BUILD_PLAN §4.3, §10.1): the dev realm's {@code alpha.analyst} posts a blank
  * comment by keyboard and gets the 422 page with the focused error summary, then posts one with a link, code, a list
  * and a quote, which the case page shows rendered after the one-shot notice. Every state (empty, error, with
- * comments) has 0 axe violations and no CSP violation in the console. The rows the test commits are removed
+ * comments) has 0 axe violations and no CSP violation in the console. The analyst also pins a comment by keyboard,
+ * which then shows in the pinned section and marked in the list with focus continuing at that comment, and unpins it;
+ * both states are equally clean. The rows the test commits are removed
  * afterwards. Browser handling follows {@link ShellAccessibilityIT}.
  */
 // "IT" is the Failsafe suffix Part B mandates for integration tests, not an abbreviation.
@@ -83,6 +86,9 @@ class CaseCommentsIT {
 
     @Autowired
     private CaseService cases;
+
+    @Autowired
+    private CaseCommentService comments;
 
     @Autowired
     private JdbcTemplate jdbc;
@@ -132,6 +138,7 @@ class CaseCommentsIT {
         String ofTeam = " WHERE CASE_ID IN (SELECT ID FROM CASE_RECORD WHERE TEAM_ID = ?)";
         if (team != 0) {
             jdbc.update("DELETE FROM AUDIT_EVENT" + ofTeam, team);
+            jdbc.update("DELETE FROM CASE_COMMENT_PIN" + ofTeam, team);
             jdbc.update("DELETE FROM CASE_COMMENT" + ofTeam, team);
             jdbc.update("DELETE FROM CASE_SEARCH" + ofTeam, team);
             jdbc.update("DELETE FROM CASE_SLA" + ofTeam, team);
@@ -195,6 +202,52 @@ class CaseCommentsIT {
         page.reload();
         assertClean();
         assertThat(page.querySelector("[data-tk-toast]")).isNull();
+    }
+
+    @Test
+    void anAnalystPinsAndUnpinsACommentByKeyboard() {
+        page.navigate(KEYCLOAK.app("/"));
+        new SignInPage(page).signIn("alpha.analyst", KeycloakDevRealm.PASSWORD, KEYCLOAK.app(""));
+        page.waitForLoadState();
+        consoleProblems.clear();
+        long analyst = Objects.requireNonNull(
+                jdbc.queryForObject("SELECT ID FROM APP_USER WHERE EXTERNAL_ID = ?", Long.class, ALPHA_ANALYST));
+        CaseSeed seed = new CaseSeed(jdbc);
+        team = seed.team();
+        caseType = seed.caseType();
+        seed.member(analyst, team, TeamRole.ANALYST);
+        CaseNumber number = cases.create(actor(analyst), fields(analyst));
+        comments.post(actor(analyst), number.toString(), "A synthetic comment worth *pinning*");
+        final long comment = Objects.requireNonNull(
+                jdbc.queryForObject("SELECT ID FROM CASE_COMMENT WHERE CASE_ID = ?", Long.class, seed.caseId(number)));
+
+        page.navigate(KEYCLOAK.app("/cases/" + number));
+        assertClean();
+        assertThat(page.querySelector("#pinned-comments")).isNull();
+        page.focus("#comment-" + comment + " button[type=submit]");
+        assertThat(page.evaluate("() => document.activeElement.textContent.trim()"))
+                .isEqualTo("Pin comment");
+        page.keyboard().press("Enter");
+        page.waitForURL(url -> url.endsWith("/cases/" + number + "#comment-" + comment));
+        assertClean();
+        assertThat(page.textContent("[data-tk-toast]")).contains("The comment was pinned.");
+        assertThat(page.textContent("#pinned-comments")).isEqualTo("Pinned comments");
+        assertThat(page.textContent(".tk-pinned .tk-comment-body")).contains("A synthetic comment worth pinning");
+        assertThat(page.textContent("#comment-" + comment)).contains("Pinned");
+        page.keyboard().press("Tab");
+        assertThat(page.evaluate("() => document.activeElement.textContent.trim()"))
+                .as("sequential focus starts at the comment that was pinned")
+                .isEqualTo("Unpin comment");
+        assertThat(page.evaluate("() => document.activeElement.closest('li').id"))
+                .isEqualTo("comment-" + comment);
+
+        page.keyboard().press("Enter");
+        page.waitForSelector("text=The comment was unpinned.");
+        assertClean();
+        assertThat(page.url()).endsWith("/cases/" + number + "#comment-" + comment);
+        assertThat(page.textContent("[data-tk-toast]")).contains("The comment was unpinned.");
+        assertThat(page.querySelector("#pinned-comments")).isNull();
+        assertThat(page.textContent("#comment-" + comment)).doesNotContain("Pinned");
     }
 
     private void assertClean() {

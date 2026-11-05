@@ -23,7 +23,11 @@ enum CaseNotice {
     /** Marked standard. */
     UNRESTRICTED,
     /** Comment posted. */
-    COMMENTED;
+    COMMENTED,
+    /** Comment pinned. */
+    PINNED,
+    /** Comment unpinned. */
+    UNPINNED;
 
     private static final String ATTRIBUTE = "tk.caseNotice";
 

@@ -7,6 +7,7 @@ import static io.trailkeep.security.CaseAction.CREATE;
 import static io.trailkeep.security.CaseAction.DECIDE_CLOSURE;
 import static io.trailkeep.security.CaseAction.DOWNLOAD_ATTACHMENT;
 import static io.trailkeep.security.CaseAction.EDIT;
+import static io.trailkeep.security.CaseAction.PIN;
 import static io.trailkeep.security.CaseAction.REASSIGN;
 import static io.trailkeep.security.CaseAction.REASSIGN_APPROVER;
 import static io.trailkeep.security.CaseAction.RELEASE_QUARANTINE;
@@ -154,7 +155,7 @@ class PermissionMatrixTest {
         boolean mayManage = senior(c.role()) || c.owner();
         return switch (c.action()) {
             case EDIT, REQUEST_CLOSURE -> s == OPEN;
-            case COMMENT, REQUEST_UPDATE -> s == OPEN || s == PENDING_CLOSURE;
+            case COMMENT, PIN, REQUEST_UPDATE -> s == OPEN || s == PENDING_CLOSURE;
             case RESTRICT -> c.sensitivity() == STANDARD && mayManage;
             case REASSIGN -> (s == OPEN || s == CLOSED) && mayManage;
             default -> seniorOnly(c);
@@ -204,6 +205,15 @@ class PermissionMatrixTest {
         assertThat(new Combination(MatrixRole.ANALYST, false, STANDARD, OPEN, REQUEST_CLOSURE).decidedBy(MATRIX))
                 .isTrue();
         assertThat(new Combination(MatrixRole.MANAGER, false, RESTRICTED, OPEN, RESTRICT).decidedBy(MATRIX))
+                .isFalse();
+        assertThat(new Combination(MatrixRole.ANALYST, false, STANDARD, PENDING_CLOSURE, PIN).decidedBy(MATRIX))
+                .as("whoever may comment may pin")
+                .isTrue();
+        assertThat(new Combination(MatrixRole.READER, false, STANDARD, OPEN, PIN).decidedBy(MATRIX))
+                .as("Readers only read")
+                .isFalse();
+        assertThat(new Combination(MatrixRole.MANAGER, false, STANDARD, CLOSED, PIN).decidedBy(MATRIX))
+                .as("a closed case's comment trail is not rearranged")
                 .isFalse();
     }
 }
