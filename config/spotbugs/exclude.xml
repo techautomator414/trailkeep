@@ -85,6 +85,13 @@
     th:text and audited only as an HMAC. Covered by CaseAttachmentDownloadIT, CaseAttachmentReleaseIT and
     AttachmentDispositionTest (allowed role, nearest disallowed role 403, unreadable 404, another case's id 404,
     CSRF 403, 422, hostile names). Approved in the security-reviewer role on #59.
+    CaseListController (WP-15 part 1a): GET /cases only, behind login, no state change. CaseListQuery.parse reads the
+    query string into the allow-listed CaseSort, a direction and a page number (422 for anything else, an unknown sort
+    column included); CaseListService counts and lists only through the person's CaseScope, rebuilding permissions
+    from the database per request, so unreadable cases are absent from rows and counts. The HX-Trigger header is used
+    only if it matches a fixed id pattern, and every value is echoed through th:text or built from enum names and
+    numbers by CaseListQuery.toQueryString. Covered by CaseListControllerIT and CaseListServiceIT. Approved in
+    the security-reviewer role on #62.
     Approved in the security-reviewer role on #20. Listed by class, never by pattern alone, so each new controller
     is reviewed the same way.
   -->
@@ -99,6 +106,7 @@
       <Class name="io.trailkeep.web.CaseEditController"/>
       <Class name="io.trailkeep.web.CaseAssignmentController"/>
       <Class name="io.trailkeep.web.CaseAttachmentController"/>
+      <Class name="io.trailkeep.web.CaseListController"/>
     </Or>
   </Match>
   <!--
@@ -106,6 +114,10 @@
     HX-Request only selects a fragment or an HX-Redirect instead of a full page; authorization is unchanged.
     HX-Current-URL is reduced to a same-origin absolute path (no scheme, host or "//"), so the HX-Redirect built from
     it cannot leave the application (HtmxAwareResponses.currentPath, tested in WebShellIT).
+    CaseListController.list (WP-15 part 1a): HX-Request selects the results fragment; HX-Trigger is used only if it
+    matches the fixed pattern tk-(sort-[a-z]+|page-(previous|next)) and then only names which element gets
+    data-tk-focus; anything else is dropped (tested in CaseListControllerIT with a hostile value). Approved in
+    the security-reviewer role on #62.
   -->
   <Match>
     <Bug pattern="SERVLET_HEADER"/>
@@ -120,6 +132,10 @@
       <And>
         <Class name="io.trailkeep.web.ErrorAdvice"/>
         <Method name="domain"/>
+      </And>
+      <And>
+        <Class name="io.trailkeep.web.CaseListController"/>
+        <Method name="list"/>
       </And>
     </Or>
   </Match>

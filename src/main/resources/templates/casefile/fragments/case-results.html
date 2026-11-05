@@ -1,0 +1,70 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- The cases list's results, the full page's #tk-case-results and the htmx response alike. After a swap app.js
+     focuses [data-tk-focus]: the sort header or page link that asked (its id came back as "focus"), or else the
+     status line, whose text the live region announces. The sorted column carries aria-sort; the others none. -->
+<th:block xmlns:th="http://www.thymeleaf.org" th:fragment="results"
+          th:with="found=#{tk.list.found(${list.total})}, here=${focus == null or focus.isEmpty()}">
+  <p id="tk-results-status" class="tk-results-status" tabindex="-1"
+     th:attr="data-tk-focus=${here ? 'true' : null},data-tk-announce=${found}"
+     th:text="${list.pages > 1} ? ${found} + ' ' + #{tk.list.page(${list.page},${list.pages})} : ${found}">
+    3 cases found.</p>
+  <div th:unless="${list.rows.isEmpty()}" class="table-responsive" tabindex="0" role="region"
+       aria-labelledby="tk-cases-caption">
+    <table class="table table-hover align-middle">
+      <caption id="tk-cases-caption" th:text="#{tk.list.caption}">Cases you can read, archived ones aside</caption>
+      <thead>
+      <tr>
+        <th th:replace="~{casefile/fragments/case-results :: sortable(${columns['NUMBER']}, #{tk.list.number})}">Case number</th>
+        <th th:replace="~{casefile/fragments/case-results :: sortable(${columns['TITLE']}, #{tk.list.titlecol})}">Title</th>
+        <th scope="col" th:text="#{tk.list.status}">Status</th>
+        <th th:replace="~{casefile/fragments/case-results :: sortable(${columns['PRIORITY']}, #{tk.list.priority})}">Priority</th>
+        <th scope="col" th:text="#{tk.case.type}">Case type</th>
+        <th scope="col" th:text="#{tk.case.team}">Team</th>
+        <th scope="col" th:text="#{tk.case.owner}">Owner</th>
+        <th th:replace="~{casefile/fragments/case-results :: sortable(${columns['DUE']}, #{tk.list.sla})}">SLA</th>
+        <th th:replace="~{casefile/fragments/case-results :: sortable(${columns['OPENED']}, #{tk.list.opened})}">Opened</th>
+      </tr>
+      </thead>
+      <tbody>
+      <tr th:each="r : ${list.rows}">
+        <th scope="row"><a th:href="@{/cases/{n}(n=${r.number})}" th:text="${r.number}">CASE-2026-000001</a></th>
+        <td><span th:text="${r.title}">Title</span>
+          <span th:if="${r.sensitivity.name() == 'RESTRICTED'}" class="tk-chip ms-1"><span aria-hidden="true"
+              >&#x1F512;</span> <span th:text="#{tk.case.restricted}">Restricted</span></span></td>
+        <td th:text="#{'tk.case.status.' + ${r.status}}">Open</td>
+        <td th:text="#{'tk.new.priority.' + ${r.priority}}">Normal</td>
+        <td th:text="${r.caseTypeName}">Type</td>
+        <td th:text="${r.teamName}">Team</td>
+        <td th:text="${r.ownerName}">Owner</td>
+        <td th:with="days=${r.sla.daysLeft}, gone=${-r.sla.daysLeft}">
+          <span aria-hidden="true" th:text="#{'tk.case.sla.icon.' + ${r.sla.state}}">○</span>
+          <span th:text="#{${'tk.case.sla.' + r.sla.state}(${days},${gone})}">SLA: 12 days left</span>
+          <span th:if="${r.sla.dueOn != null}" class="d-block" th:text="${r.sla.dueOn}">2026-12-01</span></td>
+        <td th:text="${r.openedOn}">2026-11-01</td>
+      </tr>
+      </tbody>
+    </table>
+  </div>
+  <nav th:if="${list.pages > 1}" th:aria-label="#{tk.list.pages}">
+    <ul class="pagination">
+      <li class="page-item" th:if="${list.page > 1}" th:with="url=@{/cases} + '?' + ${query.onPage(list.page - 1).toQueryString()}">
+        <a id="tk-page-previous" class="page-link" rel="prev" th:href="${url}" th:attr="hx-get=${url},
+           data-tk-focus=${focus == 'tk-page-previous' ? 'true' : null}" hx-target="#tk-case-results"
+           hx-push-url="true" th:text="#{tk.list.previous}">Previous page</a></li>
+      <li class="page-item" th:if="${list.page < list.pages}"
+          th:with="url=@{/cases} + '?' + ${query.onPage(list.page + 1).toQueryString()}">
+        <a id="tk-page-next" class="page-link" rel="next" th:href="${url}" th:attr="hx-get=${url},
+           data-tk-focus=${focus == 'tk-page-next' ? 'true' : null}" hx-target="#tk-case-results"
+           hx-push-url="true" th:text="#{tk.list.next}">Next page</a></li>
+    </ul>
+  </nav>
+</th:block>
+
+<th th:fragment="sortable(column, label)" scope="col" xmlns:th="http://www.thymeleaf.org"
+    th:with="active=${query.sort == column}, id='tk-sort-' + ${#strings.toLowerCase(column)},
+             url=@{/cases} + '?' + ${query.sortedBy(column).toQueryString()}"
+    th:attr="aria-sort=${active ? (query.descending ? 'descending' : 'ascending') : null}">
+  <a th:id="${id}" th:href="${url}" th:attr="hx-get=${url},data-tk-focus=${focus == id ? 'true' : null}"
+     hx-target="#tk-case-results" hx-push-url="true"><span th:text="${label}">Title</span><span aria-hidden="true"
+     th:if="${active}" th:text="${query.descending} ? ' ▼' : ' ▲'"> ▲</span></a>
+</th>

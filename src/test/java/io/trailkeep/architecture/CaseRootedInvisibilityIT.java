@@ -9,6 +9,7 @@ import com.tngtech.archunit.base.DescribedPredicate;
 import com.tngtech.archunit.core.domain.JavaClass;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.tngtech.archunit.core.importer.ImportOption;
+import io.trailkeep.casefile.CaseListQuery;
 import io.trailkeep.casefile.CaseScopeService;
 import io.trailkeep.shared.CaseNumber;
 import io.trailkeep.shared.CaseStatus;
@@ -26,6 +27,7 @@ import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -45,6 +47,9 @@ import org.springframework.transaction.annotation.Transactional;
  * Every declared method of every {@code @CaseRooted} repository, found by scanning production code, answers an
  * unreadable case exactly as it answers an absent one (WP-11 acceptance, ADR-0005). A new repository is covered
  * without touching this test; a method with a parameter type this test cannot supply fails it until it learns one.
+ * A method that takes no case, such as the cases list's count and page (with the default query),
+ * is asked before the cases exist and again after: someone who may not read them gets the same answer both times, so
+ * the unreadable cases are exactly as if absent, while the owner's answer changes.
  */
 // "IT" is the Failsafe suffix Part B mandates for integration tests, not an abbreviation.
 @SuppressWarnings("checkstyle:AbbreviationAsWordInName")
@@ -79,6 +84,13 @@ class CaseRootedInvisibilityIT {
         long team = seed.team();
         long owner = seed.user();
         long colleague = seed.user();
+        CaseScope ownerScope = scopes.forUser(analyst(owner, team));
+        CaseScope colleagueScope = scopes.forUser(analyst(colleague, team));
+        CaseNumber absent = new CaseNumber("SEED", 2026, 1);
+        List<Rooted> methods = caseRootedMethods();
+        final Map<Method, String> colleagueBefore =
+                caseLessOutcomes(methods, new Call(colleagueScope, absent, ABSENT_ID));
+        final Map<Method, String> ownerBefore = caseLessOutcomes(methods, new Call(ownerScope, absent, ABSENT_ID));
         CaseNumber restricted = seed.caseRow(team, owner, Sensitivity.RESTRICTED, CaseStatus.OPEN);
         long restrictedId = seed.caseId(restricted);
         seed.pin(seed.comment(restrictedId, owner, "A synthetic comment on the restricted case"), restrictedId, owner);
@@ -87,11 +99,7 @@ class CaseRootedInvisibilityIT {
         long otherTeamId = seed.caseId(otherTeam);
         seed.pin(seed.comment(otherTeamId, owner, "A synthetic comment in another team"), otherTeamId, owner);
         seed.attachment(otherTeamId, owner, "other-team-synthetic.txt", "QUARANTINED");
-        CaseNumber absent = new CaseNumber("SEED", 2026, 1);
-        CaseScope ownerScope = scopes.forUser(analyst(owner, team));
-        CaseScope colleagueScope = scopes.forUser(analyst(colleague, team));
 
-        List<Rooted> methods = caseRootedMethods();
         assertThat(methods).as("case-rooted repository methods").isNotEmpty();
         assertThat(methods)
                 .extracting(rooted -> rooted.repository().getSimpleName())
@@ -105,6 +113,14 @@ class CaseRootedInvisibilityIT {
         for (Rooted rooted : methods) {
             Method method = rooted.method();
             Object bean = context.getBean(rooted.repository());
+            if (takesNoCase(method)) {
+                assertThat(outcome(bean, method, new Call(colleagueScope, restricted, restrictedId)))
+                        .as(method.toGenericString() + " after unreadable cases were added")
+                        .isEqualTo(colleagueBefore.get(method));
+                String ownerAfter = outcome(bean, method, new Call(ownerScope, restricted, restrictedId));
+                distinguishing += ownerAfter.equals(ownerBefore.get(method)) ? 0 : 1;
+                continue;
+            }
             String unreadable = outcome(bean, method, new Call(colleagueScope, restricted, restrictedId));
             String outsideTeams = outcome(bean, method, new Call(colleagueScope, otherTeam, otherTeamId));
             String absentForColleague = outcome(bean, method, new Call(colleagueScope, absent, ABSENT_ID));
@@ -122,6 +138,22 @@ class CaseRootedInvisibilityIT {
         assertThat(distinguishing)
                 .as("methods where the owner's readable case differs (not vacuous)")
                 .isPositive();
+    }
+
+    private Map<Method, String> caseLessOutcomes(List<Rooted> methods, Call call) throws IllegalAccessException {
+        Map<Method, String> outcomes = new HashMap<>();
+        for (Rooted rooted : methods) {
+            if (takesNoCase(rooted.method())) {
+                outcomes.put(rooted.method(), outcome(context.getBean(rooted.repository()), rooted.method(), call));
+            }
+        }
+        return outcomes;
+    }
+
+    /** Whether a method names no case, so that its answer is about every case its scope reads. */
+    private static boolean takesNoCase(Method method) {
+        return Arrays.stream(method.getParameterTypes())
+                .noneMatch(type -> type == CaseNumber.class || type == long.class || type == Long.class);
     }
 
     private static List<Rooted> caseRootedMethods() throws ClassNotFoundException {
@@ -168,6 +200,9 @@ class CaseRootedInvisibilityIT {
         }
         if (type == int.class || type == Integer.class) {
             return LIMIT;
+        }
+        if (type == CaseListQuery.class) {
+            return CaseListQuery.parse(Map.of());
         }
         return fail("Teach CaseRootedInvisibilityIT a value for " + type.getName() + " in " + method);
     }

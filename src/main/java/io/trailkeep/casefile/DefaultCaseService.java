@@ -177,7 +177,7 @@ class DefaultCaseService implements CaseService {
                 LocalDate.ofInstant(record.getOpenedAt(), zone),
                 record.getSubjectText(),
                 record.getDescription(),
-                sla(row.slaState(), row.slaDueAt()),
+                CaseView.Sla.of(row.slaState(), row.slaDueAt(), LocalDate.ofInstant(clock.instant(), zone), zone),
                 record.getVersion(),
                 allowed(actor, record, CaseAction.EDIT),
                 allowed(actor, record, CaseAction.REASSIGN),
@@ -270,15 +270,6 @@ class DefaultCaseService implements CaseService {
         return policies.findById(type.getSlaPolicyId())
                 .orElseThrow(() -> new IllegalStateException("a case type has a policy"))
                 .toCommand();
-    }
-
-    private CaseView.Sla sla(@Nullable SlaState state, @Nullable Instant dueAt) {
-        if (state == null || dueAt == null) {
-            return new CaseView.Sla(SlaState.NOT_APPLICABLE, null, 0);
-        }
-        LocalDate dueOn = LocalDate.ofInstant(dueAt, zone);
-        return new CaseView.Sla(
-                state, dueOn, ChronoUnit.DAYS.between(LocalDate.ofInstant(clock.instant(), zone), dueOn));
     }
 
     private static CaseFields normalized(CaseFields fields) {
