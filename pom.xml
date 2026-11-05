@@ -80,6 +80,13 @@
         <type>pom</type>
         <scope>import</scope>
       </dependency>
+      <!-- One ArchUnit for the whole build: Spring Modulith's core depends on it at runtime, archunit-junit5 at test
+           scope, and dependencyConvergence requires them to agree. -->
+      <dependency>
+        <groupId>com.tngtech.archunit</groupId>
+        <artifactId>archunit</artifactId>
+        <version>${archunit.version}</version>
+      </dependency>
     </dependencies>
   </dependencyManagement>
 
