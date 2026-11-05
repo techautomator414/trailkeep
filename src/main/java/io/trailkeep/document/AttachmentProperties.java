@@ -32,17 +32,20 @@ record AttachmentProperties(
         @Valid @NotNull Clamd clamd) {
 
     /**
-     * The clamd {@code INSTREAM} endpoint. No host default: a deployment names its scanner or does not start.
+     * The clamd {@code INSTREAM} endpoint: the TLS sidecar in front of clamd (ADR-0012). No host default: a deployment
+     * names its scanner or does not start.
      *
-     * @param host the clamd host
-     * @param port the clamd TCP port
+     * @param host the scanner host; the server certificate must name it
+     * @param port the sidecar's TLS port
+     * @param sslBundle the {@code spring.ssl.bundle.*} bundle whose trust store authenticates the sidecar
      * @param connectTimeout how long to wait for a connection
      * @param readTimeout how long any single read may wait, including for the verdict after the last chunk
      * @param scanTimeout how long one whole exchange may take; the socket is closed after it
      */
     record Clamd(
             @NotBlank String host,
-            @Positive @Max(65_535) @DefaultValue("3310") int port,
+            @Positive @Max(65_535) @DefaultValue("3311") int port,
+            @NotBlank @DefaultValue("clamd") String sslBundle,
             @NotNull @DefaultValue("2s") Duration connectTimeout,
             @NotNull @DefaultValue("30s") Duration readTimeout,
             @NotNull @DefaultValue("2m") Duration scanTimeout) {}

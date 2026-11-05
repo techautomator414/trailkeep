@@ -19,21 +19,31 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import javax.net.ssl.SSLException;
+import javax.net.ssl.SSLParameters;
+import javax.net.ssl.SSLSocket;
+import javax.net.ssl.SSLSocketFactory;
+import org.springframework.boot.ssl.SslBundles;
 import org.springframework.stereotype.Component;
 
 /**
- * Scans a file with clamd's {@code INSTREAM} command over TCP (BUILD_PLAN §9, §11.1: a small client, no library).
- * The exchange is {@code zINSTREAM\0}, then chunks each prefixed with their length as a 4-byte big-endian integer,
- * then a zero length; clamd answers one {@code \0}-terminated line: {@code stream: OK} or
+ * Scans a file with clamd's {@code INSTREAM} command over TLS (BUILD_PLAN §9, §11.1: a small client, no library;
+ * ADR-0012: clamd sits behind a TLS-terminating sidecar). The socket comes from the Spring Boot SSL bundle named by
+ * {@code app.attachments.clamd.ssl-bundle}, so trust material is configuration; only TLS 1.3 and 1.2 are offered and
+ * the server certificate must name the configured host. There is no plaintext path.
+ *
+ * <p>The exchange is {@code zINSTREAM\0}, then chunks each prefixed with their length as a 4-byte big-endian
+ * integer, then a zero length; clamd answers one {@code \0}-terminated line: {@code stream: OK} or
  * {@code stream: <signature> FOUND}.
  *
  * <p>It fails closed: a refused connection, a timeout, an error reply ({@code ... ERROR}, for example clamd's
  * {@code StreamMaxLength}) or any other reply is a {@link ScannerUnavailableException}, never a clean verdict. Reads
  * time out after {@code read-timeout}; the whole exchange is bounded by {@code scan-timeout}, after which the socket
- * is closed even if a write is blocked.
+ * is closed even if a write is blocked. A failed handshake (an untrusted or misnamed certificate, a plaintext peer) is
+ * the scanner being unavailable too.
  */
 @Component
-class ClamdClient implements VirusScanner {
+final class ClamdClient implements VirusScanner {
 
     /** Bytes per {@code INSTREAM} chunk; far below clamd's default {@code StreamMaxLength}. */
     static final int CHUNK_SIZE = 64 * 1024;
@@ -49,15 +59,33 @@ class ClamdClient implements VirusScanner {
     private static final ScheduledExecutorService WATCHDOG = Executors.newSingleThreadScheduledExecutor(
             Thread.ofVirtual().name("clamd-watchdog").factory());
 
-    private final AttachmentProperties.Clamd clamd;
+    private static final String[] PROTOCOLS = {"TLSv1.3", "TLSv1.2"};
 
-    ClamdClient(AttachmentProperties properties) {
+    private final AttachmentProperties.Clamd clamd;
+    private final SSLSocketFactory sockets;
+
+    /**
+     * Resolves the SSL bundle at startup, so a missing or unreadable bundle fails the application, not an upload.
+     *
+     * @param properties the attachment settings
+     * @param sslBundles Spring Boot's SSL bundles
+     */
+    ClamdClient(AttachmentProperties properties, SslBundles sslBundles) {
         this.clamd = properties.clamd();
+        this.sockets =
+                sslBundles.getBundle(clamd.sslBundle()).createSslContext().getSocketFactory();
     }
 
     @Override
     public ScanVerdict scan(Path file) {
-        try (Socket socket = new Socket()) {
+        try (Socket unconnected = sockets.createSocket()) {
+            if (!(unconnected instanceof SSLSocket socket)) {
+                throw new IllegalStateException("an SSL socket factory returned a plain socket");
+            }
+            SSLParameters tls = socket.getSSLParameters();
+            tls.setProtocols(PROTOCOLS);
+            tls.setEndpointIdentificationAlgorithm("HTTPS");
+            socket.setSSLParameters(tls);
             ScheduledFuture<?> deadline = WATCHDOG.schedule(
                     () -> closeQuietly(socket), clamd.scanTimeout().toMillis(), TimeUnit.MILLISECONDS);
             try {
@@ -65,6 +93,7 @@ class ClamdClient implements VirusScanner {
                         new InetSocketAddress(clamd.host(), clamd.port()),
                         Math.toIntExact(clamd.connectTimeout().toMillis()));
                 socket.setSoTimeout(Math.toIntExact(clamd.readTimeout().toMillis()));
+                socket.startHandshake();
                 stream(file, socket.getOutputStream());
                 return verdict(readReply(socket.getInputStream()));
             } finally {
@@ -72,6 +101,8 @@ class ClamdClient implements VirusScanner {
             }
         } catch (SocketTimeoutException e) {
             throw new ScannerUnavailableException("clamd timed out", e);
+        } catch (SSLException e) {
+            throw new ScannerUnavailableException("TLS to clamd failed", e);
         } catch (IOException e) {
             throw new ScannerUnavailableException("clamd unreachable or the exchange failed", e);
         }

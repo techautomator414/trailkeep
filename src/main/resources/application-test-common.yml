@@ -29,6 +29,14 @@ app:
       trailkeep-system-admins: SYSTEM_ADMIN
 
 spring:
+  ssl:
+    bundle:
+      jks:
+        # The clamd TLS bundle (ADR-0012) must exist for contexts to start; nothing in these contexts scans. The JDK's
+        # own public CA store is a real trust store with no secret in it. Scanner tests build their own bundle.
+        clamd:
+          truststore:
+            location: file:${java.home}/lib/security/cacerts
   datasource:
     hikari:
       # Small pool: every Spring context in a run keeps its own pool open on the one shared database container, and

@@ -19,6 +19,7 @@ resources:
   - service.yaml
   - route.yaml
   - networkpolicy.yaml
+  - clamav.yaml
   - purge-cronjob.yaml
 
 images:

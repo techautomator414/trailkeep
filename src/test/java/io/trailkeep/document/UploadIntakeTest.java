@@ -10,7 +10,6 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
-import java.net.ServerSocket;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -39,7 +38,12 @@ class UploadIntakeTest {
                         DataSize.ofBytes(CAP),
                         25_000_000,
                         new AttachmentProperties.Clamd(
-                                "127.0.0.1", 9, Duration.ofSeconds(1), Duration.ofSeconds(1), Duration.ofSeconds(1))),
+                                "127.0.0.1",
+                                9,
+                                "clamd",
+                                Duration.ofSeconds(1),
+                                Duration.ofSeconds(1),
+                                Duration.ofSeconds(1))),
                 scanner);
     }
 
@@ -165,11 +169,7 @@ class UploadIntakeTest {
 
     @Test
     void clamdDownRefusesTheUploadAndDeletesTheTempFile() throws IOException {
-        int port;
-        try (ServerSocket closed = new ServerSocket(0)) {
-            port = closed.getLocalPort();
-        }
-        UploadIntake intake = intake(ClamdClientTest.client(port));
+        UploadIntake intake = intake(ClamdClientTest.client(ClamdClientTest.closedPort()));
         assertThatThrownBy(() -> intake.receive("notes.txt", bytes(UploadSamples.ascii("abc"))))
                 .isInstanceOf(ScannerUnavailableException.class);
         assertThat(tempFiles()).isZero();
@@ -227,7 +227,12 @@ class UploadIntakeTest {
                         DataSize.ofBytes(CAP),
                         25_000_000,
                         new AttachmentProperties.Clamd(
-                                "127.0.0.1", 9, Duration.ofSeconds(1), Duration.ofSeconds(1), Duration.ofSeconds(1))),
+                                "127.0.0.1",
+                                9,
+                                "clamd",
+                                Duration.ofSeconds(1),
+                                Duration.ofSeconds(1),
+                                Duration.ofSeconds(1))),
                 file -> {
                     scanned.set(file);
                     return ScanVerdict.clean();

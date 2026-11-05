@@ -41,8 +41,10 @@ import tools.jackson.databind.json.JsonMapper;
             // prod requires the R__grants.sql grantees (no defaults); TestDatabaseUsers creates these.
             "app.db.app-user=trailkeep_app",
             "app.db.purge-user=trailkeep_purge",
-            // prod requires the scanner's host too; nothing here uploads, so an unreachable one will do.
-            "app.attachments.clamd.host=127.0.0.1"
+            // prod requires the scanner's host and TLS bundle too (ADR-0012); nothing here uploads, so an unreachable
+            // host and the JDK's public CA store will do.
+            "app.attachments.clamd.host=127.0.0.1",
+            "spring.ssl.bundle.jks.clamd.truststore.location=file:${java.home}/lib/security/cacerts"
         })
 @ActiveProfiles({"prod", "postgresql"})
 @Import({RemoteAddressController.class, TestOnlyEndpointsSecurity.class, PostgresTestcontainersConfiguration.class})

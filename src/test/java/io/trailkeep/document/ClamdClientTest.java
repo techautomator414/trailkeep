@@ -6,7 +6,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.io.IOException;
-import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.SocketTimeoutException;
 import java.nio.charset.StandardCharsets;
@@ -15,8 +14,10 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.Random;
+import javax.net.ssl.SSLException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.springframework.boot.ssl.SslBundles;
 import org.springframework.util.unit.DataSize;
 
 /** {@link ClamdClient} against an in-process clamd: the framing, both verdicts, and every way it fails closed. */
@@ -25,21 +26,35 @@ class ClamdClientTest {
     @TempDir
     Path dir;
 
+    static ClamdClient client(String host, int port, Duration readTimeout, Duration scanTimeout, SslBundles trust) {
+        return new ClamdClient(
+                new AttachmentProperties(
+                        Path.of("unused"),
+                        DataSize.ofMegabytes(25),
+                        25_000_000,
+                        new AttachmentProperties.Clamd(
+                                host, port, "clamd", Duration.ofSeconds(2), readTimeout, scanTimeout)),
+                trust);
+    }
+
     static ClamdClient client(int port, Duration readTimeout, Duration scanTimeout) {
-        return new ClamdClient(new AttachmentProperties(
-                Path.of("unused"),
-                DataSize.ofMegabytes(25),
-                25_000_000,
-                new AttachmentProperties.Clamd(
-                        InetAddress.getLoopbackAddress().getHostAddress(),
-                        port,
-                        Duration.ofSeconds(2),
-                        readTimeout,
-                        scanTimeout)));
+        return client(
+                "localhost", port, readTimeout, scanTimeout, TestTls.shared().bundles());
     }
 
     static ClamdClient client(int port) {
         return client(port, Duration.ofSeconds(5), Duration.ofSeconds(10));
+    }
+
+    /**
+     * A loopback port nothing listens on.
+     *
+     * @return the port
+     */
+    static int closedPort() throws IOException {
+        try (ServerSocket closed = TestTls.shared().serverSocket()) {
+            return closed.getLocalPort();
+        }
     }
 
     private Path file(byte[] content) throws IOException {
@@ -151,12 +166,43 @@ class ClamdClientTest {
 
     @Test
     void refusedConnectionMeansTheScannerIsUnavailable() throws IOException {
-        int port;
-        try (ServerSocket closed = new ServerSocket(0, 1, InetAddress.getLoopbackAddress())) {
-            port = closed.getLocalPort();
-        }
+        int port = closedPort();
         Path file = file(new byte[10]);
         assertThatThrownBy(() -> client(port).scan(file)).isInstanceOf(ScannerUnavailableException.class);
+    }
+
+    @Test
+    void certificateFromAnotherAuthorityFailsTheHandshakeAndMeansTheScannerIsUnavailable() throws IOException {
+        try (FakeClamd impostor = FakeClamd.answering(TestTls.issue("dns:localhost"), bytes -> "stream: OK")) {
+            Path file = file(new byte[10]);
+            assertThatThrownBy(() -> client(impostor.port()).scan(file))
+                    .isInstanceOf(ScannerUnavailableException.class)
+                    .hasCauseInstanceOf(SSLException.class);
+            assertThat(impostor.received).isEmpty();
+        }
+    }
+
+    @Test
+    void certificateNamingAnotherHostFailsTheHandshakeAndMeansTheScannerIsUnavailable() throws IOException {
+        // A trusted authority, but the certificate names another host than the one connected to.
+        TestTls misnamed = TestTls.issue("dns:clamd.invalid");
+        try (FakeClamd clamd = FakeClamd.answering(misnamed, bytes -> "stream: OK")) {
+            Path file = file(new byte[10]);
+            ClamdClient client = client(
+                    "localhost", clamd.port(), Duration.ofSeconds(5), Duration.ofSeconds(10), misnamed.bundles());
+            assertThatThrownBy(() -> client.scan(file))
+                    .isInstanceOf(ScannerUnavailableException.class)
+                    .hasCauseInstanceOf(SSLException.class);
+            assertThat(clamd.received).isEmpty();
+        }
+    }
+
+    @Test
+    void onlyTls12AndAboveAreOffered() throws IOException {
+        try (FakeClamd clamd = FakeClamd.answering(bytes -> "stream: OK")) {
+            assertThat(client(clamd.port()).scan(file(new byte[1]))).isEqualTo(ScanVerdict.clean());
+            assertThat(clamd.protocols).allMatch(p -> p.equals("TLSv1.3") || p.equals("TLSv1.2"));
+        }
     }
 
     @Test

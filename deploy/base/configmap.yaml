@@ -16,10 +16,12 @@ data:
   # The application refuses to start if either is empty.
   APP_DB_APP_USER: TRAILKEEP_APP
   APP_DB_PURGE_USER: TRAILKEEP_PURGE
-  # PLACEHOLDER: the clamd Service (or "localhost" for a sidecar). Every upload is scanned before it is stored and is
-  # refused while clamd is unreachable. clamd's StreamMaxLength must be at least app.attachments.max-bytes (25MB);
-  # its defaults (100M) are.
+  # The ClamAV Service in clamav.yaml, reached over TLS on 3311 (ADR-0012); its certificate must name this host. Every
+  # upload is scanned before it is stored and is refused while the scanner is unreachable. clamd's StreamMaxLength
+  # must be at least app.attachments.max-bytes (25MB); its default (100M) is.
   APP_ATTACHMENTS_CLAMD_HOST: clamav
+  # The "clamd" SSL bundle: the CA that issued the clamav-tls certificate, mounted from the clamav-ca Secret.
+  SPRING_SSL_BUNDLE_PEM_CLAMD_TRUSTSTORE_CERTIFICATE: file:/etc/trailkeep/clamav-ca/ca.crt
   APP_TIMEZONE: UTC
   APP_BRANDING_NAME: Trailkeep
   # Secret values are files under this directory (one file per property name), never environment variables.

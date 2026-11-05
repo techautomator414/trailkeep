@@ -1,0 +1,172 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Charlie Genova and contributors
+#
+# ClamAV for upload scanning (BUILD_PLAN §9, ADR-0012): clamd listens only inside the pod (localhost:3310); a
+# ghostunnel sidecar terminates TLS on 3311 and is the only port the Service exposes. The application trusts the
+# sidecar's CA through the "clamd" SSL bundle (configmap.yaml, deployment.yaml).
+#
+# Certificates, provisioned by the deploying organization (never committed):
+#   - Secret clamav-tls  (type kubernetes.io/tls: tls.crt, tls.key) for the sidecar. Its certificate must name the
+#     host the application connects to (APP_ATTACHMENTS_CLAMD_HOST, by default the Service "clamav", so the DNS
+#     names clamav, clamav.<namespace>.svc). cert-manager can issue it with a Certificate whose secretName is
+#     clamav-tls; renewals are picked up when the pod restarts.
+#   - Secret clamav-ca   (key ca.crt) for the application pods: only the issuing CA's certificate, no key.
+# Signatures: freshclam is not run here (no egress to a signature mirror in the base). The official image is rebuilt
+# with current databases, so roll the image tag regularly, or add freshclam with a writable volume and mirror egress
+# in an overlay.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: clamav
+  labels:
+    app.kubernetes.io/component: antivirus
+spec:
+  replicas: 1
+  revisionHistoryLimit: 5
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: clamav
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: clamav
+        app.kubernetes.io/part-of: trailkeep
+    spec:
+      automountServiceAccountToken: false
+      # The official image's user is clamav (100:101). PLACEHOLDER: on OpenShift, drop runAsUser/runAsGroup and let
+      # restricted-v2 assign them; the signature files are world-readable and the scratch volumes use fsGroup.
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 100
+        runAsGroup: 101
+        fsGroup: 101
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: clamd
+          image: clamav/clamav:1.4.3
+          imagePullPolicy: IfNotPresent
+          # clamd directly, not the image's init script (which chowns the read-only database directory).
+          command: ["clamd", "--foreground=true"]
+          # Plaintext, for the probes and the sidecar on localhost only: the Service does not expose it and the
+          # NetworkPolicy below admits 3311 alone.
+          ports:
+            - name: clamd
+              containerPort: 3310
+              protocol: TCP
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 250m
+              memory: 1536Mi
+            limits:
+              cpu: "1"
+              memory: 2Gi
+          startupProbe:
+            tcpSocket:
+              port: clamd
+            periodSeconds: 10
+            failureThreshold: 30
+          livenessProbe:
+            tcpSocket:
+              port: clamd
+            periodSeconds: 20
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            - name: logs
+              mountPath: /var/log/clamav
+            - name: run
+              mountPath: /run/clamav
+        - name: tls
+          image: ghostunnel/ghostunnel:v1.8.4
+          imagePullPolicy: IfNotPresent
+          args:
+            - server
+            - --listen=0.0.0.0:3311
+            - --target=localhost:3310
+            - --cert=/etc/clamav-tls/tls.crt
+            - --key=/etc/clamav-tls/tls.key
+            # Server-authenticated TLS (ADR-0012); mTLS is optional and would replace this with --cacert/--allow-*.
+            - --disable-authentication
+          ports:
+            - name: clamd-tls
+              containerPort: 3311
+              protocol: TCP
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 50m
+              memory: 32Mi
+            limits:
+              cpu: 500m
+              memory: 128Mi
+          readinessProbe:
+            tcpSocket:
+              port: clamd-tls
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: clamd-tls
+            periodSeconds: 20
+          volumeMounts:
+            - name: clamav-tls
+              mountPath: /etc/clamav-tls
+              readOnly: true
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 512Mi
+        - name: logs
+          emptyDir:
+            sizeLimit: 64Mi
+        - name: run
+          emptyDir:
+            sizeLimit: 1Mi
+        - name: clamav-tls
+          secret:
+            secretName: clamav-tls
+            defaultMode: 0440
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: clamav
+  labels:
+    app.kubernetes.io/component: antivirus
+spec:
+  selector:
+    app.kubernetes.io/name: clamav
+  ports:
+    - name: clamd-tls
+      port: 3311
+      targetPort: clamd-tls
+      protocol: TCP
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: clamav
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: clamav
+  policyTypes: [Ingress, Egress]
+  # TLS from the Trailkeep pods only (web, importer). No egress: freshclam does not run in the base.
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: trailkeep
+      ports:
+        - port: 3311
+          protocol: TCP
+  egress: []

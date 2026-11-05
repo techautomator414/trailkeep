@@ -6,7 +6,8 @@
 #   docker compose up -d                    # PostgreSQL 16 for the 'local' profile
 #   docker compose --profile oracle up -d   # adds Oracle Free 23 for local Oracle parity work
 #   Keycloak (dev realm) at http://localhost:8180, for the 'local' profile's OIDC login.
-#   ClamAV clamd at localhost:3310, which scans every upload before it is stored (WP-14).
+#   ClamAV clamd behind a TLS sidecar at localhost:3311 (ADR-0012), which scans every upload before it is stored
+#   (WP-14). The dev CA and certificate are generated on first start into .local/clamd-tls/ (git-ignored).
 # Mailpit joins this file with the work package that needs it (WP-17).
 name: trailkeep
 
@@ -44,16 +45,59 @@ services:
     volumes:
       - ./deploy/local/keycloak/trailkeep-dev-realm.json:/opt/keycloak/data/import/trailkeep-dev-realm.json:ro
 
+  clamav-tls-init:
+    # DEV-ONLY, one-shot: a throwaway CA and a server certificate for localhost, generated on first start into the
+    # git-ignored .local/clamd-tls/ and reused after that (delete the directory to issue new ones). The CA key is
+    # deleted once it has signed. application-local.yml trusts ca.crt; nothing here is ever used outside this machine.
+    image: alpine/openssl:3.5.4
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - |
+        cd /tls
+        [ -s server.crt ] && [ -s server.key ] && [ -s ca.crt ] && exit 0
+        openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:P-256 -nodes -keyout ca.key -out ca.crt -days 825 \
+          -subj "/CN=trailkeep-dev-only-ca" -addext "basicConstraints=critical,CA:true" \
+          -addext "keyUsage=critical,keyCertSign,cRLSign"
+        openssl req -newkey ec -pkeyopt ec_paramgen_curve:P-256 -nodes -keyout server.key -out server.csr \
+          -subj "/CN=localhost"
+        printf 'subjectAltName=DNS:localhost,IP:127.0.0.1\nextendedKeyUsage=serverAuth\n' > server.ext
+        openssl x509 -req -in server.csr -CA ca.crt -CAkey ca.key -CAcreateserial -days 825 -extfile server.ext \
+          -out server.crt
+        rm -f ca.key ca.srl server.csr server.ext
+    volumes:
+      - ./.local/clamd-tls:/tls
+
   clamav:
-    # Same image as ClamdClientIT. It ships with signature databases; freshclam updates them on start.
+    # Same image as ClamdClientIT. It ships with signature databases; freshclam updates them on start. Only the TLS
+    # sidecar's port is published: clamd's own 3310 stays inside this service's network namespace.
     image: clamav/clamav:1.4.3
     ports:
-      - "127.0.0.1:3310:3310"
+      - "127.0.0.1:3311:3311"
     healthcheck:
       test: ["CMD", "clamdcheck.sh"]
       interval: 10s
       timeout: 5s
       retries: 30
+
+  clamav-tls:
+    # The TLS sidecar (ADR-0012), sharing clamav's network namespace as it does in the pod: TLS on 3311, forwarded to
+    # clamd on localhost:3310. Server-authenticated only (mTLS is optional and not used).
+    image: ghostunnel/ghostunnel:v1.8.4
+    network_mode: "service:clamav"
+    depends_on:
+      clamav-tls-init:
+        condition: service_completed_successfully
+      clamav:
+        condition: service_started
+    command:
+      - server
+      - --listen=0.0.0.0:3311
+      - --target=localhost:3310
+      - --cert=/tls/server.crt
+      - --key=/tls/server.key
+      - --disable-authentication
+    volumes:
+      - ./.local/clamd-tls:/tls:ro
 
   oracle:
     profiles: ["oracle"]

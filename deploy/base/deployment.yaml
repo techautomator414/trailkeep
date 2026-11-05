@@ -100,6 +100,9 @@ spec:
             - name: secrets
               mountPath: /etc/trailkeep/secrets
               readOnly: true
+            - name: clamav-ca
+              mountPath: /etc/trailkeep/clamav-ca
+              readOnly: true
       volumes:
         # The root filesystem is read-only; java.io.tmpdir, the multipart location and Tomcat's base directory
         # (application-prod.yml) are scratch space on emptyDir.
@@ -112,6 +115,11 @@ spec:
         - name: tomcat
           emptyDir:
             sizeLimit: 64Mi
+        # The CA certificate (no key) that authenticates the ClamAV TLS sidecar (clamav.yaml, ADR-0012).
+        - name: clamav-ca
+          secret:
+            secretName: clamav-ca
+            defaultMode: 0444
         # Reference only. The Secret is created from the platform's secret store; see deploy/README.md for keys.
         - name: secrets
           secret:

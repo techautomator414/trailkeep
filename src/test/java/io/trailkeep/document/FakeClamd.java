@@ -5,18 +5,17 @@ package io.trailkeep.document;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.IOException;
-import java.io.UncheckedIOException;
-import java.net.InetAddress;
 import java.net.ServerSocket;
-import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Function;
+import javax.net.ssl.SSLSocket;
 import org.jspecify.annotations.Nullable;
 
 /**
- * An in-process clamd that speaks {@code INSTREAM} on a loopback port, for one connection at a time. It records the
+ * An in-process clamd behind TLS (ADR-0012), speaking {@code INSTREAM} on a loopback port with a {@link TestTls}
+ * certificate, for one connection at a time. It records the
  * command, each chunk's length and the reassembled bytes, then answers what the test chose; a {@code null} answer
  * keeps the connection open without replying, so the client's read times out.
  */
@@ -32,11 +31,14 @@ final class FakeClamd implements AutoCloseable {
     /** The chunk lengths received, in order, excluding the terminating zero. */
     final List<Integer> chunkLengths = new CopyOnWriteArrayList<>();
 
+    /** The TLS protocol each connection negotiated. */
+    final List<String> protocols = new CopyOnWriteArrayList<>();
+
     /** The bytes each connection streamed. */
     final List<byte[]> received = new CopyOnWriteArrayList<>();
 
-    private FakeClamd(Function<byte[], byte @Nullable []> answer) throws IOException {
-        this.server = new ServerSocket(0, 1, InetAddress.getLoopbackAddress());
+    private FakeClamd(TestTls tls, Function<byte[], byte @Nullable []> answer) {
+        this.server = tls.serverSocket();
         this.answer = answer;
         this.thread = Thread.ofVirtual().start(this::serve);
     }
@@ -48,14 +50,21 @@ final class FakeClamd implements AutoCloseable {
      * @return the running fake
      */
     static FakeClamd answering(Function<byte[], @Nullable String> answer) {
-        try {
-            return new FakeClamd(bytes -> {
-                String reply = answer.apply(bytes);
-                return reply == null ? null : (reply + "\0").getBytes(StandardCharsets.US_ASCII);
-            });
-        } catch (IOException e) {
-            throw new UncheckedIOException(e);
-        }
+        return answering(TestTls.shared(), answer);
+    }
+
+    /**
+     * Starts a fake presenting another certificate.
+     *
+     * @param tls the certificate material the fake serves
+     * @param answer the reply, without its terminating {@code \0}, or {@code null} for none
+     * @return the running fake
+     */
+    static FakeClamd answering(TestTls tls, Function<byte[], @Nullable String> answer) {
+        return new FakeClamd(tls, bytes -> {
+            String reply = answer.apply(bytes);
+            return reply == null ? null : (reply + "\0").getBytes(StandardCharsets.US_ASCII);
+        });
     }
 
     /**
@@ -65,11 +74,7 @@ final class FakeClamd implements AutoCloseable {
      * @return the running fake
      */
     static FakeClamd rawReply(byte[] reply) {
-        try {
-            return new FakeClamd(bytes -> reply);
-        } catch (IOException e) {
-            throw new UncheckedIOException(e);
-        }
+        return new FakeClamd(TestTls.shared(), bytes -> reply);
     }
 
     /**
@@ -83,7 +88,9 @@ final class FakeClamd implements AutoCloseable {
 
     private void serve() {
         while (!server.isClosed()) {
-            try (Socket socket = server.accept()) {
+            try (SSLSocket socket = (SSLSocket) server.accept()) {
+                socket.startHandshake();
+                protocols.add(socket.getSession().getProtocol());
                 DataInputStream in = new DataInputStream(socket.getInputStream());
                 ByteArrayOutputStream command = new ByteArrayOutputStream();
                 for (int b = in.read(); b > 0; b = in.read()) {

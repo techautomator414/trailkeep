@@ -89,11 +89,11 @@ spec:
       ports:
         - port: 587
           protocol: TCP
-    # clamd as a shared Service. PLACEHOLDER label; drop this rule if ClamAV runs as a sidecar.
+    # The ClamAV Service (clamav.yaml): TLS to its sidecar only (ADR-0012).
     - to:
         - podSelector:
             matchLabels:
               app.kubernetes.io/name: clamav
       ports:
-        - port: 3310
+        - port: 3311
           protocol: TCP

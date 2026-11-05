@@ -41,6 +41,8 @@ kube-linter lint deploy/
    |---|---|---|
    | `trailkeep-web` | web `Deployment`, importer `Job` | `spring.datasource.username`, `spring.datasource.password`, OIDC client secret, SMTP password, `app.audit.hmac-key` (Base64, ≥ 32 random bytes; the `prod` profile refuses to start without it) |
    | `trailkeep-purge` | purge `CronJob` only | the `TRAILKEEP_PURGE` database credential |
+   | `clamav-tls` | ClamAV `Deployment` (TLS sidecar) only | `tls.crt`, `tls.key`: the sidecar's server certificate, naming the host in `APP_ATTACHMENTS_CLAMD_HOST` (the `clamav` Service by default); for example a cert-manager `Certificate` with `secretName: clamav-tls` (ADR-0012) |
+   | `clamav-ca` | web `Deployment`, importer `Job`, purge `CronJob` | `ca.crt` only: the CA that issued `clamav-tls`, loaded as the `clamd` SSL bundle; never the key |
 
 5. **Purge schedule.** Set `suspend: false` on `trailkeep-purge` once retention is enabled.
 
