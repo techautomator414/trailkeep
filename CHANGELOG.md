@@ -13,6 +13,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Edit on the case page (WP-12 part 1): `/cases/{number}/edit` changes title, priority, subject and description of an
+  open case, saved against the version the form was loaded with. A stale save answers 409 with "This case was updated
+  by _name_ at _time_", the person's input kept and Reload offered (no Force Save). The title's PHI heuristic applies
+  to a changed title. A `CASE_UPDATED` audit event holds the changed fields with subject and description redacted,
+  and the search text is rebuilt under its row lock. Confirmations after a change are one-shot session notices.
 - `deploy/OIDC_PROVIDER.md`: vendor-neutral checklist for registering Trailkeep with a real OIDC provider (client, redirect,
   post-logout and back-channel logout URLs, claims, `app.security.*` keys, secret handling, verification) (#30).
 - `HANDOFF.md`: "Open owner items" (OpenSSF badge, scanner secrets, real IdP sign-in, manual accessibility testing,

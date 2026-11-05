@@ -179,6 +179,43 @@ class CaseRecord {
         return sensitivity;
     }
 
+    int getVersion() {
+        return version;
+    }
+
+    Instant getUpdatedAt() {
+        return updatedAt;
+    }
+
+    long getUpdatedBy() {
+        return updatedBy;
+    }
+
+    /**
+     * The fields Edit changes, as they stand.
+     *
+     * @return the current values; a purged description reads as empty
+     */
+    CaseChanges changes() {
+        return new CaseChanges(title, priority, subjectText, description == null ? "" : description);
+    }
+
+    /**
+     * Applies an edit. The version moves on flush, and a concurrent save makes the flush fail.
+     *
+     * @param changes the new values, already normalised
+     * @param actorId who edits
+     * @param now when
+     */
+    void apply(CaseChanges changes, long actorId, Instant now) {
+        this.title = changes.title();
+        this.priority = changes.priority();
+        this.subjectText = changes.subjectText();
+        this.description = changes.description();
+        this.updatedAt = now;
+        this.updatedBy = actorId;
+    }
+
     @Override
     public boolean equals(@Nullable Object other) {
         return this == other || (other instanceof CaseRecord that && id != null && id.equals(that.id));

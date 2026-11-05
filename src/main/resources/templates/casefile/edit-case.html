@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Edit (BUILD_PLAN §4.3, §4.8): the fields of an open case, saved against the version the form was loaded with.
+     On a 409 the person's input stays in the fields, the conflict panel names who saved and when, and Reload is the
+     only way on (no Force Save); the panel takes focus like an error summary. Ctrl+S saves. -->
+<html lang="en" xmlns:th="http://www.thymeleaf.org" th:replace="~{web/layout :: page(~{::title}, ~{::main})}">
+<head><title th:text="#{tk.edit.title(${edit.number})} + ' · ' + ${@branding.name()}">Edit case</title></head>
+<body>
+<main id="main" class="container tk-main" tabindex="-1"
+      th:with="caseUrl=@{/cases/{n}(n=${edit.number})}">
+  <h1 th:text="#{tk.edit.title(${edit.number})}">Edit CASE-2026-000001</h1>
+  <div th:if="${conflict}" class="alert alert-warning" role="alert" tabindex="-1" data-tk-error-summary
+       aria-labelledby="tk-conflict-title">
+    <h2 id="tk-conflict-title" class="h5"
+        th:text="#{tk.edit.conflict(${edit.updatedBy}, ${#temporals.format(edit.updatedAt, 'yyyy-MM-dd HH:mm')})}">
+      This case was updated by someone at a time</h2>
+    <p th:text="#{tk.edit.conflict.text}">Your changes were not saved. They are still shown below.</p>
+    <p><a class="btn btn-primary" th:href="@{/cases/{n}/edit(n=${edit.number})}" th:text="#{tk.edit.reload}">
+      Reload</a></p>
+  </div>
+  <th:block th:replace="~{casefile/fragments/case-fields :: summary(#{tk.edit.errors})}"></th:block>
+  <form method="post" th:action="@{/cases/{n}/edit(n=${edit.number})}" th:data-tk-ctrl-s="${conflict ? null : 'true'}">
+    <p th:text="#{tk.edit.intro}">Fields marked required must be filled in.</p>
+    <input type="hidden" name="version" th:value="${values['version']}">
+    <div th:replace="~{casefile/fragments/case-fields :: title}"></div>
+    <fieldset th:replace="~{casefile/fragments/case-fields :: priority}"></fieldset>
+    <div th:replace="~{casefile/fragments/case-fields :: subject}"></div>
+    <div th:replace="~{casefile/fragments/case-fields :: description}"></div>
+    <div class="tk-dialog-actions">
+      <button th:unless="${conflict}" class="btn btn-primary" type="submit" th:text="#{tk.edit.save}">Save</button>
+      <a class="btn btn-outline-secondary" th:href="${caseUrl}" th:text="#{tk.edit.cancel}">Cancel</a>
+    </div>
+  </form>
+</main>
+</body>
+</html>

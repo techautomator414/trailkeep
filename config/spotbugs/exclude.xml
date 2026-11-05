@@ -40,6 +40,12 @@
     WP-11 part 2b adds POST /cases (CSRF, behind login): CaseService checks CREATE against the matrix and every
     reference before writing; form values are echoed only through th:value/th:text. Covered by CaseCreateControllerIT
     (403 for Reader and System Admin, CSRF, 422). POST approved in the security-reviewer role on #41.
+    CaseEditController (WP-12): GET and POST /cases/{number}/edit, behind login, CSRF on the POST. Every request first
+    calls CaseService.editable, which reads through the person's CaseScope (404 if unreadable) and checks EDIT against
+    the matrix (403), rebuilding permissions from the database per request; the save is checked again in the service
+    against the submitted version (409). Form values are echoed only through th:value/th:text. Covered by
+    CaseEditControllerIT (Analyst allowed, Reader 403, unreadable 404, CSRF 403, stale version 409). Approved in the
+    security-reviewer role on #49.
     Approved in the security-reviewer role on #20. Listed by class, never by pattern alone, so each new controller
     is reviewed the same way.
   -->
@@ -51,6 +57,7 @@
       <Class name="io.trailkeep.web.TeamAdminController"/>
       <Class name="io.trailkeep.web.CaseConfigController"/>
       <Class name="io.trailkeep.web.CaseController"/>
+      <Class name="io.trailkeep.web.CaseEditController"/>
     </Or>
   </Match>
   <!--

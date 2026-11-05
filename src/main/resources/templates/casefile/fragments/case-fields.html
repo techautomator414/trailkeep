@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Case fields shared by the create form and the edit form (BUILD_PLAN §4.2, §4.3, §10.1 "Forms"). They read
+     ${values} (what was entered), ${errors} (invalid field names in page order) and ${warnings} (the PHI heuristic's
+     findings, or null). Each error is tied to its field by aria-describedby and listed in the summary, which app.js
+     focuses. -->
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<body>
+<div th:fragment="summary(heading)" th:remove="tag">
+  <div th:unless="${#lists.isEmpty(errors)}" class="alert alert-danger" role="alert" tabindex="-1"
+       data-tk-error-summary aria-labelledby="tk-errors-title">
+    <h2 id="tk-errors-title" class="h5" th:text="${heading}">Correct these fields</h2>
+    <ul><li th:each="f : ${errors}"><a class="alert-link" th:href="'#' + ${f}" th:text="#{'tk.new.error.' + ${f}}">Field</a></li></ul>
+  </div>
+  <div th:if="${warnings != null}" class="alert alert-warning" role="alert" tabindex="-1" data-tk-error-summary
+       aria-labelledby="tk-phi-title">
+    <h2 id="tk-phi-title" class="h5" th:text="#{tk.new.phi.title}">The title may contain sensitive details</h2>
+    <p th:text="#{tk.new.phi.text}">Titles appear in emails. It seems to contain:</p>
+    <ul><li th:each="w : ${warnings}" th:text="#{'tk.new.phi.' + ${w}}">A pattern</li></ul>
+    <p><a class="alert-link" href="#title" th:text="#{tk.new.phi.fix}">Edit the title</a></p>
+  </div>
+</div>
+
+<div th:fragment="title" class="mb-3" th:with="e=${#lists.contains(errors, 'title')}">
+  <label class="form-label" for="title" th:text="#{tk.new.titlefield}">Title (required)</label>
+  <input class="form-control" id="title" name="title" type="text" required maxlength="200"
+         th:value="${values['title']}"
+         th:attr="aria-invalid=${e or warnings != null},
+                  aria-describedby=${e} ? 'title-error title-hint' : 'title-hint'">
+  <div th:if="${e}" class="invalid-feedback d-block" id="title-error" th:text="#{tk.new.error.title}">Error</div>
+  <div class="form-text" id="title-hint" th:text="#{tk.new.title.hint}">No sensitive details.</div>
+  <div class="form-check mt-1" th:if="${warnings != null}">
+    <input class="form-check-input" id="titleConfirmed" name="titleConfirmed" type="checkbox" value="true">
+    <label class="form-check-label" for="titleConfirmed" th:text="#{tk.new.phi.confirm}">Confirm</label>
+  </div>
+</div>
+
+<fieldset th:fragment="priority" class="mb-3" id="priority">
+  <legend class="form-label fs-6" th:text="#{tk.new.priority}">Priority</legend>
+  <div class="form-check" th:each="p : ${ {'NORMAL', 'HIGH'} }">
+    <input class="form-check-input" type="radio" name="priority" th:id="'priority-' + ${p}" th:value="${p}"
+           th:checked="${values['priority'] == p}">
+    <label class="form-check-label" th:for="'priority-' + ${p}" th:text="#{'tk.new.priority.' + ${p}}">P</label>
+  </div>
+</fieldset>
+
+<div th:fragment="subject" class="mb-3" th:with="e=${#lists.contains(errors, 'subjectText')}">
+  <label class="form-label" for="subjectText" th:text="#{tk.new.subject}">Subject / involved parties</label>
+  <input class="form-control" id="subjectText" name="subjectText" type="text" maxlength="1000"
+         th:value="${values['subjectText']}"
+         th:attr="aria-invalid=${e},aria-describedby=${e} ? 'subjectText-error' : null">
+  <div th:if="${e}" class="invalid-feedback d-block" id="subjectText-error" th:text="#{tk.new.error.subjectText}">
+    Error</div>
+</div>
+
+<div th:fragment="description" class="mb-3" th:with="e=${#lists.contains(errors, 'description')}">
+  <label class="form-label" for="description" th:text="#{tk.new.description}">Description (required)</label>
+  <textarea class="form-control" id="description" name="description" rows="6" required maxlength="20000"
+            th:attr="aria-invalid=${e},aria-describedby=${e} ? 'description-error' : null"
+            th:text="${values['description']}"></textarea>
+  <div th:if="${e}" class="invalid-feedback d-block" id="description-error"
+       th:text="#{tk.new.error.description}">Error</div>
+</div>
+</body>
+</html>

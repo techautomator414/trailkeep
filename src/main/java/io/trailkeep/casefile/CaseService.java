@@ -9,9 +9,9 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * Creating and reading cases (BUILD_PLAN §4.2, §4.3). Reads go through the actor's {@code CaseScope}, so a case the
- * actor may not read is "not found", exactly like an absent one (ADR-0005). Every change is audited in the same
- * transaction. Refusals are {@link CaseException}s.
+ * Creating, reading and editing cases (BUILD_PLAN §4.2, §4.3). Reads go through the actor's {@code CaseScope}, so a
+ * case the actor may not read is "not found", exactly like an absent one (ADR-0005). Every change is audited in the
+ * same transaction. Refusals are {@link CaseException}s.
  */
 public interface CaseService {
 
@@ -109,4 +109,27 @@ public interface CaseService {
      * @return the case
      */
     CaseView view(Actor actor, String caseNumber);
+
+    /**
+     * An open case for its edit form. {@code NOT_FOUND} as for {@link #view}; {@code FORBIDDEN} if the actor may
+     * read but not edit it (a Reader, or a case that is no longer open).
+     *
+     * @param actor the actor
+     * @param caseNumber the case number as it appears in the URL
+     * @return the case's editable fields and its last change
+     */
+    EditableCase editable(Actor actor, String caseNumber);
+
+    /**
+     * Saves an edit made against {@code version} and records {@code CASE_UPDATED} with the changed fields (subject
+     * and description redacted), rebuilding the search text under its row lock. Saving unchanged values writes
+     * nothing. {@code NOT_FOUND} and {@code FORBIDDEN} as for {@link #editable}; {@code CONFLICT} if someone saved
+     * since {@code version} was read, which the edit form answers with Reload, never with an overwrite.
+     *
+     * @param actor the actor
+     * @param caseNumber the case number as it appears in the URL
+     * @param version the version the form was loaded with
+     * @param changes what the actor entered
+     */
+    void edit(Actor actor, String caseNumber, int version, @Valid CaseChanges changes);
 }

@@ -25,6 +25,7 @@ import org.jspecify.annotations.Nullable;
  * @param subjectText who or what is involved, if given
  * @param description the description; {@code null} only once purged
  * @param sla where the case stands against its SLA
+ * @param editable whether the viewer may edit it, so the page offers Edit
  */
 public record CaseView(
         CaseNumber number,
@@ -39,7 +40,8 @@ public record CaseView(
         LocalDate openedOn,
         @Nullable String subjectText,
         @Nullable String description,
-        Sla sla) {
+        Sla sla,
+        boolean editable) {
 
     /**
      * The SLA chip (BUILD_PLAN §4.3): the state, the due day and the whole days left (negative once overdue).

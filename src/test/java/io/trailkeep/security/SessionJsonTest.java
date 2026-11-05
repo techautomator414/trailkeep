@@ -73,6 +73,9 @@ class SessionJsonTest {
         assertThat(((DefaultCsrfToken) Objects.requireNonNull(back)).getToken()).isEqualTo("token-value");
         assertThat(conversions.convert(conversions.convert(1_700_000_000_000L, byte[].class), Object.class))
                 .isEqualTo(1_700_000_000_000L);
+        // The case page's one-shot notice (WP-12) is a plain string, read back without a type id.
+        assertThat(conversions.convert(conversions.convert("CASE-2026-000001 SAVED", byte[].class), Object.class))
+                .isEqualTo("CASE-2026-000001 SAVED");
     }
 
     @Test

@@ -5,10 +5,12 @@ package io.trailkeep.web;
 import io.trailkeep.casefile.CaseFields;
 import io.trailkeep.casefile.CaseService;
 import io.trailkeep.casefile.CaseService.Actor;
+import io.trailkeep.casefile.CaseView;
 import io.trailkeep.casefile.TitleWarning;
 import io.trailkeep.security.TrailkeepOidcUser;
 import io.trailkeep.shared.config.AppProperties;
 import io.trailkeep.user.UserDirectoryService;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import java.time.InstantSource;
@@ -29,10 +31,10 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 
 /**
- * The one-page create form (BUILD_PLAN §4.2) and the case page (§4.3). The case number is the only identifier in a
- * URL; a case the person may not read answers 404 like an absent one, decided by {@link CaseService} through the
- * person's scope, which also decides who may create. The form is re-rendered with 422 when a field is invalid or the
- * title trips the PHI heuristic and has not been confirmed.
+ * The one-page create form (BUILD_PLAN §4.2) and the case page (§4.3), which shows a one-shot {@link CaseNotice}. The
+ * case number is the only identifier in a URL; a case the person may not read answers 404 like an absent one, decided
+ * by {@link CaseService} through the person's scope, which also decides who may create. The form is re-rendered with
+ * 422 when a field is invalid or the title trips the PHI heuristic and has not been confirmed.
  */
 @Controller
 class CaseController {
@@ -106,9 +108,12 @@ class CaseController {
             @AuthenticationPrincipal TrailkeepOidcUser principal,
             @PathVariable String number,
             @RequestParam(required = false) @Nullable String created,
+            HttpServletRequest request,
             Model model) {
-        model.addAttribute("c", cases.view(actor(principal), number));
+        CaseView view = cases.view(actor(principal), number);
+        model.addAttribute("c", view);
         model.addAttribute("created", created != null);
+        model.addAttribute("notice", CaseNotice.take(request, view.number()));
         return "casefile/case";
     }
 

@@ -14,6 +14,7 @@ import jakarta.persistence.criteria.CriteriaQuery;
 import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
 import org.jspecify.annotations.Nullable;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -69,6 +70,12 @@ class AuditTrailServiceIT {
             recorder.record(entry(CASE_B, "CREATE"));
             recorder.record(entry(CASE_A, "UPDATE"));
         });
+    }
+
+    /** Committed events with fixed case ids would collide with real case ids in later tests. */
+    @AfterEach
+    void removeEvents() {
+        jdbc.update("DELETE FROM AUDIT_EVENT");
     }
 
     @Test

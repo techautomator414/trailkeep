@@ -44,6 +44,17 @@ class CaseSearch {
         this.updatedAt = now;
     }
 
+    /**
+     * Replaces the text after a title or description edit; the caller holds the row lock (BUILD_PLAN §8 rule 4).
+     *
+     * @param text the rebuilt text
+     * @param now when it was written
+     */
+    void rebuild(String text, Instant now) {
+        this.text = text;
+        this.updatedAt = now;
+    }
+
     @Override
     public boolean equals(@Nullable Object other) {
         return this == other || (other instanceof CaseSearch that && caseId != 0 && caseId == that.caseId);
