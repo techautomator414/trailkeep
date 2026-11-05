@@ -55,8 +55,8 @@ abstract class AbstractDatabaseGrantsIT {
     }
 
     /**
-     * Identity (V1), audit (V2), admin (V3) and case (V4) tables, and the column each probe touches: the first key
-     * column.
+     * Identity (V1), audit (V2), admin (V3), case (V4) and comment (V4.1) tables, and the column each probe touches:
+     * the first key column.
      */
     static final Map<String, String> TABLES = Map.ofEntries(
             Map.entry("APP_USER", "ID"),
@@ -70,6 +70,7 @@ abstract class AbstractDatabaseGrantsIT {
             Map.entry("CASE_RECORD", "ID"),
             Map.entry("CASE_SLA", "CASE_ID"),
             Map.entry("CASE_SEARCH", "CASE_ID"),
+            Map.entry("CASE_COMMENT", "ID"),
             Map.entry("SPRING_SESSION", "PRIMARY_ID"),
             Map.entry("SPRING_SESSION_ATTRIBUTES", "SESSION_PRIMARY_ID"),
             Map.entry("OIDC_SESSION", "SESSION_ID"));
@@ -87,6 +88,7 @@ abstract class AbstractDatabaseGrantsIT {
             Map.entry("CASE_RECORD", EnumSet.of(Privilege.SELECT, Privilege.INSERT, Privilege.UPDATE)),
             Map.entry("CASE_SLA", EnumSet.of(Privilege.SELECT, Privilege.INSERT, Privilege.UPDATE)),
             Map.entry("CASE_SEARCH", EnumSet.of(Privilege.SELECT, Privilege.INSERT, Privilege.UPDATE)),
+            Map.entry("CASE_COMMENT", EnumSet.of(Privilege.SELECT, Privilege.INSERT)),
             Map.entry("SPRING_SESSION", EnumSet.allOf(Privilege.class)),
             Map.entry("SPRING_SESSION_ATTRIBUTES", EnumSet.allOf(Privilege.class)),
             Map.entry("OIDC_SESSION", EnumSet.allOf(Privilege.class)));
@@ -101,7 +103,8 @@ abstract class AbstractDatabaseGrantsIT {
             "SEQ_SLA_POLICY",
             "SEQ_CASE_TYPE",
             "SEQ_CASE_RECORD",
-            "SEQ_CASE_NUMBER");
+            "SEQ_CASE_NUMBER",
+            "SEQ_CASE_COMMENT");
 
     /**
      * One open connection per grantee for the whole class. Opening a connection per probe (about 100 in a burst, each
@@ -198,6 +201,24 @@ abstract class AbstractDatabaseGrantsIT {
                     .as(sequence)
                     .isEqualTo(Outcome.DENIED);
         }
+    }
+
+    /**
+     * The INSERT-only negative test of WP-13, beside the matrix: comments are evidence, so no statement of the
+     * runtime user may change or remove one, however it is phrased. Each statement would touch every row, and each
+     * is refused by the privilege check before any row is read.
+     */
+    @Test
+    void theRuntimeUserCanNeitherChangeNorRemoveAComment() throws SQLException {
+        String comments = users.ownerSchema() + ".CASE_COMMENT";
+
+        assertThat(run(appUser, "UPDATE " + comments + " SET BODY = 'rewritten'"))
+                .isEqualTo(Outcome.DENIED);
+        assertThat(run(appUser, "UPDATE " + comments + " SET AUTHOR_NAME_SNAPSHOT = 'someone else'"))
+                .isEqualTo(Outcome.DENIED);
+        assertThat(run(appUser, "DELETE FROM " + comments)).isEqualTo(Outcome.DENIED);
+        assertThat(run(appUser, "TRUNCATE TABLE " + comments)).isEqualTo(Outcome.DENIED);
+        assertThat(run(appUser, "SELECT COUNT(*) FROM " + comments)).isEqualTo(Outcome.ALLOWED);
     }
 
     @Test

@@ -105,6 +105,28 @@ public final class CaseSeed {
     }
 
     /**
+     * Inserts a comment written by a seeded user.
+     *
+     * @param caseId the case
+     * @param authorId the author, whose seeded display name becomes the snapshot
+     * @param body the Markdown body
+     * @return the new comment's id
+     */
+    public long comment(long caseId, long authorId, String body) {
+        long id = NEXT.incrementAndGet();
+        jdbc.update(
+                "INSERT INTO CASE_COMMENT (ID, CASE_ID, BODY, AUTHOR_ID, AUTHOR_NAME_SNAPSHOT, CREATED_AT)"
+                        + " VALUES (?, ?, ?, ?, ?, ?)",
+                id,
+                caseId,
+                body,
+                authorId,
+                "Seed User " + authorId,
+                NOW);
+        return id;
+    }
+
+    /**
      * Gives a user a role in a team.
      *
      * @param userId the user
