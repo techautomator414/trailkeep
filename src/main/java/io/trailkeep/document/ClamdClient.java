@@ -24,6 +24,7 @@ import javax.net.ssl.SSLParameters;
 import javax.net.ssl.SSLSocket;
 import javax.net.ssl.SSLSocketFactory;
 import org.springframework.boot.ssl.SslBundles;
+import org.springframework.context.annotation.Conditional;
 import org.springframework.stereotype.Component;
 
 /**
@@ -41,8 +42,12 @@ import org.springframework.stereotype.Component;
  * time out after {@code read-timeout}; the whole exchange is bounded by {@code scan-timeout}, after which the socket
  * is closed even if a write is blocked. A failed handshake (an untrusted or misnamed certificate, a plaintext peer) is
  * the scanner being unavailable too.
+ *
+ * <p>It exists only while {@code app.attachments.scanning} is {@code clamd} (ADR-0013): in {@code external} mode
+ * neither the host nor the SSL bundle is needed, and nothing connects to a scanner.
  */
 @Component
+@Conditional(ClamdScanningCondition.class)
 final class ClamdClient implements VirusScanner {
 
     /** Bytes per {@code INSTREAM} chunk; far below clamd's default {@code StreamMaxLength}. */
@@ -62,6 +67,7 @@ final class ClamdClient implements VirusScanner {
     private static final String[] PROTOCOLS = {"TLSv1.3", "TLSv1.2"};
 
     private final AttachmentProperties.Clamd clamd;
+    private final String host;
     private final SSLSocketFactory sockets;
 
     /**
@@ -69,9 +75,15 @@ final class ClamdClient implements VirusScanner {
      *
      * @param properties the attachment settings
      * @param sslBundles Spring Boot's SSL bundles
+     * @throws IllegalStateException if no clamd host is configured
      */
     ClamdClient(AttachmentProperties properties, SslBundles sslBundles) {
         this.clamd = properties.clamd();
+        String configured = clamd.host();
+        if (configured == null || configured.isBlank()) {
+            throw new IllegalStateException("app.attachments.clamd.host is required while scanning is clamd");
+        }
+        this.host = configured;
         this.sockets =
                 sslBundles.getBundle(clamd.sslBundle()).createSslContext().getSocketFactory();
     }
@@ -90,7 +102,7 @@ final class ClamdClient implements VirusScanner {
                     () -> closeQuietly(socket), clamd.scanTimeout().toMillis(), TimeUnit.MILLISECONDS);
             try {
                 socket.connect(
-                        new InetSocketAddress(clamd.host(), clamd.port()),
+                        new InetSocketAddress(host, clamd.port()),
                         Math.toIntExact(clamd.connectTimeout().toMillis()));
                 socket.setSoTimeout(Math.toIntExact(clamd.readTimeout().toMillis()));
                 socket.startHandshake();

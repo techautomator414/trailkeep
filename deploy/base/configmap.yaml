@@ -16,6 +16,11 @@ data:
   # The application refuses to start if either is empty.
   APP_DB_APP_USER: TRAILKEEP_APP
   APP_DB_PURGE_USER: TRAILKEEP_PURGE
+  # Who scans uploads for malware (ADR-0013). clamd (the default): every upload is scanned by the ClamAV below before
+  # it is stored, fail-closed. external: the organization scans upstream (gateway, ICAP proxy) or at the endpoints;
+  # Trailkeep stores files as NOT_SCANNED, never as clean, and needs neither the two clamd entries below nor
+  # clamav.yaml (deploy/README.md, overlays/external-scanning). Read at startup: changing it is a redeploy.
+  # APP_ATTACHMENTS_SCANNING: clamd
   # The ClamAV Service in clamav.yaml, reached over TLS on 3311 (ADR-0012); its certificate must name this host. Every
   # upload is scanned before it is stored and is refused while the scanner is unreachable. clamd's StreamMaxLength
   # must be at least app.attachments.max-bytes (25MB); its default (100M) is.

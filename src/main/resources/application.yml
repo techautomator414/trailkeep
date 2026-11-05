@@ -115,6 +115,10 @@ app:
   attachments:
     temp-dir: ${java.io.tmpdir}
     max-bytes: 25MB
+    # Who scans uploads for malware (ADR-0013): clamd (Trailkeep scans every upload, fail-closed) or external (the
+    # deployment scans upstream or at endpoints; files are stored as NOT_SCANNED, and clamd host and bundle are not
+    # needed). Read at startup only: changing it is a redeploy.
+    scanning: clamd
 
 server:
   port: 8080

@@ -14,6 +14,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Scanning mode (ADR-0013): `app.attachments.scanning` (`APP_ATTACHMENTS_SCANNING`) is `clamd` by default, or
+  `external` for organizations that scan upstream or at endpoints. It is deployment configuration read at startup,
+  so no account in the application can turn scanning off. In `external` mode no clamd host, SSL bundle or ClamAV pod
+  is needed (`deploy/overlays/external-scanning`), every other upload check still runs, and files are stored with
+  the new status `NOT_SCANNED` (`V4_4__attachment_not_scanned` widens `CK_ATTACHMENT_SCAN`), never as clean, and
+  stay downloadable; the startup log warns. An unknown value fails startup.
 - Upload validation and virus scan pipeline (WP-14 part 2, no endpoint yet): an upload is copied to a temp file in
   `app.attachments.temp-dir` (the `emptyDir` in deployments) while its SHA-256 is computed and the 25 MB cap
   (`app.attachments.max-bytes`, which `spring.servlet.multipart.max-file-size` follows) stops the copy. Its type is

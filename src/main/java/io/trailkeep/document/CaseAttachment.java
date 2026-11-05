@@ -20,6 +20,11 @@ import org.jspecify.annotations.Nullable;
  * not a field: they are {@code CASE_ATTACHMENT_CHUNK} rows written and read by {@link AttachmentContentJdbcDao}
  * (ADR-0004). Everything but the release is fixed at upload: those columns are {@code updatable = false}, and the
  * runtime user's UPDATE grant covers only the release columns (BUILD_PLAN §1.3 "immutable attachments").
+ *
+ * <p>Download rule ({@link ScanStatus#isDownloadable()}, ADR-0013): {@code CLEAN}, {@code RELEASED} and
+ * {@code NOT_SCANNED} files may be downloaded; {@code QUARANTINED} files never are. {@code NOT_SCANNED} means scanning
+ * was delegated outside Trailkeep ({@code app.attachments.scanning=external}), so it is never shown as clean, and
+ * there is nothing to release: a release applies only to a quarantined file.
  */
 @Entity
 @Table(name = "CASE_ATTACHMENT")
@@ -88,8 +93,9 @@ class CaseAttachment {
      *
      * @param caseId the case
      * @param file what validation established about the file
-     * @param status {@link ScanStatus#CLEAN} or {@link ScanStatus#QUARANTINED}; nothing is released at upload
-     * @param scanDetail the signature found, for a quarantined file; {@code null} for a clean one
+     * @param status {@link ScanStatus#CLEAN}, {@link ScanStatus#QUARANTINED} or {@link ScanStatus#NOT_SCANNED};
+     *     nothing is released at upload
+     * @param scanDetail the signature found, for a quarantined file; {@code null} otherwise
      * @param uploadedBy who uploaded it
      * @param now when
      * @return the attachment, not yet persisted
@@ -103,7 +109,8 @@ class CaseAttachment {
             long uploadedBy,
             Instant now) {
         if (status == ScanStatus.RELEASED || (status == ScanStatus.QUARANTINED) != (scanDetail != null)) {
-            throw new IllegalArgumentException("a scanned file is clean, or quarantined with a signature");
+            throw new IllegalArgumentException(
+                    "a stored file is clean or not scanned, or quarantined with a signature");
         }
         CaseAttachment attachment = new CaseAttachment();
         attachment.caseId = caseId;
@@ -119,12 +126,13 @@ class CaseAttachment {
     }
 
     /**
-     * Releases a quarantined file. The signature found stays recorded.
+     * Releases a quarantined file. The signature found stays recorded. A {@code NOT_SCANNED} file is downloadable
+     * already and is never released.
      *
      * @param by the Compliance Admin releasing it
      * @param reason why, 1 to {@link #MAX_REASON} characters
      * @param now when
-     * @throws IllegalStateException if the file is not quarantined
+     * @throws IllegalStateException if the file is not quarantined, {@code NOT_SCANNED} included
      * @throws IllegalArgumentException if the reason is blank or too long
      */
     void release(long by, String reason, Instant now) {
