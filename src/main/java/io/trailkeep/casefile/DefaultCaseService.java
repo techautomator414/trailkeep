@@ -55,6 +55,7 @@ class DefaultCaseService implements CaseService {
     private final CaseNumberJdbcDao numbers;
     private final EntityManager entityManager;
     private final CaseScopeService scopes;
+    private final CaseLoader loader;
     private final CasePermissionService permissions;
     private final UserDirectoryService directory;
     private final AuditRecorder audit;
@@ -69,6 +70,7 @@ class DefaultCaseService implements CaseService {
             CaseNumberJdbcDao numbers,
             EntityManager entityManager,
             CaseScopeService scopes,
+            CaseLoader loader,
             CasePermissionService permissions,
             UserDirectoryService directory,
             AuditRecorder audit,
@@ -81,6 +83,7 @@ class DefaultCaseService implements CaseService {
         this.numbers = numbers;
         this.entityManager = entityManager;
         this.scopes = scopes;
+        this.loader = loader;
         this.permissions = permissions;
         this.directory = directory;
         this.audit = audit;
@@ -152,7 +155,7 @@ class DefaultCaseService implements CaseService {
     @Override
     @Transactional(readOnly = true)
     public CaseView view(Actor actor, String caseNumber) {
-        CaseNumber number = parse(caseNumber);
+        CaseNumber number = CaseLoader.parse(caseNumber);
         CaseRow row = cases.findRow(scopes.forUser(actor.permissions()), number)
                 .orElseThrow(() -> new CaseException(Kind.NOT_FOUND, "case not found"));
         CaseRecord record = row.record();
@@ -172,13 +175,17 @@ class DefaultCaseService implements CaseService {
                 record.getSubjectText(),
                 record.getDescription(),
                 sla(row.slaState(), row.slaDueAt()),
-                permissions.isAllowed(actor.permissions(), facts(record), CaseAction.EDIT));
+                record.getVersion(),
+                allowed(actor, record, CaseAction.EDIT),
+                allowed(actor, record, CaseAction.REASSIGN),
+                allowed(actor, record, CaseAction.RESTRICT),
+                allowed(actor, record, CaseAction.UNRESTRICT));
     }
 
     @Override
     @Transactional(readOnly = true)
     public EditableCase editable(Actor actor, String caseNumber) {
-        CaseRecord record = load(actor, caseNumber, CaseAction.EDIT);
+        CaseRecord record = loader.load(actor.permissions(), caseNumber, CaseAction.EDIT);
         return new EditableCase(
                 record.getCaseNumber(),
                 record.changes(),
@@ -189,7 +196,7 @@ class DefaultCaseService implements CaseService {
 
     @Override
     public void edit(Actor actor, String caseNumber, int version, CaseChanges entered) {
-        CaseRecord record = load(actor, caseNumber, CaseAction.EDIT);
+        CaseRecord record = loader.load(actor.permissions(), caseNumber, CaseAction.EDIT);
         if (record.getVersion() != version) {
             throw new CaseException(Kind.CONFLICT, "saved since the form was loaded");
         }
@@ -219,26 +226,8 @@ class DefaultCaseService implements CaseService {
         LOG.info("Case id {} edited", caseId);
     }
 
-    /** A readable case on which the actor may perform an action: 404 if unreadable, then 403 if not allowed. */
-    private CaseRecord load(Actor actor, String caseNumber, CaseAction action) {
-        CaseRecord record = cases.findOne(scopes.forUser(actor.permissions()), parse(caseNumber))
-                .orElseThrow(() -> new CaseException(Kind.NOT_FOUND, "case not found"));
-        if (!permissions.isAllowed(actor.permissions(), facts(record), action)) {
-            throw new CaseException(Kind.FORBIDDEN, "action not allowed on this case");
-        }
-        return record;
-    }
-
-    private static CaseNumber parse(String caseNumber) {
-        try {
-            return CaseNumber.parse(caseNumber);
-        } catch (IllegalArgumentException malformed) {
-            throw new CaseException(Kind.NOT_FOUND, "not a case number");
-        }
-    }
-
-    private static CaseFacts facts(CaseRecord record) {
-        return new CaseFacts(record.getTeamId(), record.getOwnerId(), record.getSensitivity(), record.getStatus());
+    private boolean allowed(Actor actor, CaseRecord record, CaseAction action) {
+        return permissions.isAllowed(actor.permissions(), CaseLoader.facts(record), action);
     }
 
     /** Checks what the form offers as choices, and returns the case type's policy. */

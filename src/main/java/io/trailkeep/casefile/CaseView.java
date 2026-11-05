@@ -25,7 +25,11 @@ import org.jspecify.annotations.Nullable;
  * @param subjectText who or what is involved, if given
  * @param description the description; {@code null} only once purged
  * @param sla where the case stands against its SLA
+ * @param version the version a change from the page is made against
  * @param editable whether the viewer may edit it, so the page offers Edit
+ * @param reassignable whether the viewer may reassign it, so the page offers Reassign
+ * @param restrictable whether the viewer may mark it restricted
+ * @param unrestrictable whether the viewer may mark it standard again
  */
 public record CaseView(
         CaseNumber number,
@@ -41,7 +45,11 @@ public record CaseView(
         @Nullable String subjectText,
         @Nullable String description,
         Sla sla,
-        boolean editable) {
+        int version,
+        boolean editable,
+        boolean reassignable,
+        boolean restrictable,
+        boolean unrestrictable) {
 
     /**
      * The SLA chip (BUILD_PLAN §4.3): the state, the due day and the whole days left (negative once overdue).

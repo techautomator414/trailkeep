@@ -15,7 +15,13 @@ import org.jspecify.annotations.Nullable;
  */
 enum CaseNotice {
     /** Edit saved. */
-    SAVED;
+    SAVED,
+    /** Owner or team changed. */
+    REASSIGNED,
+    /** Marked restricted. */
+    RESTRICTED,
+    /** Marked standard. */
+    UNRESTRICTED;
 
     private static final String ATTRIBUTE = "tk.caseNotice";
 

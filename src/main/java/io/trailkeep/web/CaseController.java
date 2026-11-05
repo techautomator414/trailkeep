@@ -2,6 +2,7 @@
 // Copyright 2026 Charlie Genova and contributors
 package io.trailkeep.web;
 
+import io.trailkeep.casefile.CaseAssignmentService;
 import io.trailkeep.casefile.CaseFields;
 import io.trailkeep.casefile.CaseService;
 import io.trailkeep.casefile.CaseService.Actor;
@@ -54,12 +55,19 @@ class CaseController {
             "sensitivity");
 
     private final CaseService cases;
+    private final CaseAssignmentService assignments;
     private final UserDirectoryService directory;
     private final InstantSource clock;
     private final AppProperties app;
 
-    CaseController(CaseService cases, UserDirectoryService directory, InstantSource clock, AppProperties app) {
+    CaseController(
+            CaseService cases,
+            CaseAssignmentService assignments,
+            UserDirectoryService directory,
+            InstantSource clock,
+            AppProperties app) {
         this.cases = cases;
+        this.assignments = assignments;
         this.directory = directory;
         this.clock = clock;
         this.app = app;
@@ -110,9 +118,12 @@ class CaseController {
             @RequestParam(required = false) @Nullable String created,
             HttpServletRequest request,
             Model model) {
-        CaseView view = cases.view(actor(principal), number);
+        Actor actor = actor(principal);
+        CaseView view = cases.view(actor, number);
         model.addAttribute("c", view);
         model.addAttribute("created", created != null);
+        model.addAttribute("reassign", view.reassignable() ? assignments.reassignment(actor, number) : null);
+        // Taken only once the case has been read, so a page that answers 404 never consumes a notice.
         model.addAttribute("notice", CaseNotice.take(request, view.number()));
         return "casefile/case";
     }

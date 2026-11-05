@@ -216,6 +216,30 @@ class CaseRecord {
         this.updatedBy = actorId;
     }
 
+    /**
+     * Team, owner and sensitivity as they stand.
+     *
+     * @return the current assignment
+     */
+    CaseAssignment assignment() {
+        return new CaseAssignment(teamId, ownerId, sensitivity);
+    }
+
+    /**
+     * Reassigns the case or changes its sensitivity. The version moves on flush, as for {@link #apply}.
+     *
+     * @param assignment the new team, owner and sensitivity, already checked
+     * @param actorId who changes it
+     * @param now when
+     */
+    void assign(CaseAssignment assignment, long actorId, Instant now) {
+        this.teamId = assignment.teamId();
+        this.ownerId = assignment.ownerId();
+        this.sensitivity = assignment.sensitivity();
+        this.updatedAt = now;
+        this.updatedBy = actorId;
+    }
+
     @Override
     public boolean equals(@Nullable Object other) {
         return this == other || (other instanceof CaseRecord that && id != null && id.equals(that.id));
