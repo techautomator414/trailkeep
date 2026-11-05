@@ -7,6 +7,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Security
+
+- CI's Semgrep lockfile resolves the Dependabot alerts for `mcp` (1.30.0) and `opentelemetry-api` (1.45.2, with the rest
+  of the opentelemetry family): every Semgrep release up to 1.184.0 pins `mcp==1.29.0` and `opentelemetry-api<1.38`, so
+  `.github/requirements/semgrep-overrides.in` lifts those pins when the lockfile is compiled (the job installs with
+  `--no-deps` and never runs `semgrep mcp`).
+
 ### Changed
 
 - ClamAV pod (`deploy/base/clamav.yaml`, `compose.yaml`): clamd now binds `127.0.0.1:3310` only (new
