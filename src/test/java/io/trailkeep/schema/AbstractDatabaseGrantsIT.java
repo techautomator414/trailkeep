@@ -55,8 +55,8 @@ abstract class AbstractDatabaseGrantsIT {
     }
 
     /**
-     * Identity (V1), audit (V2), admin (V3), case (V4), comment (V4.1) and pin (V4.2) tables, and the column each
-     * probe touches: the first key column.
+     * Identity (V1), audit (V2), admin (V3), case (V4), comment (V4.1), pin (V4.2) and attachment (V4.3) tables, and
+     * the column each probe touches: the first key column.
      */
     static final Map<String, String> TABLES = Map.ofEntries(
             Map.entry("APP_USER", "ID"),
@@ -72,6 +72,8 @@ abstract class AbstractDatabaseGrantsIT {
             Map.entry("CASE_SEARCH", "CASE_ID"),
             Map.entry("CASE_COMMENT", "ID"),
             Map.entry("CASE_COMMENT_PIN", "COMMENT_ID"),
+            Map.entry("CASE_ATTACHMENT", "ID"),
+            Map.entry("CASE_ATTACHMENT_CHUNK", "ATTACHMENT_ID"),
             Map.entry("SPRING_SESSION", "PRIMARY_ID"),
             Map.entry("SPRING_SESSION_ATTRIBUTES", "SESSION_PRIMARY_ID"),
             Map.entry("OIDC_SESSION", "SESSION_ID"));
@@ -91,6 +93,9 @@ abstract class AbstractDatabaseGrantsIT {
             Map.entry("CASE_SEARCH", EnumSet.of(Privilege.SELECT, Privilege.INSERT, Privilege.UPDATE)),
             Map.entry("CASE_COMMENT", EnumSet.of(Privilege.SELECT, Privilege.INSERT)),
             Map.entry("CASE_COMMENT_PIN", EnumSet.of(Privilege.SELECT, Privilege.INSERT, Privilege.DELETE)),
+            // UPDATE of the release columns only; see theRuntimeUserMayChangeAnAttachmentOnlyByReleasingIt.
+            Map.entry("CASE_ATTACHMENT", EnumSet.of(Privilege.SELECT, Privilege.INSERT)),
+            Map.entry("CASE_ATTACHMENT_CHUNK", EnumSet.of(Privilege.SELECT, Privilege.INSERT)),
             Map.entry("SPRING_SESSION", EnumSet.allOf(Privilege.class)),
             Map.entry("SPRING_SESSION_ATTRIBUTES", EnumSet.allOf(Privilege.class)),
             Map.entry("OIDC_SESSION", EnumSet.allOf(Privilege.class)));
@@ -106,7 +111,8 @@ abstract class AbstractDatabaseGrantsIT {
             "SEQ_CASE_TYPE",
             "SEQ_CASE_RECORD",
             "SEQ_CASE_NUMBER",
-            "SEQ_CASE_COMMENT");
+            "SEQ_CASE_COMMENT",
+            "SEQ_CASE_ATTACHMENT");
 
     /**
      * One open connection per grantee for the whole class. Opening a connection per probe (about 100 in a burst, each
@@ -221,6 +227,33 @@ abstract class AbstractDatabaseGrantsIT {
         assertThat(run(appUser, "DELETE FROM " + comments)).isEqualTo(Outcome.DENIED);
         assertThat(run(appUser, "TRUNCATE TABLE " + comments)).isEqualTo(Outcome.DENIED);
         assertThat(run(appUser, "SELECT COUNT(*) FROM " + comments)).isEqualTo(Outcome.ALLOWED);
+    }
+
+    /**
+     * Attachments are evidence too (WP-14): the runtime user may write only the release of a quarantined file, never
+     * its name, type, size, hash, detection, uploader or content, and may delete neither the row nor its chunks.
+     */
+    @Test
+    void theRuntimeUserMayChangeAnAttachmentOnlyByReleasingIt() throws SQLException {
+        String attachments = users.ownerSchema() + ".CASE_ATTACHMENT";
+        String chunks = users.ownerSchema() + ".CASE_ATTACHMENT_CHUNK";
+
+        for (String column : List.of("SCAN_STATUS", "RELEASED_BY", "RELEASED_AT", "RELEASED_REASON")) {
+            assertThat(run(appUser, "UPDATE " + attachments + " SET " + column + " = NULL WHERE 1 = 0"))
+                    .as(column)
+                    .isEqualTo(Outcome.ALLOWED);
+        }
+        for (String column : List.of(
+                "ID", "CASE_ID", "FILE_NAME", "CONTENT_TYPE", "SIZE_BYTES", "SHA256", "SCAN_DETAIL", "UPLOADED_BY")) {
+            assertThat(run(appUser, "UPDATE " + attachments + " SET " + column + " = NULL"))
+                    .as(column)
+                    .isEqualTo(Outcome.DENIED);
+        }
+        assertThat(run(appUser, "UPDATE " + chunks + " SET CHUNK = NULL")).isEqualTo(Outcome.DENIED);
+        assertThat(run(appUser, "DELETE FROM " + attachments)).isEqualTo(Outcome.DENIED);
+        assertThat(run(appUser, "DELETE FROM " + chunks)).isEqualTo(Outcome.DENIED);
+        assertThat(run(purgeUser, "UPDATE " + attachments + " SET RELEASED_REASON = NULL WHERE 1 = 0"))
+                .isEqualTo(Outcome.DENIED);
     }
 
     @Test

@@ -14,6 +14,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Attachment storage (WP-14 part 1): `V4_3__attachment` adds `CASE_ATTACHMENT` (detected content type, size,
+  SHA-256, scan status `CLEAN | QUARANTINED | RELEASED` with the signature found, and the release's who, when and
+  why, kept consistent by a CHECK) with the `CaseAttachment` entity, and `CASE_ATTACHMENT_CHUNK`, the content as rows
+  of at most 1 MiB written and read one row per query by `AttachmentContentJdbcDao`, on PostgreSQL and Oracle. The
+  runtime user may insert both, may update only the four release columns of an attachment (a column grant on both
+  vendors), and may never change or delete content.
 - Comment pins (WP-13 part 3): `V4_2__comment_pin` adds `CASE_COMMENT_PIN` with the `CaseCommentPin` entity and a
   scoped `@CaseRooted` repository; a composite foreign key ties each pin to a comment of its own case, and the runtime
   user may SELECT, INSERT and DELETE pins while `CASE_COMMENT` stays insert-only. A new `PIN` matrix action (whoever
