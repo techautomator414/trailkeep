@@ -69,17 +69,12 @@ final class UploadTooLargeErrorView implements ErrorViewResolver {
             Actor actor = casePage.actor(principal);
             cases.attachableCaseId(actor, number);
             page.addAttribute("uploadError", AttachmentRejectedException.Reason.TOO_LARGE.name());
-            ModelAndView view = new ModelAndView(casePage.render(actor, number, request, null, page), page);
-            view.setStatus(HttpStatus.UNPROCESSABLE_CONTENT);
-            return view;
+            String view = casePage.render(actor, number, request, null, page);
+            return new ModelAndView(view, page, HttpStatus.UNPROCESSABLE_CONTENT);
         } catch (DomainException refused) {
-            HttpStatus refusal =
-                    refused.kind() == DomainException.Kind.NOT_FOUND ? HttpStatus.NOT_FOUND : HttpStatus.FORBIDDEN;
-            ModelAndView view = conventions.resolveErrorView(request, refusal, model);
-            if (view != null) {
-                view.setStatus(refusal);
-            }
-            return view;
+            boolean absent = refused.kind() == DomainException.Kind.NOT_FOUND;
+            return new ModelAndView(
+                    absent ? "error/404" : "error/4xx", model, absent ? HttpStatus.NOT_FOUND : HttpStatus.FORBIDDEN);
         }
     }
 }

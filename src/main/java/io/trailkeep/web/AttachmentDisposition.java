@@ -40,7 +40,7 @@ final class AttachmentDisposition {
                 encoded.append('%').append(HEX[c >> 4]).append(HEX[c & 0xF]);
             }
         }
-        String ascii = fallback.isEmpty() ? "download" : fallback.toString();
-        return "attachment; filename=\"" + ascii + "\"; filename*=UTF-8''" + encoded;
+        return "attachment; filename=\"" + (fallback.isEmpty() ? "download" : fallback) + "\"; filename*=UTF-8''"
+                + encoded;
     }
 }

@@ -42,13 +42,12 @@
       </tbody>
     </table>
   </div>
-  <th:block th:each="a : ${list}" th:if="${releasable and a.status.name() == 'QUARANTINED'}">
-    <dialog th:id="'tk-release-' + ${a.id}" class="tk-dialog" th:aria-labelledby="'tk-release-title-' + ${a.id}">
+  <dialog th:each="a : ${list}" th:if="${releasable and a.status.name() == 'QUARANTINED'}"
+          th:id="'tk-release-' + ${a.id}" class="tk-dialog" th:aria-labelledby="'tk-release-title-' + ${a.id}">
       <h2 th:id="'tk-release-title-' + ${a.id}" th:text="#{tk.release.title}">Release a quarantined file</h2>
       <form th:replace="~{document/fragments/attachments :: release(${number}, ${a.id}, ${a.fileName}, '', false,
                          true)}"></form>
-    </dialog>
-  </th:block>
+  </dialog>
   <form th:if="${uploadable}" method="post" enctype="multipart/form-data"
         th:action="@{/cases/{n}/attachments(n=${number})}" th:with="e=${error != null}">
     <div th:if="${e}" class="alert alert-danger" role="alert" tabindex="-1" data-tk-error-summary
@@ -76,8 +75,7 @@
 <form th:fragment="release(number, id, name, reason, invalid, inDialog)" method="post"
       th:action="@{/cases/{n}/attachments/{i}/release(n=${number},i=${id})}"
       th:with="r='reason-' + ${id}">
-  <p class="text-break" th:text="#{tk.release.file(${name})}">File: eicar.txt</p>
-  <p th:text="#{tk.release.text}">Releasing the file makes it downloadable.</p>
+  <p class="text-break" th:text="#{tk.release.text(${name})}">File: eicar.txt. Releasing it makes it downloadable.</p>
   <div class="mb-3">
     <label class="form-label" th:for="${r}" th:text="#{tk.release.reason}">Reason for releasing it (required)</label>
     <textarea class="form-control" th:id="${r}" name="reason" rows="3" required maxlength="1000"

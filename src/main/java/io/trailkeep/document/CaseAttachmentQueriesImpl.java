@@ -10,6 +10,7 @@ import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.CriteriaQuery;
 import jakarta.persistence.criteria.Root;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 
 /**
@@ -40,13 +41,9 @@ class CaseAttachmentQueriesImpl implements CaseAttachmentQueries {
 
     @Override
     public Optional<CaseAttachment> findOne(CaseScope scope, CaseNumber caseNumber, long attachmentId) {
-        CriteriaBuilder cb = entityManager.getCriteriaBuilder();
-        CriteriaQuery<CaseAttachment> query = cb.createQuery(CaseAttachment.class);
-        Root<CaseAttachment> attachment = query.from(CaseAttachment.class);
-        query.select(attachment)
-                .where(
-                        cb.equal(attachment.get("id"), attachmentId),
-                        scopes.readableCase(scope, caseNumber, attachment.get("caseId"), query, cb));
-        return entityManager.createQuery(query).getResultStream().findFirst();
+        // A case holds a handful of rows, metadata only (content is in chunks), so the scoped list is the lookup.
+        return findForCase(scope, caseNumber).stream()
+                .filter(attachment -> Objects.equals(attachment.getId(), attachmentId))
+                .findFirst();
     }
 }

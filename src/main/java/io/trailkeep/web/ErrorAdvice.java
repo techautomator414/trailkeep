@@ -42,7 +42,7 @@ class ErrorAdvice {
         }
         if (exception instanceof DownloadsBusyException) {
             status = HttpStatus.SERVICE_UNAVAILABLE;
-            response.setHeader(HttpHeaders.RETRY_AFTER, Integer.toString(DownloadsBusyException.RETRY_AFTER_SECONDS));
+            response.setHeader(HttpHeaders.RETRY_AFTER, "5");
         }
         LOG.debug("{} -> {}", exception.getClass().getSimpleName(), status.value());
         response.setStatus(status.value());

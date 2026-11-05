@@ -3,6 +3,7 @@
 package io.trailkeep.document;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.not;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.asyncDispatch;
@@ -19,19 +20,26 @@ import io.trailkeep.testsupport.WithAppUser;
 import io.trailkeep.user.GlobalRole;
 import io.trailkeep.user.TeamRole;
 import java.io.OutputStream;
+import java.util.Objects;
 import java.util.Random;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.web.servlet.HandlerExecutionChain;
+import org.springframework.web.servlet.HandlerInterceptor;
+import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
+import org.springframework.web.util.ServletRequestPathUtils;
 
 /**
  * Downloading an attachment (WP-14 part 4, BUILD_PLAN §4.3, §9) through the endpoint, with the streamed body read in
@@ -74,6 +82,14 @@ class CaseAttachmentDownloadIT {
 
     @Autowired
     private CaseAttachmentService attachments;
+
+    @Autowired
+    @Qualifier("downloadSlotInterceptor")
+    private HandlerInterceptor slots;
+
+    @Autowired
+    @Qualifier("requestMappingHandlerMapping")
+    private RequestMappingHandlerMapping mappings;
 
     private AttachmentFixture fixture;
 
@@ -140,6 +156,38 @@ class CaseAttachmentDownloadIT {
         refused(fixture.number, Long.toString(quarantined), 403);
         refused(fixture.number, Long.toString(quarantined), 403);
         assertThat(download(fixture.number, clean).getStatus()).isEqualTo(200);
+    }
+
+    @Test
+    @WithAppUser(id = ANALYST, team = TEAM, teamRole = TeamRole.ANALYST)
+    void bodyNeverWrittenGivesItsSlotBackWhenItsRequestEnds() throws Exception {
+        long id = fixture.attachment(fixture.number, "clean.txt", ScanStatus.CLEAN, BYTES);
+        MockHttpServletRequest request =
+                new MockHttpServletRequest("GET", "/cases/" + fixture.number + "/attachments/" + id);
+        ServletRequestPathUtils.parseAndCache(request);
+        HandlerExecutionChain chain = Objects.requireNonNull(mappings.getHandler(request));
+        assertThat(chain.getInterceptorList())
+                .as("the slot interceptor guards the download path")
+                .contains(slots);
+
+        // Opened as the controller opens it, then abandoned: the async task never runs, so writeTo never does.
+        CaseAttachmentService.Download abandoned =
+                attachments.download(fixture.actor(ANALYST), fixture.number.toString(), id);
+        request.setAttribute("io.trailkeep.web.DownloadSlotInterceptor.download", abandoned);
+        assertThatThrownBy(() -> attachments.download(fixture.actor(ANALYST), fixture.number.toString(), id))
+                .isInstanceOf(DownloadsBusyException.class);
+        slots.afterCompletion(request, new MockHttpServletResponse(), chain.getHandler(), null);
+        slots.afterCompletion(request, new MockHttpServletResponse(), chain.getHandler(), null);
+        assertThatThrownBy(() -> abandoned.writeTo(OutputStream.nullOutputStream()))
+                .isInstanceOf(IllegalStateException.class);
+
+        assertThat(download(fixture.number, id).getStatus()).isEqualTo(200);
+        // Released once only: there is still exactly one slot.
+        CaseAttachmentService.Download held =
+                attachments.download(fixture.actor(ANALYST), fixture.number.toString(), id);
+        assertThatThrownBy(() -> attachments.download(fixture.actor(ANALYST), fixture.number.toString(), id))
+                .isInstanceOf(DownloadsBusyException.class);
+        held.release();
     }
 
     @Test

@@ -10,9 +10,6 @@ public final class DownloadsBusyException extends RuntimeException {
 
     private static final long serialVersionUID = 1L;
 
-    /** Seconds a client is asked to wait before trying again. */
-    public static final int RETRY_AFTER_SECONDS = 5;
-
     DownloadsBusyException() {
         super("all download slots are in use");
     }

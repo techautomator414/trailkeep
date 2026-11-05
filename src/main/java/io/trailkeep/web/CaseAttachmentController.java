@@ -37,8 +37,6 @@ import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBo
 @Controller
 class CaseAttachmentController {
 
-    private static final String RELEASE = "document/release";
-
     private final CaseAttachmentService attachments;
     private final CasePage page;
 
@@ -51,16 +49,18 @@ class CaseAttachmentController {
     ResponseEntity<StreamingResponseBody> download(
             @AuthenticationPrincipal TrailkeepOidcUser principal,
             @PathVariable String number,
-            @PathVariable String id) {
+            @PathVariable String id,
+            HttpServletRequest request) {
         Download download = attachments.download(page.actor(principal), number, parse(id));
-        StreamingResponseBody body = download::writeTo;
+        // From here the slot is released when the request ends, even if the body never runs.
+        request.setAttribute(DownloadSlotInterceptor.ATTRIBUTE, download);
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, AttachmentDisposition.of(download.fileName()))
                 .header("X-Content-Type-Options", "nosniff")
                 .header(HttpHeaders.CACHE_CONTROL, "private, no-store")
                 .contentType(mediaType(download.contentType()))
                 .contentLength(download.sizeBytes())
-                .body(body);
+                .body((StreamingResponseBody) download::writeTo);
     }
 
     @GetMapping("/cases/{number}/attachments/{id}/release")
@@ -105,7 +105,7 @@ class CaseAttachmentController {
         model.addAttribute("number", CaseNumber.parse(number));
         model.addAttribute("reason", reason);
         model.addAttribute("invalid", invalid);
-        return RELEASE;
+        return "document/release";
     }
 
     /** The stored type, detected at upload; anything unparsable is served as opaque bytes. */

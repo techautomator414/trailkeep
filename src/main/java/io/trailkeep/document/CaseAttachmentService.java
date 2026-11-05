@@ -84,7 +84,7 @@ public interface CaseAttachmentService {
      */
     ScanStatus upload(Actor actor, String caseNumber, String fileName, InputStream content);
 
-    /** A file ready to stream. It holds one of the replica's download slots until {@link #writeTo} has run once. */
+    /** A file ready to stream. It holds one of the replica's download slots until {@link #release()}. */
     interface Download {
 
         /**
@@ -116,6 +116,12 @@ public interface CaseAttachmentService {
          * @throws IOException if writing fails, for example because the client went away
          */
         void writeTo(OutputStream out) throws IOException;
+
+        /**
+         * Gives the download slot back if it is still held; later calls do nothing. {@link #writeTo} calls it when it
+         * ends, and the web layer when the request ends, so a body that is never written cannot keep its slot.
+         */
+        void release();
     }
 
     /**

@@ -145,29 +145,30 @@ class DefaultCaseAttachmentService implements CaseAttachmentService {
     }
 
     @Override
-    @Transactional(readOnly = true)
     public Download download(Actor actor, String caseNumber, long attachmentId) {
-        cases.downloadableCaseId(actor, caseNumber);
-        CaseAttachment attachment = find(actor, caseNumber, attachmentId);
-        if (!attachment.getScanStatus().isDownloadable()) {
-            throw new AttachmentException(Kind.FORBIDDEN, "a quarantined file is never served");
-        }
+        // The checks' read-only transaction has ended before a slot is taken, so its commit cannot strand one.
+        CaseAttachment attachment = Objects.requireNonNull(readOnly.execute(status -> {
+            cases.downloadableCaseId(actor, caseNumber);
+            CaseAttachment found = find(actor, caseNumber, attachmentId);
+            if (!found.getScanStatus().isDownloadable()) {
+                throw new AttachmentException(Kind.FORBIDDEN, "a quarantined file is never served");
+            }
+            return found;
+        }));
         if (!downloads.tryAcquire()) {
             throw new DownloadsBusyException();
         }
         LOG.debug("Attachment {} download opened", attachmentId);
-        return new StreamedDownload(attachment, attachmentId);
+        return new StreamedDownload(attachment);
     }
 
     /** A download holding a slot; its content is read when the response streams, in a transaction of its own. */
     private final class StreamedDownload implements Download {
 
-        private final long id;
         private final CaseAttachment attachment;
-        private final AtomicBoolean written = new AtomicBoolean();
+        private final AtomicBoolean released = new AtomicBoolean();
 
-        StreamedDownload(CaseAttachment attachment, long id) {
-            this.id = id;
+        StreamedDownload(CaseAttachment attachment) {
             this.attachment = attachment;
         }
 
@@ -188,23 +189,25 @@ class DefaultCaseAttachmentService implements CaseAttachmentService {
 
         @Override
         public void writeTo(OutputStream out) throws IOException {
-            if (!written.compareAndSet(false, true)) {
-                throw new IllegalStateException("a download is written once");
+            if (released.get()) {
+                throw new IllegalStateException("a download is written once, while it holds its slot");
             }
             try {
                 // Its own transaction, in the thread that streams, after the request's has ended (Part B).
-                readOnly.executeWithoutResult(status -> content.copy(id, sizeBytes(), out));
+                readOnly.executeWithoutResult(
+                        status -> content.copy(Objects.requireNonNull(attachment.getId()), sizeBytes(), out));
             } catch (UncheckedIOException failed) {
                 throw failed.getCause();
             } finally {
-                downloads.release();
+                release();
             }
         }
 
-        /** The name can be PHI. */
         @Override
-        public String toString() {
-            return "Download[id=" + id + ", sizeBytes=" + sizeBytes() + "]";
+        public void release() {
+            if (released.compareAndSet(false, true)) {
+                downloads.release();
+            }
         }
     }
 
@@ -239,20 +242,19 @@ class DefaultCaseAttachmentService implements CaseAttachmentService {
             throw new AttachmentException(Kind.INVALID, "only a quarantined file is released");
         }
         long actorId = actor.permissions().userId();
-        long caseId = attachment.getCaseId();
         attachment.release(actorId, text, clock.instant());
         entityManager.flush();
         audit.record(new AuditEntry(
                 actorId,
                 actor.displayName(),
                 AuditOrigin.UI,
-                caseId,
+                attachment.getCaseId(),
                 "ATTACHMENT",
                 attachmentId,
                 "ATTACHMENT_RELEASED",
                 audit.diff(
                         new ReleaseState(ScanStatus.QUARANTINED, null), new ReleaseState(ScanStatus.RELEASED, text))));
-        LOG.info("Attachment {} on case id {} released", attachmentId, caseId);
+        LOG.info("Attachment {} on case id {} released", attachmentId, attachment.getCaseId());
         return true;
     }
 

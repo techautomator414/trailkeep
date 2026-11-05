@@ -24,9 +24,6 @@ import org.springframework.ui.Model;
 @Component
 class CasePage {
 
-    /** The case page's view. */
-    static final String VIEW = "casefile/case";
-
     private final CaseService cases;
     private final CaseAssignmentService assignments;
     private final CaseCommentService comments;
@@ -69,7 +66,7 @@ class CasePage {
         model.addAttribute("limits", attachments.limits());
         // Taken only once the case has been read, so a page that answers 404 never consumes a notice.
         model.addAttribute("notice", CaseNotice.take(request, view.number()));
-        return VIEW;
+        return "casefile/case";
     }
 
     /**
