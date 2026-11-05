@@ -21,6 +21,7 @@
 --   CASE_RECORD           S I U      -            never deleted by the app; purge grants come with WP-24 (V4)
 --   CASE_SLA              S I U      -            job-owned side table (V4)
 --   CASE_SEARCH           S I U      -            search text side table (V4)
+--   CASE_COMMENT          S I        -            insert-only; a correction is a new comment (V4.1)
 --   SPRING_SESSION        S I U D    -            Spring Session JDBC (V3.1)
 --   SPRING_SESSION_ATTRIBUTES S I U D -
 --   OIDC_SESSION          S I U D    -            back-channel logout registry (V3.1)
@@ -34,6 +35,7 @@
 --   SEQ_CASE_TYPE         SELECT     -
 --   SEQ_CASE_RECORD       SELECT     -
 --   SEQ_CASE_NUMBER       SELECT     -            case numbers, one at a time
+--   SEQ_CASE_COMMENT      SELECT     -
 --
 -- Later migrations add their rows to the cursor below. Fixed rules for them: the app user has no UPDATE or DELETE
 -- on CASE_COMMENT, AUDIT_EVENT and ALERT_LEDGER; it may DELETE only from CASE_COMMENT_PIN, SAVED_VIEW, USER_ALERT,
@@ -62,6 +64,8 @@ DECLARE
     UNION ALL SELECT 'CASE_SEARCH', 'SELECT,INSERT,UPDATE', UPPER('${app_user}') FROM DUAL
     UNION ALL SELECT 'SEQ_CASE_RECORD', 'SELECT', UPPER('${app_user}') FROM DUAL
     UNION ALL SELECT 'SEQ_CASE_NUMBER', 'SELECT', UPPER('${app_user}') FROM DUAL
+    UNION ALL SELECT 'CASE_COMMENT', 'SELECT,INSERT', UPPER('${app_user}') FROM DUAL
+    UNION ALL SELECT 'SEQ_CASE_COMMENT', 'SELECT', UPPER('${app_user}') FROM DUAL
     UNION ALL SELECT 'SPRING_SESSION', 'SELECT,INSERT,UPDATE,DELETE', UPPER('${app_user}') FROM DUAL
     UNION ALL SELECT 'SPRING_SESSION_ATTRIBUTES', 'SELECT,INSERT,UPDATE,DELETE', UPPER('${app_user}') FROM DUAL
     UNION ALL SELECT 'OIDC_SESSION', 'SELECT,INSERT,UPDATE,DELETE', UPPER('${app_user}') FROM DUAL;

@@ -64,6 +64,11 @@
 
     <!-- Not managed by Spring Boot. 9.x is the line built on Jackson 3, which Boot 4 uses. -->
     <logstash-logback-encoder.version>9.0</logstash-logback-encoder.version>
+    <!-- Comment Markdown (WP-13, BUILD_PLAN 7.2). The sanitizer is the first release carrying every fix published
+         up to 2026-11-03, including GHSA-47x2-9gq9-jg3m (denial of service via repeated allowed attributes), which
+         applies to every policy; the later advisories concern SVG, srcset and ping, which the policy never allows. -->
+    <commonmark.version>0.31.0</commonmark.version>
+    <owasp-java-html-sanitizer.version>20261103.2</owasp-java-html-sanitizer.version>
   </properties>
 
   <dependencyManagement>
@@ -157,6 +162,18 @@
     <dependency>
       <groupId>org.jspecify</groupId>
       <artifactId>jspecify</artifactId>
+    </dependency>
+    <dependency>
+      <!-- Parses comment Markdown; its output is never trusted, only sanitized (WP-13). BSD-2-Clause. -->
+      <groupId>org.commonmark</groupId>
+      <artifactId>commonmark</artifactId>
+      <version>${commonmark.version}</version>
+    </dependency>
+    <dependency>
+      <!-- The allow-list sanitizer behind SafeHtml (BUILD_PLAN 9, Input validation). Apache-2.0 or BSD-2-Clause. -->
+      <groupId>com.googlecode.owasp-java-html-sanitizer</groupId>
+      <artifactId>owasp-java-html-sanitizer</artifactId>
+      <version>${owasp-java-html-sanitizer.version}</version>
     </dependency>
     <dependency>
       <groupId>com.oracle.database.jdbc</groupId>

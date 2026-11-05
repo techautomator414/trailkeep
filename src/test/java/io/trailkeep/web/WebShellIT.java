@@ -24,6 +24,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
+import org.thymeleaf.spring6.SpringTemplateEngine;
 
 /** The web shell's server-side contract: CSP and nonce, fixed htmx config, landmarks, assets, htmx redirects. */
 // "IT" is the Failsafe suffix Part B mandates for integration tests, not an abbreviation.
@@ -47,6 +48,16 @@ class WebShellIT {
 
     @Autowired
     private MockMvc mvc;
+
+    @Autowired
+    private SpringTemplateEngine templates;
+
+    @Test
+    void theTemplateEngineKnowsTheSafeHtmlAttribute() {
+        assertThat(templates.getDialects())
+                .extracting(dialect -> dialect.getClass().getSimpleName())
+                .contains("SafeHtmlDialect");
+    }
 
     @Test
     @WithAppUser(name = "Sample Analyst")

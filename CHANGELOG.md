@@ -13,6 +13,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Comment foundations (WP-13 part 1): `V4_1__comment` adds the insert-only `CASE_COMMENT` table (author name snapshot,
+  20 000-character body cap) with the `@Immutable` `CaseComment` entity and its scoped repository; the runtime user
+  may only SELECT and INSERT it. `MarkdownRenderer` turns comment Markdown into `SafeHtml` through `commonmark-java`
+  and the OWASP allow-list sanitizer, and the `tk:safe` template attribute is the only way to write it unescaped.
+  Posting and showing comments follow in part 2.
 - Reassign, Mark restricted and Mark standard on the case page (WP-12 part 2), each in a native dialog with a
   no-JavaScript page at `/cases/{number}/reassign`, `/restrict` and `/unrestrict`. The new owner must hold Analyst or
   Manager in the team, a team change goes only into a team the actor may open cases in, and Reassign is refused
