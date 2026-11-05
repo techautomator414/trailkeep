@@ -24,6 +24,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Documentation
 
+- ADR-0006 amended (2026-11-05): the `LIKE` adapter contributes a predicate to the scoped statement instead of
+  returning candidate ids; IMPLEMENTATION_PLAN A.1 #7 marked *(amended r4)* and search removed from Part B's
+  native-SQL uses.
 - `HANDOFF.md` open owner items 6 and 7: the bnd annotations licence metadata (pinned at 4.3.1) and how ClamAV
   signatures are kept current in a cluster.
 - Importer design (`docs/design/importer.md`) and ADR-0014 (Proposed): import compliance case history from SQL Server,
@@ -45,6 +48,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Cases list filters and search (WP-15 part 1b): status (archived only when asked for), case type, team, owner or
+  "Me", and a search box, kept in the URL (`q`, `status`, `type`, `team`, `owner`) and refused with 422 for any value
+  no form offers. Search goes through `SearchGateway`, whose `LIKE` adapter matches every word in the title,
+  description or comments (never the subject), or the case number, as a predicate inside the scoped statement, so
+  counts stay exact and unreadable cases never match. Team and owner choices come only from cases the person reads.
+  The form works without JavaScript; with htmx it swaps the results, moves focus to the count and announces it.
 - Cases list (WP-15 part 1a): `GET /cases` (and "Cases" in the main navigation) lists the cases the person may read,
   archived ones aside, 25 a page, from projections with no entity loaded, in four statements per page. Sort by case
   number, title, priority, SLA due date or opening date from an allow-list; any other column, and any other value no

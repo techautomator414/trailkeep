@@ -11,7 +11,7 @@
   <div th:unless="${list.rows.isEmpty()}" class="table-responsive" tabindex="0" role="region"
        aria-labelledby="tk-cases-caption">
     <table class="table table-hover align-middle">
-      <caption id="tk-cases-caption" th:text="#{tk.list.caption}">Cases you can read, archived ones aside</caption>
+      <caption id="tk-cases-caption" th:text="#{tk.list.caption}">Cases you can read that match the filter</caption>
       <thead>
       <tr>
         <th th:replace="~{casefile/fragments/case-results :: sortable(${columns['NUMBER']}, #{tk.list.number})}">Case number</th>

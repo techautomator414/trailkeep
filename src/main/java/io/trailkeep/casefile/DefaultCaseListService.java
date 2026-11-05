@@ -3,6 +3,7 @@
 package io.trailkeep.casefile;
 
 import io.trailkeep.casefile.CaseService.Actor;
+import io.trailkeep.casefile.CaseService.Choice;
 import io.trailkeep.shared.CaseNumber;
 import io.trailkeep.shared.access.CaseAccessPath;
 import io.trailkeep.shared.access.CaseScope;
@@ -12,8 +13,10 @@ import io.trailkeep.user.UserDirectoryService;
 import java.time.InstantSource;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.function.ToLongFunction;
 import java.util.stream.Collectors;
@@ -21,8 +24,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Reads a page of the cases list in four statements, whatever its size: the count, the page's rows, the names of its
- * teams and the names of its owners. Every case-rooted read takes the actor's scope.
+ * Reads a page of the cases list in six statements, whatever its size: the count, the page's rows, the team and
+ * owner pairs of readable cases, their teams' names, their owners' names and the case types. Every case-rooted read
+ * takes the actor's scope.
  */
 @Service
 @Transactional(readOnly = true)
@@ -30,6 +34,7 @@ import org.springframework.transaction.annotation.Transactional;
 class DefaultCaseListService implements CaseListService {
 
     private final CaseRecordRepository cases;
+    private final CaseTypeRepository caseTypes;
     private final CaseScopeService scopes;
     private final UserDirectoryService directory;
     private final InstantSource clock;
@@ -37,11 +42,13 @@ class DefaultCaseListService implements CaseListService {
 
     DefaultCaseListService(
             CaseRecordRepository cases,
+            CaseTypeRepository caseTypes,
             CaseScopeService scopes,
             UserDirectoryService directory,
             InstantSource clock,
             AppProperties app) {
         this.cases = cases;
+        this.caseTypes = caseTypes;
         this.scopes = scopes;
         this.directory = directory;
         this.clock = clock;
@@ -51,13 +58,16 @@ class DefaultCaseListService implements CaseListService {
     @Override
     public CaseList list(Actor actor, CaseListQuery requested) {
         CaseScope scope = scopes.forUser(actor.permissions());
-        long total = cases.count(scope);
+        CaseFilter filter = requested.filter().forOwner(actor.permissions().userId());
+        long total = cases.count(scope, filter);
         int pages = (int) Math.max(1, Math.min(Math.ceilDiv(total, PAGE_SIZE), Integer.MAX_VALUE));
-        CaseListQuery query = requested.onPage(Math.min(requested.page(), pages));
+        CaseListQuery query =
+                new CaseListQuery(filter, requested.sort(), requested.descending(), Math.min(requested.page(), pages));
         List<CaseListRow> rows = cases.list(scope, query, PAGE_SIZE);
-        Map<Long, String> teams = directory.teams(ids(rows, CaseListRow::teamId)).values().stream()
+        List<CaseListRow.TeamOwner> pairs = cases.teamsAndOwners(scope);
+        Map<Long, String> teams = directory.teams(ids(pairs, CaseListRow.TeamOwner::teamId)).values().stream()
                 .collect(Collectors.toUnmodifiableMap(TeamSummary::id, TeamSummary::name));
-        Map<Long, String> owners = directory.displayNames(ids(rows, CaseListRow::ownerId));
+        Map<Long, String> owners = directory.displayNames(ids(pairs, CaseListRow.TeamOwner::ownerId));
         LocalDate today = LocalDate.ofInstant(clock.instant(), zone);
         List<CaseList.Row> shown = rows.stream()
                 .map(row -> new CaseList.Row(
@@ -72,10 +82,20 @@ class DefaultCaseListService implements CaseListService {
                         LocalDate.ofInstant(row.openedAt(), zone),
                         CaseView.Sla.of(row.slaState(), row.slaDueAt(), today, zone)))
                 .toList();
-        return new CaseList(shown, total, query.page(), pages);
+        List<Choice> types = caseTypes.findAllByOrderByNameAsc().stream()
+                .map(type -> new Choice(Objects.requireNonNull(type.getId()), type.getName()))
+                .toList();
+        return new CaseList(shown, total, query.page(), pages, types, byName(teams), byName(owners));
     }
 
-    private static Set<Long> ids(List<CaseListRow> rows, ToLongFunction<CaseListRow> id) {
-        return rows.stream().map(row -> id.applyAsLong(row)).collect(Collectors.toUnmodifiableSet());
+    private static Set<Long> ids(List<CaseListRow.TeamOwner> pairs, ToLongFunction<CaseListRow.TeamOwner> id) {
+        return pairs.stream().map(pair -> id.applyAsLong(pair)).collect(Collectors.toUnmodifiableSet());
+    }
+
+    private static List<Choice> byName(Map<Long, String> names) {
+        return names.entrySet().stream()
+                .map(entry -> new Choice(entry.getKey(), entry.getValue()))
+                .sorted(Comparator.comparing(Choice::name).thenComparingLong(Choice::id))
+                .toList();
     }
 }

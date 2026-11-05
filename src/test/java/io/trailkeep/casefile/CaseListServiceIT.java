@@ -5,6 +5,7 @@ package io.trailkeep.casefile;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.trailkeep.casefile.CaseService.Actor;
+import io.trailkeep.casefile.CaseService.Choice;
 import io.trailkeep.shared.CaseNumber;
 import io.trailkeep.shared.CaseStatus;
 import io.trailkeep.shared.Sensitivity;
@@ -23,6 +24,7 @@ import java.util.Map;
 import java.util.Set;
 import org.hibernate.SessionFactory;
 import org.hibernate.stat.Statistics;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -33,9 +35,9 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * The cases list on PostgreSQL (WP-15 part 1a): restricted and other-team cases are absent from rows and counts
- * exactly as if they did not exist; archived cases are hidden; every allow-listed sort with stable paging; and a page
- * read in four statements.
+ * The cases list on PostgreSQL (WP-15 part 1): restricted and other-team cases are absent from rows, counts and the
+ * filters' choices exactly as if they did not exist; the basic filters; every allow-listed sort with stable paging;
+ * and a page read in six statements.
  */
 // "IT" is the Failsafe suffix Part B mandates for integration tests, not an abbreviation.
 @SuppressWarnings("checkstyle:AbbreviationAsWordInName")
@@ -93,29 +95,54 @@ class CaseListServiceIT {
             assertThat(page.total()).isEqualTo(1);
             assertThat(page.pages()).isEqualTo(1);
             assertThat(numbers(page)).containsExactly(standard);
+            assertThat(page.teams()).extracting(Choice::id).containsExactly(team);
+            assertThat(page.owners()).extracting(Choice::id).containsExactly(analyst);
+            // "restricted" appears only in the restricted case's title: no row and a count of 0.
+            CaseList searched = search(outsider, "restricted");
+            assertThat(searched.rows()).isEmpty();
+            assertThat(searched.total()).isZero();
+            assertThat(search(outsider, "unlisted").total()).isZero();
         }
         assertThat(numbers(all(analyst))).containsExactlyInAnyOrder(standard, restricted);
+        assertThat(numbers(search(analyst, "restricted"))).containsExactly(restricted);
+        assertThat(search(analyst, "restricted").total()).isEqualTo(1);
         assertThat(numbers(all(manager))).containsExactlyInAnyOrder(standard, restricted);
+        assertThat(search(manager, "unlisted").total()).isEqualTo(1);
         assertThat(all(otherManager).rows())
                 .extracting(CaseList.Row::title)
                 .containsExactly("Synthetic other team unlisted");
 
         CaseList beforeDeletion = all(colleague);
+        CaseList searchedBefore = search(colleague, "Synthetic");
         delete(restricted);
         assertThat(all(colleague)).isEqualTo(beforeDeletion);
+        assertThat(search(colleague, "Synthetic")).isEqualTo(searchedBefore);
     }
 
     @Test
-    void archivedCasesAreHiddenFromRowsAndCountUntilFiltersCanAskForThem() {
-        CaseNumber open = create(analyst, team, "Synthetic open", Sensitivity.STANDARD);
+    void basicFiltersNarrowAndArchivedCasesAppearOnlyWhenAskedFor() {
+        final long otherType = new CaseSeed(jdbc).caseType();
+        final CaseNumber mine = create(analyst, team, "Synthetic mine", Sensitivity.STANDARD);
+        final CaseNumber managers = create(manager, team, "Synthetic manager's", Sensitivity.STANDARD);
         CaseNumber closed = create(analyst, team, "Synthetic closed", Sensitivity.STANDARD);
         CaseNumber archived = create(analyst, team, "Synthetic archived", Sensitivity.STANDARD);
         status(closed, CaseStatus.CLOSED);
         status(archived, CaseStatus.ARCHIVED);
+        entityManager.flush();
+        jdbc.update("UPDATE CASE_RECORD SET CASE_TYPE_ID = ? WHERE CASE_NUMBER = ?", otherType, managers.toString());
 
-        CaseList page = all(manager);
-        assertThat(numbers(page)).containsExactlyInAnyOrder(open, closed);
-        assertThat(page.total()).isEqualTo(2);
+        assertThat(numbers(all(manager))).containsExactlyInAnyOrder(mine, managers, closed);
+        assertThat(numbers(filtered(manager, Set.of(CaseStatus.ARCHIVED), null, null, false)))
+                .containsExactly(archived);
+        assertThat(numbers(filtered(manager, Set.of(CaseStatus.OPEN, CaseStatus.CLOSED), null, null, false)))
+                .containsExactlyInAnyOrder(mine, managers, closed);
+        assertThat(numbers(filtered(manager, Set.of(), otherType, null, false))).containsExactly(managers);
+        assertThat(numbers(filtered(manager, Set.of(), null, manager, false))).containsExactly(managers);
+        assertThat(numbers(filtered(analyst, Set.of(), null, manager, true))).containsExactlyInAnyOrder(mine, closed);
+        assertThat(numbers(list.list(
+                        actor(manager, TeamRole.MANAGER),
+                        query(new CaseFilter(Set.of(), null, otherTeam, null, false, ""), CaseSort.OPENED, true, 1))))
+                .isEmpty();
     }
 
     @Test
@@ -144,8 +171,8 @@ class CaseListServiceIT {
             seeded.add(seed.caseRow(team, analyst, Sensitivity.STANDARD, CaseStatus.OPEN));
         }
 
-        CaseList first = list.list(actor(reader, TeamRole.READER), new CaseListQuery(CaseSort.OPENED, true, 1));
-        CaseList last = list.list(actor(reader, TeamRole.READER), new CaseListQuery(CaseSort.OPENED, true, 99));
+        CaseList first = list.list(actor(reader, TeamRole.READER), query(CaseFilter.none(), CaseSort.OPENED, true, 1));
+        CaseList last = list.list(actor(reader, TeamRole.READER), query(CaseFilter.none(), CaseSort.OPENED, true, 99));
 
         assertThat(first.total()).isEqualTo(CaseListService.PAGE_SIZE + 1);
         assertThat(first.pages()).isEqualTo(2);
@@ -157,7 +184,7 @@ class CaseListServiceIT {
     }
 
     @Test
-    void pagesAreReadInFourStatementsWhateverTheyShow() {
+    void pagesAreReadInSixStatementsWhateverTheyShow() {
         for (int i = 0; i < 5; i++) {
             create(i % 2 == 0 ? analyst : manager, team, "Synthetic counted " + i, Sensitivity.STANDARD);
         }
@@ -169,9 +196,9 @@ class CaseListServiceIT {
         statistics.clear();
         CaseList page;
         try {
-            page = all(manager);
-            // Count, rows, team names, owner names.
-            assertThat(statistics.getPrepareStatementCount()).isEqualTo(4);
+            page = search(manager, "counted");
+            // Count, rows, team and owner pairs, team names, owner names, case types.
+            assertThat(statistics.getPrepareStatementCount()).isEqualTo(6);
         } finally {
             statistics.setStatisticsEnabled(false);
         }
@@ -183,11 +210,28 @@ class CaseListServiceIT {
     }
 
     private List<CaseNumber> sorted(CaseSort sort, boolean descending) {
-        return numbers(list.list(actor(analyst, TeamRole.ANALYST), new CaseListQuery(sort, descending, 1)));
+        return numbers(list.list(actor(analyst, TeamRole.ANALYST), query(CaseFilter.none(), sort, descending, 1)));
     }
 
     private CaseList all(long user) {
-        return list.list(actor(user, roleOf(user)), CaseListQuery.parse(Map.of()));
+        return filtered(user, Set.of(), null, null, false);
+    }
+
+    private CaseList search(long user, String text) {
+        return list.list(
+                actor(user, roleOf(user)),
+                query(new CaseFilter(Set.of(), null, null, null, false, text), CaseSort.OPENED, true, 1));
+    }
+
+    private CaseList filtered(
+            long user, Set<CaseStatus> statuses, @Nullable Long type, @Nullable Long owner, boolean mine) {
+        return list.list(
+                actor(user, roleOf(user)),
+                query(new CaseFilter(statuses, type, null, owner, mine, ""), CaseSort.OPENED, true, 1));
+    }
+
+    private static CaseListQuery query(CaseFilter filter, CaseSort sort, boolean descending, int page) {
+        return new CaseListQuery(filter, sort, descending, page);
     }
 
     private static List<CaseNumber> numbers(CaseList page) {

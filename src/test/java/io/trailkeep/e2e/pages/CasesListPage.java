@@ -21,6 +21,19 @@ public final class CasesListPage {
     }
 
     /**
+     * Types into the search box and presses Enter, then waits until htmx has replaced the results and moved focus.
+     *
+     * @param text the search text
+     */
+    public void search(String text) {
+        markResultsStale();
+        page.locator("#tk-q").focus();
+        page.keyboard().type(text);
+        page.keyboard().press("Enter");
+        waitForFocusOn("tk-results-status");
+    }
+
+    /**
      * Presses Tab until a control has focus, at most a few times.
      *
      * @param id the control's id

@@ -1,9 +1,9 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 # ADR-0006: Search behind `SearchGateway` with an atomic `CASE_SEARCH` side table
 
-- **Status:** Accepted
+- **Status:** Accepted (amended 2026-11-05)
 - **Date:** 2026-11-03
-- **Register rows:** IMPLEMENTATION_PLAN.md A.1 #7 (amended r3); A.5 #44
+- **Register rows:** IMPLEMENTATION_PLAN.md A.1 #7 (amended r3, r4); A.5 #44
 - **Plan sections:** BUILD_PLAN.md §8 rule 4 and rule 6
 
 ## Context and problem statement
@@ -31,6 +31,16 @@ Search must work across replicas and on both databases, over case text that is r
 
 - **Good:** no lost updates, no editor conflicts, same behavior on both vendors.
 - **Bad:** `LIKE '%term%'` is a scan on both vendors. The stated expectation is "fine at about 50k cases, measured at the 50k seed; not fine at 500k comments". `SEARCH_TEXT` duplicates comment content.
+
+## Amendment (2026-11-05)
+
+WP-15 part 1b (decided on #62). This changes how the `LIKE` adapter meets `CaseScope`; table maintenance is unchanged.
+
+- **Reason.** "The adapter returns candidate ids that `CaseScope` filters" needs a round trip: the ids come back to Java and are bound again as `CASE_RECORD.ID IN (…)`. A common word at 50k cases yields tens of thousands of ids, every list and count would carry them, and Oracle refuses more than 1000 expressions in one `IN` list.
+- **Mechanism.** `SearchGateway` contributes a JPA Criteria **predicate** to the caller's query instead of returning ids: `CASE_RECORD.ID IN (SELECT CASE_ID FROM CASE_SEARCH WHERE LOWER(SEARCH_TEXT) LIKE ? ESCAPE '\' AND …)`, one bound pattern per word, or the case number containing the text. It sits in the same `WHERE` as `CaseScope.toPredicate`, so candidate ids never leave the database and counts over a search are exact.
+- **No native SQL.** JPA expresses `LOWER(…) LIKE … ESCAPE` on the `CLOB` (Oracle) and `text` (PostgreSQL) column, and Part B allows native SQL only where JPA cannot express the statement. The `CASE_SEARCH` append stays in `CaseSearchJdbcDao`; search needs no `*JdbcDao`.
+- **Vendor adapters (v1.1)** stay behind the same interface, as predicates: a `pg_trgm` or Oracle Text adapter registers its operator or `CONTAINS` as a Hibernate function and returns it as a predicate.
+- **Proof.** `AbstractCaseListSearchIT` runs the adapter on PostgreSQL (every PR) and on Oracle (`OracleCaseListSearchIT`, `-Poracle-it` on `main`).
 
 ## Confirmation
 

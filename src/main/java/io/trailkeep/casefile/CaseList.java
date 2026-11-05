@@ -2,6 +2,7 @@
 // Copyright 2026 Charlie Genova and contributors
 package io.trailkeep.casefile;
 
+import io.trailkeep.casefile.CaseService.Choice;
 import io.trailkeep.shared.CaseNumber;
 import io.trailkeep.shared.CaseStatus;
 import io.trailkeep.shared.Sensitivity;
@@ -9,19 +10,32 @@ import java.time.LocalDate;
 import java.util.List;
 
 /**
- * One page of the cases list (BUILD_PLAN §4.4). Only cases the person's {@code CaseScope} reads are counted or listed.
- * Dates are already in {@code app.timezone}.
+ * One page of the cases list (BUILD_PLAN §4.4) with what its filters offer. Only cases the person's {@code CaseScope}
+ * reads are counted, listed or used to offer a team or an owner. Dates are already in {@code app.timezone}.
  *
  * @param rows the cases on this page
- * @param total how many cases the list holds, on every page
+ * @param total how many cases match the filter, on every page
  * @param page the page shown, from 1; a requested page past the last is shown as the last
  * @param pages how many pages there are; at least 1
+ * @param caseTypes every case type, by name, to filter by
+ * @param teams the teams of the cases the person reads, by name
+ * @param owners the owners of the cases the person reads, by name
  */
-public record CaseList(List<Row> rows, long total, int page, int pages) {
+public record CaseList(
+        List<Row> rows,
+        long total,
+        int page,
+        int pages,
+        List<Choice> caseTypes,
+        List<Choice> teams,
+        List<Choice> owners) {
 
-    /** Copies the rows. */
+    /** Copies the lists. */
     public CaseList {
         rows = List.copyOf(rows);
+        caseTypes = List.copyOf(caseTypes);
+        teams = List.copyOf(teams);
+        owners = List.copyOf(owners);
     }
 
     /**
