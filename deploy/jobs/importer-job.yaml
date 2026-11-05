@@ -66,6 +66,9 @@ spec:
             - name: secrets
               mountPath: /etc/trailkeep/secrets
               readOnly: true
+            - name: clamav-ca
+              mountPath: /etc/trailkeep/clamav-ca
+              readOnly: true
       volumes:
         - name: tmp
           emptyDir:
@@ -74,6 +77,11 @@ spec:
           persistentVolumeClaim:
             claimName: trailkeep-import-data
             readOnly: true
+        # The CA certificate (no key) that authenticates the ClamAV TLS sidecar (clamav.yaml, ADR-0012).
+        - name: clamav-ca
+          secret:
+            secretName: clamav-ca
+            defaultMode: 0444
         # Reference only: the application credential, as for the web Deployment.
         - name: secrets
           secret:

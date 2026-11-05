@@ -69,10 +69,19 @@ spec:
                 - name: secrets
                   mountPath: /etc/trailkeep/secrets
                   readOnly: true
+                - name: clamav-ca
+                  mountPath: /etc/trailkeep/clamav-ca
+                  readOnly: true
           volumes:
             - name: tmp
               emptyDir:
                 sizeLimit: 128Mi
+            # The CA certificate (no key) the scanner client loads at startup (clamav.yaml, ADR-0012). Purge never
+            # scans, but it runs the same application context.
+            - name: clamav-ca
+              secret:
+                secretName: clamav-ca
+                defaultMode: 0444
             # Reference only: holds the TRAILKEEP_PURGE database credential.
             - name: secrets
               secret:

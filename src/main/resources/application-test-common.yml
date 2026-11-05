@@ -9,6 +9,11 @@
 # The grantees below are created before migration by the test-only TestDatabaseUsers Flyway callback;
 # DatabaseGrantsIT logs in as each of them.
 app:
+  attachments:
+    clamd:
+      # Unreachable on purpose, like the provider endpoints below: scanner tests start their own clamd (fake or real).
+      host: 127.0.0.1
+      port: 9
   proxy:
     # Placeholder router range. Loopback (the test client) is deliberately outside it.
     pattern: 10\.128\.\d+\.\d+
@@ -24,6 +29,14 @@ app:
       trailkeep-system-admins: SYSTEM_ADMIN
 
 spring:
+  ssl:
+    bundle:
+      jks:
+        # The clamd TLS bundle (ADR-0012) must exist for contexts to start; nothing in these contexts scans. The JDK's
+        # own public CA store is a real trust store with no secret in it. Scanner tests build their own bundle.
+        clamd:
+          truststore:
+            location: file:${java.home}/lib/security/cacerts
   datasource:
     hikari:
       # Small pool: every Spring context in a run keeps its own pool open on the one shared database container, and

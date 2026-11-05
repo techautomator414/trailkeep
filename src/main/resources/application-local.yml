@@ -2,6 +2,13 @@
 # Copyright 2026 Charlie Genova and contributors
 # 'local' profile: the PostgreSQL service from compose.yaml. Dev-only credentials, obviously fake.
 spring:
+  ssl:
+    bundle:
+      pem:
+        clamd:
+          truststore:
+            # The dev-only CA compose generates on first start (clamav-tls-init). Run `docker compose up -d` first.
+            certificate: file:.local/clamd-tls/ca.crt
   datasource:
     url: jdbc:postgresql://localhost:5432/trailkeep
     username: trailkeep
@@ -15,6 +22,10 @@ spring:
             issuer-uri: http://localhost:8180/realms/trailkeep-dev
 
 app:
+  attachments:
+    clamd:
+      # The compose ClamAV, through its TLS sidecar on 3311; trusted through the clamd SSL bundle below.
+      host: localhost
   # Synthetic case configuration for local development (WP-10), loaded by LocalConfigSeed when missing.
   seed:
     sla-policies:

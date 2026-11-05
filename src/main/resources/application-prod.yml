@@ -23,3 +23,7 @@ spring:
   servlet:
     multipart:
       location: /var/lib/trailkeep/uploads
+app:
+  attachments:
+    # The same emptyDir: an upload is copied here while it is checked and scanned, then deleted.
+    temp-dir: /var/lib/trailkeep/uploads

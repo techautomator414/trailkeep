@@ -14,6 +14,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Upload validation and virus scan pipeline (WP-14 part 2, no endpoint yet): an upload is copied to a temp file in
+  `app.attachments.temp-dir` (the `emptyDir` in deployments) while its SHA-256 is computed and the 25 MB cap
+  (`app.attachments.max-bytes`, which `spring.servlet.multipart.max-file-size` follows) stops the copy. Its type is
+  detected from the bytes with `tika-core` against the allow-list and cross-checked against the extension, so a
+  disguised executable is refused (422), and PNG/JPEG dimensions are capped from the header without decoding pixels.
+  Then an in-house clamd `INSTREAM` client scans it synchronously over TLS (ADR-0012: server-authenticated, TLS 1.2+,
+  hostname verified, trust from the `clamd` SSL bundle): `FOUND` gives a quarantined verdict with the signature, and
+  an error, timeout, failed handshake or unexpected reply refuses the upload. The temp file is deleted on every
+  failure path. ClamAV and a ghostunnel TLS sidecar join `compose.yaml` (with a generated dev-only CA) and
+  `deploy/base/clamav.yaml`; `app.attachments.clamd.host` and the `clamd` SSL bundle are required.
 - Attachment storage (WP-14 part 1): `V4_3__attachment` adds `CASE_ATTACHMENT` (detected content type, size,
   SHA-256, scan status `CLEAN | QUARANTINED | RELEASED` with the signature found, and the release's who, when and
   why, kept consistent by a CHECK) with the `CaseAttachment` entity, and `CASE_ATTACHMENT_CHUNK`, the content as rows
