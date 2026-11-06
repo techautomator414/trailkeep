@@ -9,6 +9,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- The case timeline can be paged and filtered, and a principal can read it (WP-16 part 2a, no screen yet).
+  `AuditTrailService.pageForCase` returns one page of a case's events, newest first, optionally only some actions,
+  with the total, which `forCase` (a limit and nothing else) cannot do. A principal's scope now reaches the events of
+  a case it may read, by a subquery on the case entity with the scope's own predicate, so an unreadable or absent case
+  gives an empty page with a total of zero; events with no case, and the recent-events list, stay invisible to
+  principals. `CaseRootedInvisibilityIT` covers the new methods. No migration.
 - Saved views (WP-15 part 3): "Save view" on a filtered or sorted cases list opens a native `<dialog>` asking for a
   name (`save=1` renders it open without JavaScript) and posts it with CSRF to `/cases/views`. The view stores the
   canonical query string of the filter and order on page 1 in the new `SAVED_VIEW` table (`V4_7__saved_view.sql`,

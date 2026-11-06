@@ -202,6 +202,10 @@ class CaseRootedInvisibilityIT {
         if (type == int.class || type == Integer.class) {
             return LIMIT;
         }
+        if (type == Set.class) {
+            // An action filter that keeps everything.
+            return Set.of();
+        }
         if (type == CaseFilter.class) {
             return CaseFilter.none();
         }

@@ -5,6 +5,7 @@ package io.trailkeep.audit;
 import io.trailkeep.shared.access.CaseAccessPath;
 import io.trailkeep.shared.access.CaseScope;
 import java.util.List;
+import java.util.Set;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -30,6 +31,18 @@ class DefaultAuditTrailService implements AuditTrailService {
     @Override
     public List<AuditRecord> forCase(CaseScope scope, long caseId, int limit) {
         return toRecords(repository.findByCase(scope, caseId, checked(limit)));
+    }
+
+    @Override
+    public AuditPage pageForCase(CaseScope scope, long caseId, Set<String> actions, int offset, int limit) {
+        if (offset < 0) {
+            throw new IllegalArgumentException("offset must not be negative");
+        }
+        Set<String> kept = Set.copyOf(actions);
+        long total = repository.countByCase(scope, caseId, kept);
+        return new AuditPage(
+                total == 0 ? List.of() : toRecords(repository.pageByCase(scope, caseId, kept, offset, checked(limit))),
+                total);
     }
 
     private static int checked(int limit) {
