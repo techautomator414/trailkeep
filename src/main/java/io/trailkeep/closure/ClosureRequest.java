@@ -113,6 +113,18 @@ class ClosureRequest {
         return approverId;
     }
 
+    long getRequestedBy() {
+        return requestedBy;
+    }
+
+    String getOutcome() {
+        return outcome;
+    }
+
+    int getVersion() {
+        return version;
+    }
+
     ClosureDecision getDecision() {
         return decision;
     }

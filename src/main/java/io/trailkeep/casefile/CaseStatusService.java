@@ -48,16 +48,28 @@ public interface CaseStatusService {
     ClosableCase closable(Actor actor, String caseNumber);
 
     /**
+     * A case a status move locked, as the lock holds it.
+     *
+     * @param ref the case
+     * @param facts the facts the matrix decided on under the lock
+     */
+    record MovedCase(CaseRef ref, CaseFacts facts) {}
+
+    /**
      * Moves a case from one status to another under its row lock: {@code NOT_FOUND}, then {@code FORBIDDEN} if the
-     * matrix denies {@code action}, then {@code CONFLICT} if the case is no longer in {@code from} once locked (a
-     * concurrent request or decision got there first). The case's version moves on, so an edit form loaded before
-     * is refused with Reload.
+     * matrix denies {@code action}; then, on the case re-read under the lock, {@code CONFLICT} if it is no longer in
+     * {@code from} (a concurrent request or decision got there first) and {@code FORBIDDEN} if the matrix now denies
+     * the action. Closing stamps {@code CLOSED_AT} and finalises the SLA ({@code MET} or {@code BREACHED});
+     * reopening a closed case starts the next SLA cycle from now. {@code from == to} only takes the lock (approver
+     * reassignment). The case's version moves on, so an edit form loaded before is refused with Reload. The lock is
+     * held to the end of the caller's transaction.
      *
      * @param actor the actor
      * @param caseNumber the case number as it appears in the URL
      * @param action the action that moves it
      * @param from the status it must be in
      * @param to the status it moves to
+     * @return the case and its facts under the lock
      */
-    void move(Actor actor, String caseNumber, CaseAction action, CaseStatus from, CaseStatus to);
+    MovedCase move(Actor actor, String caseNumber, CaseAction action, CaseStatus from, CaseStatus to);
 }

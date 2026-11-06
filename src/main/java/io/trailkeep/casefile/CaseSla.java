@@ -56,6 +56,33 @@ class CaseSla {
         this.dueAt = dueAt;
     }
 
+    /**
+     * Finalises the state at closure (BUILD_PLAN §6 "Closure"): {@code MET} on or before the due time,
+     * {@code BREACHED} after it; a case without an SLA keeps {@code NOT_APPLICABLE}.
+     *
+     * @param closedAt when the case closed
+     */
+    void finish(Instant closedAt) {
+        Instant due = dueAt;
+        if (state != SlaState.NOT_APPLICABLE && due != null) {
+            state = closedAt.isAfter(due) ? SlaState.BREACHED : SlaState.MET;
+        }
+    }
+
+    /**
+     * Starts the next cycle at a reopen (ADR-0007): the cycle increments, so "at risk once" is once per cycle, and
+     * the clock runs from the reopen instant.
+     *
+     * @param clock the new cycle's at-risk and due instants
+     */
+    void restart(SlaClock clock) {
+        cycle++;
+        state = SlaState.ON_TRACK;
+        atRiskAt = clock.atRiskAt();
+        dueAt = clock.dueAt();
+        lastEvaluatedAt = null;
+    }
+
     @Override
     public boolean equals(@Nullable Object other) {
         return this == other || (other instanceof CaseSla that && caseId != 0 && caseId == that.caseId);
