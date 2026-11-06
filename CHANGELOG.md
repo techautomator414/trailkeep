@@ -90,6 +90,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Saved views (WP-15 part 3): "Save view" on a filtered or sorted cases list opens a native `<dialog>` asking for a
+  name (`save=1` renders it open without JavaScript) and posts it with CSRF to `/cases/views`. The view stores the
+  canonical query string of the filter and order on page 1 in the new `SAVED_VIEW` table (`V4_7__saved_view.sql`,
+  `SavedView` entity; the runtime user may SELECT, INSERT and DELETE it). A blank, over-long (100 characters) or
+  duplicate name, or the plain list, is 422 with the dialog open and the reason. Views are private to the person who
+  saved them: the first 20 by name are listed under "Cases" in the navigation (a native disclosure) and apply as a
+  plain link through the person's scope, and `/cases/views` lists them with a Delete button each (another person's
+  view is 404). Saving and deleting are audited (`SAVED_VIEW_CREATED`, `SAVED_VIEW_DELETED`), by name only.
 - Cases list filter drawer (WP-15 part 2): every filter now sits in a native `<dialog>` opened from a "Filters" button
   (focus on its first control, Escape closes and returns focus, Apply swaps the results and focuses the count), with
   the search box still on the page. Status becomes multi-choice, and SLA state (several), priority, sensitivity (only

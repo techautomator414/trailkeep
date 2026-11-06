@@ -24,6 +24,11 @@ body { color: var(--tk-ink); display: flex; flex-direction: column; min-height: 
 .tk-nav { display: flex; gap: 1rem; list-style: none; margin: 0; padding: 0; }
 .tk-nav a { color: #fff; display: inline-block; min-height: 24px; padding: 0.25rem 0; }
 .tk-signout { margin-left: auto; }
+.tk-views { display: inline-block; position: relative; margin-left: 0.5rem; }
+.tk-views summary { color: #fff; cursor: pointer; min-height: 24px; padding: 0.25rem 0; }
+.tk-views ul { position: absolute; z-index: 10; min-width: 16rem; margin: 0; padding: 0.5rem 1rem; list-style: none;
+  background: #fff; border: 2px solid var(--tk-ink); border-radius: 0.5rem; }
+.tk-views ul a { color: var(--tk-ink); display: inline-block; min-height: 24px; padding: 0.25rem 0; }
 
 .tk-main { flex: 1; padding-block: 1.5rem; }
 .tk-main:focus { outline: none; }

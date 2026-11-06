@@ -4,7 +4,8 @@
      "Filters" opens the dialog (app.js); without JavaScript it is a link to the same list with filters=1, which
      renders the dialog open in the page. The form, the chips and the sort and page links are plain GETs; with htmx
      they replace #tk-case-results and push the URL, the response refreshes the form's controls out of band, and the
-     fragment says where focus goes and what the live region announces. Saved views and CSV arrive in parts 3 and 4. -->
+     fragment says where focus goes and what the live region announces. "Save view" is a second dialog (save=1
+     without JavaScript) that posts the name and this query to /cases/views. CSV arrives in part 4. -->
 <html lang="en" xmlns:th="http://www.thymeleaf.org" th:replace="~{web/layout :: page(~{::title}, ~{::main})}">
 <head><title th:text="#{tk.list.title} + ' · ' + ${@branding.name()}">Cases</title></head>
 <body>
@@ -19,6 +20,9 @@
         <a id="tk-filters-open" class="btn btn-outline-primary" aria-haspopup="dialog"
            data-tk-dialog-open="tk-filter-dialog" th:text="#{tk.list.filters}"
            th:href="@{/cases} + '?' + ${here.isEmpty() ? '' : here + '&'} + 'filters=1'">Filters</a>
+        <a id="tk-save-open" th:unless="${here.isEmpty()}" class="btn btn-outline-secondary" aria-haspopup="dialog"
+           data-tk-dialog-open="tk-save-dialog" th:text="#{tk.view.save}"
+           th:href="@{/cases} + '?' + ${here} + '&save=1'">Save view</a>
       </div>
     </div>
     <dialog id="tk-filter-dialog" class="tk-dialog tk-filter-dialog" aria-labelledby="tk-filter-title"
@@ -32,6 +36,26 @@
       </div>
     </dialog>
   </form>
+  <dialog id="tk-save-dialog" class="tk-dialog" aria-labelledby="tk-save-title"
+          th:attr="open=${saveOpen ? 'open' : null}" th:with="bad=${saveProblem != null}">
+    <h2 id="tk-save-title" th:text="#{tk.view.title}">Save this view</h2>
+    <form method="post" th:action="@{/cases/views}">
+      <div th:if="${bad}" class="alert alert-danger" role="alert" tabindex="-1" data-tk-error-summary>
+        <p id="tk-view-error" class="mb-0" th:text="#{'tk.view.error.' + ${saveProblem}}">Give the view a name.</p>
+      </div>
+      <input type="hidden" name="query" th:value="${here}">
+      <label class="form-label" for="tk-view-name" th:text="#{tk.view.name}">Name (required)</label>
+      <input id="tk-view-name" class="form-control" type="text" name="name" required maxlength="100"
+             th:value="${viewName}" data-tk-dialog-focus="true" th:attr="aria-invalid=${bad ? 'true' : null},
+             aria-describedby=${bad ? 'tk-view-error tk-view-hint' : 'tk-view-hint'}">
+      <p id="tk-view-hint" class="form-text" th:text="#{tk.view.hint}">Only you see your views.</p>
+      <div class="tk-dialog-actions">
+        <button class="btn btn-primary" type="submit" th:text="#{tk.view.save}">Save view</button>
+        <a class="btn btn-outline-secondary" data-tk-dialog-close th:text="#{tk.dialog.close}"
+           th:href="@{/cases} + ${here.isEmpty() ? '' : '?' + here}">Close</a>
+      </div>
+    </form>
+  </dialog>
   <div id="tk-case-results" class="mt-4" th:insert="~{casefile/fragments/case-results :: results}"></div>
 </main>
 </body>

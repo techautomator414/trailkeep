@@ -29,7 +29,15 @@
     <nav th:aria-label="#{tk.nav.label}">
       <ul class="tk-nav">
         <li><a th:href="@{/}" th:text="#{tk.nav.dashboard}">Dashboard</a></li>
-        <li><a th:href="@{/cases}" th:text="#{tk.nav.cases}">Cases</a></li>
+        <li th:with="views=${@savedViewNav.mine()}"><a th:href="@{/cases}" th:text="#{tk.nav.cases}">Cases</a>
+          <!-- The person's saved views under Cases (WP-15 part 3), in a native disclosure: no script needed. -->
+          <details th:unless="${views.isEmpty()}" class="tk-views">
+            <summary th:text="#{tk.nav.views}">Saved views</summary>
+            <ul>
+              <li th:each="v : ${views}"><a th:href="@{/cases} + '?' + ${v.query}" th:text="${v.name}">View</a></li>
+              <li><a th:href="@{/cases/views}" th:text="#{tk.nav.views.manage}">Manage views</a></li>
+            </ul>
+          </details></li>
       </ul>
     </nav>
     <!-- htmx posts the sign-out so the provider's end-session URL comes back as HX-Redirect: a form redirect to

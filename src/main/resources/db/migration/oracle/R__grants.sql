@@ -28,6 +28,7 @@
 --   SPRING_SESSION        S I U D    -            Spring Session JDBC (V3.1)
 --   SPRING_SESSION_ATTRIBUTES S I U D -
 --   OIDC_SESSION          S I U D    -            back-channel logout registry (V3.1)
+--   SAVED_VIEW            S I   D    -            a person's saved views; saved and deleted, never changed (V4.7)
 --   SEQ_APP_USER          SELECT     -            Oracle's sequence privilege is SELECT (NEXTVAL)
 --   SEQ_TEAM              SELECT     -
 --   SEQ_AUDIT_EVENT       SELECT     -
@@ -40,6 +41,7 @@
 --   SEQ_CASE_NUMBER       SELECT     -            case numbers, one at a time
 --   SEQ_CASE_COMMENT      SELECT     -
 --   SEQ_CASE_ATTACHMENT   SELECT     -
+--   SEQ_SAVED_VIEW        SELECT     -
 --
 -- Later migrations add their rows to the cursor below. Fixed rules for them: the app user has no UPDATE or DELETE
 -- on CASE_COMMENT, CASE_ATTACHMENT_CHUNK, AUDIT_EVENT and ALERT_LEDGER, and no DELETE on CASE_ATTACHMENT; it may DELETE only from CASE_COMMENT_PIN, SAVED_VIEW, USER_ALERT,
@@ -76,7 +78,9 @@ DECLARE
     UNION ALL SELECT 'SEQ_CASE_ATTACHMENT', 'SELECT', UPPER('${app_user}') FROM DUAL
     UNION ALL SELECT 'SPRING_SESSION', 'SELECT,INSERT,UPDATE,DELETE', UPPER('${app_user}') FROM DUAL
     UNION ALL SELECT 'SPRING_SESSION_ATTRIBUTES', 'SELECT,INSERT,UPDATE,DELETE', UPPER('${app_user}') FROM DUAL
-    UNION ALL SELECT 'OIDC_SESSION', 'SELECT,INSERT,UPDATE,DELETE', UPPER('${app_user}') FROM DUAL;
+    UNION ALL SELECT 'OIDC_SESSION', 'SELECT,INSERT,UPDATE,DELETE', UPPER('${app_user}') FROM DUAL
+    UNION ALL SELECT 'SAVED_VIEW', 'SELECT,INSERT,DELETE', UPPER('${app_user}') FROM DUAL
+    UNION ALL SELECT 'SEQ_SAVED_VIEW', 'SELECT', UPPER('${app_user}') FROM DUAL;
   keep PLS_INTEGER;
 BEGIN
   FOR w IN wanted LOOP
