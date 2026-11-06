@@ -147,7 +147,7 @@ class DefaultCaseAttachmentService implements CaseAttachmentService {
     @Override
     public Download download(Actor actor, String caseNumber, long attachmentId) {
         // The checks' read-only transaction has ended before a slot is taken, so its commit cannot strand one.
-        CaseAttachment attachment = Objects.requireNonNull(readOnly.execute(status -> {
+        final CaseAttachment attachment = Objects.requireNonNull(readOnly.execute(status -> {
             cases.downloadableCaseId(actor, caseNumber);
             CaseAttachment found = find(actor, caseNumber, attachmentId);
             if (!found.getScanStatus().isDownloadable()) {
@@ -157,6 +157,16 @@ class DefaultCaseAttachmentService implements CaseAttachmentService {
         }));
         if (!downloads.tryAcquire()) {
             throw new DownloadsBusyException();
+        }
+        boolean recorded = false;
+        try {
+            // A download of a restricted case's file is audited once, when it is allowed and has a slot.
+            cases.recordDownload(actor, caseNumber, attachmentId);
+            recorded = true;
+        } finally {
+            if (!recorded) {
+                downloads.release();
+            }
         }
         LOG.debug("Attachment {} download opened", attachmentId);
         return new StreamedDownload(attachment);

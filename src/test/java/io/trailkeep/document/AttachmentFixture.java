@@ -79,6 +79,26 @@ final class AttachmentFixture {
     }
 
     /**
+     * A new open RESTRICTED case of the team, owned by the fixture's Analyst; a Manager of the team reads it, a Reader
+     * does not. Removed with the rest of the team's cases.
+     *
+     * @return its number
+     */
+    CaseNumber restrictedCase() {
+        return seed.caseRow(team, analyst, Sensitivity.RESTRICTED, CaseStatus.OPEN);
+    }
+
+    /**
+     * The case's database id.
+     *
+     * @param on the case
+     * @return the id
+     */
+    long caseId(CaseNumber on) {
+        return seed.caseId(on);
+    }
+
+    /**
      * Stores an attachment with its content in chunks, as an upload would.
      *
      * @param on the case

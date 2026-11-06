@@ -54,7 +54,30 @@ class CasePage {
      * @return the view name
      */
     String render(Actor actor, String number, HttpServletRequest request, @Nullable String rejected, Model model) {
-        CaseView view = cases.view(actor, number);
+        return fill(cases.view(actor, number), actor, number, request, rejected, model);
+    }
+
+    /**
+     * Fills the model for a full view of the case page, which records {@code VIEW_RESTRICTED} if the case is
+     * restricted (BUILD_PLAN §3.3); {@code NOT_FOUND} for a case the actor may not read, recording nothing.
+     *
+     * @param actor the actor
+     * @param number the case number as it appears in the URL
+     * @param request the request, whose session may hold a notice for this case
+     * @param model the model
+     * @return the view name
+     */
+    String open(Actor actor, String number, HttpServletRequest request, Model model) {
+        return fill(cases.open(actor, number), actor, number, request, null, model);
+    }
+
+    private String fill(
+            CaseView view,
+            Actor actor,
+            String number,
+            HttpServletRequest request,
+            @Nullable String rejected,
+            Model model) {
         model.addAttribute("c", view);
         model.addAttribute("reassign", view.reassignable() ? assignments.reassignment(actor, number) : null);
         List<CommentView> all = comments.comments(actor, number);

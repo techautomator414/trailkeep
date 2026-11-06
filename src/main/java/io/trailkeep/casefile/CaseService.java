@@ -111,6 +111,27 @@ public interface CaseService {
     CaseView view(Actor actor, String caseNumber);
 
     /**
+     * One case for a full page view: as {@link #view}, and when the case is {@code RESTRICTED} it writes a {@code
+     * VIEW_RESTRICTED} audit event for the actor in the same transaction (BUILD_PLAN §3.3). This is the one read path
+     * that is not read-only. A page that refuses with {@code NOT_FOUND} records nothing.
+     *
+     * @param actor the actor
+     * @param caseNumber the case number as it appears in the URL
+     * @return the case
+     */
+    CaseView open(Actor actor, String caseNumber);
+
+    /**
+     * Records that the actor started a download of an attachment of the case: a {@code VIEW_RESTRICTED} event naming
+     * the attachment if the case is {@code RESTRICTED}, nothing otherwise. Called once the download is allowed.
+     *
+     * @param actor the actor
+     * @param caseNumber the case number as it appears in the URL
+     * @param attachmentId the attachment
+     */
+    void recordDownload(Actor actor, String caseNumber, long attachmentId);
+
+    /**
      * An open case for its edit form. {@code NOT_FOUND} as for {@link #view}; {@code FORBIDDEN} if the actor may
      * read but not edit it (a Reader, or a case that is no longer open).
      *
