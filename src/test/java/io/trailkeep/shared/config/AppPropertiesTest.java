@@ -4,15 +4,45 @@ package io.trailkeep.shared.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.net.URI;
 import java.time.ZoneId;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.context.annotation.Configuration;
 
 class AppPropertiesTest {
 
-    private final ApplicationContextRunner runner = new ApplicationContextRunner().withUserConfiguration(Config.class);
+    private final ApplicationContextRunner runner = new ApplicationContextRunner()
+            .withUserConfiguration(Config.class)
+            .withPropertyValues("app.base-url=https://trailkeep.example.invalid");
+
+    @Test
+    void failsFastWhenTheBaseUrlIsMissing() {
+        new ApplicationContextRunner()
+                .withUserConfiguration(Config.class)
+                .withPropertyValues("app.proxy.pattern=x")
+                .run(context ->
+                        assertThat(context).hasFailed().getFailure().rootCause().hasMessageContaining("baseUrl"));
+    }
+
+    @ParameterizedTest
+    @ValueSource(
+            strings = {"trailkeep.example.invalid", "ftp://trailkeep.example.invalid", "https://x.invalid/?q", "/cases"
+            })
+    void failsFastOnBaseUrlsThatAreNotAbsoluteWebAddresses(String baseUrl) {
+        runner.withPropertyValues("app.proxy.pattern=x", "app.base-url=" + baseUrl)
+                .run(context -> assertThat(context).hasFailed());
+    }
+
+    @Test
+    void bindsTheBaseUrl() {
+        runner.withPropertyValues("app.proxy.pattern=x", "app.base-url=https://trailkeep.example.invalid/tk/")
+                .run(context -> assertThat(context.getBean(AppProperties.class).baseUrl())
+                        .isEqualTo(URI.create("https://trailkeep.example.invalid/tk/")));
+    }
 
     @Test
     void failsFastWhenTheProxyPatternIsMissing() {

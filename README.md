@@ -62,8 +62,9 @@ docker compose up -d                 # PostgreSQL 16 and Keycloak 26 with the de
 
 Open `http://localhost:8080` and sign in with a dev-realm user (`deploy/local/keycloak/README.md`): `system.admin`
 manages teams at `/admin/teams`, `compliance.admin` manages SLA policies and case types under `/admin`, and
-`alpha.analyst` can create a case at `/cases/new` and work it from `/cases`. ClamAV (with its TLS sidecar) is in the
-compose stack; Mailpit joins it with the email work package (WP-17).
+`alpha.analyst` can create a case at `/cases/new` and work it from `/cases`. ClamAV (with its TLS sidecar) and Mailpit
+are in the compose stack: every mail the `local` profile sends (a comment by someone other than the case's owner, for
+example) is caught by Mailpit and readable at `http://localhost:8025`; nothing leaves the machine.
 
 ## Security posture
 

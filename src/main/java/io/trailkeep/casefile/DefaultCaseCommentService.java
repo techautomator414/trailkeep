@@ -7,6 +7,7 @@ import io.trailkeep.audit.AuditOrigin;
 import io.trailkeep.audit.AuditRecorder;
 import io.trailkeep.audit.Redacted;
 import io.trailkeep.casefile.CaseService.Actor;
+import io.trailkeep.notification.NotificationService;
 import io.trailkeep.security.CaseAction;
 import io.trailkeep.shared.CaseNumber;
 import io.trailkeep.shared.DomainException.Kind;
@@ -22,6 +23,7 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -35,6 +37,8 @@ import org.springframework.transaction.annotation.Transactional;
  * Reads, posts and pins comments. A comment, its search-text append and its audit event are written in one
  * transaction; the append takes no lock on the case row, so posting never conflicts with an edit (BUILD_PLAN §8 rule
  * 4). A pin is a {@code CASE_COMMENT_PIN} row, inserted or deleted with its audit event; the comment is untouched.
+ * A comment by anyone but the case's owner also queues the {@code comment-added} mail to the owner, in the same
+ * transaction.
  */
 @Service
 @Transactional
@@ -51,6 +55,7 @@ class DefaultCaseCommentService implements CaseCommentService {
     private final MarkdownRenderer markdown;
     private final EntityManager entityManager;
     private final AuditRecorder audit;
+    private final NotificationService notifications;
     private final InstantSource clock;
     private final ZoneId zone;
 
@@ -63,6 +68,7 @@ class DefaultCaseCommentService implements CaseCommentService {
             MarkdownRenderer markdown,
             EntityManager entityManager,
             AuditRecorder audit,
+            NotificationService notifications,
             InstantSource clock,
             AppProperties app) {
         this.loader = loader;
@@ -73,6 +79,7 @@ class DefaultCaseCommentService implements CaseCommentService {
         this.markdown = markdown;
         this.entityManager = entityManager;
         this.audit = audit;
+        this.notifications = notifications;
         this.clock = clock;
         this.zone = app.timezone();
     }
@@ -125,6 +132,16 @@ class DefaultCaseCommentService implements CaseCommentService {
                 "COMMENT_ADDED",
                 audit.diff(null, new PostedComment(text))));
         LOG.info("Comment {} added to case id {}", commentId, caseId);
+        if (record.getOwnerId() != actorId) {
+            // Number, title, who and a link: never the comment, description or subject (BUILD_PLAN §4.7, §9).
+            String number = record.getCaseNumber().toString();
+            notifications.notifyUser(
+                    record.getOwnerId(),
+                    "comment-added",
+                    Map.of("caseNumber", number, "title", record.getTitle(), "commenter", actor.displayName()),
+                    caseId,
+                    "/cases/" + number + "#comments");
+        }
     }
 
     @Override

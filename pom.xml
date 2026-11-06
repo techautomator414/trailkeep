@@ -162,6 +162,12 @@
       <artifactId>flyway-database-postgresql</artifactId>
     </dependency>
     <dependency>
+      <!-- SMTP for the outbox dispatcher, its only caller (BUILD_PLAN §6 "Outbox dispatcher", WP-17). Apache-2.0;
+           brings Jakarta Mail (Eclipse Angus, EPL-2.0 / BSD-3-Clause). -->
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-mail</artifactId>
+    </dependency>
+    <dependency>
       <!-- Prometheus scrape endpoint on the management port (BUILD_PLAN §16). Apache-2.0. -->
       <groupId>io.micrometer</groupId>
       <artifactId>micrometer-registry-prometheus</artifactId>

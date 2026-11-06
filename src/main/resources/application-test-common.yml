@@ -9,6 +9,11 @@
 # The grantees below are created before migration by the test-only TestDatabaseUsers Flyway callback;
 # DatabaseGrantsIT logs in as each of them.
 app:
+  base-url: https://trailkeep.example.invalid
+  mail:
+    from: Trailkeep (test) <trailkeep@example.invalid>
+    # No scheduled dispatch in tests, so they stay deterministic; dispatcher tests call OutboxDispatcher.dispatch().
+    dispatch-cron: "-"
   attachments:
     clamd:
       # Unreachable on purpose, like the provider endpoints below: scanner tests start their own clamd (fake or real).
@@ -43,6 +48,10 @@ spring:
       # Oracle Free 23 runs out of server processes under a large total (ORA-12516). No test needs more.
       maximum-pool-size: 4
       minimum-idle: 1
+  mail:
+    # Unreachable on purpose, like the provider endpoints below: dispatcher tests start their own Mailpit.
+    host: 127.0.0.1
+    port: 9
   security:
     oauth2:
       client:

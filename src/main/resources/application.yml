@@ -92,6 +92,15 @@ spring:
       pool:
         size: 4
 
+  # The mail server the outbox dispatcher sends through. spring.mail.host (and port, username, password) is per
+  # deployment; while app.mail.enabled is true, startup fails without a host. The timeouts bound one batch of 50 well
+  # inside app.mail.lease.
+  mail:
+    properties:
+      "[mail.smtp.connectiontimeout]": 10000
+      "[mail.smtp.timeout]": 10000
+      "[mail.smtp.writetimeout]": 10000
+
   # OIDC login (BUILD_PLAN §9 Identity). The client is per deployment (app.security.oidc.*, the secret from a
   # mounted secret file); the provider's endpoints are set per profile: issuer discovery in local and prod, fixed
   # unreachable endpoints in test so contexts start without an identity provider.
@@ -133,6 +142,15 @@ app:
   # person narrows it. The export streams in pages of 500 rows inside one read-only transaction.
   export:
     max-rows: 10000
+  # app.base-url (the address people open the application at, the start of every deep link in a mail) has no default
+  # here on purpose: a deployment sets it or does not start (the local and test profiles set one).
+  # Outgoing mail (WP-17). The outbox dispatcher runs every minute on every web replica (app.mail.dispatch-cron) and is
+  # the only sender. enabled: false stops sending while mail keeps queuing in NOTIFICATION_OUTBOX (sent once it is true
+  # again). from is required while enabled. lease: how long a claimed batch is held before the reaper hands it on.
+  # The server is spring.mail.* below and per profile.
+  mail:
+    enabled: true
+    lease: 5m
 
 server:
   port: 8080
@@ -170,6 +188,11 @@ management:
     web:
       exposure:
         include: health,info,prometheus
+  health:
+    mail:
+      # The mail server is shared by the cluster, not a property of this pod (Part A #30): it shows as a growing
+      # trailkeep.outbox.pending gauge, never as this pod's health.
+      enabled: false
   endpoint:
     health:
       probes:

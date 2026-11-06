@@ -68,6 +68,14 @@ class DefaultUserDirectory implements UserDirectoryService {
     }
 
     @Override
+    public Optional<String> mailAddress(long userId) {
+        return users.findById(userId)
+                .filter(user -> !user.isDisabled())
+                .map(AppUser::getEmail)
+                .filter(email -> !email.isBlank());
+    }
+
+    @Override
     public Optional<TeamAdminService.TeamSummary> team(long teamId) {
         return teams.findById(teamId)
                 .map(team -> new TeamAdminService.TeamSummary(teamId, team.getName(), team.isActive()));

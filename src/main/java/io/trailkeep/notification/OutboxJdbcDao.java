@@ -50,6 +50,7 @@ class OutboxJdbcDao {
             + " WHERE o.id = :id AND o.status = :sending";
     private static final String REAP = "UPDATE NotificationOutbox o SET o.status = :pending, o.lockedUntil = NULL,"
             + " o.nextAttemptAt = :now WHERE o.status = :sending AND o.lockedUntil < :now";
+    private static final String COUNT = "SELECT COUNT(o) FROM NotificationOutbox o WHERE o.status = :status";
 
     private final NamedParameterJdbcTemplate jdbc;
     private final EntityManager entityManager;
@@ -181,6 +182,19 @@ class OutboxJdbcDao {
                 .setParameter("now", now)
                 .executeUpdate());
         return Objects.requireNonNullElse(reaped, 0);
+    }
+
+    /**
+     * How many rows are in a status, for the metrics; uses the {@code (STATUS, NEXT_ATTEMPT_AT)} index.
+     *
+     * @param status the status
+     * @return the count
+     */
+    long count(OutboxStatus status) {
+        return entityManager
+                .createQuery(COUNT, Long.class)
+                .setParameter("status", status)
+                .getSingleResult();
     }
 
     private static OffsetDateTime timestamp(Instant instant) {

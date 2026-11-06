@@ -44,7 +44,13 @@ import tools.jackson.databind.json.JsonMapper;
             // prod requires the scanner's host and TLS bundle too (ADR-0012); nothing here uploads, so an unreachable
             // host and the JDK's public CA store will do.
             "app.attachments.clamd.host=127.0.0.1",
-            "spring.ssl.bundle.jks.clamd.truststore.location=file:${java.home}/lib/security/cacerts"
+            "spring.ssl.bundle.jks.clamd.truststore.location=file:${java.home}/lib/security/cacerts",
+            // prod requires the deep-link base, the sender and a mail server (WP-17); nothing here sends.
+            "app.base-url=https://trailkeep.example.invalid",
+            "app.mail.from=trailkeep@example.invalid",
+            "app.mail.dispatch-cron=-",
+            "spring.mail.host=127.0.0.1",
+            "spring.mail.port=9"
         })
 @ActiveProfiles({"prod", "postgresql"})
 @Import({RemoteAddressController.class, TestOnlyEndpointsSecurity.class, PostgresTestcontainersConfiguration.class})

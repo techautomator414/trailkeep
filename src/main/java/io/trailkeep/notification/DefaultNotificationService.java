@@ -2,10 +2,14 @@
 // Copyright 2026 Charlie Genova and contributors
 package io.trailkeep.notification;
 
+import io.trailkeep.shared.config.AppProperties;
+import io.trailkeep.user.UserDirectoryService;
 import jakarta.persistence.EntityManager;
 import java.time.InstantSource;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -24,12 +28,40 @@ class DefaultNotificationService implements NotificationService {
 
     private final EntityManager entityManager;
     private final MailTemplates templates;
+    private final UserDirectoryService users;
     private final InstantSource clock;
+    private final String baseUrl;
 
-    DefaultNotificationService(EntityManager entityManager, MailTemplates templates, InstantSource clock) {
+    DefaultNotificationService(
+            EntityManager entityManager,
+            MailTemplates templates,
+            UserDirectoryService users,
+            InstantSource clock,
+            AppProperties app) {
         this.entityManager = entityManager;
         this.templates = templates;
+        this.users = users;
         this.clock = clock;
+        String base = app.baseUrl().toString();
+        this.baseUrl = base.endsWith("/") ? base.substring(0, base.length() - 1) : base;
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public boolean notifyUser(
+            long userId, String templateId, Map<String, ?> model, @Nullable Long caseId, String path) {
+        if (!path.startsWith("/") || path.startsWith("//") || path.indexOf('\\') >= 0) {
+            throw new IllegalArgumentException("a deep link is an absolute path on this application");
+        }
+        Optional<String> address = users.mailAddress(userId);
+        if (address.isEmpty()) {
+            LOG.info("User {} has no mail address; no mail queued", userId);
+            return false;
+        }
+        Map<String, Object> withLink = new HashMap<>(model);
+        withLink.put("link", baseUrl + path);
+        enqueue(address.get(), templateId, withLink, caseId);
+        return true;
     }
 
     @Override

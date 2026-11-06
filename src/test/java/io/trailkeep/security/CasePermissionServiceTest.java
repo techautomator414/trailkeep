@@ -49,6 +49,11 @@ class CasePermissionServiceTest {
         }
 
         @Override
+        public Optional<String> mailAddress(long userId) {
+            return Optional.empty();
+        }
+
+        @Override
         public Optional<TeamAdminService.TeamSummary> team(long teamId) {
             return Optional.empty();
         }
