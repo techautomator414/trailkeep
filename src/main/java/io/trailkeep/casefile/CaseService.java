@@ -32,8 +32,9 @@ public interface CaseService {
      * @param id the case's id
      * @param number the case number
      * @param title the title
+     * @param teamId the case's team
      */
-    record CaseRef(long id, CaseNumber number, String title) {}
+    record CaseRef(long id, CaseNumber number, String title, long teamId) {}
 
     /**
      * Something the create form offers to pick.
@@ -176,6 +177,17 @@ public interface CaseService {
      * @return the case
      */
     CaseRef actionable(Actor actor, String caseNumber, CaseAction action);
+
+    /**
+     * Whether the matrix lets the actor perform an action on a case they read, for pages that offer it only then;
+     * {@code NOT_FOUND} as for {@link #view}.
+     *
+     * @param actor the actor
+     * @param caseNumber the case number as it appears in the URL
+     * @param action the action
+     * @return {@code true} if it is allowed now
+     */
+    boolean allows(Actor actor, String caseNumber, CaseAction action);
 
     /**
      * Several cases by id, those the actor reads, for lists in other modules.

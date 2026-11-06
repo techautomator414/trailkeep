@@ -9,7 +9,9 @@ import io.trailkeep.casefile.CaseService;
 import io.trailkeep.casefile.CaseService.Actor;
 import io.trailkeep.casefile.CaseView;
 import io.trailkeep.document.CaseAttachmentService;
+import io.trailkeep.security.CaseAction;
 import io.trailkeep.security.TrailkeepOidcUser;
+import io.trailkeep.updaterequest.UpdateRequestService;
 import io.trailkeep.user.UserDirectoryService;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.List;
@@ -28,6 +30,7 @@ class CasePage {
     private final CaseAssignmentService assignments;
     private final CaseCommentService comments;
     private final CaseAttachmentService attachments;
+    private final UpdateRequestService requests;
     private final UserDirectoryService directory;
 
     CasePage(
@@ -35,11 +38,13 @@ class CasePage {
             CaseAssignmentService assignments,
             CaseCommentService comments,
             CaseAttachmentService attachments,
+            UpdateRequestService requests,
             UserDirectoryService directory) {
         this.cases = cases;
         this.assignments = assignments;
         this.comments = comments;
         this.attachments = attachments;
+        this.requests = requests;
         this.directory = directory;
     }
 
@@ -87,6 +92,10 @@ class CasePage {
         model.addAttribute("errors", rejected == null ? List.of() : List.of("body"));
         model.addAttribute("attachments", attachments.attachments(actor, number));
         model.addAttribute("limits", attachments.limits());
+        // Open update requests, and the Request update dialog's recipients when the actor may ask (WP-18).
+        model.addAttribute("requests", requests.openForCase(actor, number));
+        boolean requestable = cases.allows(actor, number, CaseAction.REQUEST_UPDATE);
+        model.addAttribute("recipients", requestable ? requests.recipients(actor, number) : null);
         // Taken only once the case has been read, so a page that answers 404 never consumes a notice.
         model.addAttribute("notice", CaseNotice.take(request, view.number()));
         return "casefile/case";

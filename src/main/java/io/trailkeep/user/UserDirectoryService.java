@@ -34,6 +34,14 @@ public interface UserDirectoryService {
     List<Long> activeComplianceAdmins();
 
     /**
+     * The enabled users holding any role in a team (Reader, Analyst or Manager).
+     *
+     * @param teamId the team id
+     * @return their ids, ascending
+     */
+    List<Long> activeMembersOf(long teamId);
+
+    /**
      * A user's display name, for showing who owns or did something.
      *
      * @param userId the user's id

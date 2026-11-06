@@ -152,13 +152,16 @@ class CaseRecordQueriesImpl implements CaseRecordQueries {
         CriteriaBuilder cb = entityManager.getCriteriaBuilder();
         CriteriaQuery<Tuple> query = cb.createTupleQuery();
         Root<CaseRecord> root = query.from(CaseRecord.class);
-        query.select(cb.tuple(root.get("id"), root.get("caseNumber"), root.get("title")))
+        query.select(cb.tuple(root.get("id"), root.get("caseNumber"), root.get("title"), root.get("teamId")))
                 .where(root.get("id").in(caseIds), scope.toPredicate(root, query, cb));
         return entityManager
                 .createQuery(query)
                 .getResultStream()
                 .map(row -> new CaseService.CaseRef(
-                        row.get(0, Long.class), CaseNumber.parse(row.get(1, String.class)), row.get(2, String.class)))
+                        row.get(0, Long.class),
+                        CaseNumber.parse(row.get(1, String.class)),
+                        row.get(2, String.class),
+                        row.get(3, Long.class)))
                 .toList();
     }
 

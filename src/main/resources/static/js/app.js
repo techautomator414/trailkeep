@@ -207,7 +207,134 @@
     }
   }
 
+  /**
+   * ARIA APG "Combobox with list autocomplete" over a native <select data-tk-combobox> (the Request update recipient,
+   * BUILD_PLAN §10.3): a text input with role=combobox filters a listbox of the select's options as the person types;
+   * Down and Up move through the shown options (aria-activedescendant), Enter or a click chooses one, Esc closes the
+   * list. The select stays in the form, hidden, and carries the chosen value; without JavaScript it is the control.
+   */
+  function wireComboboxes() {
+    document.querySelectorAll('select[data-tk-combobox]').forEach(function (select) {
+      const input = document.createElement('input');
+      const list = document.createElement('ul');
+      const label = document.querySelector('label[for="' + select.id + '"]');
+      const options = Array.from(select.options).filter(function (option) { return option.value; });
+      let active = -1;
+      input.type = 'text';
+      input.id = select.id + '-input';
+      input.className = 'form-control';
+      input.autocomplete = 'off';
+      input.setAttribute('role', 'combobox');
+      input.setAttribute('aria-autocomplete', 'list');
+      input.setAttribute('aria-expanded', 'false');
+      input.setAttribute('aria-controls', select.id + '-listbox');
+      input.setAttribute('aria-required', 'true');
+      input.setAttribute('aria-describedby', select.getAttribute('aria-describedby') || '');
+      if (select.hasAttribute('data-tk-dialog-focus')) {
+        input.setAttribute('data-tk-dialog-focus', 'true');
+        select.removeAttribute('data-tk-dialog-focus');
+      }
+      list.id = select.id + '-listbox';
+      list.className = 'tk-listbox';
+      list.setAttribute('role', 'listbox');
+      list.hidden = true;
+      if (label) {
+        label.id = label.id || select.id + '-label';
+        label.htmlFor = input.id;
+        list.setAttribute('aria-labelledby', label.id);
+      }
+      options.forEach(function (option, index) {
+        const item = document.createElement('li');
+        item.id = list.id + '-' + index;
+        item.setAttribute('role', 'option');
+        item.setAttribute('aria-selected', 'false');
+        item.setAttribute('data-value', option.value);
+        item.textContent = option.text;
+        list.appendChild(item);
+      });
+      if (select.selectedIndex > 0) {
+        input.value = select.options[select.selectedIndex].text;
+      }
+      // The hidden select is no longer what the person fills in; the server checks the choice (422).
+      select.required = false;
+      select.hidden = true;
+      select.after(input, list);
+
+      const shown = function () {
+        return Array.from(list.children).filter(function (item) { return !item.hidden; });
+      };
+      const setActive = function (index) {
+        const items = shown();
+        Array.from(list.children).forEach(function (item) { item.setAttribute('aria-selected', 'false'); });
+        active = index;
+        if (index >= 0 && items[index]) {
+          items[index].setAttribute('aria-selected', 'true');
+          input.setAttribute('aria-activedescendant', items[index].id);
+          items[index].scrollIntoView({ block: 'nearest' });
+        } else {
+          input.removeAttribute('aria-activedescendant');
+        }
+      };
+      const expand = function (open) {
+        list.hidden = !open;
+        input.setAttribute('aria-expanded', String(open));
+        if (!open) {
+          setActive(-1);
+        }
+      };
+      const filter = function () {
+        const text = input.value.trim().toLowerCase();
+        Array.from(list.children).forEach(function (item) {
+          item.hidden = !item.textContent.toLowerCase().includes(text);
+        });
+        const exact = options.find(function (option) { return option.text.toLowerCase() === text; });
+        select.value = exact ? exact.value : '';
+      };
+      const choose = function (item) {
+        input.value = item.textContent;
+        select.value = item.getAttribute('data-value');
+        expand(false);
+      };
+      input.addEventListener('input', function () {
+        filter();
+        expand(shown().length > 0);
+      });
+      input.addEventListener('keydown', function (event) {
+        const items = shown();
+        if (event.key === 'ArrowDown') {
+          event.preventDefault();
+          if (list.hidden) {
+            filter();
+            expand(shown().length > 0);
+          }
+          setActive(Math.min(active + 1, shown().length - 1));
+        } else if (event.key === 'ArrowUp' && !list.hidden) {
+          event.preventDefault();
+          setActive(Math.max(active - 1, 0));
+        } else if (event.key === 'Enter' && !list.hidden && items[active]) {
+          event.preventDefault();
+          choose(items[active]);
+        } else if (event.key === 'Escape' && !list.hidden) {
+          // Closes the list, not the dialog around it.
+          event.preventDefault();
+          event.stopPropagation();
+          expand(false);
+        }
+      });
+      input.addEventListener('blur', function () { expand(false); });
+      list.addEventListener('mousedown', function (event) { event.preventDefault(); });
+      list.addEventListener('click', function (event) {
+        const item = event.target.closest('[role="option"]');
+        if (item) {
+          choose(item);
+          input.focus();
+        }
+      });
+    });
+  }
+
   document.addEventListener('DOMContentLoaded', function () {
+    wireComboboxes();
     wireForms();
     wireRows();
     wireDialogs();

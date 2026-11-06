@@ -221,7 +221,14 @@ class DefaultCaseService implements CaseService {
     @Transactional(readOnly = true)
     public CaseRef actionable(Actor actor, String caseNumber, CaseAction action) {
         CaseRecord record = loader.load(actor.permissions(), caseNumber, action);
-        return new CaseRef(Objects.requireNonNull(record.getId()), record.getCaseNumber(), record.getTitle());
+        return new CaseRef(
+                Objects.requireNonNull(record.getId()), record.getCaseNumber(), record.getTitle(), record.getTeamId());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public boolean allows(Actor actor, String caseNumber, CaseAction action) {
+        return allowed(actor, loader.load(actor.permissions(), caseNumber, CaseAction.VIEW), action);
     }
 
     @Override

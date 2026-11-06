@@ -49,6 +49,11 @@ class CasePermissionServiceTest {
         }
 
         @Override
+        public List<Long> activeMembersOf(long teamId) {
+            return List.of();
+        }
+
+        @Override
         public Optional<String> mailAddress(long userId) {
             return Optional.empty();
         }

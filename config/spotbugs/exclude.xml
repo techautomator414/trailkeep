@@ -126,6 +126,14 @@
     text and links are written only by NotificationService (a link is a single-slash path inside the application)
     and echoed through th:text and @{...}. Covered by UserAlertServiceIT, AlertControllerIT and AlertsAccessibilityIT.
     Approved in the security-reviewer role on #96.
+    UpdateRequestController (WP-18 part b): behind login; GET /cases/{n}/request-update and POST of the same path, and
+    POST /cases/{n}/update-requests/{id}/answered, both POSTs with CSRF (403 without). UpdateRequestService decides
+    404 (case through the person's CaseScope, then a request not on that case) and 403 (REQUEST_UPDATE, or
+    ANSWER_UPDATE for someone else's request) before any input is read; the recipient is re-checked against the
+    recipient's own scope (422), a second open request is 409. Ids are parsed leniently to -1. Redirects are the fixed
+    path /cases/ plus a parsed case number. The message is echoed only through th:text and never mailed. Covered by
+    UpdateRequestIT, OracleUpdateRequestIT, UpdateRequestControllerIT and UpdateRequestAccessibilityIT.
+    Approved in the security-reviewer role on #98.
     Approved in the security-reviewer role on #20. Listed by class, never by pattern alone, so each new controller
     is reviewed the same way.
   -->
@@ -146,6 +154,7 @@
       <Class name="io.trailkeep.web.CaseHistoryController"/>
       <Class name="io.trailkeep.web.CaseExportController"/>
       <Class name="io.trailkeep.web.AlertController"/>
+      <Class name="io.trailkeep.web.UpdateRequestController"/>
     </Or>
   </Match>
   <!--

@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- The Request update form (BUILD_PLAN §4.3, WP-18), in the case page's dialog and on its own page. The recipient is
+     a native <select> of the people who can read the case; app.js turns it into an ARIA APG "combobox with list
+     autocomplete" and keeps the select as the submitted value, so without JavaScript the select is the control. The
+     message never leaves the case: the mail carries a link. A refusal (422, 409) is summarized above the fields. -->
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<body>
+<form th:fragment="form(number, recipients, selected, message, problem, dialog)" method="post"
+      th:action="@{/cases/{n}/request-update(n=${number})}">
+  <div th:if="${problem != null}" class="alert alert-danger" role="alert" tabindex="-1" data-tk-error-summary
+       aria-labelledby="tk-request-errors">
+    <h2 id="tk-request-errors" class="h5" th:text="#{tk.request.errors}">The update was not requested.</h2>
+    <p class="mb-0" th:text="#{'tk.request.problem.' + ${problem}}">Choose someone and write a message.</p>
+  </div>
+  <div class="mb-3">
+    <label class="form-label" for="tk-recipient" th:text="#{tk.request.recipient}">Ask (required)</label>
+    <select class="form-select" id="tk-recipient" name="recipientId" required data-tk-combobox
+            aria-describedby="tk-recipient-hint" th:attr="data-tk-dialog-focus=${dialog} ? 'true' : null">
+      <option value="" th:text="#{tk.request.choose}">Choose a person</option>
+      <option th:each="p : ${recipients}" th:value="${p.id}" th:text="${p.name}" th:selected="${p.id == selected}">
+        Name</option>
+    </select>
+    <div class="form-text" id="tk-recipient-hint" th:text="#{tk.request.recipient.hint}">Only people who can read
+      this case are listed.</div>
+  </div>
+  <div class="mb-3">
+    <label class="form-label" for="tk-request-message" th:text="#{tk.request.message}">Message (required)</label>
+    <textarea class="form-control" id="tk-request-message" name="message" rows="4" required maxlength="2000"
+              aria-describedby="tk-request-hint" th:text="${message}"></textarea>
+    <div class="form-text" id="tk-request-hint" th:text="#{tk.request.message.hint}">Up to 2000 characters.</div>
+  </div>
+  <div class="tk-dialog-actions">
+    <button class="btn btn-primary" type="submit" th:text="#{tk.request.send}">Send</button>
+    <a class="btn btn-outline-secondary" th:href="@{/cases/{n}(n=${number})}"
+       th:attr="data-tk-dialog-close=${dialog} ? 'true' : null"
+       th:text="${dialog} ? #{tk.request.cancel} : #{tk.request.back}">Cancel</a>
+  </div>
+</form>
+</body>
+</html>

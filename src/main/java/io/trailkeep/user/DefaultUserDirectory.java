@@ -56,6 +56,13 @@ class DefaultUserDirectory implements UserDirectoryService {
     }
 
     @Override
+    public List<Long> activeMembersOf(long teamId) {
+        return enabled(memberships.findByIdTeamId(teamId).stream()
+                .map(m -> m.getId().userId())
+                .toList());
+    }
+
+    @Override
     public List<Long> activeComplianceAdmins() {
         return enabled(globalRoles.findByIdRole(GlobalRole.COMPLIANCE_ADMIN).stream()
                 .map(role -> role.getId().userId())
