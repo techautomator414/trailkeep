@@ -4,6 +4,7 @@ package io.trailkeep.casefile;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 
+import io.trailkeep.shared.CaseNumber;
 import io.trailkeep.shared.CaseStatus;
 import io.trailkeep.shared.DomainException.Kind;
 import io.trailkeep.shared.Sensitivity;
@@ -23,7 +24,8 @@ import org.jspecify.annotations.Nullable;
  * One request for the cases list: what to show, in which order, and which page. It is read from and written back to
  * the URL's query parameters ({@code q}, {@code status} and {@code sla} (both repeatable), {@code priority},
  * {@code sensitivity}, {@code from} and {@code to} (ISO dates), {@code type}, {@code team}, {@code owner},
- * {@code sort}, {@code dir}, {@code page}), so a list can be bookmarked and the browser's Back button restores it.
+ * {@code ids} (repeatable case numbers, the rows selected for export), {@code sort}, {@code dir}, {@code page}), so a
+ * list can be bookmarked and the browser's Back button restores it.
  *
  * @param filter the filter
  * @param sort the column to sort by
@@ -86,7 +88,8 @@ public record CaseListQuery(CaseFilter filter, CaseSort sort, boolean descending
                 id(first(parameters, "team")),
                 mine ? null : id(owner),
                 mine,
-                text == null ? "" : text);
+                text == null ? "" : text,
+                numbers(parameters.getOrDefault("ids", List.of())));
     }
 
     /**
@@ -165,6 +168,7 @@ public record CaseListQuery(CaseFilter filter, CaseSort sort, boolean descending
         add(out, "type", filter.caseTypeId());
         add(out, "team", filter.teamId());
         add(out, "owner", filter.mine() ? "me" : filter.ownerId());
+        filter.numbers().stream().sorted().forEach(number -> add(out, "ids", number));
         return out;
     }
 
@@ -203,6 +207,21 @@ public record CaseListQuery(CaseFilter filter, CaseSort sort, boolean descending
             return Long.parseLong(value.strip());
         } catch (NumberFormatException malformed) {
             throw invalid("not a number");
+        }
+    }
+
+    /** The selected case numbers, each canonical; a malformed one, or more than a page could show, is refused. */
+    private static Set<String> numbers(List<String> values) {
+        if (values.size() > CaseFilter.MAX_NUMBERS) {
+            throw invalid("too many selected cases");
+        }
+        try {
+            return values.stream()
+                    .filter(value -> !value.isBlank())
+                    .map(value -> CaseNumber.parse(value.strip()).toString())
+                    .collect(Collectors.toUnmodifiableSet());
+        } catch (IllegalArgumentException malformed) {
+            throw invalid("not a case number");
         }
     }
 

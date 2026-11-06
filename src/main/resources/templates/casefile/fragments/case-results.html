@@ -3,7 +3,9 @@
      focuses [data-tk-focus]: the sort header or page link that asked (its id came back as "focus"), or else the
      status line, whose text the live region announces. The sorted column carries aria-sort; the others none. Each
      active filter criterion is a chip linking to the same list without it, so removing one is a plain GET. The export
-     form repeats this list's filter and order as hidden fields and downloads every matching case as CSV. -->
+     form repeats this list's filter and order as hidden fields and downloads every matching case as CSV, or only the
+     rows ticked on this page (their boxes belong to the form through form="tk-export"). A row's click opens its case
+     (app.js); the case-number link stays the keyboard path. -->
 <th:block xmlns:th="http://www.thymeleaf.org" th:fragment="results"
           th:with="found=#{tk.list.found(${list.total})}, here=${focus == null or focus.isEmpty()}">
   <ul th:unless="${chips.isEmpty()}" class="tk-chips" th:aria-label="#{tk.list.active}">
@@ -23,6 +25,9 @@
       <caption id="tk-cases-caption" th:text="#{tk.list.caption}">Cases you can read that match the filter</caption>
       <thead>
       <tr>
+        <th scope="col"><span class="visually-hidden" th:text="#{tk.export.select.col}">Select</span>
+          <input class="form-check-input" type="checkbox" id="tk-select-all" data-tk-select-all hidden
+                 th:aria-label="#{tk.export.select.all}"></th>
         <th th:replace="~{casefile/fragments/case-results :: sortable(${columns['NUMBER']}, #{tk.list.number})}">Case number</th>
         <th th:replace="~{casefile/fragments/case-results :: sortable(${columns['TITLE']}, #{tk.list.titlecol})}">Title</th>
         <th scope="col" th:text="#{tk.list.status}">Status</th>
@@ -35,7 +40,9 @@
       </tr>
       </thead>
       <tbody>
-      <tr th:each="r : ${list.rows}">
+      <tr th:each="r : ${list.rows}" th:attr="data-tk-href=@{/cases/{n}(n=${r.number})}">
+        <td><input class="form-check-input" type="checkbox" name="ids" form="tk-export" th:value="${r.number}"
+                   th:aria-label="#{tk.export.select.one(${r.number})}"></td>
         <th scope="row"><a th:href="@{/cases/{n}(n=${r.number})}" th:text="${r.number}">CASE-2026-000001</a></th>
         <td><span th:text="${r.title}">Title</span>
           <span th:if="${r.sensitivity.name() == 'RESTRICTED'}" class="tk-chip ms-1"><span aria-hidden="true"
@@ -80,7 +87,8 @@
     <button id="tk-export-csv" class="btn btn-outline-secondary" type="submit" th:text="#{tk.export.csv}"
             th:attr="aria-describedby=${bad ? 'tk-export-error tk-export-hint' : 'tk-export-hint'}">Export CSV</button>
     <p id="tk-export-hint" class="form-text"
-       th:text="${offersDetails} ? #{tk.export.hint.details(${list.total})} : #{tk.export.hint(${list.total})}">
+       th:text="(${offersDetails} ? #{tk.export.hint.details(${list.total})} : #{tk.export.hint(${list.total})})
+                + ' ' + #{tk.export.hint.selected}">
       Exports every matching case.</p>
   </form>
 </th:block>

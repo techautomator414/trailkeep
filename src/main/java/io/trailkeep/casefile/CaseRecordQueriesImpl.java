@@ -172,6 +172,9 @@ class CaseRecordQueriesImpl implements CaseRecordQueries {
         equalIfSet(where, cb, root.get("caseTypeId"), filter.caseTypeId());
         equalIfSet(where, cb, root.get("teamId"), filter.teamId());
         equalIfSet(where, cb, root.get("ownerId"), filter.ownerId());
+        if (!filter.numbers().isEmpty()) {
+            where.add(root.get("caseNumber").in(filter.numbers()));
+        }
         if (!filter.text().isEmpty()) {
             where.add(search.matches(filter.text(), root, query, cb));
         }

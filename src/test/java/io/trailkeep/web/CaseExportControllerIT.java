@@ -178,6 +178,33 @@ class CaseExportControllerIT {
 
     @Test
     @WithAppUser(id = READER, team = TEAM, teamRole = TeamRole.READER)
+    void rowsHaveLabelledBoxesThatSelectThemForTheExportAndOpenTheirCaseOnClick() throws Exception {
+        String page = mvc.perform(get("/cases"))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        assertThat(page)
+                .containsPattern(
+                        "<tr data-tk-href=\"/cases/" + standard + "\">\\s*<td><input class=\"form-check-input\""
+                                + " type=\"checkbox\" name=\"ids\" form=\"tk-export\" value=\"" + standard + "\"\\s+"
+                                + "aria-label=\"Select " + standard + " for export\"></td>")
+                .containsPattern("<th scope=\"col\"><span class=\"visually-hidden\">Select for export</span>\\s*"
+                        + "<input class=\"form-check-input\" type=\"checkbox\" id=\"tk-select-all\""
+                        + " data-tk-select-all hidden\\s+aria-label=\"Select all cases on this page for export\">")
+                .contains("Tick rows to export only those.");
+
+        String body = mvc.perform(get("/cases/export.csv").param("ids", standard.toString(), restricted.toString()))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString(StandardCharsets.UTF_8);
+        assertThat(body).contains(standard.toString()).doesNotContain(restricted.toString());
+        mvc.perform(get("/cases/export.csv").param("ids", "not-a-case")).andExpect(status().isUnprocessableContent());
+    }
+
+    @Test
+    @WithAppUser(id = READER, team = TEAM, teamRole = TeamRole.READER)
     void valuesNoFormOffersAreUnprocessable() throws Exception {
         for (String[] bad : new String[][] {{"sort", "subject"}, {"status", "GONE"}, {"from", "yesterday"}}) {
             mvc.perform(get("/cases/export.csv").param(bad[0], bad[1])).andExpect(status().isUnprocessableContent());

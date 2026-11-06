@@ -207,6 +207,26 @@ abstract class AbstractCaseExportIT {
     }
 
     @Test
+    void onlyTheSelectedCasesTheScopeReadsAreExported() throws IOException {
+        CaseNumber picked = create(analyst, "Synthetic picked case", Sensitivity.STANDARD, DESCRIPTION);
+        create(analyst, "Synthetic unpicked case", Sensitivity.STANDARD, DESCRIPTION);
+        CaseNumber restricted = create(analyst, "Synthetic restricted pick", Sensitivity.RESTRICTED, DESCRIPTION);
+        CaseListQuery selected = new CaseListQuery(
+                filter().numbers(picked.toString(), restricted.toString(), "CASE-2026-999999")
+                        .build(),
+                CaseSort.OPENED,
+                true,
+                1);
+
+        assertThat(csv(exports.export(actor(colleague, TeamRole.ANALYST), selected, false)))
+                .extracting(row -> row.get(0))
+                .containsExactly("Case number", picked.toString());
+        assertThat(csv(exports.export(actor(analyst, TeamRole.ANALYST), selected, false)))
+                .extracting(row -> row.get(0))
+                .containsExactlyInAnyOrder("Case number", picked.toString(), restricted.toString());
+    }
+
+    @Test
     void longDescriptionsAreExportedWhole() throws IOException {
         String longDescription = String.join(" ", Collections.nCopies(200, "Synthetic long description."));
         create(analyst, "Synthetic long case", Sensitivity.STANDARD, longDescription);

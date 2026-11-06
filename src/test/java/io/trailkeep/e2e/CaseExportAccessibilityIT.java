@@ -168,4 +168,56 @@ class CaseExportAccessibilityIT {
         assertThat(shell.axeViolations()).isEmpty();
         assertThat(consoleProblems).isEmpty();
     }
+
+    @Test
+    void tickedRowsAreExportedAloneAndRowClicksOpenTheirCase() throws IOException {
+        String word = "Whimbrel" + UUID.randomUUID().toString().replace("-", "").substring(0, 10);
+        CaseSeed seed = new CaseSeed(jdbc);
+        long team = seed.team();
+        long analyst = seed.user();
+        seed.member(analyst, team, TeamRole.ANALYST);
+        CaseService.Actor actor = new CaseService.Actor(
+                new UserPermissions(analyst, false, Set.of(), Map.of(team, TeamRole.ANALYST)), "Synthetic Analyst");
+        final CaseNumber first = cases.create(actor, fields(seed, team, analyst, "First " + word));
+        final CaseNumber second = cases.create(actor, fields(seed, team, analyst, "Second " + word));
+        page.navigate(KEYCLOAK.app("/cases?q=" + word));
+        page.waitForLoadState();
+        ShellPage shell = new ShellPage(page);
+        CasesListPage list = new CasesListPage(page);
+        assertThat(list.status()).isEqualTo("2 cases found.");
+        assertThat(page.isVisible("#tk-select-all")).isTrue();
+        assertThat(shell.axeViolations()).isEmpty();
+
+        // Tab to the first case's box, tick it with Space, Tab on to Export CSV: only that case is exported.
+        page.locator("#tk-q").focus();
+        list.tabToLabel("Select " + first + " for export", 25);
+        page.keyboard().press("Space");
+        list.tabTo("tk-export-csv", 25);
+        Download download = page.waitForDownload(() -> page.keyboard().press("Enter"));
+        String csv = Files.readString(Objects.requireNonNull(download.path()), StandardCharsets.UTF_8);
+        assertThat(csv).contains("\"" + first + "\"").doesNotContain(second.toString());
+        assertThat(shell.axeViolations()).isEmpty();
+
+        // A click anywhere on a row, outside its link and box, opens the case.
+        page.locator("tbody tr", new Page.LocatorOptions().setHasText(second.toString()))
+                .locator("td")
+                .nth(2)
+                .click();
+        page.waitForURL(url -> url.endsWith("/cases/" + second));
+        assertThat(shell.heading()).contains("Second " + word);
+        assertThat(consoleProblems).isEmpty();
+    }
+
+    private static CaseFields fields(CaseSeed seed, long team, long owner, String title) {
+        return new CaseFields(
+                seed.caseType(),
+                title,
+                CasePriority.NORMAL,
+                LocalDate.now(ZoneOffset.UTC).minusDays(1),
+                team,
+                owner,
+                "Synthetic subject",
+                "Synthetic description",
+                Sensitivity.STANDARD);
+    }
 }
