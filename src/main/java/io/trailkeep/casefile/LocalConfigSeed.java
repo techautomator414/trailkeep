@@ -14,7 +14,8 @@ import org.springframework.stereotype.Component;
 
 /**
  * Seeds synthetic SLA policies and case types for the {@code local} profile from {@code app.seed} in
- * {@code application-local.yml}. Inserts only what is missing by name, so restarts keep local edits.
+ * {@code application-local.yml}. Inserts only what is missing by name, so restarts keep local edits. Names are
+ * compared stripped, as the service stores them.
  */
 @Component
 @Profile("local")
@@ -55,12 +56,12 @@ class LocalConfigSeed implements ApplicationRunner {
         Map<String, Long> policies = config.policies(system).stream()
                 .collect(Collectors.toMap(p -> p.values().name(), CaseConfigService.SlaPolicyView::id));
         seed.slaPolicies().stream()
-                .filter(p -> !policies.containsKey(p.name()))
-                .forEach(p -> policies.put(p.name(), config.savePolicy(system, null, p)));
+                .filter(p -> !policies.containsKey(p.name().strip()))
+                .forEach(p -> policies.put(p.name().strip(), config.savePolicy(system, null, p)));
         List<String> existing =
                 config.caseTypes(system).stream().map(t -> t.values().name()).toList();
         seed.caseTypes().stream()
-                .filter(t -> !existing.contains(t.name()))
+                .filter(t -> !existing.contains(t.name().strip()))
                 .forEach(t -> config.saveCaseType(
                         system,
                         null,
@@ -68,7 +69,7 @@ class LocalConfigSeed implements ApplicationRunner {
     }
 
     private static long policyId(Map<String, Long> policies, CaseTypeSeed caseType) {
-        Long id = policies.get(caseType.slaPolicy());
+        Long id = policies.get(caseType.slaPolicy().strip());
         if (id == null) {
             throw new IllegalStateException("app.seed: case type '" + caseType.name() + "' names SLA policy '"
                     + caseType.slaPolicy() + "', which is neither seeded nor already present");

@@ -3,6 +3,7 @@
 package io.trailkeep.casefile;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.trailkeep.audit.AuditOrigin;
@@ -74,6 +75,25 @@ class LocalConfigSeedIT {
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("Sample type")
                 .hasMessageContaining("Standrad 30 days");
+    }
+
+    @Test
+    void namesWithSurroundingWhitespaceSeedOnceAndSurviveARestart() {
+        // The service stores names stripped, so the next start must compare stripped names too.
+        LocalConfigSeed.Seed padded = new LocalConfigSeed.Seed(
+                List.of(new SlaPolicyCommand("  Padded policy ", SlaAnchor.OPENED_AT, 10, 80, 7, EscalateTo.OWNER)),
+                List.of(new LocalConfigSeed.CaseTypeSeed(" Padded type\t", " Padded policy", 3, List.of("Resolved"))));
+        LocalConfigSeed seed = new LocalConfigSeed(padded, config);
+
+        seed.run(new DefaultApplicationArguments());
+        assertThatCode(() -> seed.run(new DefaultApplicationArguments())).doesNotThrowAnyException();
+
+        assertThat(config.policies(DefaultCaseConfigService.SYSTEM))
+                .filteredOn(p -> p.values().name().equals("Padded policy"))
+                .hasSize(1);
+        assertThat(config.caseTypes(DefaultCaseConfigService.SYSTEM))
+                .filteredOn(t -> t.values().name().equals("Padded type"))
+                .hasSize(1);
     }
 
     private static LocalConfigSeed.Seed localSeed() throws Exception {

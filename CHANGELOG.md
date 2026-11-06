@@ -46,6 +46,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   `HX-Redirect` to the path of `HX-Current-URL` as it is (that path already includes the context path), and to
   `<context path>/` when the header is missing, malformed or names a page outside the context. Deployments at the
   root context path were not affected.
+- The `local` seed (`LocalConfigSeed`) compares names stripped, as the service stores them (#67, item 4): a seed name
+  with leading or trailing whitespace no longer fails the second start with "the name is taken", and a case type's
+  `slaPolicy` reference is matched stripped too.
 
 ### Documentation
 
