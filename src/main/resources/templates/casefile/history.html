@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- The History page of a case (BUILD_PLAN §4.3): the case's audit events, newest first, 50 to a page. A plain GET
+     form chooses the kind of event and plain links page through; nothing here needs a script. Each time is a <time>
+     element (UTC in datetime, app.timezone as text). A field whose value is possible PHI arrives from the service as
+     "set" or "changed" only, never as a digest or a length. -->
+<html lang="en" xmlns:th="http://www.thymeleaf.org" th:replace="~{web/layout :: page(~{::title}, ~{::main})}">
+<head><title th:text="#{tk.history.heading(${h.number})} + ' · ' + ${@branding.name()}">History</title></head>
+<body>
+<main id="main" class="container tk-main" tabindex="-1">
+  <h1 th:text="#{tk.history.heading(${h.number})}">History of CASE-2026-000001</h1>
+  <p><a th:href="@{/cases/{n}(n=${h.number})}" th:text="#{tk.history.back}">Back to the case</a>
+    <span th:text="${h.title}">Title</span></p>
+  <form method="get" th:action="@{/cases/{n}/history(n=${h.number})}" class="row g-3 align-items-end">
+    <div class="col-12 col-md-4">
+      <label class="form-label" for="tk-history-kind" th:text="#{tk.history.kind}">Show</label>
+      <select class="form-select" id="tk-history-kind" name="kind">
+        <option th:each="k : ${kinds}" th:value="${#strings.toLowerCase(k.name())}"
+                th:selected="${k == h.kind}" th:text="#{'tk.history.kind.' + ${k.name()}}">All events</option>
+      </select>
+    </div>
+    <div class="col-12 col-md-4">
+      <button class="btn btn-primary" type="submit" th:text="#{tk.history.apply}">Show events</button>
+    </div>
+  </form>
+  <p id="tk-history-status" class="mt-3" tabindex="-1" th:text="${h.pages > 1}
+     ? #{tk.history.found(${h.total})} + ' ' + #{tk.list.page(${h.page},${h.pages})}
+     : #{tk.history.found(${h.total})}">3 events found.</p>
+  <div th:unless="${h.entries.isEmpty()}" class="table-responsive" tabindex="0" role="region"
+       aria-labelledby="tk-history-caption">
+    <table class="table align-middle">
+      <caption id="tk-history-caption" th:text="#{tk.history.caption}">Events of this case, newest first</caption>
+      <thead>
+      <tr>
+        <th scope="col" th:text="#{tk.history.when}">When</th>
+        <th scope="col" th:text="#{tk.history.who}">Who</th>
+        <th scope="col" th:text="#{tk.history.origin}">Origin</th>
+        <th scope="col" th:text="#{tk.history.what}">Event</th>
+        <th scope="col" th:text="#{tk.history.changes}">Changes</th>
+      </tr>
+      </thead>
+      <tbody>
+      <tr th:each="e : ${h.entries}">
+        <th scope="row"><time th:datetime="${e.at}"
+            th:text="${#temporals.format(e.local, 'yyyy-MM-dd HH:mm')}">2026-11-05 10:30</time></th>
+        <td th:text="${e.who} ?: #{tk.history.system}">Someone</td>
+        <td th:text="#{'tk.history.origin.' + ${e.origin}}">Screen</td>
+        <td th:text="${#messages.msgOrNull('tk.history.action.' + e.action)} ?: ${e.action}">Case edited</td>
+        <td>
+          <ul class="list-unstyled mb-0" th:unless="${e.changes.isEmpty()}">
+            <li th:each="c : ${e.changes}" class="text-break"
+                th:with="label=${#messages.msgOrNull('tk.history.field.' + c.field)} ?: ${c.field},
+                         mark=${c.redaction != null} ? #{'tk.history.redacted.' + ${c.redaction}} : '',
+                         blank=#{tk.history.empty}"
+                th:text="${c.redaction != null}
+                  ? #{tk.history.value(${label},${mark})}
+                  : (${c.before == null}
+                    ? #{tk.history.value(${label},${c.after})}
+                    : #{tk.history.change(${label},${c.before},${c.after ?: blank})})">Title: Old → New</li>
+          </ul>
+          <span th:if="${e.changes.isEmpty()}" class="text-muted" th:text="#{tk.history.none}">No fields recorded</span>
+        </td>
+      </tr>
+      </tbody>
+    </table>
+  </div>
+  <nav th:if="${h.pages > 1}" th:aria-label="#{tk.list.pages}">
+    <ul class="pagination">
+      <li class="page-item" th:if="${h.page > 1}">
+        <a id="tk-history-previous" class="page-link" rel="prev"
+           th:href="@{/cases/{n}/history(n=${h.number},kind=${#strings.toLowerCase(h.kind.name())},page=${h.page - 1})}"
+           th:text="#{tk.list.previous}">Previous page</a></li>
+      <li class="page-item" th:if="${h.page < h.pages}">
+        <a id="tk-history-next" class="page-link" rel="next"
+           th:href="@{/cases/{n}/history(n=${h.number},kind=${#strings.toLowerCase(h.kind.name())},page=${h.page + 1})}"
+           th:text="#{tk.list.next}">Next page</a></li>
+    </ul>
+  </nav>
+</main>
+</body>
+</html>

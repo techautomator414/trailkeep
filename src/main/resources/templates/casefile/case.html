@@ -7,7 +7,8 @@
      with the error summary). Pinned comments are listed again above all comments and marked "Pinned" in the full
      list; Pin and Unpin are one-button forms (no menu, so no JavaScript), and after either the page opens at that
      comment. Attachments follow, from document/fragments/attachments; their upload form is offered with the comment
-     form, because one matrix row covers both. The other actions and the tabs arrive with WP-14 to WP-19. -->
+     form, because one matrix row covers both. Links to the Comments and Attachments sections and to the History page
+     (WP-16) sit under the action buttons; the other actions arrive with WP-19. -->
 <html lang="en" xmlns:th="http://www.thymeleaf.org" th:replace="~{web/layout :: page(~{::title}, ~{::main})}">
 <head><title th:text="${c.number} + ' ' + ${c.title} + ' · ' + ${@branding.name()}">Case</title></head>
 <body>
@@ -50,6 +51,14 @@
     <h2 th:id="'tk-' + ${s} + '-title'" th:text="#{${'tk.sensitivity.title.' + s}(${c.number})}">Mark restricted</h2>
     <form th:replace="~{casefile/fragments/case-actions :: sensitivity(${c.number}, ${c.version}, ${s}, true)}"></form>
   </dialog>
+  <nav class="tk-case-sections" th:aria-label="#{tk.case.sections}">
+    <ul class="list-inline">
+      <li class="list-inline-item"><a href="#comments" th:text="#{tk.comment.title}">Comments</a></li>
+      <li class="list-inline-item"><a href="#attachments" th:text="#{tk.attachment.title}">Attachments</a></li>
+      <li class="list-inline-item"><a id="tk-history-link" th:href="@{/cases/{n}/history(n=${c.number})}"
+          th:text="#{tk.case.history}">History</a></li>
+    </ul>
+  </nav>
   <h2 th:text="#{tk.case.overview}">Overview</h2>
   <dl class="tk-facts">
     <dt th:text="#{tk.case.owner}">Owner</dt><dd th:text="${c.ownerName}">Owner</dd>

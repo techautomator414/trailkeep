@@ -9,6 +9,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- History page (WP-16 part 2): `GET /cases/{number}/history`, linked as "History" from the case page beside Comments
+  and Attachments, lists the case's audit events newest first, 50 to a page, with who, when (in `app.timezone`, in a
+  `time` element), origin (screen, scheduled job, import) and, for field changes, old to new; owners and teams are
+  shown by name. A field that is possible PHI (subject, description, comment text, file name, release reason) shows
+  only "(set)" or "(changed)", never its value, its HMAC or its length. A native select narrows the list to field
+  changes, comments, attachments, state changes or restricted views; paging uses plain previous and next links; an
+  unknown kind or page is 422 and an unreadable case is 404. Opening the history of a restricted case is itself a
+  read and records `VIEW_RESTRICTED`, through the same `RestrictedReadAudit` as the case page and downloads.
 - The case timeline can be paged and filtered, and a principal can read it (WP-16 part 2a, no screen yet).
   `AuditTrailService.pageForCase` returns one page of a case's events, newest first, optionally only some actions,
   with the total, which `forCase` (a limit and nothing else) cannot do. A principal's scope now reaches the events of
