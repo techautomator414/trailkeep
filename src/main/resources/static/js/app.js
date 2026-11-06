@@ -75,8 +75,13 @@
       }
     });
     document.querySelectorAll('dialog').forEach(function (dialog) {
+      // The close event arrives as a task after close(). Browsers that restore focus themselves have already put
+      // it back on the opener, and the person may have moved on (Tab, Enter) by now: return focus only if it is
+      // lost (on the body) or still inside the closed dialog, never pull it away from where the person took it.
       dialog.addEventListener('close', function () {
-        if (dialog.tkOpener && document.body.contains(dialog.tkOpener)) {
+        const active = document.activeElement;
+        const lost = !active || active === document.body || dialog.contains(active);
+        if (lost && dialog.tkOpener && document.body.contains(dialog.tkOpener)) {
           dialog.tkOpener.focus();
         }
       });
