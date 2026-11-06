@@ -4,25 +4,24 @@
 -->
 # Trailkeep handoff: state at the end of Phase 2
 
-_Written 2026-11-04 at 0.1.0 for the team taking over; refreshed 2026-11-06, after WP-11 to WP-14, parts 1a to 4 of
-WP-15 and WP-16 merged. Read this first, then `README.md`, then `IMPLEMENTATION_PLAN.md` Part B (standards) and Part C
+_Written 2026-11-04 at 0.1.0 for the team taking over; refreshed 2026-11-06, after WP-11 to WP-16 merged and Phase 2
+closed. Read this first, then `README.md`, then `IMPLEMENTATION_PLAN.md` Part B (standards) and Part C
 (work packages). Where this file and the plans disagree, the plans win; this file only says where the build stands._
 
 ## 1. Where the project stands
 
 | Measure | Done | Total | Share |
 |---|---|---|---|
-| Work packages (IMPLEMENTATION_PLAN Part C) | 17 (WP-01 to WP-08 are 10 rows with the 03a/b and 04a/b splits, plus WP-09 to WP-14 and WP-16) | 33 | 52 % |
-| Work packages weighted by size (S = 1, M = 2, L = 3) | 34 | 67 | 51 % |
+| Work packages (IMPLEMENTATION_PLAN Part C) | 18 (WP-01 to WP-08 are 10 rows with the 03a/b and 04a/b splits, plus WP-09 to WP-16) | 33 | 55 % |
+| Work packages weighted by size (S = 1, M = 2, L = 3) | 37 | 67 | 55 % |
 | Phase 1 pull requests (Part D) | 12 | 12 | 100 % |
-| Plan calendar (Part F) | about 8.1 weeks: Phase 1 (4) plus 14 of Phase 2's 17 weighted points, about 4.1 of its 5 | 25 weeks | about 32 % (Phase 0 discovery, 2 weeks, is not counted on either side) |
+| Plan calendar (Part F) | about 9 weeks: Phase 1 (4) plus all 17 of Phase 2's weighted points (5) | 25 weeks | about 36 % (Phase 0 discovery, 2 weeks, is not counted on either side) |
 
-**Phase 2 is complete except one measurement.** WP-15 (cases list, L) is built: parts 1a, 1b, 2, 3 and 4 are merged
-(list, sort and paging; filters and search; the filter drawer, chips and multi-status; saved views; the CSV export
-with redaction, row selection and row click). Its acceptance line, p95 under 500 ms at 50k cases on PostgreSQL, has
-not been measured, so the package is not counted in the table above until **part 5** (the 50k seed, the k6 smoke and
-the measurement) lands; part 5 is in flight. If it counted, the table would read 18 of 33 (55 %), 37 of 67 (55 %) and
-about 9 weeks (36 %). WP-16 (history tab, S) is done and counted.
+**Phase 2 is complete.** WP-15 (cases list, L) is done: parts 1a, 1b, 2, 3, 4 and 5 are merged (list, sort and paging;
+filters and search; the filter drawer, chips and multi-status; saved views; the CSV export with redaction, row
+selection and row click; the 50k-case performance run). Its acceptance line, p95 under 500 ms at 50k cases on
+PostgreSQL, is measured: 132 ms for the list and 109 ms for the two-word search (the slowest single-word search measured, 120 ms; #91,
+`docs/perf/cases-list-50k.md`), and the nightly `perf` job fails if either target is missed. WP-16 (history tab, S) is done.
 
 In plain terms: the platform is built and gated, administration works, and **cases can be worked, though not yet
 closed**: a person creates one on a single page, views it, edits it under optimistic locking, reassigns or restricts
@@ -67,8 +66,9 @@ when their secrets are absent, and they were absent at handoff (#30).
 | WP-12 | Edit with optimistic locking (409 and Reload); reassign, mark restricted and mark standard in native dialogs | #49, #50 | `CaseEditController`, `CaseAssignmentController` |
 | WP-13 | Insert-only comments, pins, `SafeHtml` and `tk:safe`, atomic `CASE_SEARCH` append | #51, #52, #53 | `shared.html` (`MarkdownRenderer`, `SafeHtml`), `CaseCommentService`, `CaseSearchWriter`, `CaseSearchJdbcDao` |
 | WP-14 | Attachments: chunked content DAO, upload validation, synchronous clamd scan over TLS, deployment-chosen scanning mode, upload section, download and quarantine Release | #54, #55, #57, #58, #59 | `io.trailkeep.document`, `CaseAttachmentController`, ADR-0012, ADR-0013 |
-| WP-15 (parts 1a, 1b, 2, 3) | Cases list with scoped projections, sort and paging; filters and `LIKE` search through `SearchGateway`; filter drawer, chips, multi-status; saved views under Cases in the navigation | #62, #65, #71, #78 | `CaseListController`, `CaseListService`, `LikeSearchGateway`, `SavedViewService`, `SavedViewController`, ADR-0006 |
+| WP-15 parts 1a, 1b, 2, 3 | Cases list with scoped projections, sort and paging; filters and `LIKE` search through `SearchGateway`; filter drawer, chips, multi-status; saved views under Cases in the navigation | #62, #65, #71, #78 | `CaseListController`, `CaseListService`, `LikeSearchGateway`, `SavedViewService`, `SavedViewController`, ADR-0006 |
 | WP-15 part 4 | CSV export of the cases list (`GET /cases/export.csv`): subject and description redacted per row unless the person manages that case's team or is a Compliance Admin and asked for details; refused (422) above `app.export.max-rows` (default 10000); hand-rolled CSV escaping with formula-injection guard, no library; one `CASES_EXPORTED` audit event per export; selected-row export (repeatable `ids`, at most 100, read through the scope); rows open the case on click (the case-number link stays the keyboard path) | #84 | `CaseExportController`, `CaseExportService`, `CsvFormat`, `ExportProperties`, `CaseRecordQueries.export`, `CaseExportIT`, `OracleCaseExportIT` |
+| WP-15 part 5 | The 50k-case performance run: a deterministic synthetic seed (never applied by Flyway), `PerfCasesListIT` (tagged `perf`; list, sorts, deep page, search, export and the saved-view query, in process, failing at a p95 of 500 ms for the list or 1 s for the search), the nightly `perf` job that runs it through the `perf-it` profile and uploads the table, a k6 smoke run by hand against a running stack, and the measurements with index recommendations that are not applied. p95 at 50k cases on PostgreSQL 16: list 132 ms, search 109 ms | #91 | `perf/seed-cases-postgresql.sql`, `PerfCasesListIT`, `perf/k6/cases-smoke.js`, `docs/perf/cases-list-50k.md`, `nightly.yml` |
 | WP-16 | Case history. #83: `VIEW_RESTRICTED` is written when a restricted case is viewed, an attachment is downloaded or the history is read (closes #82). #86: `AuditTrailService.pageForCase` (paged, filterable, with the total) and the principal-scope join, so a principal's scope reaches the events of a case it may read. #87: the History page, `GET /cases/{number}/history`, with an allow-listed kind filter and structural redaction | #83, #86, #87 | `RestrictedReadAudit`, `AuditTrailService`, `AuditEventQueriesImpl`, `CaseHistoryController`, `CaseHistoryService`, `HistoryKind`, `templates/casefile/history.html`, `RestrictedViewAuditIT`, `CaseHistoryAccessibilityIT` |
 
 Schema on `main`: `V1__identity`, `V2__audit`, `V3__admin`, `V3_1__sessions`, `V4__case`, `V4_1__comment`,
@@ -80,8 +80,8 @@ is assigned in the PR that ships it.
 
 ### Not built yet
 
-The 50k seed, the k6 smoke and the p95 measurement (WP-15 part 5, in flight); email outbox and dispatcher (WP-17);
-reminders tick (WP-17b); request-update (WP-18); closure workflow (WP-19); dashboard (WP-20); SLA evaluator and
+Email outbox and dispatcher (WP-17, in flight: outbox schema and claim, dispatcher and SMTP with Mailpit, in-app
+alerts); reminders tick (WP-17b); request-update (WP-18); closure workflow (WP-19); dashboard (WP-20); SLA evaluator and
 alerts (WP-21); reports (WP-22, 23); retention and purge (WP-24); System screen (WP-25); importer (WP-26, designed in
 `docs/design/importer.md` and ADR-0014, not started); preferences and shortcuts (WP-27); DAST, 508 conformance pass,
 performance and runbook (WP-28 to 30).
@@ -120,7 +120,7 @@ Playwright: the `e2e` suite launches Chromium; locally it skips if no browser is
 | `codeql.yml` | every PR, push to `main`, weekly | CodeQL `security-extended` for Java |
 | `scorecard.yml` | push to `main`, weekly | OpenSSF Scorecard |
 | `main.yml` | push to `main` (each merge cancels the previous run); on demand with `gh workflow run main.yml` (its own concurrency group since #88, so a push does not cancel it); called by nightly and release | SonarCloud, Dependency-Check, SBOM + Trivy, image build + Trivy (`--ignore-unfixed`) + Dockle + kube-linter, `oracle-it` (both images, one job) |
-| `nightly.yml` | 04:41 UTC | `main.yml` again; k6 and ZAP are placeholders until WP-30 and WP-28 |
+| `nightly.yml` | 04:41 UTC | `main.yml` again, and the `perf` job (`PerfCasesListIT` at 50k cases; fails at a list p95 of 500 ms or a search p95 of 1 s); the 500k-comment k6 run and ZAP are placeholders until WP-30 and WP-28 |
 | `release.yml` | tag `v*` | `main.yml` again plus its own `./mvnw verify`, image to GHCR with keyless cosign signature, SBOM attestation, SLSA provenance, GitHub Release with the evidence pack (it does not re-run the `ci.yml` jobs) |
 
 Secrets: `SONAR_TOKEN` and `NVD_API_KEY` are referenced but were not set at handoff (#30). The release workflow
@@ -155,7 +155,8 @@ All are recorded where they were made; this is the index.
 | Saved views store the canonical query string, not `filter_json`; they are private to the person, and save and delete are audited by name only | #78, `V4_7` | `SAVED_VIEW.QUERY` holds `CaseListQuery.toQueryString()` (BUILD_PLAN §5's `filter_json` is replaced; the binding to the typed filter record is kept because the posted query is parsed into `CaseListQuery` before it is stored). Another person's or an unknown view is 404, never 403, so a view's existence stays private. Applying a view is a plain GET that is re-read through the parser and `CaseScope`, so a view never widens what the person reads. `SAVED_VIEW_CREATED` and `SAVED_VIEW_DELETED` carry the name only |
 | `VIEW_RESTRICTED` is written in the read's own transaction, through one `RestrictedReadAudit` | #83, #87, BUILD_PLAN §3.3 | The case page, an attachment download and the History page share the one writer, so the rule lives in one place; the audit row commits or rolls back with the read, and for the History page it is written before the events are read, so the page's own entry is the newest line. Absent and unreadable cases write nothing (404) |
 | The audited export's `query` carries search words as typed | #84 | `CASES_EXPORTED` stores the list's query string as sent, which can include search words; `subject` and `description` never enter the audit row. Accepted by the release manager: the audit trail is itself access-controlled |
-| Exports hold a database connection while they stream and are not counted against `app.attachments.max-concurrent-downloads` | #84 | `app.export.max-rows` bounds an export's length, and rows are read in pages of 500 inside one read-only transaction. Whether exports need their own concurrency gate is for WP-15 part 5's measurements to decide |
+| Exports hold a database connection while they stream, are not counted against `app.attachments.max-concurrent-downloads`, and keep no semaphore of their own | #84, #91 | `app.export.max-rows` bounds an export's length, and rows are read in pages of 500 inside one read-only transaction. WP-15 part 5 measured 0.5 s for 9 645 rows with details (about the cap), so a Hikari pool of 10 serves ten at once without an interactive request waiting more than that. A slow client stretches the hold; if WP-30's load test shows it, share the download semaphore (the small fix) or render to a temporary file (the larger one). Both are recorded in `docs/perf/cases-list-50k.md`, not built |
+| No index or cache was added for the cases list; the recommendations (`CASE_RECORD (OPENED_AT, ID)`, an expression index on `LOWER(TITLE)`, no cache for the filter choices) wait for WP-30's 500k run | #91 | Every target is met with a wide margin at 50k cases, so a migration now would be speculation; `docs/perf/cases-list-50k.md` has the evidence to weigh them against |
 | History is a separate page, not an ARIA tab strip | #87, IMPLEMENTATION_PLAN WP-16 | A page with plain previous and next links, a labelled native select for the kind, and a "Case sections" link list works without script and has one h1 and one region to test. A tab strip, if it ever comes, is Phase 6 polish and these links are its no-script form. A redacted field reaches the page only as "(set)" or "(changed)"; the check is structural (no value, HMAC or length is passed to the template) |
 | Attachment scanning is `clamd` over TLS by default, or `external` | ADR-0012, ADR-0013, #55, #57 | The scan is synchronous and nothing is stored on a scanner error; `external` stores files as `NOT_SCANNED`, never `CLEAN`. Deployment configuration, so no application account can turn scanning off |
 | PR 10 (#23) exceeded 400 net production lines | #23 review | Accepted so the `V3_1__sessions` migration shipped with the code that uses it |
@@ -221,13 +222,13 @@ Not defects, but worth knowing:
 
 ## 7. What comes next, in plan order
 
-1. **WP-15 part 5** (in flight): the 50k-case seed, the k6 smoke and the p95 measurement (under 500 ms on
-   PostgreSQL), which closes WP-15 and with it Phase 2. It also decides whether exports need their own concurrency
-   gate (section 5). Enter on a focused row stays out: rows open on click and the case-number link is the keyboard
-   path (#84).
-2. Phase 3: **WP-17** (outbox and dispatcher; it brings Mailpit to `compose.yaml`), then **WP-18** (request update)
-   and **WP-19** (closure, `V5__closure`). WP-18 filters recipients with `CaseScope.canRead`; WP-19 is where the
-   approver rules and separation of duties from Part A #18 get code.
+1. Phase 3 begins with **WP-17**, in flight: the outbox schema and claim, the dispatcher and SMTP delivery (it brings
+   Mailpit to `compose.yaml`), and in-app alerts. Then **WP-18** (request update) and **WP-19** (closure,
+   `V5__closure`). WP-18 filters recipients with `CaseScope.canRead`; WP-19 is where the approver rules and
+   separation of duties from Part A #18 get code.
+2. Phase 2 leaves nothing open that blocks Phase 3. Carried forward: the index recommendations of
+   `docs/perf/cases-list-50k.md` wait for WP-30's 500k run, and rows open on click only (the case-number link is the
+   keyboard path, #84).
 3. Phase 4 (WP-21, 17b, 20, 22, 23), Phase 5 (WP-24 to 27), Phase 6 (WP-28 to 30). WP-25 owns the role-conflict list
    described in section 6; WP-24 owns purge.
 

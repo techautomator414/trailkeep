@@ -6,8 +6,11 @@
 // browser does, and then requests the list, a sorted list, a deep page, a search and, once, the CSV export. Run it by
 // hand (docs/perf/cases-list-50k.md):
 //
-//   k6 run -e BASE_URL=http://localhost:8080 -e USERNAME=compliance.admin -e PASSWORD=dev-password \
-//     perf/k6/cases-smoke.js
+//   k6 run -e PASSWORD=<password of USERNAME> perf/k6/cases-smoke.js
+//
+// PASSWORD is required and has no default (the script stops at once if it is unset). BASE_URL defaults to
+// http://localhost:8080 and USERNAME to compliance.admin; override them with -e. On the local stack the password is in
+// deploy/local/keycloak/README.md.
 //
 // The thresholds are the plan's targets: GET /cases p95 under 500 ms, the search p95 under 1 s.
 
@@ -16,7 +19,12 @@ import { check, fail } from 'k6';
 
 const BASE_URL = __ENV.BASE_URL || 'http://localhost:8080';
 const USERNAME = __ENV.USERNAME || 'compliance.admin';
-const PASSWORD = __ENV.PASSWORD || 'dev-password';
+// No default: a password written into the script would be copied into runs against other environments.
+const PASSWORD = __ENV.PASSWORD;
+if (!PASSWORD) {
+  throw new Error('PASSWORD is required: run k6 with -e PASSWORD=<the password of USERNAME>. '
+    + 'For the local stack it is in deploy/local/keycloak/README.md.');
+}
 
 export const options = {
   // Keep each virtual user's session across iterations: it signs in once, as a person does.
