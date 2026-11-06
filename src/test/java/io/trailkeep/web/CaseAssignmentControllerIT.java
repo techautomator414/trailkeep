@@ -245,7 +245,9 @@ class CaseAssignmentControllerIT {
         // Reassigned to a colleague, the restricted case leaves the Analyst's scope: back to the dashboard.
         mvc.perform(reassign(number, TEAM, COLLEAGUE, "1")).andExpect(redirectedUrl("/"));
         mvc.perform(get("/cases/" + number)).andExpect(status().isNotFound());
-        assertThat(actions(number)).containsExactly("CASE_CREATED", "CASE_RESTRICTED", "CASE_REASSIGNED");
+        // The one full page view of the now restricted case is audited (#82); the 404 afterwards is not.
+        assertThat(actions(number))
+                .containsExactly("CASE_CREATED", "CASE_RESTRICTED", "VIEW_RESTRICTED", "CASE_REASSIGNED");
     }
 
     @Test
@@ -262,7 +264,9 @@ class CaseAssignmentControllerIT {
 
         mvc.perform(change(restricted, "unrestrict", "1")).andExpect(redirectedUrl("/cases/" + restricted));
         assertThat(sensitivity(restricted)).isEqualTo("STANDARD");
-        assertThat(actions(restricted)).containsExactly("CASE_CREATED", "CASE_UPDATED", "CASE_UNRESTRICTED");
+        // The Manager's page view of the restricted case is audited (#82); the unrestrict form page is not a case view.
+        assertThat(actions(restricted))
+                .containsExactly("CASE_CREATED", "VIEW_RESTRICTED", "CASE_UPDATED", "CASE_UNRESTRICTED");
     }
 
     @Test

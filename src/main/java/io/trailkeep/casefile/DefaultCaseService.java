@@ -159,8 +159,50 @@ class DefaultCaseService implements CaseService {
     @Transactional(readOnly = true)
     public CaseView view(Actor actor, String caseNumber) {
         CaseNumber number = CaseLoader.parse(caseNumber);
-        CaseRow row = cases.findRow(scopes.forUser(actor.permissions()), number)
+        return toView(actor, number, readRow(actor, number));
+    }
+
+    @Override
+    @Transactional
+    public CaseView open(Actor actor, String caseNumber) {
+        CaseNumber number = CaseLoader.parse(caseNumber);
+        CaseRow row = readRow(actor, number);
+        recordRestrictedRead(actor, row.record(), AuditChanges.none());
+        return toView(actor, number, row);
+    }
+
+    @Override
+    @Transactional
+    public void recordDownload(Actor actor, String caseNumber, long attachmentId) {
+        CaseRecord record = readRow(actor, CaseLoader.parse(caseNumber)).record();
+        recordRestrictedRead(actor, record, audit.diff(null, new ViewedAttachment(attachmentId)));
+    }
+
+    /** What a download adds to {@code VIEW_RESTRICTED}, so it is told from a page view. */
+    record ViewedAttachment(long attachmentId) {}
+
+    private CaseRow readRow(Actor actor, CaseNumber number) {
+        return cases.findRow(scopes.forUser(actor.permissions()), number)
                 .orElseThrow(() -> new CaseException(Kind.NOT_FOUND, "case not found"));
+    }
+
+    /** Every read of a restricted case is audited once (BUILD_PLAN §3.3), in the reader's transaction. */
+    private void recordRestrictedRead(Actor actor, CaseRecord record, AuditChanges changes) {
+        if (record.getSensitivity() == Sensitivity.RESTRICTED) {
+            long caseId = id(record.getId());
+            audit.record(new AuditEntry(
+                    actor.permissions().userId(),
+                    actor.displayName(),
+                    AuditOrigin.UI,
+                    caseId,
+                    "CASE",
+                    caseId,
+                    "VIEW_RESTRICTED",
+                    changes));
+        }
+    }
+
+    private CaseView toView(Actor actor, CaseNumber number, CaseRow row) {
         CaseRecord record = row.record();
         String team = directory.team(record.getTeamId()).map(TeamSummary::name).orElse("");
         String owner = directory.displayName(record.getOwnerId()).orElse("");

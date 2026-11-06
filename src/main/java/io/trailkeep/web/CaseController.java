@@ -35,6 +35,7 @@ import org.springframework.validation.BindingResult;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -131,10 +132,15 @@ class CaseController {
             @AuthenticationPrincipal TrailkeepOidcUser principal,
             @PathVariable String number,
             @RequestParam(required = false) @Nullable String created,
+            @RequestHeader(name = "HX-Request", required = false) @Nullable String htmx,
             HttpServletRequest request,
             Model model) {
         model.addAttribute("created", created != null);
-        return page.render(page.actor(principal), number, request, null, model);
+        // A full page view of a restricted case is audited; an htmx request for part of the page is not a new view.
+        if ("true".equals(htmx)) {
+            return page.render(page.actor(principal), number, request, null, model);
+        }
+        return page.open(page.actor(principal), number, request, model);
     }
 
     @PostMapping("/cases/{number}/comments")

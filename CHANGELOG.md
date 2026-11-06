@@ -148,6 +148,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- Reading a restricted case is now audited (#82, the first half of WP-16). A full page view of a `RESTRICTED` case
+  (`GET /cases/{number}`, not an htmx request, not a 422 re-render, nothing on 404) and each download of one of its
+  attachments (nothing on 404, 403 or 503) write one `VIEW_RESTRICTED` event for the actor (entity `CASE`, origin
+  `UI`; a download adds the attachment id), in the transaction of the read, as BUILD_PLAN §3.3 and
+  IMPLEMENTATION_PLAN A.2 #16 require and no code did. `CaseService.open` is the page view, the only case-page read
+  path that is not read-only; `recordDownload` is called once a download is allowed and holds a slot.
 - The size beside an attachment picks its unit from the value as it is printed (#67, item 11): 1,048,525 to 1,048,575
   bytes read "1.0 MB" instead of "1024.0 KB", and the same rounding at the top of the MB range reads "1.0 GB" (a new
   `tk.attachment.gb` message) instead of "1024.0 MB". Bytes are still whole below 1 KiB.
