@@ -27,6 +27,7 @@ public final class CasesListPage {
      * @param text the search text
      */
     public void search(String text) {
+        waitForSettle();
         markResultsStale();
         page.locator("#tk-q").focus();
         page.keyboard().type(text);

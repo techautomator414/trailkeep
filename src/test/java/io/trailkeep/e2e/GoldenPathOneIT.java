@@ -118,6 +118,7 @@ class GoldenPathOneIT {
         page.fill("#description", "Synthetic description of a synthetic matter");
         assertThat(submit().status()).isEqualTo(422);
         page.waitForSelector("[data-tk-error-summary]");
+        new ShellPage(page).waitForErrorSummaryFocus();
         assertThat(page.evaluate("() => document.activeElement.hasAttribute('data-tk-error-summary')"))
                 .isEqualTo(true);
         assertClean("New case");

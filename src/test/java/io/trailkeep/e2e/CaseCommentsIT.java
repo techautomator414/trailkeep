@@ -180,12 +180,14 @@ class CaseCommentsIT {
                         .status())
                 .isEqualTo(422);
         page.waitForSelector("[data-tk-error-summary]");
+        new ShellPage(page).waitForErrorSummaryFocus();
         assertThat(page.evaluate("() => document.activeElement.hasAttribute('data-tk-error-summary')"))
                 .isEqualTo(true);
         assertThat(page.getAttribute("#body", "aria-invalid")).isEqualTo("true");
         assertClean();
 
         page.click("[data-tk-error-summary] a[href='#body']");
+        new ShellPage(page).waitForFocusOn("body");
         assertThat(page.evaluate("() => document.activeElement.id")).isEqualTo("body");
         page.fill("#body", MARKDOWN);
         page.click("main form[action$='/comments'] button[type=submit]");

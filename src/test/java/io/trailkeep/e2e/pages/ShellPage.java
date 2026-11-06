@@ -72,6 +72,40 @@ public final class ShellPage {
         return String.valueOf(page.evaluate("() => document.activeElement.className"));
     }
 
+    /**
+     * Waits until the focused element is the page's error summary. The layout's scripts are deferred, so the summary
+     * is in the document a little before {@code app.js} has moved focus to it.
+     */
+    public void waitForErrorSummaryFocus() {
+        page.waitForFunction(
+                "() => document.activeElement && document.activeElement.hasAttribute('data-tk-error-summary')");
+    }
+
+    /**
+     * Waits until the element with this id has focus.
+     *
+     * @param id the element's id
+     */
+    public void waitForFocusOn(String id) {
+        page.waitForFunction("id => document.activeElement && document.activeElement.id === id", id);
+    }
+
+    /**
+     * Waits until a closed dialog has given focus back to the control that opened it, then lets the dialog's late
+     * {@code close} event run. The event is dispatched as a task after {@code close()}, so a key pressed at once could
+     * otherwise race its handler (the race behind #75).
+     *
+     * @param dialog selector of the dialog
+     * @param opener selector of the control that opened it
+     */
+    public void waitForDialogClosedWithFocusOn(String dialog, String opener) {
+        page.waitForFunction(
+                "args => !document.querySelector(args[0]).open"
+                        + " && document.activeElement === document.querySelector(args[1])",
+                List.of(dialog, opener));
+        page.evaluate("() => new Promise(done => window.setTimeout(done, 0))");
+    }
+
     /** Opens the session-expiry dialog as the timer would. */
     public void openSessionDialog() {
         page.evaluate("() => window.trailkeep.dialogs.open(document.getElementById('tk-session-dialog'))");
