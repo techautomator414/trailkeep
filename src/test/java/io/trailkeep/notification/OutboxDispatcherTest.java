@@ -25,7 +25,7 @@ class OutboxDispatcherTest {
     private final OutboxJdbcDao outbox = mock(OutboxJdbcDao.class);
 
     @Test
-    void theBackoffDoublesFromOneMinuteIsCappedAtFourHoursAndAddsUpToAQuarter() {
+    void backoffDoublesFromOneMinuteIsCappedAtFourHoursAndAddsUpToOneQuarter() {
         long[] expectedMinutes = {1, 2, 4, 8, 16, 32, 64, 128, 240, 240};
         for (int attempts = 1; attempts <= expectedMinutes.length; attempts++) {
             Duration base = Duration.ofMinutes(expectedMinutes[attempts - 1]);
@@ -55,7 +55,7 @@ class OutboxDispatcherTest {
     }
 
     @Test
-    void enabledMailWithoutAServerFailsStartup() {
+    void enabledMailWithoutMailServerFailsStartup() {
         MailProperties enabled = new MailProperties(true, "trailkeep@example.invalid", Duration.ofMinutes(5));
 
         assertThatThrownBy(() -> dispatcher(enabled))
@@ -64,7 +64,7 @@ class OutboxDispatcherTest {
     }
 
     @Test
-    void enabledMailNeedsAWellFormedSenderAndAPositiveLease() {
+    void enabledMailNeedsWellFormedSenderAndPositiveLease() {
         assertThatThrownBy(() -> new MailProperties(true, null, Duration.ofMinutes(5)))
                 .hasMessageContaining("app.mail.from is required");
         assertThatThrownBy(() -> new MailProperties(true, " ", Duration.ofMinutes(5)))

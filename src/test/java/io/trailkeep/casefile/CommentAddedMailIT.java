@@ -113,7 +113,7 @@ class CommentAddedMailIT {
     }
 
     @Test
-    void aRolledBackCommentTakesItsMailWithIt() {
+    void rolledBackCommentTakesItsMailWithIt() {
         transactions.executeWithoutResult(status -> {
             comments.post(actor(colleague), number.toString(), COMMENT);
             entityManager.flush();

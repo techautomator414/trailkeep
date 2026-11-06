@@ -126,9 +126,9 @@ class NotificationServiceIT {
                     .as(path)
                     .isInstanceOf(IllegalArgumentException.class);
         }
-        assertThat(transaction.execute(
-                        status -> notifications.notifyUser(-1L, "outbox-test", Map.of(), null, "/cases/x")))
-                .isFalse();
+        Boolean queued =
+                transaction.execute(status -> notifications.notifyUser(-1L, "outbox-test", Map.of(), null, "/cases/x"));
+        assertThat(queued).isFalse();
         assertThatThrownBy(() -> notifications.notifyUser(-1L, "outbox-test", Map.of(), null, "/cases/x"))
                 .isInstanceOf(IllegalTransactionStateException.class);
     }

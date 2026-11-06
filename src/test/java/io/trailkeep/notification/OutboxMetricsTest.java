@@ -30,7 +30,7 @@ class OutboxMetricsTest {
     private final OutboxMetrics metrics = new OutboxMetrics(registry, outbox, clock);
 
     @Test
-    void gaugesAreCountQueriesCachedForAMinute() {
+    void gaugesAreCountQueriesCachedForOneMinute() {
         when(outbox.count(OutboxStatus.PENDING)).thenReturn(3L, 5L);
         when(outbox.count(OutboxStatus.FAILED)).thenReturn(1L);
 

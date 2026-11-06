@@ -102,7 +102,7 @@ class OutboxDispatcherIT {
     }
 
     @Test
-    void aPassGivesUpAfterABatchThatSentNothing() {
+    void passGivesUpAfterOneBatchThatSentNothing() {
         IntStream.range(0, OutboxJdbcDao.MAX_CLAIM + 10).forEach(i -> queue());
 
         assertThat(dispatcher.dispatch()).isZero();
