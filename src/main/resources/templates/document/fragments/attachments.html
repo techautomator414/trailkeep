@@ -88,9 +88,12 @@
   <div th:replace="~{casefile/fragments/case-actions :: actions(${number}, #{tk.release.save}, ${inDialog})}"></div>
 </form>
 
+<!--/* The unit is chosen from the value as it will be printed (one decimal), so 1023.95 KB or more is MB, never "1024.0 KB". */-->
 <th:block th:fragment="size(b)"
-          th:text="${b < 1024} ? #{tk.attachment.bytes(${b})} : (${b < 1048576}
+          th:text="${b < 1024} ? #{tk.attachment.bytes(${b})} : (${b / 1024.0 < 1023.95}
                    ? #{tk.attachment.kb(${#numbers.formatDecimal(b / 1024.0, 1, 1)})}
-                   : #{tk.attachment.mb(${#numbers.formatDecimal(b / 1048576.0, 1, 1)})})">1.2 MB</th:block>
+                   : (${b / 1048576.0 < 1023.95}
+                   ? #{tk.attachment.mb(${#numbers.formatDecimal(b / 1048576.0, 1, 1)})}
+                   : #{tk.attachment.gb(${#numbers.formatDecimal(b / 1073741824.0, 1, 1)})}))">1.2 MB</th:block>
 </body>
 </html>

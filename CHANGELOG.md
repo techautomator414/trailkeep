@@ -24,6 +24,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- The size beside an attachment picks its unit from the value as it is printed (#67, item 11): 1,048,525 to 1,048,575
+  bytes read "1.0 MB" instead of "1024.0 KB", and the same rounding at the top of the MB range reads "1.0 GB" (a new
+  `tk.attachment.gb` message) instead of "1024.0 MB". Bytes are still whole below 1 KiB.
 - A closed dialog no longer pulls focus back to the control that opened it after the person has moved on. The
   `close` event arrives after the browser has already restored focus, so a quick Escape then Tab (or Enter) could
   land back on the opener. `app.js` now returns focus only when focus is lost or still inside the dialog. This was
