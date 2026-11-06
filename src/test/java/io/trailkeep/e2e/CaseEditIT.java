@@ -137,6 +137,7 @@ class CaseEditIT {
         page.fill("#title", " ");
         assertThat(submit().status()).isEqualTo(422);
         page.waitForSelector("[data-tk-error-summary]");
+        new ShellPage(page).waitForErrorSummaryFocus();
         assertThat(page.evaluate("() => document.activeElement.hasAttribute('data-tk-error-summary')"))
                 .isEqualTo(true);
         assertClean("Edit " + number);
@@ -152,6 +153,7 @@ class CaseEditIT {
         assertThat(page.textContent("[data-tk-error-summary]"))
                 .contains("This case was updated by Seed User " + colleague);
         assertThat(page.inputValue("#title")).isEqualTo("My synthetic title");
+        new ShellPage(page).waitForErrorSummaryFocus();
         assertThat(page.evaluate("() => document.activeElement.hasAttribute('data-tk-error-summary')"))
                 .isEqualTo(true);
         assertClean("Edit " + number);

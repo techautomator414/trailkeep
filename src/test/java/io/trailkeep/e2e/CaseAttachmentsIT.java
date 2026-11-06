@@ -182,6 +182,7 @@ class CaseAttachmentsIT {
                         .status())
                 .isEqualTo(422);
         page.waitForSelector("[data-tk-error-summary]");
+        new ShellPage(page).waitForErrorSummaryFocus();
         assertThat(page.evaluate("() => document.activeElement.hasAttribute('data-tk-error-summary')"))
                 .isEqualTo(true);
         assertThat(page.textContent("[data-tk-error-summary]")).contains("this kind of file is not allowed");
@@ -190,6 +191,7 @@ class CaseAttachmentsIT {
 
         page.keyboard().press("Tab");
         page.keyboard().press("Enter");
+        new ShellPage(page).waitForFocusOn("file");
         assertThat(page.evaluate("() => document.activeElement.id")).isEqualTo("file");
         chooseByKeyboard(new FilePayload(
                 "synthetic-notes.txt", "text/plain", "Synthetic notes".getBytes(StandardCharsets.US_ASCII)));
@@ -245,6 +247,7 @@ class CaseAttachmentsIT {
                 .isEqualTo(true);
         assertClean();
         page.keyboard().press("Escape");
+        new ShellPage(page).waitForDialogClosedWithFocusOn(dialog, opener);
         assertThat(page.isVisible(dialog)).isFalse();
         assertThat(page.evaluate("s => document.activeElement === document.querySelector(s)", opener))
                 .isEqualTo(true);

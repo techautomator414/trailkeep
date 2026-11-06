@@ -161,6 +161,7 @@ class CaseAssignmentIT {
         page.keyboard().press("Enter");
         assertDialogClean("#tk-RESTRICTED-dialog", "Synthetic assign case");
         page.keyboard().press("Escape");
+        new ShellPage(page).waitForDialogClosedWithFocusOn("#tk-RESTRICTED-dialog", restrictOpener);
         assertThat(page.isVisible("#tk-RESTRICTED-dialog")).isFalse();
         assertThat(page.evaluate("s => document.activeElement === document.querySelector(s)", restrictOpener))
                 .isEqualTo(true);
@@ -260,6 +261,7 @@ class CaseAssignmentIT {
 
     private void assertErrorPageClean(String heading) {
         page.waitForSelector("[data-tk-error-summary]");
+        new ShellPage(page).waitForErrorSummaryFocus();
         assertThat(page.evaluate("() => document.activeElement.hasAttribute('data-tk-error-summary')"))
                 .isEqualTo(true);
         assertClean(heading);
