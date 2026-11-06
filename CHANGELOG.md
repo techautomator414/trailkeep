@@ -9,6 +9,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Reopen (WP-19 part b2, no screen yet): `CASE_REOPEN` (`V5_1__case_reopen.sql`, `CaseReopen` entity, append-only;
+  the runtime user may SELECT and INSERT it only) and `ClosureDecisionService.reopen`. A Manager or Compliance Admin
+  reopens a closed case with a reason of 1 to 1000 characters: the case is `OPEN` again with `CLOSED_AT` cleared, the
+  SLA starts its next cycle (`SLA_CYCLE` + 1, `ON_TRACK`, the clock from the reopen instant), and one `CASE_REOPEN`
+  row keeps who, when, why, the new cycle and the request whose approval closed the case. Audited as
+  `CASE_REOPENED` with the reason redacted; the owner and that request's requester get `case-reopened` (once each,
+  never the actor), never the reason. The case can then be requested for closure again.
 - Closure decisions and approver reassignment (WP-19 part b, no screen yet): `ClosureDecisionService`. The
   request's approver approves (the case is `CLOSED`, `CLOSED_AT` stamped, the SLA finalised as `MET` or `BREACHED`),
   rejects or requests changes (a reason of 1 to 1000 characters; the case is `OPEN` again); a Manager or Compliance

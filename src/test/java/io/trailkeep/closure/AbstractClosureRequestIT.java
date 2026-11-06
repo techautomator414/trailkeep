@@ -97,7 +97,8 @@ abstract class AbstractClosureRequestIT {
     @AfterEach
     void removeCommittedRows() {
         for (long caseId : caseIds) {
-            for (String table : new String[] {"CLOSURE_REQUEST", "NOTIFICATION_OUTBOX", "USER_ALERT", "AUDIT_EVENT"}) {
+            for (String table :
+                    new String[] {"CLOSURE_REQUEST", "NOTIFICATION_OUTBOX", "USER_ALERT", "AUDIT_EVENT", "CASE_SLA"}) {
                 jdbc.update("DELETE FROM " + table + " WHERE CASE_ID = ?", caseId);
             }
             jdbc.update("DELETE FROM CASE_RECORD WHERE ID = ?", caseId);
@@ -297,7 +298,13 @@ abstract class AbstractClosureRequestIT {
 
     private CaseNumber caseOf(long teamId, long ownerId) {
         CaseNumber created = seed.caseRow(teamId, ownerId, Sensitivity.STANDARD, CaseStatus.OPEN);
-        caseIds.add(seed.caseId(created));
+        long caseId = seed.caseId(created);
+        caseIds.add(caseId);
+        // Every case has its SLA row (a status move requires it).
+        jdbc.update(
+                "INSERT INTO CASE_SLA (CASE_ID, SLA_STATE, SLA_DUE_AT, AT_RISK_AT, SLA_CYCLE)"
+                        + " VALUES (?, 'ON_TRACK', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 1)",
+                caseId);
         return created;
     }
 }
