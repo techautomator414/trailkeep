@@ -178,6 +178,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- `messages.properties` defined `tk.attachment.scan.NOT_SCANNED` twice (same text, so no screen was wrong); the
+  duplicate is gone, and `MessagesPropertiesTest` fails the build on any repeated key, which `Properties` would
+  otherwise resolve silently to the last one.
 - Reading a restricted case is now audited (#82, the first half of WP-16). A full page view of a `RESTRICTED` case
   (`GET /cases/{number}`, not an htmx request, not a 422 re-render, nothing on 404) and each download of one of its
   attachments (nothing on 404, 403 or 503) write one `VIEW_RESTRICTED` event for the actor (entity `CASE`, origin
