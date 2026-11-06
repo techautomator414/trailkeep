@@ -125,6 +125,19 @@ class ClosureRequest {
         return version;
     }
 
+    Instant getRequestedAt() {
+        return requestedAt;
+    }
+
+    String getResolutionSummary() {
+        return resolutionSummary;
+    }
+
+    @Nullable
+    String getFollowUpActions() {
+        return followUpActions;
+    }
+
     ClosureDecision getDecision() {
         return decision;
     }
