@@ -27,7 +27,9 @@ class ScanningModeTest {
     private final ApplicationContextRunner runner = new ApplicationContextRunner()
             .withConfiguration(AutoConfigurations.of(SslAutoConfiguration.class))
             .withUserConfiguration(AttachmentConfig.class, ClamdClient.class, UploadIntake.class)
-            .withPropertyValues(TEMP_DIR);
+            // application.yml is not loaded here; its request limit is what AttachmentConfig checks the 25 MB cap
+            // against.
+            .withPropertyValues(TEMP_DIR, "spring.servlet.multipart.max-request-size=26MB");
 
     @Test
     void unsetModeIsClamdAndScansWithTheClamdClient(CapturedOutput output) {

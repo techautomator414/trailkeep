@@ -34,6 +34,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   `UserSessionEnder` port, which `security`'s `UserSessionService` extends) in the same transaction, and audits
   `USER_DISABLED` with the number of ended sessions (`USER_ENABLED` for the reverse). A System Admin cannot disable
   themselves. This closes the "no caller yet" note under 0.1.0 below.
+- The application refuses to start when `spring.servlet.multipart.max-request-size` leaves less than 1 MiB above
+  `app.attachments.max-bytes` (#67, item 6). `max-file-size` follows `max-bytes` but `max-request-size` is a separate
+  setting (26MB), so raising `max-bytes` alone made the container refuse files the form still advertised as allowed.
+  `AttachmentConfig` now fails startup with a message naming both properties and their values in bytes. The shipped
+  defaults (25MB and 26MB) start unchanged.
 
 ### Fixed
 

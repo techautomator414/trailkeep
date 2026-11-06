@@ -76,7 +76,8 @@ spring:
   servlet:
     multipart:
       # Aligned with the attachment cap (BUILD_PLAN §9). The request may be a little larger than the file: the form's
-      # CSRF token and the multipart framing come with it.
+      # CSRF token and the multipart framing come with it. Keep max-request-size at least 1 MiB above
+      # app.attachments.max-bytes: AttachmentConfig refuses to start otherwise.
       max-file-size: ${app.attachments.max-bytes}
       max-request-size: 26MB
 
