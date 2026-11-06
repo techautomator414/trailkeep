@@ -1,0 +1,2 @@
+/*[- SPDX-License-Identifier: Apache-2.0. In-app alert of the case-reopened mail: one line. -]*/
+[(${reopener})] reopened your case [(${caseNumber})], "[(${title})]"
