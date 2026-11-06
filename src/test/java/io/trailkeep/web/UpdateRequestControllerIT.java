@@ -230,8 +230,8 @@ class UpdateRequestControllerIT {
 
     private long ownerAsks(long recipient) {
         jdbc.update(
-                "INSERT INTO UPDATE_REQUEST (ID, CASE_ID, REQUESTED_BY, REQUESTED_FROM, MESSAGE, REQUESTED_AT, OPEN_KEY)"
-                        + " SELECT 985200, ID, ?, ?, 'A synthetic question', CURRENT_TIMESTAMP, ID || ':' || ?"
+                "INSERT INTO UPDATE_REQUEST (ID, CASE_ID, REQUESTED_BY, REQUESTED_FROM, MESSAGE, REQUESTED_AT,"
+                        + " OPEN_KEY) SELECT 985200, ID, ?, ?, 'A synthetic question', CURRENT_TIMESTAMP, ID || ':' || ?"
                         + " FROM CASE_RECORD WHERE CASE_NUMBER = ?",
                 OWNER,
                 recipient,

@@ -152,7 +152,7 @@ class UpdateRequestAccessibilityIT {
         long colleague = colleague(seed, TeamRole.ANALYST);
         colleague(seed, TeamRole.READER);
         CaseNumber number = cases.create(actor(analyst), fields(analyst));
-        String name = "Seed User " + colleague;
+        final String name = "Seed User " + colleague;
 
         page.navigate(KEYCLOAK.app("/cases/" + number));
         assertClean();
