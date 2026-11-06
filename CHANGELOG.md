@@ -9,6 +9,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Outbox dispatcher and the first mail (WP-17 part b): `OutboxDispatcher` runs every minute on every web replica
+  (no ShedLock: the claim's `SKIP LOCKED` and lease give each row to one replica), reaps lapsed claims, then sends due
+  rows 50 at a time over one SMTP connection as multipart text + HTML with no transaction open. A sent row is `SENT`;
+  a failed one retries after 1, 2, 4 … minutes (capped at four hours, spread by row) and is `FAILED` with its error at
+  the tenth failure; a pass stops after a batch that sent nothing. Delivery is at-least-once. New settings:
+  `app.base-url` (required; the start of every deep link), `app.mail.from` (required while sending),
+  `app.mail.enabled` (`false` keeps queuing without sending), `app.mail.lease`, and `spring.mail.*` for the relay
+  (STARTTLS required in `prod`). A comment by someone other than the case's owner queues the `comment-added` mail to
+  the owner in the posting transaction (case number, title, commenter and a link; never the comment, description or
+  subject). Metrics `trailkeep.outbox.pending` and `trailkeep.outbox.failed` (count queries, cached a minute) and
+  `trailkeep.outbox.attempts{outcome}`; the mail server is not a health indicator. Mailpit joins `compose.yaml`
+  (SMTP 1025, UI 8025) and the `local` profile sends to it. New dependency `spring-boot-starter-mail` (Apache-2.0).
 - Notification outbox, schema and claim (WP-17 part a): `NOTIFICATION_OUTBOX` (`V4_8__notification_outbox.sql`,
   `NotificationOutbox` entity, status `PENDING`/`SENDING`/`SENT`/`FAILED`, index `(STATUS, NEXT_ATTEMPT_AT)`; the
   runtime user may SELECT, INSERT and UPDATE it, never DELETE, and the purge user may trim it).

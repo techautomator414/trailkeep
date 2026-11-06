@@ -116,4 +116,20 @@ class NotificationServiceIT {
                         "SELECT COUNT(*) FROM NOTIFICATION_OUTBOX WHERE TEMPLATE_ID = 'outbox-test'", Long.class))
                 .isZero();
     }
+
+    @Test
+    void personalMailLinksOnlyIntoThisApplicationAndNeedsAnAddress() {
+        TransactionTemplate transaction = new TransactionTemplate(transactions);
+        for (String path : new String[] {"https://elsewhere.invalid/", "//elsewhere.invalid/", "cases/x", "/\\x"}) {
+            assertThatThrownBy(() -> transaction.execute(
+                            status -> notifications.notifyUser(1L, "outbox-test", Map.of(), null, path)))
+                    .as(path)
+                    .isInstanceOf(IllegalArgumentException.class);
+        }
+        assertThat(transaction.execute(
+                        status -> notifications.notifyUser(-1L, "outbox-test", Map.of(), null, "/cases/x")))
+                .isFalse();
+        assertThatThrownBy(() -> notifications.notifyUser(-1L, "outbox-test", Map.of(), null, "/cases/x"))
+                .isInstanceOf(IllegalTransactionStateException.class);
+    }
 }
