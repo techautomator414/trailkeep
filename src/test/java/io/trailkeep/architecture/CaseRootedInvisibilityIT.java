@@ -199,16 +199,21 @@ class CaseRootedInvisibilityIT {
         if (type == long.class || type == Long.class) {
             return call.caseId();
         }
+        if (type == Collection.class) {
+            // Case ids, such as the cases a list in another module names.
+            return List.of(call.caseId());
+        }
+        return fixedArgument(type, method);
+    }
+
+    /** A value that does not depend on the call: a page size, an empty action filter, no filter, the default query. */
+    private static Object fixedArgument(Class<?> type, Method method) {
         if (type == int.class || type == Integer.class) {
             return LIMIT;
         }
         if (type == Set.class) {
             // An action filter that keeps everything.
             return Set.of();
-        }
-        if (type == Collection.class) {
-            // Case ids, such as the cases a list in another module names.
-            return List.of(call.caseId());
         }
         if (type == CaseFilter.class) {
             return CaseFilter.none();

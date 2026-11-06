@@ -141,7 +141,7 @@ abstract class AbstractUpdateRequestIT {
 
     @Test
     void refusalsFollowTheOrderNotFoundForbiddenInvalid() {
-        CaseNumber restricted = caseOf(Sensitivity.RESTRICTED);
+        final CaseNumber restricted = caseOf(Sensitivity.RESTRICTED);
         jdbc.update("UPDATE APP_USER SET DISABLED = ? WHERE ID = ?", true, manager);
 
         refused(() -> ask(outsider, TeamRole.ANALYST, number, colleague, QUESTION), Kind.NOT_FOUND);
@@ -202,7 +202,7 @@ abstract class AbstractUpdateRequestIT {
     @Test
     void markAnsweredIsTheRequestersOrManagersAndHappensOnce() {
         long fromColleague = request(owner, colleague);
-        long fromReader = request(colleague, reader);
+        final long fromReader = request(colleague, reader);
 
         refused(() -> markAnswered(colleague, TeamRole.ANALYST, fromColleague), Kind.FORBIDDEN);
         refused(() -> markAnswered(reader, TeamRole.READER, fromColleague), Kind.FORBIDDEN);
