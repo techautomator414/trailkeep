@@ -12,8 +12,11 @@ import io.trailkeep.testsupport.TestBrowser;
 import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Map;
 import java.util.Objects;
 import java.util.function.BooleanSupplier;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -51,6 +54,8 @@ class SharedSessionsIT {
     private static final String ALPHA_ANALYST = "00000000-0000-4000-8000-000000000002";
     private static final String BETA_READER = "00000000-0000-4000-8000-000000000005";
     private static final String BETA_ANALYST = "00000000-0000-4000-8000-000000000006";
+    private static final String ALPHA_READER = "00000000-0000-4000-8000-000000000001";
+    private static final Pattern CSRF_FIELD = Pattern.compile("name=\"_csrf\"[^>]*value=\"([^\"]+)\"");
     private static final Duration WAIT = Duration.ofSeconds(15);
 
     private static @Nullable ConfigurableApplicationContext instanceB;
@@ -155,6 +160,46 @@ class SharedSessionsIT {
         } finally {
             jdbc.update("UPDATE APP_USER SET DISABLED = FALSE WHERE ID = ?", userId);
         }
+    }
+
+    @Test
+    void disablingAUserFromTheAdminScreenEndsTheirSessionsOnEveryInstance() throws Exception {
+        TestBrowser victim = new TestBrowser();
+        victim.login(KEYCLOAK.app("/"), "alpha.reader");
+        assertSignedIn(victim.get(appB("/")), "Alpha Reader");
+        long userId = userId(ALPHA_READER);
+        TestBrowser admin = new TestBrowser();
+        admin.login(KEYCLOAK.app("/admin/users"), "system.admin");
+
+        try {
+            adminPost(admin, "/admin/users/" + userId + "/disable");
+
+            assertThat(count("SELECT COUNT(*) FROM SPRING_SESSION WHERE PRINCIPAL_NAME = ?", Long.toString(userId)))
+                    .as("the action deleted the sessions; the next-request check was not needed")
+                    .isZero();
+            assertSentToLogin(victim.get(appB("/")));
+            assertSentToLogin(victim.get(KEYCLOAK.app("/")));
+            assertThat(jdbc.queryForObject(
+                            "SELECT COUNT(*) FROM AUDIT_EVENT WHERE ACTION = 'USER_DISABLED' AND ENTITY_ID = ?",
+                            Integer.class,
+                            userId))
+                    .isOne();
+        } finally {
+            adminPost(admin, "/admin/users/" + userId + "/enable");
+        }
+        assertThat(jdbc.queryForObject("SELECT DISABLED FROM APP_USER WHERE ID = ?", Boolean.class, userId))
+                .isFalse();
+    }
+
+    private static void adminPost(TestBrowser admin, String path) throws Exception {
+        HttpResponse<String> page = admin.get(KEYCLOAK.app("/admin/users"));
+        assertThat(page.statusCode()).isEqualTo(200);
+        Matcher csrf = CSRF_FIELD.matcher(page.body());
+        assertThat(csrf.find()).as("the user list carries a CSRF field").isTrue();
+        HttpResponse<String> response = admin.post(KEYCLOAK.app(path), Map.of("_csrf", csrf.group(1)));
+        assertThat(response.statusCode()).isEqualTo(302);
+        assertThat(response.headers().firstValue("Location"))
+                .hasValueSatisfying(location -> assertThat(location).endsWith("/admin/users"));
     }
 
     private static String appB(String path) {

@@ -31,8 +31,9 @@ import org.springframework.test.context.DynamicPropertySource;
 
 /**
  * The team admin screens (WP-09) in a real browser after a real OIDC login as the dev realm's {@code system.admin}:
- * the team list, a team page, and each in its 422 invalid-input state have 0 axe violations and no CSP violation in
- * the console. Browser handling follows {@link ShellAccessibilityIT}.
+ * the team list, a team page and the user list (disabling a user), and the first two in their 422 invalid-input
+ * state, have 0 axe violations and no CSP violation in the console. Browser handling follows
+ * {@link ShellAccessibilityIT}.
  */
 // "IT" is the Failsafe suffix Part B mandates for integration tests, not an abbreviation.
 @SuppressWarnings("checkstyle:AbbreviationAsWordInName")
@@ -118,6 +119,33 @@ class TeamAdminAccessibilityIT {
         assertThat(invalid.status()).isEqualTo(422);
         assertThat(page.isVisible("[role=alert]")).isTrue();
         assertClean(name);
+    }
+
+    @Test
+    void userListHasNoViolationsAndItsButtonsAreReachableByKeyboard() {
+        // A second user must exist: the admin's own row has no Disable button.
+        Page other = browser.newContext().newPage();
+        other.navigate(KEYCLOAK.app("/"));
+        new SignInPage(other).signIn("alpha.reader", KeycloakDevRealm.PASSWORD, KEYCLOAK.app(""));
+        other.waitForLoadState();
+        other.context().close();
+
+        Response list = Objects.requireNonNull(page.navigate(KEYCLOAK.app("/admin/users")));
+        assertThat(list.status()).isEqualTo(200);
+        assertClean("Users");
+
+        // Keyboard only: Tab from the page top reaches a row action button (skip link, nav, Teams link, then rows).
+        boolean reached = false;
+        for (int i = 0; i < 30 && !reached; i++) {
+            page.keyboard().press("Tab");
+            reached = Boolean.TRUE.equals(page.evaluate(
+                    "() => document.activeElement && document.activeElement.matches('main form button[type=submit]')"));
+        }
+        assertThat(reached)
+                .as("a Disable or Enable button takes keyboard focus")
+                .isTrue();
+        assertThat(page.locator("main form button[type=submit]:focus").innerText())
+                .matches("(Disable|Enable) .+");
     }
 
     private Response submit(String field, String value, String button) {
