@@ -16,6 +16,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -126,6 +127,24 @@ class CaseListQueryTest {
                                 "owner", List.of("")))
                         .filter())
                 .isEqualTo(CaseFilter.none());
+    }
+
+    @Test
+    void selectedCaseNumbersAreReadCanonicallyAndMalformedOnesOrTooManyAreInvalid() {
+        CaseListQuery query = CaseListQuery.parse(
+                Map.of("ids", List.of(" CASE-2026-000002", "CASE-2026-000001", ""), "status", List.of("OPEN")));
+
+        assertThat(query.filter().numbers()).containsExactlyInAnyOrder("CASE-2026-000001", "CASE-2026-000002");
+        assertThat(query.toQueryString()).isEqualTo("status=OPEN&ids=CASE-2026-000001&ids=CASE-2026-000002");
+        assertThat(CaseListQuery.parse(parameters(query.toQueryString()))).isEqualTo(query);
+        assertThat(query.criteria()).extracting(CaseListQuery.Criterion::name).containsExactly("status", "ids", "ids");
+        assertInvalid(Map.of("ids", List.of("CASE-2026-1")));
+        assertInvalid(Map.of("ids", List.of("1 OR 1=1")));
+        assertInvalid(Map.of(
+                "ids",
+                IntStream.rangeClosed(1, CaseFilter.MAX_NUMBERS + 1)
+                        .mapToObj(i -> String.format(Locale.ROOT, "CASE-2026-%06d", i))
+                        .toList()));
     }
 
     @Test

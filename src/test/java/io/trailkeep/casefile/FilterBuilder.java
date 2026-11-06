@@ -22,6 +22,7 @@ final class FilterBuilder {
     private @Nullable Long ownerId;
     private boolean mine;
     private String text = "";
+    private Set<String> numbers = Set.of();
 
     private FilterBuilder() {}
 
@@ -80,8 +81,13 @@ final class FilterBuilder {
         return this;
     }
 
+    FilterBuilder numbers(String... selected) {
+        numbers = Set.of(selected);
+        return this;
+    }
+
     CaseFilter build() {
         return new CaseFilter(
-                statuses, slaStates, priority, sensitivity, from, to, caseTypeId, teamId, ownerId, mine, text);
+                statuses, slaStates, priority, sensitivity, from, to, caseTypeId, teamId, ownerId, mine, text, numbers);
     }
 }

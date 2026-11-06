@@ -129,6 +129,10 @@ app:
     # max-concurrent-downloads (default 8): downloads streaming at once per replica; one more is refused with 503 and
     # Retry-After. Each holds a database connection while it streams, so keep it below the Hikari pool (10 by
     # default), and at most the async executor's core size (spring.task.execution.pool.core-size, 8 by default).
+  # CSV export of the cases list (WP-15 part 4): a filter matching more than max-rows cases is refused (422) and the
+  # person narrows it. The export streams in pages of 500 rows inside one read-only transaction.
+  export:
+    max-rows: 10000
 
 server:
   port: 8080

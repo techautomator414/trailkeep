@@ -42,6 +42,7 @@ body { color: var(--tk-ink); display: flex; flex-direction: column; min-height: 
 .tk-filter-dialog:not(:modal) { position: static; width: auto; margin: 1rem 0; }
 .tk-chip-remove { display: inline-block; min-height: 24px; color: var(--tk-ink); text-decoration: none; }
 .tk-chip-remove:hover { text-decoration: underline; }
+tr[data-tk-href] { cursor: pointer; }
 
 .tk-problem { border-left: 4px solid #b3261e; padding: 0.75rem 1rem; background: #fdf2f1; }
 

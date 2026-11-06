@@ -60,6 +60,18 @@ interface CaseRecordQueries {
     List<CaseListRow> list(CaseScope scope, CaseListQuery query, int pageSize);
 
     /**
+     * One page of the CSV export: the rows {@link #list} gives for the same query, page and size, with the subject and
+     * the description, which the list never loads. The same {@code WHERE}, so a case missing from the list is missing
+     * from the export.
+     *
+     * @param scope the caller's scope
+     * @param query the filter, with "mine" already resolved to an owner, order and page
+     * @param pageSize the rows per page
+     * @return the page's rows
+     */
+    List<CaseExportRow> export(CaseScope scope, CaseListQuery query, int pageSize);
+
+    /**
      * Every distinct team and owner pair of the cases the scope reads, archived ones included, for the filters.
      *
      * @param scope the caller's scope

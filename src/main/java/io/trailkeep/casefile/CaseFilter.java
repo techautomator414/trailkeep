@@ -27,6 +27,7 @@ import org.jspecify.annotations.Nullable;
  * @param ownerId the owner, or {@code null} for anyone; ignored when {@code mine} is set
  * @param mine whether only the person's own cases are wanted
  * @param text words every listed case contains in its number, title, description or comments; blank for any
+ * @param numbers the case numbers selected on a page, in canonical form; empty for any (the export's "selected rows")
  */
 public record CaseFilter(
         Set<CaseStatus> statuses,
@@ -39,10 +40,14 @@ public record CaseFilter(
         @Nullable Long teamId,
         @Nullable Long ownerId,
         boolean mine,
-        String text) {
+        String text,
+        Set<String> numbers) {
 
     /** The longest search text accepted, in characters. */
     public static final int MAX_TEXT = 200;
+
+    /** The most case numbers one selection may name: more than any page shows. */
+    public static final int MAX_NUMBERS = 100;
 
     /**
      * Copies the sets, strips the text and refuses a date range that ends before it starts.
@@ -52,6 +57,7 @@ public record CaseFilter(
     public CaseFilter {
         statuses = Set.copyOf(statuses);
         slaStates = Set.copyOf(slaStates);
+        numbers = Set.copyOf(numbers);
         text = text.strip();
         if (identifiedFrom != null && identifiedTo != null && identifiedFrom.isAfter(identifiedTo)) {
             throw new CaseException(Kind.INVALID, "date range ends before it starts");
@@ -64,7 +70,7 @@ public record CaseFilter(
      * @return the empty filter
      */
     public static CaseFilter none() {
-        return new CaseFilter(Set.of(), Set.of(), null, null, null, null, null, null, null, false, "");
+        return new CaseFilter(Set.of(), Set.of(), null, null, null, null, null, null, null, false, "", Set.of());
     }
 
     /** The same filter for one person: "mine" becomes that person as the owner. */
@@ -81,7 +87,8 @@ public record CaseFilter(
                         teamId,
                         userId,
                         false,
-                        text)
+                        text,
+                        numbers)
                 : this;
     }
 }

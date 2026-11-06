@@ -2,6 +2,7 @@
 // Copyright 2026 Charlie Genova and contributors
 package io.trailkeep.web;
 
+import io.trailkeep.casefile.CaseExportService;
 import io.trailkeep.casefile.CaseFilter;
 import io.trailkeep.casefile.CaseList;
 import io.trailkeep.casefile.CaseListQuery;
@@ -24,7 +25,8 @@ import org.springframework.ui.Model;
 
 /**
  * Fills the model of the cases list (BUILD_PLAN §4.4) for {@link CaseListController} and for {@link
- * SavedViewController}, which shows the page again with the "Save view" dialog open when a save is refused.
+ * SavedViewController}, which shows the page again with the "Save view" dialog open when a save is refused, and
+ * {@link CaseExportController}, which shows it with the reason when an export would be too large.
  */
 @Component
 class CaseListPage {
@@ -41,9 +43,11 @@ class CaseListPage {
             "sensitivity", "tk.list.sensitivity.");
 
     private final CaseListService cases;
+    private final CaseExportService exports;
 
-    CaseListPage(CaseListService cases) {
+    CaseListPage(CaseListService cases, CaseExportService exports) {
         this.cases = cases;
+        this.exports = exports;
     }
 
     /**
@@ -77,6 +81,7 @@ class CaseListPage {
         model.addAttribute("maxText", CaseFilter.MAX_TEXT);
         model.addAttribute("filtersOpen", false);
         model.addAttribute("saveOpen", false);
+        model.addAttribute("offersDetails", exports.offersDetails(actor.permissions()));
     }
 
     /**

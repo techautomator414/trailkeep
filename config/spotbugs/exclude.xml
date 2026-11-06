@@ -111,6 +111,14 @@
     with the same scope. Every value is echoed through th:text, and a redacted field reaches the page as "set" or
     "changed" only. Covered by CaseHistoryControllerIT, CaseHistoryAccessibilityIT and RestrictedViewAuditIT.
     Approved in the security-reviewer role on #87.
+    CaseExportController (WP-15 part 4): GET /cases/export.csv, behind login; the only write is the CASES_EXPORTED
+    audit row. CaseListQuery.parse reads the list's own query string (422 for any value no form offers); the export
+    reads through the person's CaseScope with the list's WHERE, so unreadable cases are absent; details=true is
+    honoured only for a Manager of the case's team or a Compliance Admin and silently redacted otherwise; a filter
+    over app.export.max-rows is 422; selected ids are parsed case numbers (at most 100) under the same WHERE. The
+    Content-Disposition file name is "cases-" plus a formatted timestamp, never
+    user input; every cell is quoted and defused against formula injection by CsvFormat. Covered by CsvFormatTest,
+    CaseExportIT, OracleCaseExportIT and CaseExportControllerIT. Approved in the security-reviewer role on #84.
     Approved in the security-reviewer role on #20. Listed by class, never by pattern alone, so each new controller
     is reviewed the same way.
   -->
@@ -129,6 +137,7 @@
       <Class name="io.trailkeep.web.CaseListController"/>
       <Class name="io.trailkeep.web.SavedViewController"/>
       <Class name="io.trailkeep.web.CaseHistoryController"/>
+      <Class name="io.trailkeep.web.CaseExportController"/>
     </Or>
   </Match>
   <!--
