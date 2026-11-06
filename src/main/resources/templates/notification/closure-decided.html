@@ -1,0 +1,15 @@
+<!--/* SPDX-License-Identifier: Apache-2.0. HTML part of the closure-decided mail: simple, linear HTML with the same
+     content as the text part (BUILD_PLAN §10.1), never the reason. */-->
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+<meta charset="UTF-8">
+<title th:text="|Closure ${verb} on ${caseNumber}|">Closure decided</title>
+</head>
+<body>
+<p><span th:text="${decider}">Someone</span> <span th:text="${verb}">approved</span> the request to close case
+  <span th:text="${caseNumber}">CASE</span>, &ldquo;<span th:text="${title}">title</span>&rdquo;.</p>
+<p><a th:href="${link}" th:text="|Open ${caseNumber} to read the decision|">Open the case</a></p>
+<p>You receive this because you requested the closure or own the case.</p>
+</body>
+</html>

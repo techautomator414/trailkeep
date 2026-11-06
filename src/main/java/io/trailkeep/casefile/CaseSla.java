@@ -56,6 +56,19 @@ class CaseSla {
         this.dueAt = dueAt;
     }
 
+    /**
+     * Finalises the state at closure (BUILD_PLAN §6 "Closure"): {@code MET} on or before the due time,
+     * {@code BREACHED} after it; a case without an SLA keeps {@code NOT_APPLICABLE}.
+     *
+     * @param closedAt when the case closed
+     */
+    void finish(Instant closedAt) {
+        Instant due = dueAt;
+        if (state != SlaState.NOT_APPLICABLE && due != null) {
+            state = closedAt.isAfter(due) ? SlaState.BREACHED : SlaState.MET;
+        }
+    }
+
     @Override
     public boolean equals(@Nullable Object other) {
         return this == other || (other instanceof CaseSla that && caseId != 0 && caseId == that.caseId);
