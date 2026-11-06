@@ -52,15 +52,17 @@ public interface CaseStatusService {
      *
      * @param ref the case
      * @param facts the facts the matrix decided on under the lock
+     * @param slaCycle the case's SLA cycle after the move (the new one after a reopen)
      */
-    record MovedCase(CaseRef ref, CaseFacts facts) {}
+    record MovedCase(CaseRef ref, CaseFacts facts, int slaCycle) {}
 
     /**
      * Moves a case from one status to another under its row lock: {@code NOT_FOUND}, then {@code FORBIDDEN} if the
      * matrix denies {@code action}; then, on the case re-read under the lock, {@code CONFLICT} if it is no longer in
      * {@code from} (a concurrent request or decision got there first) and {@code FORBIDDEN} if the matrix now denies
-     * the action. Closing stamps {@code CLOSED_AT} and finalises the SLA ({@code MET} or {@code BREACHED}).
-     * {@code from == to} only takes the lock (approver
+     * the action. Closing stamps {@code CLOSED_AT} and finalises the SLA ({@code MET} or {@code BREACHED});
+     * reopening a closed case clears {@code CLOSED_AT} and starts the next SLA cycle, its clock from now with the
+     * case type's policy anchored on the reopen instant. {@code from == to} only takes the lock (approver
      * reassignment). The case's version moves on, so an edit form loaded before is refused with Reload. The lock is
      * held to the end of the caller's transaction.
      *

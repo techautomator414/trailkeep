@@ -6,7 +6,7 @@ import io.trailkeep.casefile.CaseService.Actor;
 import org.jspecify.annotations.Nullable;
 
 /**
- * Deciding a closure request and reassigning its approver (BUILD_PLAN §4.3, §5.2, §6); reopening follows. Each
+ * Deciding a closure request, reassigning its approver and reopening a closed case (BUILD_PLAN §4.3, §5.2, §6). Each
  * runs under the case's row lock ({@code CaseStatusService.move}) and re-checks, on what the lock holds, that the
  * request is still pending at the version it was read with, so two decisions racing each other yield exactly one.
  * Refusals are {@code DomainException}s: 404 for an unreadable case or a request not on it, 403 if the matrix
@@ -33,6 +33,19 @@ public interface ClosureDecisionService {
      * @param reason why, 1 to 1000 characters, required unless approving
      */
     void decide(Actor actor, String caseNumber, long requestId, ClosureDecision decision, @Nullable String reason);
+
+    /**
+     * Reopens a closed case ({@code REOPEN}, Managers and Compliance Admins) with a reason of 1 to 1000 characters:
+     * back to {@code OPEN}, the next SLA cycle with its clock from now, one {@code CASE_REOPEN} row (the reason, the
+     * new cycle and the request whose approval closed the case), audited {@code CASE_REOPENED} with the reason
+     * redacted. The owner and the requester of that request (once each, never the actor) get the
+     * {@code case-reopened} mail and alert, never the reason.
+     *
+     * @param actor who reopens
+     * @param caseNumber the case number as it appears in the URL
+     * @param reason why
+     */
+    void reopen(Actor actor, String caseNumber, String reason);
 
     /**
      * Gives a pending request another approver ({@code REASSIGN_APPROVER}), chosen by the same rule as at request

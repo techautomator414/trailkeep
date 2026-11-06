@@ -33,6 +33,7 @@
 --   USER_ALERT            S I U D    -            in-app alerts; marked read and deleted by their person (V4.9)
 --   UPDATE_REQUEST        S I U      -            update requests; answered, never deleted (V4.10)
 --   CLOSURE_REQUEST       S I U      -            closure requests; decided, never deleted (V5)
+--   CASE_REOPEN           S I        -            reopens; history, never changed (V5.1)
 --   SEQ_APP_USER          SELECT     -            Oracle's sequence privilege is SELECT (NEXTVAL)
 --   SEQ_TEAM              SELECT     -
 --   SEQ_AUDIT_EVENT       SELECT     -
@@ -50,6 +51,7 @@
 --   SEQ_USER_ALERT        SELECT     -
 --   SEQ_UPDATE_REQUEST    SELECT     -
 --   SEQ_CLOSURE_REQUEST   SELECT     -
+--   SEQ_CASE_REOPEN       SELECT     -
 --
 -- Later migrations add their rows to the cursor below. Fixed rules for them: the app user has no UPDATE or DELETE
 -- on CASE_COMMENT, CASE_ATTACHMENT_CHUNK, AUDIT_EVENT and ALERT_LEDGER, and no DELETE on CASE_ATTACHMENT; it may DELETE only from CASE_COMMENT_PIN, SAVED_VIEW, USER_ALERT,
@@ -97,7 +99,9 @@ DECLARE
     UNION ALL SELECT 'UPDATE_REQUEST', 'SELECT,INSERT,UPDATE', UPPER('${app_user}') FROM DUAL
     UNION ALL SELECT 'SEQ_UPDATE_REQUEST', 'SELECT', UPPER('${app_user}') FROM DUAL
     UNION ALL SELECT 'CLOSURE_REQUEST', 'SELECT,INSERT,UPDATE', UPPER('${app_user}') FROM DUAL
-    UNION ALL SELECT 'SEQ_CLOSURE_REQUEST', 'SELECT', UPPER('${app_user}') FROM DUAL;
+    UNION ALL SELECT 'SEQ_CLOSURE_REQUEST', 'SELECT', UPPER('${app_user}') FROM DUAL
+    UNION ALL SELECT 'CASE_REOPEN', 'SELECT,INSERT', UPPER('${app_user}') FROM DUAL
+    UNION ALL SELECT 'SEQ_CASE_REOPEN', 'SELECT', UPPER('${app_user}') FROM DUAL;
   keep PLS_INTEGER;
 BEGIN
   FOR w IN wanted LOOP

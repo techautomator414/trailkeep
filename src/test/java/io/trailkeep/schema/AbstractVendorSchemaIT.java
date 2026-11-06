@@ -269,6 +269,16 @@ abstract class AbstractVendorSchemaIT {
     }
 
     @Test
+    void reopensAreMigratedWithTheirEntity() {
+        assertThat(Arrays.stream(flyway.info().applied()).map(MigrationInfo::getScript))
+                .contains("V5_1__case_reopen.sql");
+        assertThat(SchemaMetadataDiff.expectedColumns(entityManagerFactory))
+                .containsEntry("CASE_REOPEN.REASON", column("CASE_REOPEN", "REASON", false, 1000L))
+                .containsKeys("CASE_REOPEN.CASE_ID", "CASE_REOPEN.SLA_CYCLE");
+        assertThat(nullableColumns(Set.of("CASE_REOPEN"))).containsExactly("CASE_REOPEN.CLOSURE_REQUEST_ID");
+    }
+
+    @Test
     void closureRequestsAreMigratedWithTheirEntity() {
         assertThat(Arrays.stream(flyway.info().applied()).map(MigrationInfo::getScript))
                 .contains("V5__closure.sql");
