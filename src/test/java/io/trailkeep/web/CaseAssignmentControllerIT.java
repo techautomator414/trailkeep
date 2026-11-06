@@ -146,7 +146,9 @@ class CaseAssignmentControllerIT {
     void analystsWhoDoNotOwnTheCaseAreNotOfferedTheActionsAndAreRefused() throws Exception {
         mvc.perform(get("/cases/" + number))
                 .andExpect(status().isOk())
-                .andExpect(content().string(not(containsString("dialog-open=\"tk-"))))
+                // Request update (WP-18) is theirs to offer; reassign and restrict are not.
+                .andExpect(content().string(not(containsString("dialog-open=\"tk-reassign"))))
+                .andExpect(content().string(not(containsString("dialog-open=\"tk-RESTRICTED"))))
                 .andExpect(content().string(not(containsString("/reassign\""))));
         mvc.perform(get("/cases/" + number + "/reassign")).andExpect(status().isForbidden());
         mvc.perform(reassign(number, TEAM, COLLEAGUE, "0")).andExpect(status().isForbidden());
