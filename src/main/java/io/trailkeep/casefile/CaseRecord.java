@@ -175,6 +175,24 @@ class CaseRecord {
         return status;
     }
 
+    long getCaseTypeId() {
+        return caseTypeId;
+    }
+
+    /**
+     * Moves the case to a status ({@link CaseStatusService#move}, already checked); closing stamps the closing time.
+     *
+     * @param to the new status
+     * @param actorId who moves it
+     * @param now when
+     */
+    void moveTo(CaseStatus to, long actorId, Instant now) {
+        this.status = to;
+        this.closedAt = to == CaseStatus.CLOSED ? now : null;
+        this.updatedAt = now;
+        this.updatedBy = actorId;
+    }
+
     Sensitivity getSensitivity() {
         return sensitivity;
     }

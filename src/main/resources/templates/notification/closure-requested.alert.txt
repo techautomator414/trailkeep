@@ -1,0 +1,2 @@
+/*[- SPDX-License-Identifier: Apache-2.0. In-app alert of the closure-requested mail: one line, never the summary. -]*/
+[(${requester})] asked you to approve closing [(${caseNumber})], "[(${title})]"
