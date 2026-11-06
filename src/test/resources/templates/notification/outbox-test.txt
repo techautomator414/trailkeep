@@ -1,0 +1,4 @@
+/*[- SPDX-License-Identifier: Apache-2.0. Test-only mail template for the outbox ITs. -]*/
+Hello [(${name})],
+
+Case [(${caseNumber})] has news for you: [(${link})]

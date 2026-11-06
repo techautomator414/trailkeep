@@ -193,6 +193,43 @@ abstract class AbstractVendorSchemaIT {
     }
 
     @Test
+    void theOutboxIsMigratedWithItsEntityAndItsClaimIndex() throws SQLException {
+        assertThat(Arrays.stream(flyway.info().applied()).map(MigrationInfo::getScript))
+                .contains("V4_8__notification_outbox.sql");
+        assertThat(SchemaMetadataDiff.expectedColumns(entityManagerFactory))
+                .containsEntry("NOTIFICATION_OUTBOX.RECIPIENT", column("NOTIFICATION_OUTBOX", "RECIPIENT", false, 320L))
+                .containsEntry("NOTIFICATION_OUTBOX.SUBJECT", column("NOTIFICATION_OUTBOX", "SUBJECT", false, 200L))
+                .containsKeys("NOTIFICATION_OUTBOX.BODY_TEXT", "NOTIFICATION_OUTBOX.BODY_HTML");
+        assertThat(nullableColumns(Set.of("NOTIFICATION_OUTBOX")))
+                .containsExactlyInAnyOrder(
+                        "NOTIFICATION_OUTBOX.CASE_ID",
+                        "NOTIFICATION_OUTBOX.REPORT_RUN_ID",
+                        "NOTIFICATION_OUTBOX.LOCKED_UNTIL",
+                        "NOTIFICATION_OUTBOX.SENT_AT",
+                        "NOTIFICATION_OUTBOX.LAST_ERROR");
+        List<String> indexed = new ArrayList<>();
+        try (Connection connection = dataSource.getConnection()) {
+            DatabaseMetaData metaData = connection.getMetaData();
+            String table = metaData.storesLowerCaseIdentifiers() ? "notification_outbox" : "NOTIFICATION_OUTBOX";
+            try (ResultSet rows = metaData.getIndexInfo(null, databaseProperties.schema(), table, false, true)) {
+                while (rows.next()) {
+                    String name = rows.getString("INDEX_NAME");
+                    if (name != null) {
+                        indexed.add(name.toUpperCase(Locale.ROOT) + ":" + rows.getShort("ORDINAL_POSITION") + ":"
+                                + rows.getString("COLUMN_NAME").toUpperCase(Locale.ROOT));
+                    }
+                }
+            }
+        }
+
+        // Oracle indexes a TIMESTAMP WITH TIME ZONE column through a hidden SYS_EXTRACT_UTC column (SYS_NC…$).
+        assertThat(indexed)
+                .contains("IX_OUTBOX_STATUS_NEXT:1:STATUS")
+                .anySatisfy(
+                        entry -> assertThat(entry).matches("IX_OUTBOX_STATUS_NEXT:2:(NEXT_ATTEMPT_AT|SYS_NC\\d+\\$)"));
+    }
+
+    @Test
     void savedViewsAreMigratedWithTheirEntityAndEachPersonsNamesAreUnique() throws SQLException {
         assertThat(Arrays.stream(flyway.info().applied()).map(MigrationInfo::getScript))
                 .contains("V4_7__saved_view.sql");

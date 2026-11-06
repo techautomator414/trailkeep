@@ -9,6 +9,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Notification outbox, schema and claim (WP-17 part a): `NOTIFICATION_OUTBOX` (`V4_8__notification_outbox.sql`,
+  `NotificationOutbox` entity, status `PENDING`/`SENDING`/`SENT`/`FAILED`, index `(STATUS, NEXT_ATTEMPT_AT)`; the
+  runtime user may SELECT, INSERT and UPDATE it, never DELETE, and the purge user may trim it).
+  `NotificationService.enqueue(recipient, templateId, model, caseId)` renders a mail from its templates under
+  `templates/notification/` and writes the row in the caller's transaction (`MANDATORY`), so a change and its mail
+  commit together. `OutboxJdbcDao` holds the state machine: the two-step native claim (up to 50 candidate ids without a
+  lock, then `FOR UPDATE SKIP LOCKED` on that `IN` list, marked `SENDING` with a lease, committed before any I/O), the
+  release (sent, retry at a later time, or failed) and the reaper for lapsed leases. Proven on PostgreSQL and Oracle by
+  two concurrent claimers that never share a row. No dispatcher or SMTP yet (part b).
 - Cases list performance at 50 000 cases (WP-15 part 5): a deterministic synthetic seed
   (`perf/seed-cases-postgresql.sql`), `PerfCasesListIT` (tagged `perf`, run by the new `perf-it` profile's `perf-50k`
   execution and by the nightly `perf` job, which replaces the k6 placeholder) that measures the list, the sorts, a

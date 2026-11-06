@@ -1,0 +1,2 @@
+/*[- SPDX-License-Identifier: Apache-2.0. Test-only mail template for the outbox ITs. -]*/
+[(${caseNumber})]: a synthetic test mail

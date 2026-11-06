@@ -77,7 +77,8 @@ abstract class AbstractDatabaseGrantsIT {
             Map.entry("SPRING_SESSION", "PRIMARY_ID"),
             Map.entry("SPRING_SESSION_ATTRIBUTES", "SESSION_PRIMARY_ID"),
             Map.entry("OIDC_SESSION", "SESSION_ID"),
-            Map.entry("SAVED_VIEW", "ID"));
+            Map.entry("SAVED_VIEW", "ID"),
+            Map.entry("NOTIFICATION_OUTBOX", "ID"));
 
     /** What the runtime user may do; anything absent is denied. */
     static final Map<String, Set<Privilege>> APP_USER_GRANTS = Map.ofEntries(
@@ -101,10 +102,13 @@ abstract class AbstractDatabaseGrantsIT {
             Map.entry("SPRING_SESSION_ATTRIBUTES", EnumSet.allOf(Privilege.class)),
             Map.entry("OIDC_SESSION", EnumSet.allOf(Privilege.class)),
             // A person deletes their own views; a view is never changed, so no UPDATE.
-            Map.entry("SAVED_VIEW", EnumSet.of(Privilege.SELECT, Privilege.INSERT, Privilege.DELETE)));
+            Map.entry("SAVED_VIEW", EnumSet.of(Privilege.SELECT, Privilege.INSERT, Privilege.DELETE)),
+            // Mail is sent and its status changed, never deleted by the app: trimming sent rows is the purge user's.
+            Map.entry("NOTIFICATION_OUTBOX", EnumSet.of(Privilege.SELECT, Privilege.INSERT, Privilege.UPDATE)));
 
-    /** What the purge user may do on these tables: nothing yet; its case-data grants arrive with WP-24 (purge). */
-    static final Map<String, Set<Privilege>> PURGE_USER_GRANTS = Map.of();
+    /** What the purge user may do on these tables: trim the outbox (V4.8); its case-data grants arrive with WP-24. */
+    static final Map<String, Set<Privilege>> PURGE_USER_GRANTS =
+            Map.of("NOTIFICATION_OUTBOX", EnumSet.of(Privilege.SELECT, Privilege.DELETE));
 
     static final List<String> SEQUENCES = List.of(
             "SEQ_APP_USER",
@@ -116,7 +120,8 @@ abstract class AbstractDatabaseGrantsIT {
             "SEQ_CASE_NUMBER",
             "SEQ_CASE_COMMENT",
             "SEQ_CASE_ATTACHMENT",
-            "SEQ_SAVED_VIEW");
+            "SEQ_SAVED_VIEW",
+            "SEQ_NOTIFICATION_OUTBOX");
 
     /**
      * One open connection per grantee for the whole class. Opening a connection per probe (about 100 in a burst, each
