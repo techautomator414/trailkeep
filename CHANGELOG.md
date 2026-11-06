@@ -23,6 +23,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   a case it may read, by a subquery on the case entity with the scope's own predicate, so an unreadable or absent case
   gives an empty page with a total of zero; events with no case, and the recent-events list, stay invisible to
   principals. `CaseRootedInvisibilityIT` covers the new methods. No migration.
+- CSV export of the cases list (WP-15 part 4): "Export CSV" under the results downloads
+  `GET /cases/export.csv?<the list's query>`, every case the person reads that matches the filter, in the list's
+  order, not just the page. It streams in pages of 500 inside one read-only transaction, with the list's own
+  `WHERE`, so restricted and other-team cases are absent exactly as from the list. The file is
+  `cases-<yyyyMMdd-HHmm>.csv`, UTF-8 with a byte order mark and CRLF line ends: the list's columns plus subject and
+  description. Every cell is quoted, and a cell starting with `=`, `+`, `-`, `@`, a tab or a carriage return gets a
+  leading apostrophe (hand-rolled `CsvFormat`, no library). Subject and description read `[redacted]` unless a
+  Manager of the case's team or a Compliance Admin ticks "Include subject and description"; nobody else sees the
+  box, and a forced `details=true` is silently ignored. A filter matching more than `app.export.max-rows` (default
+  10000) is 422 with the reason next to the control. Every export is audited (`CASES_EXPORTED` with row count, query
+  and `details`). Rows ticked on the page (a labelled box per row, and "select all on this page") export alone through
+  the repeatable `ids` parameter, at most 100 and still through the scope; a click on a row opens its case, and the
+  case-number link stays the keyboard path.
 - Saved views (WP-15 part 3): "Save view" on a filtered or sorted cases list opens a native `<dialog>` asking for a
   name (`save=1` renders it open without JavaScript) and posts it with CSRF to `/cases/views`. The view stores the
   canonical query string of the filter and order on page 1 in the new `SAVED_VIEW` table (`V4_7__saved_view.sql`,

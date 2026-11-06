@@ -163,6 +163,31 @@
     resetSessionTimer();
   }
 
+  /**
+   * The cases list: a click on a row opens its case (the case-number link stays the keyboard path), and the "select
+   * all on this page" box, hidden without script, ticks or clears every row's box.
+   */
+  function wireRows() {
+    document.addEventListener('click', function (event) {
+      const row = event.target.closest('tr[data-tk-href]');
+      if (row && !event.target.closest('a, button, input, label, select, textarea')) {
+        window.location.assign(row.getAttribute('data-tk-href'));
+      }
+    });
+    document.addEventListener('change', function (event) {
+      if (event.target.matches('[data-tk-select-all]')) {
+        document.querySelectorAll('input[name="ids"][form="tk-export"]').forEach(function (box) {
+          box.checked = event.target.checked;
+        });
+      }
+    });
+    const reveal = function () {
+      document.querySelectorAll('[data-tk-select-all]').forEach(function (box) { box.hidden = false; });
+    };
+    reveal();
+    document.addEventListener('htmx:afterSettle', reveal);
+  }
+
   /** Forms: Ctrl+S (Cmd+S) submits a [data-tk-ctrl-s] form; an error summary takes focus; a toast is announced. */
   function wireForms() {
     document.addEventListener('keydown', function (event) {
@@ -184,6 +209,7 @@
 
   document.addEventListener('DOMContentLoaded', function () {
     wireForms();
+    wireRows();
     wireDialogs();
     wireHtmx();
     wireSession();
