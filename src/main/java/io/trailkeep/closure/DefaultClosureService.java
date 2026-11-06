@@ -84,14 +84,14 @@ class DefaultClosureService implements ClosureService {
     @Override
     @Transactional(readOnly = true)
     public List<Approver> approvers(Actor actor, String caseNumber) {
-        return approvers(actor, statuses.closable(actor, caseNumber));
+        return approversOf(actor, statuses.closable(actor, caseNumber));
     }
 
     @Override
     @Transactional(readOnly = true)
     public ClosureChoices choices(Actor actor, String caseNumber) {
         ClosableCase closable = statuses.closable(actor, caseNumber);
-        return new ClosureChoices(closable.outcomes(), approvers(actor, closable));
+        return new ClosureChoices(closable.outcomes(), approversOf(actor, closable));
     }
 
     @Override
@@ -117,7 +117,7 @@ class DefaultClosureService implements ClosureService {
                         r.getFollowUpActions()));
     }
 
-    private List<Approver> approvers(Actor actor, ClosableCase closable) {
+    private List<Approver> approversOf(Actor actor, ClosableCase closable) {
         List<Long> ids = permissions.approverCandidates(
                 closable.facts(), actor.permissions().userId());
         Map<Long, String> names = directory.displayNames(ids);

@@ -39,7 +39,9 @@ enum CaseNotice {
     /** An update requested from someone. */
     UPDATE_REQUESTED,
     /** An update request marked answered. */
-    UPDATE_ANSWERED;
+    UPDATE_ANSWERED,
+    /** Closure requested; the case is pending closure. */
+    CLOSURE_REQUESTED;
 
     private static final String ATTRIBUTE = "tk.caseNotice";
 
