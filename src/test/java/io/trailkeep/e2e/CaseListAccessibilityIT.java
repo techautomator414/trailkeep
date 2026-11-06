@@ -26,9 +26,11 @@ import io.trailkeep.user.UserPermissions;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
@@ -44,12 +46,14 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 
 /**
- * The cases list (WP-15 part 1a) in a real browser after a real OIDC login as the dev realm's {@code
+ * The cases list (WP-15 parts 1a and 1b) in a real browser after a real OIDC login as the dev realm's {@code
  * compliance.admin}, who reads every team's cases, driven from the keyboard: Tab to the Title header, Enter to sort,
  * Enter again to reverse, Tab on to the SLA header. After each htmx swap focus stays on the header used, the URL
  * carries the order, {@code aria-sort} follows, and axe finds 0 violations with no CSP problem in the console. A
  * standard and a restricted case created through {@link CaseService}: the restricted one is listed first (newest)
- * and marked; cases other tests commit only add rows.
+ * and marked; cases other tests commit only add rows. The search walk types a per-run word into the search box and
+ * presses Enter: focus moves to the status line with the count, the URL carries {@code q}, sorting keeps the search,
+ * and the empty result has no violations either.
  */
 // "IT" is the Failsafe suffix Part B mandates for integration tests, not an abbreviation.
 @SuppressWarnings("checkstyle:AbbreviationAsWordInName")
@@ -155,6 +159,43 @@ class CaseListAccessibilityIT {
         list.tabTo("tk-sort-due", 6);
         list.pressEnterAndWaitForFocusOn("tk-sort-due");
         assertThat(list.sortStates()).containsExactly("SLA=ascending");
+        assertThat(shell.axeViolations()).isEmpty();
+        assertThat(consoleProblems).isEmpty();
+    }
+
+    @Test
+    void searchingFromTheKeyboardMovesFocusToTheCountAndHasNoViolations() {
+        String word = "Tern" + UUID.randomUUID().toString().replace("-", "").substring(0, 10);
+        CaseSeed seed = new CaseSeed(jdbc);
+        long team = seed.team();
+        long analyst = seed.user();
+        seed.member(analyst, team, TeamRole.ANALYST);
+        CaseService.Actor actor = new CaseService.Actor(
+                new UserPermissions(analyst, false, Set.of(), Map.of(team, TeamRole.ANALYST)), "Synthetic Analyst");
+        final CaseNumber bravo =
+                cases.create(actor, fields(seed, team, analyst, "Bravo " + word, Sensitivity.STANDARD));
+        final CaseNumber alpha =
+                cases.create(actor, fields(seed, team, analyst, "Alpha " + word, Sensitivity.RESTRICTED));
+        page.navigate(KEYCLOAK.app("/cases"));
+        page.waitForLoadState();
+        ShellPage shell = new ShellPage(page);
+        CasesListPage list = new CasesListPage(page);
+        assertThat(shell.axeViolations()).isEmpty();
+
+        list.search(word.toLowerCase(Locale.ROOT));
+        assertThat(list.status()).isEqualTo("2 cases found.");
+        assertThat(page.url()).contains("q=" + word.toLowerCase(Locale.ROOT));
+        assertThat(list.numbers()).containsExactly(alpha.toString(), bravo.toString());
+        assertThat(shell.axeViolations()).isEmpty();
+
+        list.tabTo("tk-sort-title", 4);
+        list.pressEnterAndWaitForFocusOn("tk-sort-title");
+        assertThat(list.numbers()).containsExactly(alpha.toString(), bravo.toString());
+        assertThat(page.url()).contains("q=" + word.toLowerCase(Locale.ROOT), "sort=title");
+
+        page.navigate(KEYCLOAK.app("/cases?q=Nothing" + word));
+        page.waitForLoadState();
+        assertThat(list.status()).isEqualTo("No cases found.");
         assertThat(shell.axeViolations()).isEmpty();
         assertThat(consoleProblems).isEmpty();
     }

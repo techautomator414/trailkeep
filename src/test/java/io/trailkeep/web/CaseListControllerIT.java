@@ -40,7 +40,7 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * The cases list page (GET only, so no CSRF case): a Reader sees the team's standard case and not its restricted
  * one, in the rows, the count or the page; the owner sees both; a System Admin and another team's Manager get an
- * empty list, not an error; an unknown sort column and other values no page offers are 422; an htmx request gets
+ * empty list, not an error; an unknown sort column and other values no form offers are 422; an htmx request gets
  * only the results fragment, focus marked on the header that asked; anonymous requests go to the identity provider.
  * Permissions come from seeded database rows.
  */
@@ -114,11 +114,12 @@ class CaseListControllerIT {
     @Test
     @WithAppUser(id = ANALYST, team = TEAM, teamRole = TeamRole.ANALYST)
     void theOwnerSeesBothAndTheRestrictedOneIsMarked() throws Exception {
-        mvc.perform(get("/cases"))
+        mvc.perform(get("/cases").param("owner", "me").param("q", "synthetic"))
                 .andExpect(status().isOk())
                 .andExpect(content().string(containsString("2 cases found.")))
                 .andExpect(content().string(containsString(restricted.toString())))
-                .andExpect(content().string(containsString("Restricted")));
+                .andExpect(content().string(containsString("Restricted")))
+                .andExpect(content().string(containsString("<option value=\"me\" selected=\"selected\">Me</option>")));
     }
 
     @Test
@@ -144,7 +145,8 @@ class CaseListControllerIT {
     @WithAppUser(id = READER, team = TEAM, teamRole = TeamRole.READER)
     void valuesNoFormOffersAreUnprocessable() throws Exception {
         for (String[] bad : new String[][] {
-            {"sort", "subject"}, {"sort", "description"}, {"sort", "title desc"}, {"dir", "up"}, {"page", "-"}
+            {"sort", "subject"}, {"sort", "description"}, {"sort", "title desc"}, {"dir", "up"}, {"page", "-"},
+            {"status", "GONE"}, {"type", "1 or 1=1"}, {"team", "x"}, {"owner", "someone"}, {"q", "x".repeat(201)}
         }) {
             mvc.perform(get("/cases").param(bad[0], bad[1]))
                     .andExpect(status().isUnprocessableContent())
@@ -169,7 +171,7 @@ class CaseListControllerIT {
                 .getContentAsString();
 
         assertThat(fragment)
-                .doesNotContain("<html", "<h1")
+                .doesNotContain("<html", "<h1", "tk-case-filter")
                 .contains("aria-sort=\"ascending\"", "data-tk-announce=\"1 case found.\"")
                 .containsPattern("id=\"tk-sort-title\"[^>]*data-tk-focus=\"true\"")
                 .containsPattern("href=\"/cases\\?sort=title&amp;dir=desc\"");
@@ -181,6 +183,44 @@ class CaseListControllerIT {
                 .getResponse()
                 .getContentAsString();
         assertThat(hostile).doesNotContain("onclick").containsPattern("id=\"tk-results-status\"[^>]*data-tk-focus");
+    }
+
+    @Test
+    @WithAppUser(id = READER, team = TEAM, teamRole = TeamRole.READER)
+    void theFilterFormOffersOnlyReadableTeamsAndOwnersAndKeepsItsStateInTheLinks() throws Exception {
+        String page = mvc.perform(
+                        get("/cases").param("team", String.valueOf(TEAM)).param("status", "OPEN"))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        assertThat(page)
+                .contains("role=\"search\"", "<label class=\"form-label\" for=\"tk-q\">Search</label>")
+                .contains("<option value=\"" + TEAM + "\" selected=\"selected\">Synthetic List Team</option>")
+                .contains("<option value=\"" + ANALYST + "\">Synthetic List Analyst</option>")
+                .contains("<option value=\"OPEN\" selected=\"selected\">Open</option>")
+                .doesNotContain("Synthetic List Other Team", "Synthetic List Other Manager");
+
+        String fragment = mvc.perform(get("/cases")
+                        .param("q", "listed 50%")
+                        .header("HX-Request", "true")
+                        .header("HX-Trigger", "tk-case-filter"))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        assertThat(fragment)
+                .contains("data-tk-announce=\"No cases found.\"")
+                .containsPattern("id=\"tk-results-status\"[^>]*data-tk-focus=\"true\"");
+        String found = mvc.perform(get("/cases").param("q", "LISTED").header("HX-Request", "true"))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        assertThat(found)
+                .contains("data-tk-announce=\"1 case found.\"", standard.toString())
+                .contains("href=\"/cases?q=LISTED&amp;sort=title&amp;dir=asc\"")
+                .doesNotContain(restricted.toString());
     }
 
     @Test

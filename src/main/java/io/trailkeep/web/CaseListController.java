@@ -2,10 +2,12 @@
 // Copyright 2026 Charlie Genova and contributors
 package io.trailkeep.web;
 
+import io.trailkeep.casefile.CaseFilter;
 import io.trailkeep.casefile.CaseListQuery;
 import io.trailkeep.casefile.CaseListService;
 import io.trailkeep.casefile.CaseSort;
 import io.trailkeep.security.TrailkeepOidcUser;
+import io.trailkeep.shared.CaseStatus;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.Arrays;
 import java.util.Map;
@@ -20,10 +22,10 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 
 /**
- * The cases list (BUILD_PLAN §4.4): a GET with the order and page in the query string, read by {@link
- * CaseListQuery#parse}, which answers 422 for a value no page offers (an unknown sort column, for one). Which cases
+ * The cases list (BUILD_PLAN §4.4): a GET with the filter, order and page in the query string, read by {@link
+ * CaseListQuery#parse}, which answers 422 for a value no form offers (an unknown sort column, for one). Which cases
  * are counted and listed is decided by {@link CaseListService} through the person's scope. An htmx request (a sort
- * header or a page link) gets only the results fragment; app.js then moves focus to the control that
+ * header, a page link or the filter form) gets only the results fragment; app.js then moves focus to the control that
  * asked for it, found by the {@code HX-Trigger} id, or else to the status line, and announces the count.
  */
 @Controller
@@ -54,6 +56,8 @@ class CaseListController {
         model.addAttribute("query", query);
         model.addAttribute("list", cases.list(page.actor(principal), query));
         model.addAttribute("columns", COLUMNS);
+        model.addAttribute("statuses", CaseStatus.values());
+        model.addAttribute("maxText", CaseFilter.MAX_TEXT);
         if (!"true".equals(request.getHeader("HX-Request"))) {
             return "casefile/cases";
         }

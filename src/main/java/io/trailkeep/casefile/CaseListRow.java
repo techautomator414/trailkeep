@@ -34,4 +34,13 @@ record CaseListRow(
         long ownerId,
         Instant openedAt,
         @Nullable SlaState slaState,
-        @Nullable Instant slaDueAt) {}
+        @Nullable Instant slaDueAt) {
+
+    /**
+     * A team and an owner that occur together on some readable case, for the filters' choices.
+     *
+     * @param teamId the team
+     * @param ownerId the owner
+     */
+    record TeamOwner(long teamId, long ownerId) {}
+}

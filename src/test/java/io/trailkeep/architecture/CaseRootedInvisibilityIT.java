@@ -9,6 +9,7 @@ import com.tngtech.archunit.base.DescribedPredicate;
 import com.tngtech.archunit.core.domain.JavaClass;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.tngtech.archunit.core.importer.ImportOption;
+import io.trailkeep.casefile.CaseFilter;
 import io.trailkeep.casefile.CaseListQuery;
 import io.trailkeep.casefile.CaseScopeService;
 import io.trailkeep.shared.CaseNumber;
@@ -47,9 +48,9 @@ import org.springframework.transaction.annotation.Transactional;
  * Every declared method of every {@code @CaseRooted} repository, found by scanning production code, answers an
  * unreadable case exactly as it answers an absent one (WP-11 acceptance, ADR-0005). A new repository is covered
  * without touching this test; a method with a parameter type this test cannot supply fails it until it learns one.
- * A method that takes no case, such as the cases list's count and page (with the default query),
- * is asked before the cases exist and again after: someone who may not read them gets the same answer both times, so
- * the unreadable cases are exactly as if absent, while the owner's answer changes.
+ * A method that takes no case, such as the cases list's count, page and filter choices (with an empty filter and the
+ * default query), is asked before the cases exist and again after: someone who may not read them gets the same answer
+ * both times, so the unreadable cases are exactly as if absent, while the owner's answer changes.
  */
 // "IT" is the Failsafe suffix Part B mandates for integration tests, not an abbreviation.
 @SuppressWarnings("checkstyle:AbbreviationAsWordInName")
@@ -200,6 +201,9 @@ class CaseRootedInvisibilityIT {
         }
         if (type == int.class || type == Integer.class) {
             return LIMIT;
+        }
+        if (type == CaseFilter.class) {
+            return CaseFilter.none();
         }
         if (type == CaseListQuery.class) {
             return CaseListQuery.parse(Map.of());
