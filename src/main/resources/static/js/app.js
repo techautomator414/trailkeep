@@ -32,12 +32,24 @@
     }
   }
 
-  /** Native <dialog> helper: modal, Esc closes (built in), focus returns to the control that opened it. */
+  /**
+   * Native <dialog> helper: modal, Esc closes (built in), focus returns to the control that opened it. Focus lands on
+   * the dialog's [data-tk-dialog-focus] control if it has one, else on its heading. A dialog the server rendered open
+   * (the page without JavaScript) is closed first, so it can be shown modal.
+   */
   const dialogs = {
     open: function (dialog, opener) {
       dialog.tkOpener = opener || document.activeElement;
+      if (dialog.open) {
+        dialog.close();
+      }
       dialog.showModal();
-      focusRegion(dialog);
+      const first = dialog.querySelector('[data-tk-dialog-focus]');
+      if (first) {
+        first.focus();
+      } else {
+        focusRegion(dialog);
+      }
     },
     close: function (dialog) {
       dialog.close();
@@ -57,6 +69,8 @@
       }
       const closer = event.target.closest('[data-tk-dialog-close]');
       if (closer) {
+        // A closer may be a link back to the page, which is what it does without JavaScript.
+        event.preventDefault();
         dialogs.close(closer.closest('dialog'));
       }
     });
@@ -90,6 +104,14 @@
     });
     document.addEventListener('htmx:afterSwap', function (event) {
       const root = event.detail.target;
+      // A form whose controls sit in a dialog (the cases list's filters) closes it once its results are in, and
+      // focus goes to the results rather than back to the dialog's opener.
+      const source = event.detail.requestConfig && event.detail.requestConfig.elt;
+      const dialog = source instanceof HTMLFormElement ? source.querySelector('dialog[open]') : null;
+      if (dialog) {
+        dialog.tkOpener = null;
+        dialog.close();
+      }
       focusRegion(root);
       const message = root.querySelector('[data-tk-announce]');
       announce(message ? message.getAttribute('data-tk-announce') : null);

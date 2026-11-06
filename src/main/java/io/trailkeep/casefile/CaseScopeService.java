@@ -25,6 +25,17 @@ public interface CaseScopeService {
     CaseScope forUser(UserPermissions user);
 
     /**
+     * Whether a person reads restricted cases beyond their own: the permission matrix lets them {@code VIEW} a
+     * restricted case they do not own, in some team or in every team (a team's Manager, a Compliance Admin). An
+     * Analyst, who reads only the restricted cases they own, does not. The cases list offers its sensitivity filter
+     * only to such a person; the filter itself never reaches beyond the scope.
+     *
+     * @param user the person's permissions, rebuilt for this request
+     * @return {@code true} if they read some other person's restricted cases
+     */
+    boolean readsOthersRestricted(UserPermissions user);
+
+    /**
      * Restricts a query over a table whose rows hold their case as an id, in another module, to one case the scope
      * reads (ADR-0005). It adds a {@code CaseRecord} root to the query, joins it on {@code caseId}, matches the case
      * number and applies {@link CaseScope#toPredicate}, so the case entity never leaves this module. A

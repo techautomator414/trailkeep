@@ -64,6 +64,13 @@ class DefaultCaseScopeService implements CaseScopeService {
     }
 
     @Override
+    public boolean readsOthersRestricted(UserPermissions user) {
+        return views(user, NO_TEAM, Sensitivity.RESTRICTED, false)
+                || user.teamRoles().keySet().stream()
+                        .anyMatch(team -> views(user, team, Sensitivity.RESTRICTED, false));
+    }
+
+    @Override
     public Predicate readableCase(
             CaseScope scope, CaseNumber caseNumber, Expression<?> caseId, CriteriaQuery<?> query, CriteriaBuilder cb) {
         Root<CaseRecord> record = query.from(CaseRecord.class);

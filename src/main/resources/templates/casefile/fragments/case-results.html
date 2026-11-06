@@ -1,9 +1,17 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- The cases list's results, the full page's #tk-case-results and the htmx response alike. After a swap app.js
      focuses [data-tk-focus]: the sort header or page link that asked (its id came back as "focus"), or else the
-     status line, whose text the live region announces. The sorted column carries aria-sort; the others none. -->
+     status line, whose text the live region announces. The sorted column carries aria-sort; the others none. Each
+     active filter criterion is a chip linking to the same list without it, so removing one is a plain GET. -->
 <th:block xmlns:th="http://www.thymeleaf.org" th:fragment="results"
           th:with="found=#{tk.list.found(${list.total})}, here=${focus == null or focus.isEmpty()}">
+  <ul th:unless="${chips.isEmpty()}" class="tk-chips" th:aria-label="#{tk.list.active}">
+    <li th:each="c : ${chips}" th:with="what=#{'tk.list.chip.' + ${c.name}},
+        value=${c.key.isEmpty()} ? ${c.value} : #{${c.key}}, url=@{/cases} + (${c.without.isEmpty()} ? '' : '?' + ${c.without})">
+      <a class="tk-chip tk-chip-remove" th:href="${url}" th:attr="hx-get=${url}" hx-target="#tk-case-results"
+         hx-push-url="true" th:aria-label="#{tk.list.chip.remove(${what},${value})}"><span
+         th:text="#{tk.list.chip(${what},${value})}">Status: Open</span> <span aria-hidden="true">×</span></a></li>
+  </ul>
   <p id="tk-results-status" class="tk-results-status" tabindex="-1"
      th:attr="data-tk-focus=${here ? 'true' : null},data-tk-announce=${found}"
      th:text="${list.pages > 1} ? ${found} + ' ' + #{tk.list.page(${list.page},${list.pages})} : ${found}">

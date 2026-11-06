@@ -107,7 +107,7 @@ abstract class AbstractCaseListSearchIT {
     }
 
     private static CaseListQuery query(String text) {
-        return new CaseListQuery(new CaseFilter(Set.of(), null, null, null, false, text), CaseSort.OPENED, true, 1);
+        return new CaseListQuery(FilterBuilder.filter().text(text).build(), CaseSort.OPENED, true, 1);
     }
 
     private CaseNumber create(String title, String description, Sensitivity sensitivity) {

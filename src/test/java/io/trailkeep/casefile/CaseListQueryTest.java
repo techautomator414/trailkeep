@@ -4,23 +4,32 @@ package io.trailkeep.casefile;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.tuple;
 
 import io.trailkeep.shared.CaseStatus;
 import io.trailkeep.shared.DomainException.Kind;
+import io.trailkeep.shared.Sensitivity;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Set;
 import java.util.stream.Collectors;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.web.util.UriComponentsBuilder;
 
-/** Reading the cases list's query string: the sort allow-list, the other refusals, and the round trip to links. */
+/**
+ * Reading the cases list's query string: the sort allow-list, the other refusals (unknown SLA states, priorities and
+ * sensitivities, dates that are not ISO, a range that ends before it starts), the round trip to links, and the chips
+ * that remove one criterion each.
+ */
 class CaseListQueryTest {
+
+    private static final LocalDate OCTOBER_1 = LocalDate.of(2026, 10, 1);
+    private static final LocalDate OCTOBER_31 = LocalDate.of(2026, 10, 31);
 
     @Test
     void noParametersMeanTheFirstPageNewestFirstWithoutArchivedCases() {
@@ -59,33 +68,116 @@ class CaseListQueryTest {
         assertInvalid(Map.of("page", List.of("two")));
         assertInvalid(Map.of("dir", List.of("sideways")));
         assertInvalid(Map.of("q", List.of("x".repeat(CaseFilter.MAX_TEXT + 1))));
+        assertInvalid(Map.of("sla", List.of("LATE")));
+        assertInvalid(Map.of("sla", List.of("OVERDUE", "ON_TRACK;")));
+        assertInvalid(Map.of("priority", List.of("URGENT")));
+        assertInvalid(Map.of("sensitivity", List.of("SECRET")));
+        assertInvalid(Map.of("from", List.of("01/10/2026")));
+        assertInvalid(Map.of("to", List.of("2026-02-30")));
+        assertInvalid(Map.of("from", List.of("2026-10-01T00:00")));
+        assertInvalid(Map.of("from", List.of("2026-10-02"), "to", List.of("2026-10-01")));
     }
 
     @Test
     void fullQueriesRoundTripThroughTheirQueryStringAndUnknownParametersAreIgnored() {
-        CaseListQuery query = CaseListQuery.parse(Map.of(
-                "q", List.of("  50% off_line & more  "),
-                "status", List.of("closed", "OPEN"),
-                "type", List.of("7"),
-                "team", List.of("8"),
-                "owner", List.of("me"),
-                "sort", List.of("title"),
-                "dir", List.of("desc"),
-                "page", List.of("3"),
-                "unknown", List.of("ignored")));
+        CaseListQuery query = CaseListQuery.parse(Map.ofEntries(
+                Map.entry("q", List.of("  50% off_line & more  ")),
+                Map.entry("status", List.of("closed", "OPEN")),
+                Map.entry("sla", List.of("overdue", "AT_RISK")),
+                Map.entry("priority", List.of("high")),
+                Map.entry("sensitivity", List.of("Restricted")),
+                Map.entry("from", List.of("2026-10-01")),
+                Map.entry("to", List.of(" 2026-10-31 ")),
+                Map.entry("type", List.of("7")),
+                Map.entry("team", List.of("8")),
+                Map.entry("owner", List.of("me")),
+                Map.entry("sort", List.of("title")),
+                Map.entry("dir", List.of("desc")),
+                Map.entry("page", List.of("3")),
+                Map.entry("filters", List.of("1")),
+                Map.entry("unknown", List.of("ignored"))));
 
         assertThat(query.filter())
-                .isEqualTo(new CaseFilter(
-                        Set.of(CaseStatus.OPEN, CaseStatus.CLOSED), 7L, 8L, null, true, "50% off_line & more"));
+                .isEqualTo(FilterBuilder.filter()
+                        .statuses(CaseStatus.OPEN, CaseStatus.CLOSED)
+                        .sla(SlaState.AT_RISK, SlaState.OVERDUE)
+                        .priority(CasePriority.HIGH)
+                        .sensitivity(Sensitivity.RESTRICTED)
+                        .identified(OCTOBER_1, OCTOBER_31)
+                        .type(7L)
+                        .team(8L)
+                        .mine()
+                        .text("50% off_line & more")
+                        .build());
         assertThat(query.toQueryString())
-                .isEqualTo("q=50%25+off_line+%26+more&status=OPEN&status=CLOSED&type=7&team=8&owner=me"
+                .isEqualTo("q=50%25+off_line+%26+more&status=OPEN&status=CLOSED&sla=AT_RISK&sla=OVERDUE"
+                        + "&priority=HIGH&sensitivity=RESTRICTED&from=2026-10-01&to=2026-10-31&type=7&team=8&owner=me"
                         + "&sort=title&dir=desc&page=3");
         assertThat(CaseListQuery.parse(parameters(query.toQueryString()))).isEqualTo(query);
         assertThat(CaseListQuery.parse(Map.of("dir", List.of("asc"))).toQueryString())
                 .isEqualTo("sort=opened&dir=asc");
-        assertThat(CaseListQuery.parse(Map.of("status", List.of(""), "owner", List.of("")))
+        assertThat(CaseListQuery.parse(Map.of(
+                                "status", List.of(""),
+                                "sla", List.of(" "),
+                                "priority", List.of(""),
+                                "sensitivity", List.of(""),
+                                "from", List.of(""),
+                                "to", List.of(""),
+                                "owner", List.of("")))
                         .filter())
                 .isEqualTo(CaseFilter.none());
+    }
+
+    @Test
+    void oneDayRangesAndOpenEndedRangesAreAccepted() {
+        assertThat(CaseListQuery.parse(Map.of("from", List.of("2026-10-01"), "to", List.of("2026-10-01")))
+                        .filter())
+                .isEqualTo(
+                        FilterBuilder.filter().identified(OCTOBER_1, OCTOBER_1).build());
+        assertThat(CaseListQuery.parse(Map.of("to", List.of("2026-10-31"))).toQueryString())
+                .isEqualTo("to=2026-10-31");
+        assertThat(CaseListQuery.parse(Map.of("from", List.of("2026-10-01")))
+                        .filter()
+                        .identifiedTo())
+                .isNull();
+    }
+
+    @Test
+    void eachCriterionBecomesChipWhoseRemovalKeepsTheRestAndTheOrderOnPageOne() {
+        CaseListQuery query = CaseListQuery.parse(Map.of(
+                "q", List.of("heron 50%"),
+                "status", List.of("OPEN", "CLOSED"),
+                "sla", List.of("OVERDUE"),
+                "from", List.of("2026-10-01"),
+                "owner", List.of("me"),
+                "sort", List.of("title"),
+                "page", List.of("4")));
+
+        assertThat(query.criteria())
+                .extracting(CaseListQuery.Criterion::name, CaseListQuery.Criterion::value)
+                .containsExactly(
+                        tuple("q", "heron 50%"),
+                        tuple("status", "OPEN"),
+                        tuple("status", "CLOSED"),
+                        tuple("sla", "OVERDUE"),
+                        tuple("from", "2026-10-01"),
+                        tuple("owner", "me"));
+        assertThat(query.criteria())
+                .extracting(CaseListQuery.Criterion::without)
+                .containsExactly(
+                        "status=OPEN&status=CLOSED&sla=OVERDUE&from=2026-10-01&owner=me&sort=title&dir=asc",
+                        "q=heron+50%25&status=CLOSED&sla=OVERDUE&from=2026-10-01&owner=me&sort=title&dir=asc",
+                        "q=heron+50%25&status=OPEN&sla=OVERDUE&from=2026-10-01&owner=me&sort=title&dir=asc",
+                        "q=heron+50%25&status=OPEN&status=CLOSED&from=2026-10-01&owner=me&sort=title&dir=asc",
+                        "q=heron+50%25&status=OPEN&status=CLOSED&sla=OVERDUE&owner=me&sort=title&dir=asc",
+                        "q=heron+50%25&status=OPEN&status=CLOSED&sla=OVERDUE&from=2026-10-01&sort=title&dir=asc");
+        CaseListQuery withoutOpen =
+                CaseListQuery.parse(parameters(query.criteria().get(1).without()));
+        assertThat(withoutOpen.filter().statuses()).containsExactly(CaseStatus.CLOSED);
+        assertThat(withoutOpen.page()).isEqualTo(1);
+        assertThat(withoutOpen.sort()).isEqualTo(CaseSort.TITLE);
+        assertThat(CaseListQuery.parse(Map.of("sort", List.of("title"))).criteria())
+                .isEmpty();
     }
 
     @Test
@@ -102,9 +194,23 @@ class CaseListQueryTest {
 
     @Test
     void mineBecomesTheOwnerOnlyWhenAsked() {
-        CaseFilter mine = new CaseFilter(Set.of(), null, null, 5L, true, "");
+        CaseFilter mine = FilterBuilder.filter()
+                .sla(SlaState.MET)
+                .priority(CasePriority.NORMAL)
+                .sensitivity(Sensitivity.STANDARD)
+                .identified(OCTOBER_1, OCTOBER_31)
+                .owner(5L)
+                .mine()
+                .build();
 
-        assertThat(mine.forOwner(9)).isEqualTo(new CaseFilter(Set.of(), null, null, 9L, false, ""));
+        assertThat(mine.forOwner(9))
+                .isEqualTo(FilterBuilder.filter()
+                        .sla(SlaState.MET)
+                        .priority(CasePriority.NORMAL)
+                        .sensitivity(Sensitivity.STANDARD)
+                        .identified(OCTOBER_1, OCTOBER_31)
+                        .owner(9L)
+                        .build());
         assertThat(CaseFilter.none().forOwner(9)).isEqualTo(CaseFilter.none());
     }
 

@@ -16,9 +16,12 @@ import jakarta.persistence.criteria.Order;
 import jakarta.persistence.criteria.Path;
 import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
+import jakarta.persistence.criteria.Subquery;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -129,12 +132,25 @@ class CaseRecordQueriesImpl implements CaseRecordQueries {
         if (filter.mine()) {
             throw new IllegalArgumentException("resolve \"mine\" to an owner before querying");
         }
-        List<Predicate> where = new ArrayList<>(6);
+        List<Predicate> where = new ArrayList<>(12);
         where.add(scope.toPredicate(root, query, cb));
         where.add(
                 filter.statuses().isEmpty()
                         ? cb.notEqual(root.get("status"), CaseStatus.ARCHIVED)
                         : root.get("status").in(filter.statuses()));
+        if (!filter.slaStates().isEmpty()) {
+            where.add(root.get("id").in(slaRowsIn(filter.slaStates(), query)));
+        }
+        equalIfSet(where, cb, root.get("priority"), filter.priority());
+        equalIfSet(where, cb, root.get("sensitivity"), filter.sensitivity());
+        LocalDate from = filter.identifiedFrom();
+        if (from != null) {
+            where.add(cb.greaterThanOrEqualTo(root.<LocalDate>get("identifiedOn"), from));
+        }
+        LocalDate to = filter.identifiedTo();
+        if (to != null) {
+            where.add(cb.lessThanOrEqualTo(root.<LocalDate>get("identifiedOn"), to));
+        }
         equalIfSet(where, cb, root.get("caseTypeId"), filter.caseTypeId());
         equalIfSet(where, cb, root.get("teamId"), filter.teamId());
         equalIfSet(where, cb, root.get("ownerId"), filter.ownerId());
@@ -144,7 +160,17 @@ class CaseRecordQueriesImpl implements CaseRecordQueries {
         return where.toArray(Predicate[]::new);
     }
 
-    private static void equalIfSet(List<Predicate> where, CriteriaBuilder cb, Path<?> path, @Nullable Long value) {
+    /**
+     * The ids of cases whose SLA row is in one of the states, as a subquery, so the count needs no join and shares
+     * the list's {@code WHERE}.
+     */
+    private static Subquery<Long> slaRowsIn(Set<SlaState> states, CriteriaQuery<?> query) {
+        Subquery<Long> ids = query.subquery(Long.class);
+        Root<CaseSla> sla = ids.from(CaseSla.class);
+        return ids.select(sla.get("caseId")).where(sla.get("state").in(states));
+    }
+
+    private static void equalIfSet(List<Predicate> where, CriteriaBuilder cb, Path<?> path, @Nullable Object value) {
         if (value != null) {
             where.add(cb.equal(path, value));
         }

@@ -1,0 +1,8 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- The htmx response of the cases list: the results for #tk-case-results, then the search box and the filter
+     controls with hx-swap-oob, which htmx swaps in place by id, so the form matches the URL it just pushed. -->
+<th:block xmlns:th="http://www.thymeleaf.org">
+<th:block th:replace="~{casefile/fragments/case-results :: results}"></th:block>
+<div th:replace="~{casefile/fragments/case-filters :: search(true)}"></div>
+<div th:replace="~{casefile/fragments/case-filters :: fields(true)}"></div>
+</th:block>

@@ -64,6 +64,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Cases list filter drawer (WP-15 part 2): every filter now sits in a native `<dialog>` opened from a "Filters" button
+  (focus on its first control, Escape closes and returns focus, Apply swaps the results and focuses the count), with
+  the search box still on the page. Status becomes multi-choice, and SLA state (several), priority, sensitivity (only
+  for people who read other people's restricted cases) and an inclusive "identified from/to" date range join the
+  filters, kept in the URL (`sla`, `priority`, `sensitivity`, `from`, `to`) and refused with 422 for any value no
+  form offers or a range that ends before it starts. Active filters show above the results as chips, each a link to
+  the same list without that criterion ("Remove filter: Status Open"). Without JavaScript, "Filters" links to the
+  list with `filters=1`, which renders the dialog open in the page. The search hint now says "up to ten words".
 - Cases list filters and search (WP-15 part 1b): status (archived only when asked for), case type, team, owner or
   "Me", and a search box, kept in the URL (`q`, `status`, `type`, `team`, `owner`) and refused with 422 for any value
   no form offers. Search goes through `SearchGateway`, whose `LIKE` adapter matches every word in the title,
