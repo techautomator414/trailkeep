@@ -48,11 +48,15 @@ the nightly run (the in-process run covers the same scenarios). To run it on the
         -Dspring-boot.run.arguments=--app.attachments.scanning=external
     # once the application has migrated the schema:
     psql -h localhost -U trailkeep -d trailkeep -f perf/seed-cases-postgresql.sql
-    k6 run -e BASE_URL=http://localhost:8080 -e USERNAME=compliance.admin -e PASSWORD=dev-password \
-        perf/k6/cases-smoke.js
+    k6 run -e PASSWORD="<the dev realm password>" perf/k6/cases-smoke.js
 
-Running k6 from its container also works: `docker run --rm --network host -v "$PWD/perf/k6:/scripts:ro" grafana/k6
-run /scripts/cases-smoke.js`.
+`PASSWORD` is required and the script has no default for it: k6 stops at once with a message if it is unset. The
+dev realm's users and their password are documented in `deploy/local/keycloak/README.md`; use the password given there
+for `compliance.admin`. `BASE_URL` (default `http://localhost:8080`) and `USERNAME` (default `compliance.admin`) keep
+their defaults for the local stack and can be overridden with `-e`.
+
+Running k6 from its container also works: `docker run --rm --network host -e PASSWORD -v "$PWD/perf/k6:/scripts:ro"
+grafana/k6 run /scripts/cases-smoke.js` (with `PASSWORD` exported in the shell, so it is passed through by name).
 
 The application's session cookie is `Secure`, and k6 never sends a `Secure` cookie over plain `http`. The script
 therefore copies the application's cookies into its jar as non-secure cookies for `BASE_URL`. Behind TLS this changes

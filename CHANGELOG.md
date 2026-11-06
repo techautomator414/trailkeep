@@ -163,6 +163,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- `perf/k6/cases-smoke.js` now requires `PASSWORD` from the environment, with no default, and stops at once with a
+  message if it is unset (`BASE_URL` and `USERNAME` keep their defaults); `docs/perf/cases-list-50k.md` says how to run
+  it against the local stack and points at `deploy/local/keycloak/README.md` for the dev realm's password.
 - The `main` workflow's concurrency group now includes the triggering event, so a push to `main` (which cancels the
   run before it) no longer cancels a full run requested by hand with `gh workflow run main.yml`; runs called from
   `nightly.yml` and `release.yml` keep their own groups. `main.yml` already had `workflow_dispatch`; no gate changes.
