@@ -39,6 +39,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   setting (26MB), so raising `max-bytes` alone made the container refuse files the form still advertised as allowed.
   `AttachmentConfig` now fails startup with a message naming both properties and their values in bytes. The shipped
   defaults (25MB and 26MB) start unchanged.
+- The schema now carries the upper bounds the admin screens state (#67, item 7). `V4_6__sla_check_ceilings` adds named
+  CHECK constraints `CK_SLA_TARGET_MAX` (3650 target days), `CK_SLA_REMINDER_MAX` (365 reminder days) and
+  `CK_CASE_TYPE_RETENTION_MAX` (100 retention years), equal to the limits in `SlaPolicyCommand` and
+  `CaseTypeCommand`; `V3__admin` is unchanged. `SlaCheckCeilingsIT` proves a value at each ceiling is accepted and one
+  above is refused by PostgreSQL.
 
 ### Fixed
 
