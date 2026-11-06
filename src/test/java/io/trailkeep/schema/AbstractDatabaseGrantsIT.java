@@ -55,8 +55,8 @@ abstract class AbstractDatabaseGrantsIT {
     }
 
     /**
-     * Identity (V1), audit (V2), admin (V3), case (V4), comment (V4.1), pin (V4.2) and attachment (V4.3) tables, and
-     * the column each probe touches: the first key column.
+     * Identity (V1), audit (V2), admin (V3), case (V4), comment (V4.1), pin (V4.2), attachment (V4.3) and saved view
+     * (V4.7) tables, and the column each probe touches: the first key column.
      */
     static final Map<String, String> TABLES = Map.ofEntries(
             Map.entry("APP_USER", "ID"),
@@ -76,7 +76,8 @@ abstract class AbstractDatabaseGrantsIT {
             Map.entry("CASE_ATTACHMENT_CHUNK", "ATTACHMENT_ID"),
             Map.entry("SPRING_SESSION", "PRIMARY_ID"),
             Map.entry("SPRING_SESSION_ATTRIBUTES", "SESSION_PRIMARY_ID"),
-            Map.entry("OIDC_SESSION", "SESSION_ID"));
+            Map.entry("OIDC_SESSION", "SESSION_ID"),
+            Map.entry("SAVED_VIEW", "ID"));
 
     /** What the runtime user may do; anything absent is denied. */
     static final Map<String, Set<Privilege>> APP_USER_GRANTS = Map.ofEntries(
@@ -98,7 +99,9 @@ abstract class AbstractDatabaseGrantsIT {
             Map.entry("CASE_ATTACHMENT_CHUNK", EnumSet.of(Privilege.SELECT, Privilege.INSERT)),
             Map.entry("SPRING_SESSION", EnumSet.allOf(Privilege.class)),
             Map.entry("SPRING_SESSION_ATTRIBUTES", EnumSet.allOf(Privilege.class)),
-            Map.entry("OIDC_SESSION", EnumSet.allOf(Privilege.class)));
+            Map.entry("OIDC_SESSION", EnumSet.allOf(Privilege.class)),
+            // A person deletes their own views; a view is never changed, so no UPDATE.
+            Map.entry("SAVED_VIEW", EnumSet.of(Privilege.SELECT, Privilege.INSERT, Privilege.DELETE)));
 
     /** What the purge user may do on these tables: nothing yet; its case-data grants arrive with WP-24 (purge). */
     static final Map<String, Set<Privilege>> PURGE_USER_GRANTS = Map.of();
@@ -112,7 +115,8 @@ abstract class AbstractDatabaseGrantsIT {
             "SEQ_CASE_RECORD",
             "SEQ_CASE_NUMBER",
             "SEQ_CASE_COMMENT",
-            "SEQ_CASE_ATTACHMENT");
+            "SEQ_CASE_ATTACHMENT",
+            "SEQ_SAVED_VIEW");
 
     /**
      * One open connection per grantee for the whole class. Opening a connection per probe (about 100 in a burst, each

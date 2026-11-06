@@ -268,7 +268,8 @@ class CaseListControllerIT {
                         "<a class=\"btn btn-outline-secondary\" data-tk-dialog-close href=\"/cases\\?status=OPEN\">")
                 // A Reader reads no one's restricted cases: no sensitivity filter.
                 .doesNotContain("tk-sensitivity", "Restricted");
-        assertThat(page.indexOf("data-tk-dialog-focus")).isEqualTo(page.lastIndexOf("data-tk-dialog-focus"));
+        // One first control per dialog: the first Status box, and the "Save view" name field.
+        assertThat(page.split("data-tk-dialog-focus", -1)).hasSize(3);
         assertThat(page).doesNotContainPattern("<dialog [^>]*open=");
 
         mvc.perform(get("/cases").param("filters", "1"))

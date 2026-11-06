@@ -97,6 +97,13 @@
     UserAdminControllerIT (System Admin allowed, Compliance Admin 403, unknown user 404, self 422, CSRF, anonymous),
     UserAdminServiceIT and SharedSessionsIT (CSRF-protected POST through a real login). Approved in the
     security-reviewer role on #63.
+    SavedViewController (WP-15 part 3): behind login; POST /cases/views and POST /cases/views/{id}/delete carry CSRF
+    (403 without). The posted query is read back through CaseListQuery.parse (422 for any value no form offers) and
+    stored in its canonical form, so a view holds only allow-listed criteria and applies through the person's
+    CaseScope like any URL; the redirect after a save is the fixed path /cases plus that canonical query string. Every
+    lookup and delete carries the owner's id, so another person's view or an unknown id is 404, never 403. The name
+    is echoed only through th:text and audited by name only. Covered by SavedViewServiceIT and
+    SavedViewControllerIT. Needs security-reviewer approval.
     Approved in the security-reviewer role on #20. Listed by class, never by pattern alone, so each new controller
     is reviewed the same way.
   -->
@@ -113,6 +120,7 @@
       <Class name="io.trailkeep.web.CaseAssignmentController"/>
       <Class name="io.trailkeep.web.CaseAttachmentController"/>
       <Class name="io.trailkeep.web.CaseListController"/>
+      <Class name="io.trailkeep.web.SavedViewController"/>
     </Or>
   </Match>
   <!--

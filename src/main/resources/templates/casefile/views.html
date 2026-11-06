@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- The person's saved views (BUILD_PLAN §4.4): each applies as a link to the cases list and has a Delete button,
+     a POST with CSRF. Only the person's own views are listed. -->
+<html lang="en" xmlns:th="http://www.thymeleaf.org" th:replace="~{web/layout :: page(~{::title}, ~{::main})}">
+<head><title th:text="#{tk.views.title} + ' · ' + ${@branding.name()}">Saved views</title></head>
+<body>
+<main id="main" class="container tk-main" tabindex="-1">
+  <h1 th:text="#{tk.views.title}">Saved views</h1>
+  <p th:if="${views.isEmpty()}" th:text="#{tk.views.none}">You have no saved views.</p>
+  <table th:unless="${views.isEmpty()}" class="table align-middle">
+    <caption th:text="#{tk.views.caption}">Your saved views, by name</caption>
+    <thead><tr><th scope="col" th:text="#{tk.config.name}">Name</th>
+      <th scope="col" th:text="#{tk.views.actions}">Actions</th></tr></thead>
+    <tbody>
+    <tr th:each="v : ${views}">
+      <th scope="row"><a th:href="@{/cases} + '?' + ${v.query}" th:text="${v.name}">My view</a></th>
+      <td><form method="post" th:action="@{/cases/views/{id}/delete(id=${v.id})}">
+        <button class="btn btn-outline-danger" type="submit"><span th:text="#{tk.views.delete}">Delete</span><span
+            class="visually-hidden" th:text="' ' + ${v.name}"> My view</span></button></form></td>
+    </tr>
+    </tbody>
+  </table>
+  <p><a th:href="@{/cases}" th:text="#{tk.views.back}">Back to cases</a></p>
+</main>
+</body>
+</html>
