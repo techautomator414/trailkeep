@@ -43,7 +43,7 @@
     <div class="tk-dialog-actions mt-3" th:if="${decides}">
       <form th:replace="~{casefile/fragments/closure-decision :: approve(${c.number}, ${p.id}, 'tk-pending-text')}">
       </form>
-      <a class="btn btn-outline-primary" th:href="@{/cases/{n}/closure/{id}/decision(n=${c.number},id=${p.id})}"
+      <a class="btn btn-outline-dark" th:href="@{/cases/{n}/closure/{id}/decision(n=${c.number},id=${p.id})}"
          data-tk-dialog-open="tk-decision-dialog" aria-haspopup="dialog" th:text="#{tk.decision.open}">Reject or
         request changes</a>
     </div>
