@@ -7,93 +7,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
-### Security
-
-- CI's Semgrep lockfile resolves the Dependabot alerts for `mcp` (1.30.0) and `opentelemetry-api` (1.45.2, with the rest
-  of the opentelemetry family): every Semgrep release up to 1.184.0 pins `mcp==1.29.0` and `opentelemetry-api<1.38`, so
-  `.github/requirements/semgrep-overrides.in` lifts those pins when the lockfile is compiled (the job installs with
-  `--no-deps` and never runs `semgrep mcp`).
-
-### Changed
-
-- ClamAV pod (`deploy/base/clamav.yaml`, `compose.yaml`): clamd now binds `127.0.0.1:3310` only (new
-  `deploy/base/clamd.conf`, shipped as a generated ConfigMap), the TLS sidecar forwards to `127.0.0.1:3310`, and
-  clamd's startup, readiness and liveness probes are `clamdscan --ping` exec probes instead of TCP-socket probes. The
-  compose service runs `clamd --foreground=true` directly, as the pod does, so signatures are the image's. The
-  NetworkPolicy is unchanged (it only admits 3311).
-
-### Fixed
-
-- The size beside an attachment picks its unit from the value as it is printed (#67, item 11): 1,048,525 to 1,048,575
-  bytes read "1.0 MB" instead of "1024.0 KB", and the same rounding at the top of the MB range reads "1.0 GB" (a new
-  `tk.attachment.gb` message) instead of "1024.0 MB". Bytes are still whole below 1 KiB.
-- A closed dialog no longer pulls focus back to the control that opened it after the person has moved on. The
-  `close` event arrives after the browser has already restored focus, so a quick Escape then Tab (or Enter) could
-  land back on the opener. `app.js` now returns focus only when focus is lost or still inside the dialog. This was
-  what made the cases-list filter keyboard walk (`CaseListAccessibilityIT`) flaky on `main`; that walk now also waits
-  for htmx to settle before each keyboard step.
-- Disabling a user now ends their sessions (#31). The System Admin screen `/admin/users` lists users and disables or
-  enables them; `UserAdminService.disable` writes `DISABLED = TRUE` and then calls `endSessionsOf` (through the new
-  `UserSessionEnder` port, which `security`'s `UserSessionService` extends) in the same transaction, and audits
-  `USER_DISABLED` with the number of ended sessions (`USER_ENABLED` for the reverse). A System Admin cannot disable
-  themselves. This closes the "no caller yet" note under 0.1.0 below.
-- The application refuses to start when `spring.servlet.multipart.max-request-size` leaves less than 1 MiB above
-  `app.attachments.max-bytes` (#67, item 6). `max-file-size` follows `max-bytes` but `max-request-size` is a separate
-  setting (26MB), so raising `max-bytes` alone made the container refuse files the form still advertised as allowed.
-  `AttachmentConfig` now fails startup with a message naming both properties and their values in bytes. The shipped
-  defaults (25MB and 26MB) start unchanged.
-- The schema now carries the upper bounds the admin screens state (#67, item 7). `V4_6__sla_check_ceilings` adds named
-  CHECK constraints `CK_SLA_TARGET_MAX` (3650 target days), `CK_SLA_REMINDER_MAX` (365 reminder days) and
-  `CK_CASE_TYPE_RETENTION_MAX` (100 retention years), equal to the limits in `SlaPolicyCommand` and
-  `CaseTypeCommand`; `V3__admin` is unchanged. `SlaCheckCeilingsIT` proves a value at each ceiling is accepted and one
-  above is refused by PostgreSQL.
-
-### Fixed
-
-- Case search works on Oracle again (#69). Hibernate refuses `lower()` on `CASE_SEARCH.SEARCH_TEXT`, which Oracle maps
-  to `CLOB`, so `LikeSearchGateway` no longer applies a function to the column: `SEARCH_TEXT` is now stored lower-cased
-  (`Locale.ROOT`) by every writer (`CaseSearch` on create and rebuild, `CaseSearchJdbcDao` on comment append) and
-  matched with `LIKE` against the lower-cased words. Migration `V4_5__search_text_lowercase.sql` lower-cases rows
-  written before. ADR-0006's amendment records the convention.
-- The htmx 403 answer no longer doubles the servlet context path (#66). `HtmxAwareResponses.accessDenied` now sends
-  `HX-Redirect` to the path of `HX-Current-URL` as it is (that path already includes the context path), and to
-  `<context path>/` when the header is missing, malformed or names a page outside the context. Deployments at the
-  root context path were not affected.
-- The `local` seed (`LocalConfigSeed`) compares names stripped, as the service stores them (#67, item 4): a seed name
-  with leading or trailing whitespace no longer fails the second start with "the name is taken", and a case type's
-  `slaPolicy` reference is matched stripped too.
-- Two small edge cases from the bug hunt (#67, item 11): a case description whose line breaks arrive as CRLF is
-  checked against the 20 000 limit with each break counted once, as the form's `maxlength` and the comment service
-  count it (`CaseFields` and `CaseChanges` normalise to LF), so a full description no longer fails with 422; and the
-  audit actor-name snapshot is no longer cut between the two halves of a surrogate pair.
-
-### Documentation
-
-- `HANDOFF.md` refreshed to the state after WP-11 to WP-14 and WP-15 parts 1a, 1b, 2 and 3 (progress table, what is on
-  `main`, schema, decisions, known gaps, what comes next); `README.md` status and `CONTRIBUTING.md` compose line no
-  longer say that no case can be created or that ClamAV is still to come.
-- ADR-0006 amended (2026-11-05): the `LIKE` adapter contributes a predicate to the scoped statement instead of
-  returning candidate ids; IMPLEMENTATION_PLAN A.1 #7 marked *(amended r4)* and search removed from Part B's
-  native-SQL uses.
-- `HANDOFF.md` open owner items 6 and 7: the bnd annotations licence metadata (pinned at 4.3.1) and how ClamAV
-  signatures are kept current in a cluster.
-- Importer design (`docs/design/importer.md`) and ADR-0014 (Proposed): import compliance case history from SQL Server,
-  Oracle or PostgreSQL, or from files exported from them, through a canonical staging model, a validated mapping file,
-  a dry run with an authenticated in-app sign-off by any Compliance Admin, bound to the recorded scanning mode, an
-  idempotent load through import-only domain APIs that never touches the source, and a reconciliation report.
-  ADR-0014 records the owner's decisions of 2026-11-05: two non-login import principals, a separate
-  `TRAILKEEP_IMPORT` login, go-live alerts pre-marked, cases past purge or on legacy legal hold imported and held,
-  legacy change history in an insert-only `CASE_IMPORTED_EVENT` table on the History tab, default owners with a
-  later `relink-owners`, and delta changes reported, never overwritten, with a closure worklist. It also records the
-  owner-accepted risk that imported attachments are stored `NOT_SCANNED` in `external` scanning mode (ADR-0013),
-  amends Part B to allow one importer source-query DAO and profile-filtered staging entities, and lists the new
-  dependencies with their licences. WP-26 is planned as 31 PRs.
-
-### Fixed
-
-- ADR-0006 no longer says both drivers accept the character-stream bind; on Oracle the search append binds a CLOB.
-- Oracle Free 23 `oracle-it` failures (ORA-12516) in `OracleDatabaseGrantsIT`: the grants probes share one connection per grantee and test contexts use a small Hikari pool.
-
 ### Added
 
 - Saved views (WP-15 part 3): "Save view" on a filtered or sorted cases list opens a native `<dialog>` asking for a
@@ -125,7 +38,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   has a caption, scoped headers and `aria-sort`; sorting and paging swap the results with htmx, keep focus on the
   control used and announce the count, and work as plain links without JavaScript. `UserDirectoryService` gains batch
   `displayNames` and `teams` lookups.
-
 - Attachment download and quarantine Release (WP-14 part 4): `GET /cases/{number}/attachments/{id}` answers 404 for
   an unreadable case or an id not of that case, 403 for a quarantined file, and 503 with `Retry-After` when all
   `app.attachments.max-concurrent-downloads` (default 8) are streaming; otherwise it streams the file one 1 MiB chunk
@@ -222,7 +134,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   clamd's startup, readiness and liveness probes are `clamdscan --ping` exec probes instead of TCP-socket probes. The
   compose service runs `clamd --foreground=true` directly, as the pod does, so signatures are the image's. The
   NetworkPolicy is unchanged (it only admits 3311).
-
 - `ErrorAdvice` maps a `ConstraintViolationException` reaching the web layer to 422 (htmx `problem` fragment or the
   error page) instead of a 5xx (#27).
 - Back-channel logout's loopback `logoutUri` is set from the port the server actually bound, so an instance started
@@ -231,19 +142,35 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   its tests through an abstract base, so the registry's SQL runs on XE 21 and Free 23 in the `-Poracle-it` run (#26).
 - The local seed fails with a message naming the case type and the SLA policy when the policy is unknown (#29).
 - `.gitignore` excludes `.claude/settings.local.json`, which holds machine-specific Claude Code settings.
-
 - CI installs Semgrep from a hash-pinned lockfile (`.github/requirements/semgrep.txt`, watched by Dependabot), and
   `SECURITY.md` links the private advisory form directly, to satisfy OpenSSF Scorecard Pinned-Dependencies and
   Security-Policy.
 
 ### Fixed
 
+- The size beside an attachment picks its unit from the value as it is printed (#67, item 11): 1,048,525 to 1,048,575
+  bytes read "1.0 MB" instead of "1024.0 KB", and the same rounding at the top of the MB range reads "1.0 GB" (a new
+  `tk.attachment.gb` message) instead of "1024.0 MB". Bytes are still whole below 1 KiB.
+- A closed dialog no longer pulls focus back to the control that opened it after the person has moved on. The
+  `close` event arrives after the browser has already restored focus, so a quick Escape then Tab (or Enter) could
+  land back on the opener. `app.js` now returns focus only when focus is lost or still inside the dialog. This was
+  what made the cases-list filter keyboard walk (`CaseListAccessibilityIT`) flaky on `main`; that walk now also waits
+  for htmx to settle before each keyboard step.
 - Disabling a user now ends their sessions (#31). The System Admin screen `/admin/users` lists users and disables or
   enables them; `UserAdminService.disable` writes `DISABLED = TRUE` and then calls `endSessionsOf` (through the new
   `UserSessionEnder` port, which `security`'s `UserSessionService` extends) in the same transaction, and audits
   `USER_DISABLED` with the number of ended sessions (`USER_ENABLED` for the reverse). A System Admin cannot disable
   themselves. This closes the "no caller yet" note under 0.1.0 below.
-
+- The application refuses to start when `spring.servlet.multipart.max-request-size` leaves less than 1 MiB above
+  `app.attachments.max-bytes` (#67, item 6). `max-file-size` follows `max-bytes` but `max-request-size` is a separate
+  setting (26MB), so raising `max-bytes` alone made the container refuse files the form still advertised as allowed.
+  `AttachmentConfig` now fails startup with a message naming both properties and their values in bytes. The shipped
+  defaults (25MB and 26MB) start unchanged.
+- The schema now carries the upper bounds the admin screens state (#67, item 7). `V4_6__sla_check_ceilings` adds named
+  CHECK constraints `CK_SLA_TARGET_MAX` (3650 target days), `CK_SLA_REMINDER_MAX` (365 reminder days) and
+  `CK_CASE_TYPE_RETENTION_MAX` (100 retention years), equal to the limits in `SlaPolicyCommand` and
+  `CaseTypeCommand`; `V3__admin` is unchanged. `SlaCheckCeilingsIT` proves a value at each ceiling is accepted and one
+  above is refused by PostgreSQL.
 - Case search works on Oracle again (#69). Hibernate refuses `lower()` on `CASE_SEARCH.SEARCH_TEXT`, which Oracle maps
   to `CLOB`, so `LikeSearchGateway` no longer applies a function to the column: `SEARCH_TEXT` is now stored lower-cased
   (`Locale.ROOT`) by every writer (`CaseSearch` on create and rebuild, `CaseSearchJdbcDao` on comment append) and
@@ -253,7 +180,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   `HX-Redirect` to the path of `HX-Current-URL` as it is (that path already includes the context path), and to
   `<context path>/` when the header is missing, malformed or names a page outside the context. Deployments at the
   root context path were not affected.
-
+- The `local` seed (`LocalConfigSeed`) compares names stripped, as the service stores them (#67, item 4): a seed name
+  with leading or trailing whitespace no longer fails the second start with "the name is taken", and a case type's
+  `slaPolicy` reference is matched stripped too.
+- Two small edge cases from the bug hunt (#67, item 11): a case description whose line breaks arrive as CRLF is
+  checked against the 20 000 limit with each break counted once, as the form's `maxlength` and the comment service
+  count it (`CaseFields` and `CaseChanges` normalise to LF), so a full description no longer fails with 422; and the
+  audit actor-name snapshot is no longer cut between the two halves of a surrogate pair.
 - ADR-0006 no longer says both drivers accept the character-stream bind; on Oracle the search append binds a CLOB.
 - Oracle Free 23 `oracle-it` failures (ORA-12516) in `OracleDatabaseGrantsIT`: the grants probes share one connection per grantee and test contexts use a small Hikari pool.
 
@@ -266,6 +199,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Documentation
 
+- `HANDOFF.md` refreshed to the state after WP-11 to WP-14 and WP-15 parts 1a, 1b, 2 and 3 (progress table, what is on
+  `main`, schema, decisions, known gaps, what comes next); `README.md` status and `CONTRIBUTING.md` compose line no
+  longer say that no case can be created or that ClamAV is still to come.
 - ADR-0006 amended (2026-11-05): the `LIKE` adapter contributes a predicate to the scoped statement instead of
   returning candidate ids; IMPLEMENTATION_PLAN A.1 #7 marked *(amended r4)* and search removed from Part B's
   native-SQL uses.
