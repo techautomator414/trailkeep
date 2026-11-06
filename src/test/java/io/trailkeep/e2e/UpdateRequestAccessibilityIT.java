@@ -170,6 +170,12 @@ class UpdateRequestAccessibilityIT {
         assertThat(page.textContent("#" + page.getAttribute("#tk-recipient-input", "aria-activedescendant")))
                 .isEqualTo(name);
         assertClean();
+        // Esc closes the list, not the dialog around it; Down opens it again on the same match.
+        page.keyboard().press("Escape");
+        assertThat(page.getAttribute("#tk-recipient-input", "aria-expanded")).isEqualTo("false");
+        assertThat(page.evaluate("() => document.getElementById('tk-request-dialog').matches(':modal')"))
+                .isEqualTo(true);
+        page.keyboard().press("ArrowDown");
         page.keyboard().press("Enter");
         assertThat(page.inputValue("#tk-recipient-input")).isEqualTo(name);
         assertThat(page.getAttribute("#tk-recipient-input", "aria-expanded")).isEqualTo("false");
