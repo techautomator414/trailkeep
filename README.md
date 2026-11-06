@@ -13,9 +13,9 @@ and keeps an evidence-grade history.
 > (build and scanning gates, two-vendor schema tooling, identity, OIDC login and shared sessions, audit, web shell,
 > container and deploy base), with team and case-configuration administration (WP-09, WP-10) and, in Phase 2, case
 > create, view, edit, reassign and restrict, comments, attachments with virus scanning, and a filtered, searchable
-> cases list (WP-11 to WP-14, and WP-15 parts 1a, 1b and 2). About half of the planned work packages are done. **Cases
-> cannot be closed yet** and there is no email or SLA alerting: those are Phases 3 and 4. Read
-> [`HANDOFF.md`](HANDOFF.md) for exactly what exists, what does not, and what comes next.
+> cases list with saved views (WP-11 to WP-14, and WP-15 parts 1a, 1b, 2 and 3). About half of the planned work
+> packages are done. **Cases cannot be closed yet** and there is no email or SLA alerting: those are Phases 3 and 4.
+> Read [`HANDOFF.md`](HANDOFF.md) for exactly what exists, what does not, and what comes next.
 
 ## What it does
 
