@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- The person's alerts (BUILD_PLAN §4.7 "in-app list"), newest first, 50 to a page with plain previous and next
+     links; nothing here needs a script. Reading the page marks nothing read: "Mark read" and "Delete" are POSTs with
+     CSRF, and each button's name includes its alert's text. Status is text, never colour alone. -->
+<html lang="en" xmlns:th="http://www.thymeleaf.org" th:replace="~{web/layout :: page(~{::title}, ~{::main})}">
+<head><title th:text="#{tk.alerts.title} + ' · ' + ${@branding.name()}">Alerts</title></head>
+<body>
+<main id="main" class="container tk-main" tabindex="-1">
+  <h1 th:text="#{tk.alerts.title}">Alerts</h1>
+  <p th:if="${a.alerts.isEmpty()}" th:text="#{tk.alerts.none}">You have no alerts.</p>
+  <p th:if="${a.pages > 1}" th:text="#{tk.list.page(${a.page},${a.pages})}">Page 1 of 2.</p>
+  <div th:unless="${a.alerts.isEmpty()}" class="table-responsive" tabindex="0" role="region"
+       aria-labelledby="tk-alerts-caption">
+    <table class="table align-middle">
+      <caption id="tk-alerts-caption" th:text="#{tk.alerts.caption}">Your alerts, newest first</caption>
+      <thead>
+      <tr>
+        <th scope="col" th:text="#{tk.alerts.when}">When</th>
+        <th scope="col" th:text="#{tk.alerts.what}">Alert</th>
+        <th scope="col" th:text="#{tk.alerts.status}">Status</th>
+        <th scope="col" th:text="#{tk.alerts.actions}">Actions</th>
+      </tr>
+      </thead>
+      <tbody>
+      <tr th:each="alert : ${a.alerts}">
+        <td><time th:datetime="${alert.at}"
+            th:text="${#temporals.format(alert.local, 'yyyy-MM-dd HH:mm')}">2026-11-06 10:30</time></td>
+        <th scope="row"><a th:href="@{${alert.link}}" th:text="${alert.message}">Someone commented</a></th>
+        <td th:text="${alert.read} ? #{tk.alerts.read} : #{tk.alerts.unread}">Unread</td>
+        <td>
+          <form th:unless="${alert.read}" class="d-inline" method="post"
+                th:action="@{/alerts/{id}/read(id=${alert.id},page=${a.page})}">
+            <button class="btn btn-outline-primary" type="submit"><span th:text="#{tk.alerts.markRead}">Mark
+              read</span><span class="visually-hidden" th:text="': ' + ${alert.message}">: alert</span></button>
+          </form>
+          <form class="d-inline" method="post" th:action="@{/alerts/{id}/delete(id=${alert.id},page=${a.page})}">
+            <button class="btn btn-outline-danger" type="submit"><span th:text="#{tk.alerts.delete}">Delete</span><span
+                class="visually-hidden" th:text="': ' + ${alert.message}">: alert</span></button>
+          </form>
+        </td>
+      </tr>
+      </tbody>
+    </table>
+  </div>
+  <nav th:if="${a.pages > 1}" th:aria-label="#{tk.list.pages}">
+    <ul class="pagination">
+      <li class="page-item" th:if="${a.page > 1}">
+        <a class="page-link" rel="prev" th:href="@{/alerts(page=${a.page - 1})}" th:text="#{tk.list.previous}">
+          Previous page</a></li>
+      <li class="page-item" th:if="${a.page < a.pages}">
+        <a class="page-link" rel="next" th:href="@{/alerts(page=${a.page + 1})}" th:text="#{tk.list.next}">
+          Next page</a></li>
+    </ul>
+  </nav>
+</main>
+</body>
+</html>

@@ -32,9 +32,10 @@ public interface NotificationService {
     long enqueue(String recipient, String templateId, Map<String, ?> model, @Nullable Long caseId);
 
     /**
-     * Tells a person about something, in the caller's transaction: queues a mail to their address through {@link
-     * #enqueue}, with the deep link ({@code app.base-url} followed by {@code path}) added to the model as {@code link}.
-     * A person who is unknown, disabled or has no address gets nothing.
+     * Tells a person about something, in the caller's transaction: writes their in-app alert (from {@code
+     * <id>.alert.txt}, linking to {@code path}; see {@link UserAlertService}) and queues a mail to their address
+     * through {@link #enqueue}, with the deep link ({@code app.base-url} followed by {@code path}) added to the model
+     * as {@code link}. A person who is unknown or disabled gets neither; one without an address gets only the alert.
      *
      * @param userId the person
      * @param templateId the mail's templates under {@code templates/notification/}
