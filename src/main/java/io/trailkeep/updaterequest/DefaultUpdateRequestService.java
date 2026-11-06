@@ -26,9 +26,12 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
+import java.util.TreeSet;
 import java.util.stream.Stream;
 import org.hibernate.exception.ConstraintViolationException;
 import org.jspecify.annotations.Nullable;
@@ -91,10 +94,7 @@ class DefaultUpdateRequestService implements UpdateRequestService {
         if (text.isBlank() || text.length() > UpdateRequest.MAX_MESSAGE) {
             throw new UpdateRequestException(Kind.INVALID, "a request message is 1 to 2000 characters");
         }
-        UserPermissions recipient = directory.permissionsOf(recipientId);
-        if (recipientId == actor.permissions().userId()
-                || recipient.disabled()
-                || !scopes.forUser(recipient).canRead(ref.number())) {
+        if (recipientId == actor.permissions().userId() || !readsCase(recipientId, ref.number())) {
             throw new UpdateRequestException(Kind.INVALID, "the recipient cannot read this case");
         }
         if (open(scopes.forUser(actor.permissions()), ref.number())
@@ -163,6 +163,8 @@ class DefaultUpdateRequestService implements UpdateRequestService {
         CaseNumber number = cases.actionable(actor, caseNumber, CaseAction.VIEW).number();
         List<UpdateRequest> found =
                 open(scopes.forUser(actor.permissions()), number).toList();
+        boolean asRequester = !found.isEmpty() && cases.allows(actor, caseNumber, CaseAction.REQUEST_UPDATE);
+        boolean asManager = !found.isEmpty() && cases.allows(actor, caseNumber, CaseAction.ANSWER_UPDATE);
         Map<Long, String> names = directory.displayNames(found.stream()
                 .flatMap(r -> Stream.of(r.getRequestedBy(), r.getRequestedFrom()))
                 .distinct()
@@ -174,8 +176,31 @@ class DefaultUpdateRequestService implements UpdateRequestService {
                         names.getOrDefault(r.getRequestedBy(), ""),
                         names.getOrDefault(r.getRequestedFrom(), ""),
                         LocalDateTime.ofInstant(r.getRequestedAt(), zone).truncatedTo(ChronoUnit.MINUTES),
-                        r.getMessage()))
+                        r.getMessage(),
+                        r.getRequestedBy() == actor.permissions().userId() ? asRequester : asManager))
                 .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<Recipient> recipients(Actor actor, String caseNumber) {
+        CaseRef ref = cases.actionable(actor, caseNumber, CaseAction.REQUEST_UPDATE);
+        Set<Long> people = new TreeSet<>(directory.activeMembersOf(ref.teamId()));
+        people.addAll(directory.activeComplianceAdmins());
+        people.remove(actor.permissions().userId());
+        List<Long> readers =
+                people.stream().filter(id -> readsCase(id, ref.number())).toList();
+        Map<Long, String> names = directory.displayNames(readers);
+        return readers.stream()
+                .map(id -> new Recipient(id, names.getOrDefault(id, "")))
+                .sorted(Comparator.comparing(Recipient::name))
+                .toList();
+    }
+
+    /** Whether a person, as the database holds their roles now, is enabled and reads the case. */
+    private boolean readsCase(long userId, CaseNumber number) {
+        UserPermissions person = directory.permissionsOf(userId);
+        return !person.disabled() && scopes.forUser(person).canRead(number);
     }
 
     @Override

@@ -28,6 +28,7 @@ public interface UpdateRequestService {
      * @param requestedFrom who was asked, by name
      * @param requestedAt when, in {@code app.timezone}, to the minute
      * @param message what was asked; possible PHI, shown on the case page only
+     * @param answerable whether the reader may mark it answered (its requester, or a Manager or Compliance Admin)
      */
     record CaseRequest(
             long id,
@@ -35,7 +36,28 @@ public interface UpdateRequestService {
             String requestedBy,
             String requestedFrom,
             LocalDateTime requestedAt,
-            String message) {}
+            String message,
+            boolean answerable) {}
+
+    /**
+     * Someone an update may be requested from, as the dialog's combobox offers them.
+     *
+     * @param id the person's id
+     * @param name their display name
+     */
+    record Recipient(long id, String name) {}
+
+    /**
+     * The people an update may be requested from on a case (IMPLEMENTATION_PLAN A.4 #31): the team's members and the
+     * Compliance Admins who are enabled and read the case as their roles stand now, minus the actor, by name. The
+     * server checks again on {@link #request}. {@code NOT_FOUND}, then {@code FORBIDDEN} without
+     * {@code REQUEST_UPDATE}.
+     *
+     * @param actor the actor
+     * @param caseNumber the case number as it appears in the URL
+     * @return the people, by name
+     */
+    List<Recipient> recipients(Actor actor, String caseNumber);
 
     /**
      * An open request addressed to the person, for the dashboard's "Needs attention".

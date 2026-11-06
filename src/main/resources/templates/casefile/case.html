@@ -30,7 +30,8 @@
     <li class="tk-chip" th:if="${c.priority.name() == 'HIGH'}">
       <span aria-hidden="true">!</span> <span th:text="#{tk.case.high}">High priority</span></li>
   </ul>
-  <p class="tk-dialog-actions" th:if="${c.editable or c.reassignable or c.restrictable or c.unrestrictable}">
+  <p class="tk-dialog-actions"
+     th:if="${c.editable or c.reassignable or c.restrictable or c.unrestrictable or recipients != null}">
     <a th:if="${c.editable}" class="btn btn-primary" th:href="@{/cases/{n}/edit(n=${c.number})}"
        th:text="#{tk.case.edit}">Edit</a>
     <a th:if="${reassign != null}" class="btn btn-outline-primary" th:href="@{/cases/{n}/reassign(n=${c.number})}"
@@ -40,7 +41,15 @@
        th:href="@{/cases/{n}/{a}(n=${c.number},a=${s == 'RESTRICTED' ? 'restrict' : 'unrestrict'})}"
        th:data-tk-dialog-open="'tk-' + ${s} + '-dialog'" aria-haspopup="dialog"
        th:text="#{'tk.sensitivity.save.' + ${s}}">Mark restricted</a>
+    <a th:if="${recipients != null}" class="btn btn-outline-primary"
+       th:href="@{/cases/{n}/request-update(n=${c.number})}" data-tk-dialog-open="tk-request-dialog"
+       aria-haspopup="dialog" th:text="#{tk.request.open}">Request update</a>
   </p>
+  <dialog th:if="${recipients != null}" id="tk-request-dialog" class="tk-dialog" aria-labelledby="tk-request-title">
+    <h2 id="tk-request-title" th:text="#{tk.request.title(${c.number})}">Request an update</h2>
+    <form th:replace="~{casefile/fragments/update-request :: form(${c.number}, ${recipients}, -1, '', null, true)}">
+    </form>
+  </dialog>
   <dialog th:if="${reassign != null}" id="tk-reassign-dialog" class="tk-dialog" aria-labelledby="tk-reassign-title">
     <h2 id="tk-reassign-title" th:text="#{tk.assign.title(${c.number})}">Reassign</h2>
     <form th:replace="~{casefile/fragments/case-actions :: reassign(${reassign}, ${reassign.teamId},
@@ -73,6 +82,21 @@
   </dl>
   <h3 th:text="#{tk.case.description}">Description</h3>
   <p class="tk-description" th:text="${c.description}">Description</p>
+  <th:block th:unless="${#lists.isEmpty(requests)}">
+    <h2 id="update-requests" th:text="#{tk.request.open.title}">Awaiting an update</h2>
+    <ul class="list-unstyled" aria-labelledby="update-requests">
+      <li th:each="r : ${requests}" class="mb-3">
+        <p class="mb-1" th:text="#{tk.request.awaiting(${r.requestedFrom},
+            ${#temporals.format(r.requestedAt, 'yyyy-MM-dd HH:mm')}, ${r.requestedBy})}">Update requested from X.</p>
+        <p class="tk-description mb-1" th:text="${r.message}">Message</p>
+        <form th:if="${r.answerable}" method="post"
+              th:action="@{/cases/{n}/update-requests/{id}/answered(n=${c.number},id=${r.id})}">
+          <button class="btn btn-outline-primary btn-sm" type="submit"><span th:text="#{tk.request.answered}">Mark
+            answered</span><span class="visually-hidden" th:text="': ' + ${r.requestedFrom}">: X</span></button>
+        </form>
+      </li>
+    </ul>
+  </th:block>
   <h2 id="comments" tabindex="-1" th:text="#{tk.comment.title}">Comments</h2>
   <p th:if="${#lists.isEmpty(comments)}" th:text="#{tk.comment.none}">No comments yet.</p>
   <th:block th:unless="${#lists.isEmpty(pinned)}">

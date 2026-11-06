@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Request update without JavaScript, and after a refused request (BUILD_PLAN §4.3): 422 for a recipient who cannot
+     read the case or a message out of bounds, 409 when an update is already requested from that person. -->
+<html lang="en" xmlns:th="http://www.thymeleaf.org" th:replace="~{web/layout :: page(~{::title}, ~{::main})}">
+<head><title th:text="#{tk.request.title(${ref.number})} + ' · ' + ${@branding.name()}">Request an update</title></head>
+<body>
+<main id="main" class="container tk-main" tabindex="-1">
+  <h1 th:text="#{tk.request.title(${ref.number})}">Request an update on CASE-2026-000001</h1>
+  <p th:text="${ref.title}">Title</p>
+  <form th:replace="~{casefile/fragments/update-request :: form(${ref.number}, ${recipients}, ${selected}, ${message},
+                     ${problem}, false)}"></form>
+</main>
+</body>
+</html>

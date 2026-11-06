@@ -1,5 +1,7 @@
 <!DOCTYPE html>
 <!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- The dashboard (BUILD_PLAN §4.1). "Needs attention" lists the update requests addressed to the person, newest
+     first, each a plain link to its case's comments, where a comment answers it (WP-18). -->
 <html lang="en" xmlns:th="http://www.thymeleaf.org"
       th:replace="~{web/layout :: page(~{::title}, ~{::main})}">
 <head><title th:text="#{tk.dashboard.title} + ' · ' + ${@branding.name()}">Dashboard</title></head>
@@ -8,6 +10,13 @@
   <h1 th:text="#{tk.dashboard.title}">Dashboard</h1>
   <p th:text="#{tk.dashboard.welcome(${displayName})}">Signed in.</p>
   <p><a class="btn btn-primary" th:href="@{/cases/new}" th:text="#{tk.new.link}">New case</a></p>
+  <h2 id="tk-attention" th:text="#{tk.dashboard.attention}">Needs attention</h2>
+  <p th:if="${attention.isEmpty()}" th:text="#{tk.dashboard.attention.none}">Nothing needs your attention.</p>
+  <ul th:unless="${attention.isEmpty()}" aria-labelledby="tk-attention">
+    <li th:each="r : ${attention}"><a th:href="@{/cases/{n}(n=${r.caseNumber})} + '#comments'"
+        th:text="#{tk.dashboard.attention.request(${r.requestedBy}, ${r.caseNumber}, ${r.caseTitle})}">X asked you
+        for an update on CASE</a></li>
+  </ul>
 </main>
 </body>
 </html>
