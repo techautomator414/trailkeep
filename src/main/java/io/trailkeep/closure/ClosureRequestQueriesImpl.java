@@ -36,4 +36,18 @@ class ClosureRequestQueriesImpl implements ClosureRequestQueries {
                 .orderBy(cb.desc(request.get("requestedAt")), cb.desc(request.get("id")));
         return entityManager.createQuery(query).getResultList();
     }
+
+    @Override
+    public List<ClosureRequest> findPendingFor(CaseScope scope, long approverId) {
+        CriteriaBuilder cb = entityManager.getCriteriaBuilder();
+        CriteriaQuery<ClosureRequest> query = cb.createQuery(ClosureRequest.class);
+        Root<ClosureRequest> request = query.from(ClosureRequest.class);
+        query.select(request)
+                .where(
+                        cb.equal(request.get("approverId"), approverId),
+                        cb.equal(request.get("decision"), ClosureDecision.PENDING),
+                        scopes.readableCases(scope, request.get("caseId"), query, cb))
+                .orderBy(cb.asc(request.get("requestedAt")), cb.asc(request.get("id")));
+        return entityManager.createQuery(query).setMaxResults(100).getResultList();
+    }
 }

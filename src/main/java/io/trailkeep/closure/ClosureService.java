@@ -3,6 +3,7 @@
 package io.trailkeep.closure;
 
 import io.trailkeep.casefile.CaseService.Actor;
+import io.trailkeep.shared.CaseNumber;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -103,6 +104,37 @@ public interface ClosureService {
      * @return the decision, or empty
      */
     Optional<DecidedClosure> lastDecision(Actor actor, String caseNumber);
+
+    /**
+     * A request waiting for the actor's decision, for the dashboard's "Pending my approval".
+     *
+     * @param id the request
+     * @param caseNumber the case
+     * @param caseTitle the case's title
+     * @param requestedBy who asked, by name
+     * @param outcome the outcome requested
+     */
+    record AwaitingApproval(long id, CaseNumber caseNumber, String caseTitle, String requestedBy, String outcome) {}
+
+    /**
+     * The pending requests the actor is the approver of, on cases they read, oldest first, at most 100.
+     *
+     * @param actor the actor
+     * @return the requests
+     */
+    List<AwaitingApproval> awaitingMyApproval(Actor actor);
+
+    /**
+     * Who a pending request may be reassigned to ({@code REASSIGN_APPROVER}): the A.2 #18 rule for its original
+     * requester, minus its current approver, by name. {@code NOT_FOUND}, then {@code FORBIDDEN}, then
+     * {@code NOT_FOUND} if the request is not the case's pending one.
+     *
+     * @param actor who reassigns
+     * @param caseNumber the case number as it appears in the URL
+     * @param requestId the pending request
+     * @return the approvers, by name
+     */
+    List<Approver> reassignChoices(Actor actor, String caseNumber, long requestId);
 
     /**
      * The pending request the actor would decide ({@code DECIDE_CLOSURE}): {@code NOT_FOUND}, then

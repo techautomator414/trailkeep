@@ -1,7 +1,8 @@
 <!DOCTYPE html>
 <!-- SPDX-License-Identifier: Apache-2.0 -->
-<!-- The dashboard (BUILD_PLAN §4.1). "Needs attention" lists the update requests addressed to the person, newest
-     first, each a plain link to its case's comments, where a comment answers it (WP-18). -->
+<!-- The dashboard (BUILD_PLAN §4.1). "Needs attention" lists the closure requests waiting for the person's decision,
+     each with Approve and a link to Reject or request changes (WP-19), then the update requests addressed to them,
+     newest first, each a plain link to its case's comments, where a comment answers it (WP-18). -->
 <html lang="en" xmlns:th="http://www.thymeleaf.org"
       th:replace="~{web/layout :: page(~{::title}, ~{::main})}">
 <head><title th:text="#{tk.dashboard.title} + ' · ' + ${@branding.name()}">Dashboard</title></head>
@@ -11,12 +12,30 @@
   <p th:text="#{tk.dashboard.welcome(${displayName})}">Signed in.</p>
   <p><a class="btn btn-primary" th:href="@{/cases/new}" th:text="#{tk.new.link}">New case</a></p>
   <h2 id="tk-attention" th:text="#{tk.dashboard.attention}">Needs attention</h2>
-  <p th:if="${attention.isEmpty()}" th:text="#{tk.dashboard.attention.none}">Nothing needs your attention.</p>
-  <ul th:unless="${attention.isEmpty()}" aria-labelledby="tk-attention">
-    <li th:each="r : ${attention}"><a th:href="@{/cases/{n}(n=${r.caseNumber})} + '#comments'"
-        th:text="#{tk.dashboard.attention.request(${r.requestedBy}, ${r.caseNumber}, ${r.caseTitle})}">X asked you
-        for an update on CASE</a></li>
-  </ul>
+  <p th:if="${attention.isEmpty() and approvals.isEmpty()}" th:text="#{tk.dashboard.attention.none}">Nothing needs
+    your attention.</p>
+  <th:block th:unless="${approvals.isEmpty()}">
+    <h3 id="tk-approvals" class="h5" th:text="#{tk.dashboard.approvals}">Pending my approval</h3>
+    <ul aria-labelledby="tk-approvals">
+      <li th:each="a : ${approvals}" class="mb-2"><a th:id="'tk-approval-' + ${a.id}"
+          th:href="@{/cases/{n}(n=${a.caseNumber})}" th:text="#{tk.dashboard.approval(${a.requestedBy},
+          ${a.caseNumber}, ${a.caseTitle}, ${a.outcome})}">X requested closure of CASE</a>
+        <div class="tk-dialog-actions mt-1">
+          <form th:replace="~{casefile/fragments/closure-decision :: approve(${a.caseNumber}, ${a.id},
+                             'tk-approval-' + ${a.id})}"></form>
+          <a class="btn btn-outline-primary" th:attr="aria-describedby='tk-approval-' + ${a.id}"
+             th:href="@{/cases/{n}/closure/{id}/decision(n=${a.caseNumber},id=${a.id})}"
+             th:text="#{tk.decision.open}">Reject or request changes</a></div></li>
+    </ul>
+  </th:block>
+  <th:block th:unless="${attention.isEmpty()}">
+    <h3 id="tk-requests" class="h5" th:text="#{tk.dashboard.requests}">Update requests for you</h3>
+    <ul aria-labelledby="tk-requests">
+      <li th:each="r : ${attention}"><a th:href="@{/cases/{n}(n=${r.caseNumber})} + '#comments'"
+          th:text="#{tk.dashboard.attention.request(${r.requestedBy}, ${r.caseNumber}, ${r.caseTitle})}">X asked you
+          for an update on CASE</a></li>
+    </ul>
+  </th:block>
 </main>
 </body>
 </html>
