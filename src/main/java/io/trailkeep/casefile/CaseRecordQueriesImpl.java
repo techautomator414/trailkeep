@@ -16,6 +16,7 @@ import jakarta.persistence.criteria.Order;
 import jakarta.persistence.criteria.Path;
 import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
+import jakarta.persistence.criteria.Selection;
 import jakarta.persistence.criteria.Subquery;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -85,26 +86,43 @@ class CaseRecordQueriesImpl implements CaseRecordQueries {
 
     @Override
     public List<CaseListRow> list(CaseScope scope, CaseListQuery request, int pageSize) {
+        return page(scope, request, pageSize, CaseListRow.class, false);
+    }
+
+    @Override
+    public List<CaseExportRow> export(CaseScope scope, CaseListQuery request, int pageSize) {
+        return page(scope, request, pageSize, CaseExportRow.class, true);
+    }
+
+    /**
+     * One page of the list's projection, or of the export's, which adds the subject and the description: selected
+     * as they are, with no function applied, because the description is a CLOB on Oracle.
+     */
+    private <T> List<T> page(CaseScope scope, CaseListQuery request, int pageSize, Class<T> type, boolean details) {
         CriteriaBuilder cb = entityManager.getCriteriaBuilder();
-        CriteriaQuery<CaseListRow> query = cb.createQuery(CaseListRow.class);
+        CriteriaQuery<T> query = cb.createQuery(type);
         Root<CaseRecord> root = query.from(CaseRecord.class);
-        Join<CaseRecord, CaseType> type = root.join(CaseType.class);
-        type.on(cb.equal(type.get("id"), root.get("caseTypeId")));
+        Join<CaseRecord, CaseType> caseType = root.join(CaseType.class);
+        caseType.on(cb.equal(caseType.get("id"), root.get("caseTypeId")));
         Join<CaseRecord, CaseSla> sla = root.join(CaseSla.class, JoinType.LEFT);
         sla.on(cb.equal(sla.get("caseId"), root.get("id")));
-        query.select(cb.construct(
-                        CaseListRow.class,
-                        root.get("caseNumber"),
-                        root.get("title"),
-                        root.get("status"),
-                        root.get("sensitivity"),
-                        root.get("priority"),
-                        type.get("name"),
-                        root.get("teamId"),
-                        root.get("ownerId"),
-                        root.get("openedAt"),
-                        sla.get("state"),
-                        sla.get("dueAt")))
+        List<Selection<?>> columns = new ArrayList<>(List.of(
+                root.get("caseNumber"),
+                root.get("title"),
+                root.get("status"),
+                root.get("sensitivity"),
+                root.get("priority"),
+                caseType.get("name"),
+                root.get("teamId"),
+                root.get("ownerId"),
+                root.get("openedAt"),
+                sla.get("state"),
+                sla.get("dueAt")));
+        if (details) {
+            columns.add(root.get("subjectText"));
+            columns.add(root.get("description"));
+        }
+        query.select(cb.construct(type, columns.toArray(new Selection<?>[0])))
                 .where(where(scope, request.filter(), root, query, cb))
                 .orderBy(order(request, sortKey(request.sort(), root, sla, cb), cb), cb.asc(root.get("id")));
         long offset = (long) (request.page() - 1) * pageSize;

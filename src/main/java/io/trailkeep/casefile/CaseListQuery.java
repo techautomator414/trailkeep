@@ -141,6 +141,18 @@ public record CaseListQuery(CaseFilter filter, CaseSort sort, boolean descending
         return List.copyOf(criteria);
     }
 
+    /**
+     * The filter and the order as URL parameters, the page aside, in the order of {@link #toQueryString}: what a form
+     * repeating this list (the CSV export) carries as hidden fields.
+     *
+     * @return the parameters, possibly empty
+     */
+    public List<Map.Entry<String, String>> parameters() {
+        List<Map.Entry<String, String>> out = filterParameters();
+        out.addAll(orderParameters());
+        return List.copyOf(out);
+    }
+
     private List<Map.Entry<String, String>> filterParameters() {
         List<Map.Entry<String, String>> out = new ArrayList<>();
         add(out, "q", filter.text().isEmpty() ? null : filter.text());
