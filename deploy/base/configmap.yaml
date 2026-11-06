@@ -29,5 +29,14 @@ data:
   SPRING_SSL_BUNDLE_PEM_CLAMD_TRUSTSTORE_CERTIFICATE: file:/etc/trailkeep/clamav-ca/ca.crt
   APP_TIMEZONE: UTC
   APP_BRANDING_NAME: Trailkeep
+  # PLACEHOLDER: the address people open Trailkeep at; every deep link in a mail starts with it. Required.
+  APP_BASE_URL: https://trailkeep.example.org
+  # PLACEHOLDER: outgoing mail (WP-17). The relay must offer STARTTLS (the egress NetworkPolicy allows 587). A relay
+  # that needs a login reads spring.mail.username and spring.mail.password from secret files. APP_MAIL_ENABLED=false
+  # stops sending while mail keeps queuing in the outbox; it is sent once the value is true again.
+  SPRING_MAIL_HOST: smtp.example.org
+  SPRING_MAIL_PORT: "587"
+  APP_MAIL_FROM: Trailkeep <trailkeep@example.org>
+  # APP_MAIL_ENABLED: "true"
   # Secret values are files under this directory (one file per property name), never environment variables.
   SPRING_CONFIG_IMPORT: configtree:/etc/trailkeep/secrets/

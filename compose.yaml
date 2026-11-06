@@ -8,7 +8,7 @@
 #   Keycloak (dev realm) at http://localhost:8180, for the 'local' profile's OIDC login.
 #   ClamAV clamd behind a TLS sidecar at localhost:3311 (ADR-0012), which scans every upload before it is stored
 #   (WP-14). The dev CA and certificate are generated on first start into .local/clamd-tls/ (git-ignored).
-# Mailpit joins this file with the work package that needs it (WP-17).
+#   Mailpit at localhost:1025 (SMTP) catches every mail the 'local' profile sends; read them at http://localhost:8025.
 name: trailkeep
 
 services:
@@ -44,6 +44,14 @@ services:
       - "host.docker.internal:host-gateway"
     volumes:
       - ./deploy/local/keycloak/trailkeep-dev-realm.json:/opt/keycloak/data/import/trailkeep-dev-realm.json:ro
+
+  mailpit:
+    # Same image as MailpitDispatchIT, pinned by digest. A local mail catcher: it accepts every message and delivers
+    # none, so the outbox dispatcher can be watched end to end (WP-17). Both ports on loopback only.
+    image: axllent/mailpit:v1.33.0@sha256:9b3a463be15354c0f0eba91697d80e3e0d8a5623ef0e627cacc836bc17fd5231
+    ports:
+      - "127.0.0.1:1025:1025"
+      - "127.0.0.1:8025:8025"
 
   clamav-tls-init:
     # DEV-ONLY, one-shot: a throwaway CA and a server certificate for localhost, generated on first start into the

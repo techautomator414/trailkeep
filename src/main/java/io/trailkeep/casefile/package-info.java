@@ -7,7 +7,8 @@
  * io.trailkeep.casefile.CaseConfigService}, because case creation needs it and {@code casefile} may not call
  * {@code sla}; {@code sla} reads it from here.
  *
- * <p>May call: {@code shared}, {@code audit}, {@code user}, {@code security}. Other modules use only the {@code
+ * <p>May call: {@code shared}, {@code audit}, {@code user}, {@code security}, {@code notification} (to queue mail in
+ * the transaction of the change it reports). Other modules use only the {@code
  * *Service} interfaces and records in this package.
  */
 @NullMarked

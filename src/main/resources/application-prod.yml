@@ -6,6 +6,7 @@
 #   - app.proxy.pattern has no default, so startup fails until the deploying organization sets it.
 #   - app.security.oidc.issuer-uri, client-id and client-secret (a secret file) have no default either; the
 #     provider is found by issuer discovery at startup.
+#   - app.base-url, app.mail.from and spring.mail.host have no default: no mail is sent from, or links to, a guess.
 #   - spring.jpa.hibernate.ddl-auto is deliberately absent; the persistence PR owns JPA settings and prod runs
 #     "validate" only.
 # Logging: this profile switches logback-spring.xml to one JSON object per line.
@@ -23,6 +24,12 @@ spring:
   servlet:
     multipart:
       location: /var/lib/trailkeep/uploads
+  # app -> SMTP needs STARTTLS (BUILD_PLAN §9 Transport): a relay that does not offer it is refused, never used in
+  # the clear. spring.mail.host/port come from the ConfigMap, username/password (if any) from secret files.
+  mail:
+    properties:
+      "[mail.smtp.starttls.enable]": true
+      "[mail.smtp.starttls.required]": true
 app:
   attachments:
     # The same emptyDir: an upload is copied here while it is checked and scanned, then deleted.

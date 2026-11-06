@@ -42,6 +42,14 @@ public interface UserDirectoryService {
     Optional<String> displayName(long userId);
 
     /**
+     * Where to email a user, for {@code notification} only. Never logged or shown (Part B "Logging").
+     *
+     * @param userId the user's id
+     * @return the address from the identity provider; empty for an unknown or disabled user or one without an address
+     */
+    Optional<String> mailAddress(long userId);
+
+    /**
      * One team.
      *
      * @param teamId the team id

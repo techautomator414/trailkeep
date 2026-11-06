@@ -20,8 +20,15 @@ spring:
           idp:
             # The compose Keycloak with the dev realm (deploy/local/keycloak/trailkeep-dev-realm.json).
             issuer-uri: http://localhost:8180/realms/trailkeep-dev
+  mail:
+    # The compose Mailpit: it accepts everything and sends nothing on; read the mail at http://localhost:8025.
+    host: localhost
+    port: 1025
 
 app:
+  base-url: http://localhost:8080
+  mail:
+    from: Trailkeep (local) <trailkeep@example.invalid>
   attachments:
     clamd:
       # The compose ClamAV, through its TLS sidecar on 3311; trusted through the clamd SSL bundle below.

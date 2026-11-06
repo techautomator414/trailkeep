@@ -30,4 +30,19 @@ public interface NotificationService {
      * @throws org.springframework.transaction.IllegalTransactionStateException when called outside a transaction
      */
     long enqueue(String recipient, String templateId, Map<String, ?> model, @Nullable Long caseId);
+
+    /**
+     * Tells a person about something, in the caller's transaction: queues a mail to their address through {@link
+     * #enqueue}, with the deep link ({@code app.base-url} followed by {@code path}) added to the model as {@code link}.
+     * A person who is unknown, disabled or has no address gets nothing.
+     *
+     * @param userId the person
+     * @param templateId the mail's templates under {@code templates/notification/}
+     * @param model the values the templates read, besides {@code link}; never a description or subject text
+     * @param caseId the case it is about, or {@code null}
+     * @param path the page it links to, an absolute path such as {@code /cases/CASE-2026-000042#comments}
+     * @return {@code true} if a mail was queued
+     * @throws IllegalArgumentException for a path that does not start with a single {@code /}, or as {@link #enqueue}
+     */
+    boolean notifyUser(long userId, String templateId, Map<String, ?> model, @Nullable Long caseId, String path);
 }
