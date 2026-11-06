@@ -23,6 +23,7 @@ import java.time.InstantSource;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.stream.Stream;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -31,7 +32,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Decides and reassigns; see {@link ClosureDecisionService}. Each operation first takes the case's row lock
+ * Decides, reassigns and reopens; see {@link ClosureDecisionService}. Each operation first takes the case's row lock
  * through {@link CaseStatusService#move}, which re-reads the case and re-evaluates the matrix on what the lock holds.
  * Under that lock the request is read and re-checked (still pending; the actor is its approver; the approver is not
  * the owner), and written by one conditional update that matches only the pending row at the version read, so a
@@ -97,7 +98,7 @@ class DefaultClosureDecisionService implements ClosureDecisionService {
         if (request.getApproverId() != actorId || Objects.equals(moved.facts().ownerId(), actorId)) {
             throw new ClosureException(Kind.FORBIDDEN, "only the request's approver decides");
         }
-        String text = reason(decision, reason);
+        String text = reason(decision != ClosureDecision.APPROVED, reason);
         int changed = entityManager
                 .createQuery(DECIDE)
                 .setParameter("decision", decision)
@@ -124,6 +125,49 @@ class DefaultClosureDecisionService implements ClosureDecisionService {
                 .filter(Objects::nonNull)
                 .distinct()
                 .forEach(person -> tell(person, actorId, "closure-decided", moved, model));
+    }
+
+    @Override
+    public void reopen(Actor actor, String caseNumber, String reason) {
+        MovedCase moved = statuses.move(actor, caseNumber, CaseAction.REOPEN, CaseStatus.CLOSED, CaseStatus.OPEN);
+        String text = Objects.requireNonNull(reason(true, reason));
+        long actorId = actor.permissions().userId();
+        // The request whose approval closed the case, if one did (an imported closed case has none).
+        Optional<ClosureRequest> closing =
+                requests
+                        .findForCase(
+                                scopes.forUser(actor.permissions()), moved.ref().number())
+                        .stream()
+                        .filter(r -> r.getDecision() == ClosureDecision.APPROVED)
+                        .findFirst();
+        CaseReopen reopen = new CaseReopen(
+                moved.ref().id(),
+                actorId,
+                text,
+                moved.slaCycle(),
+                closing.map(ClosureRequest::getId).orElse(null),
+                clock.instant());
+        entityManager.persist(reopen);
+        entityManager.flush();
+        audit.record(new AuditEntry(
+                actorId,
+                actor.displayName(),
+                AuditOrigin.UI,
+                moved.ref().id(),
+                "CASE",
+                moved.ref().id(),
+                "CASE_REOPENED",
+                audit.diff(
+                        new Reopened(CaseStatus.CLOSED, moved.slaCycle() - 1, null),
+                        new Reopened(CaseStatus.OPEN, moved.slaCycle(), text))));
+        Stream.of(
+                        moved.facts().ownerId(),
+                        closing.map(ClosureRequest::getRequestedBy).orElse(null))
+                .filter(Objects::nonNull)
+                .distinct()
+                .forEach(person ->
+                        tell(person, actorId, "case-reopened", moved, Map.of("reopener", actor.displayName())));
+        LOG.info("Case id {} reopened as reopen {}", moved.ref().id(), reopen.getId());
     }
 
     @Override
@@ -166,9 +210,9 @@ class DefaultClosureDecisionService implements ClosureDecisionService {
     }
 
     /** The reason as stored (CRLF as one line break, stripped, {@code null} if empty); 422 if missing or too long. */
-    private static @Nullable String reason(ClosureDecision decision, @Nullable String reason) {
+    private static @Nullable String reason(boolean required, @Nullable String reason) {
         String text = reason == null ? "" : reason.replace("\r\n", "\n").strip();
-        if (text.length() > MAX_REASON || (text.isEmpty() && decision != ClosureDecision.APPROVED)) {
+        if (text.length() > MAX_REASON || (text.isEmpty() && required)) {
             throw new ClosureException(Kind.INVALID, "a reason of 1 to 1000 characters is required");
         }
         return text.isEmpty() ? null : text;
@@ -243,4 +287,16 @@ class DefaultClosureDecisionService implements ClosureDecisionService {
      * @param approver who decides, by name
      */
     record Reassigned(String approver) {}
+
+    /**
+     * The audit snapshot of a reopen: the status, the SLA cycle, and the reason, redacted like a decision's.
+     *
+     * @param status the case's status
+     * @param slaCycle the SLA cycle
+     * @param reason why it was reopened, or {@code null} before
+     */
+    record Reopened(
+            CaseStatus status,
+            int slaCycle,
+            @Redacted @Nullable String reason) {}
 }

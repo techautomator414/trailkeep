@@ -69,6 +69,24 @@ class CaseSla {
         }
     }
 
+    int getCycle() {
+        return cycle;
+    }
+
+    /**
+     * Starts the next cycle at a reopen (ADR-0007): the cycle increments, so "at risk once" is once per cycle, and
+     * the clock runs from the reopen instant.
+     *
+     * @param clock the new cycle's at-risk and due instants
+     */
+    void restart(SlaClock clock) {
+        cycle++;
+        state = SlaState.ON_TRACK;
+        atRiskAt = clock.atRiskAt();
+        dueAt = clock.dueAt();
+        lastEvaluatedAt = null;
+    }
+
     @Override
     public boolean equals(@Nullable Object other) {
         return this == other || (other instanceof CaseSla that && caseId != 0 && caseId == that.caseId);
