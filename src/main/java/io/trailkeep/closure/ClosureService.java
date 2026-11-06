@@ -3,6 +3,7 @@
 package io.trailkeep.closure;
 
 import io.trailkeep.casefile.CaseService.Actor;
+import io.trailkeep.shared.CaseNumber;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -67,6 +68,71 @@ public interface ClosureService {
             LocalDateTime requestedAt,
             String summary,
             @Nullable String followUps) {}
+
+    /**
+     * The latest decided closure request of a case, as the case page shows it: on a closed case the closure itself
+     * (locked), on an open case the reason it was sent back. Case content: shown to whoever reads the case.
+     *
+     * @param id the request
+     * @param decision the decision
+     * @param decidedBy who decided, by name
+     * @param decidedAt when, in {@code app.timezone}, to the minute
+     * @param reason why, or {@code null}
+     * @param outcome the outcome requested
+     * @param summary the resolution summary
+     * @param followUps the follow-up actions, or {@code null}
+     * @param requiresChanges sent back (rejected or changes requested) and nobody has commented since: the case
+     *     page's "Requires Changes" badge (BUILD_PLAN §4.3)
+     */
+    record DecidedClosure(
+            long id,
+            ClosureDecision decision,
+            String decidedBy,
+            LocalDateTime decidedAt,
+            @Nullable String reason,
+            String outcome,
+            String summary,
+            @Nullable String followUps,
+            boolean requiresChanges) {}
+
+    /**
+     * A request waiting for the actor's decision, for the dashboard's "Pending my approval".
+     *
+     * @param id the request
+     * @param caseNumber the case
+     * @param caseTitle the case's title
+     * @param requestedBy who asked, by name
+     * @param outcome the outcome requested
+     */
+    record AwaitingApproval(long id, CaseNumber caseNumber, String caseTitle, String requestedBy, String outcome) {}
+
+    /**
+     * The case's latest request, if the actor reads the case and it is decided (an open case's latest request may
+     * have been sent back; a closed case's was approved).
+     *
+     * @param actor the actor
+     * @param caseNumber the case number as it appears in the URL
+     * @return the decision, or empty
+     */
+    Optional<DecidedClosure> lastDecision(Actor actor, String caseNumber);
+
+    /**
+     * The pending requests the actor is the approver of, on cases they read, oldest first, at most 100.
+     *
+     * @param actor the actor
+     * @return the requests
+     */
+    List<AwaitingApproval> awaitingMyApproval(Actor actor);
+
+    /**
+     * Who a pending request may be reassigned to ({@code REASSIGN_APPROVER}): the A.2 #18 rule for its original
+     * requester, minus its current approver, by name. {@code NOT_FOUND}, then {@code FORBIDDEN}.
+     *
+     * @param actor who reassigns
+     * @param caseNumber the case number as it appears in the URL
+     * @return the approvers, by name; empty if nothing is pending
+     */
+    List<Approver> reassignChoices(Actor actor, String caseNumber);
 
     /**
      * The form's choices for a case the actor may request closure of: {@code NOT_FOUND}, then {@code FORBIDDEN} as

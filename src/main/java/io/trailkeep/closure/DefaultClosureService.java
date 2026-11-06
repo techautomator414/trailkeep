@@ -6,8 +6,11 @@ import io.trailkeep.audit.AuditEntry;
 import io.trailkeep.audit.AuditOrigin;
 import io.trailkeep.audit.AuditRecorder;
 import io.trailkeep.audit.Redacted;
+import io.trailkeep.casefile.CaseCommentService;
 import io.trailkeep.casefile.CaseScopeService;
+import io.trailkeep.casefile.CaseService;
 import io.trailkeep.casefile.CaseService.Actor;
+import io.trailkeep.casefile.CaseService.CaseRef;
 import io.trailkeep.casefile.CaseStatusService;
 import io.trailkeep.casefile.CaseStatusService.ClosableCase;
 import io.trailkeep.notification.NotificationService;
@@ -20,6 +23,7 @@ import io.trailkeep.shared.access.CaseAccessPath;
 import io.trailkeep.shared.config.AppProperties;
 import io.trailkeep.user.UserDirectoryService;
 import jakarta.persistence.EntityManager;
+import java.time.Instant;
 import java.time.InstantSource;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
@@ -55,6 +59,8 @@ class DefaultClosureService implements ClosureService {
     private final EntityManager entityManager;
     private final ClosureRequestRepository requests;
     private final CaseScopeService scopes;
+    private final CaseService cases;
+    private final CaseCommentService comments;
     private final InstantSource clock;
     private final ZoneId zone;
 
@@ -67,6 +73,8 @@ class DefaultClosureService implements ClosureService {
             EntityManager entityManager,
             ClosureRequestRepository requests,
             CaseScopeService scopes,
+            CaseService cases,
+            CaseCommentService comments,
             InstantSource clock,
             AppProperties app) {
         this.statuses = statuses;
@@ -77,8 +85,71 @@ class DefaultClosureService implements ClosureService {
         this.entityManager = entityManager;
         this.requests = requests;
         this.scopes = scopes;
+        this.cases = cases;
+        this.comments = comments;
         this.clock = clock;
         this.zone = app.timezone();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<DecidedClosure> lastDecision(Actor actor, String caseNumber) {
+        Optional<ClosureRequest> latest = forCase(actor, caseNumber).stream().findFirst();
+        if (latest.isEmpty() || latest.get().getDecision() == ClosureDecision.PENDING) {
+            return Optional.empty();
+        }
+        ClosureRequest r = latest.get();
+        Instant decidedAt = Objects.requireNonNull(r.getDecidedAt());
+        boolean sentBack = r.getDecision() != ClosureDecision.APPROVED
+                && comments.lastCommentAt(actor, caseNumber)
+                        .filter(at -> at.isAfter(decidedAt))
+                        .isEmpty();
+        return Optional.of(new DecidedClosure(
+                Objects.requireNonNull(r.getId()),
+                r.getDecision(),
+                directory.displayName(Objects.requireNonNull(r.getDecidedBy())).orElse(""),
+                minute(decidedAt),
+                r.getReason(),
+                r.getOutcome(),
+                r.getResolutionSummary(),
+                r.getFollowUpActions(),
+                sentBack));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<AwaitingApproval> awaitingMyApproval(Actor actor) {
+        List<ClosureRequest> pending = requests.findPendingFor(
+                scopes.forUser(actor.permissions()), actor.permissions().userId());
+        Map<Long, CaseRef> refs = cases.refs(
+                actor, pending.stream().map(ClosureRequest::getCaseId).toList());
+        Map<Long, String> names = directory.displayNames(
+                pending.stream().map(ClosureRequest::getRequestedBy).distinct().toList());
+        return pending.stream()
+                .filter(r -> refs.containsKey(r.getCaseId()))
+                .map(r -> {
+                    CaseRef ref = Objects.requireNonNull(refs.get(r.getCaseId()));
+                    return new AwaitingApproval(
+                            Objects.requireNonNull(r.getId()),
+                            ref.number(),
+                            ref.title(),
+                            names.getOrDefault(r.getRequestedBy(), ""),
+                            r.getOutcome());
+                })
+                .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<Approver> reassignChoices(Actor actor, String caseNumber) {
+        ClosableCase closable = statuses.closable(actor, caseNumber, CaseAction.REASSIGN_APPROVER);
+        return forCase(actor, caseNumber).stream()
+                .filter(r -> r.getDecision() == ClosureDecision.PENDING)
+                .findFirst()
+                .map(r -> named(permissions.approverCandidates(closable.facts(), r.getRequestedBy()).stream()
+                        .filter(id -> id != r.getApproverId())
+                        .toList()))
+                .orElse(List.of());
     }
 
     @Override
@@ -97,13 +168,7 @@ class DefaultClosureService implements ClosureService {
     @Override
     @Transactional(readOnly = true)
     public Optional<PendingClosure> pending(Actor actor, String caseNumber) {
-        CaseNumber number;
-        try {
-            number = CaseNumber.parse(caseNumber);
-        } catch (IllegalArgumentException malformed) {
-            return Optional.empty();
-        }
-        return requests.findForCase(scopes.forUser(actor.permissions()), number).stream()
+        return forCase(actor, caseNumber).stream()
                 .filter(r -> r.getDecision() == ClosureDecision.PENDING)
                 .findFirst()
                 .map(r -> new PendingClosure(
@@ -112,14 +177,32 @@ class DefaultClosureService implements ClosureService {
                         directory.displayName(r.getRequestedBy()).orElse(""),
                         r.getApproverId(),
                         directory.displayName(r.getApproverId()).orElse(""),
-                        LocalDateTime.ofInstant(r.getRequestedAt(), zone).truncatedTo(ChronoUnit.MINUTES),
+                        minute(r.getRequestedAt()),
                         r.getResolutionSummary(),
                         r.getFollowUpActions()));
     }
 
+    /** The case's requests, newest first; none for a malformed, absent or unreadable case. */
+    private List<ClosureRequest> forCase(Actor actor, String caseNumber) {
+        CaseNumber number;
+        try {
+            number = CaseNumber.parse(caseNumber);
+        } catch (IllegalArgumentException malformed) {
+            return List.of();
+        }
+        return requests.findForCase(scopes.forUser(actor.permissions()), number);
+    }
+
+    private LocalDateTime minute(Instant at) {
+        return LocalDateTime.ofInstant(at, zone).truncatedTo(ChronoUnit.MINUTES);
+    }
+
     private List<Approver> approversOf(Actor actor, ClosableCase closable) {
-        List<Long> ids = permissions.approverCandidates(
-                closable.facts(), actor.permissions().userId());
+        return named(permissions.approverCandidates(
+                closable.facts(), actor.permissions().userId()));
+    }
+
+    private List<Approver> named(List<Long> ids) {
         Map<Long, String> names = directory.displayNames(ids);
         return ids.stream()
                 .map(id -> new Approver(id, names.getOrDefault(id, "")))

@@ -109,6 +109,10 @@ class ClosureRequest {
         return id;
     }
 
+    long getCaseId() {
+        return caseId;
+    }
+
     long getApproverId() {
         return approverId;
     }
@@ -140,6 +144,21 @@ class ClosureRequest {
 
     ClosureDecision getDecision() {
         return decision;
+    }
+
+    @Nullable
+    Long getDecidedBy() {
+        return decidedBy;
+    }
+
+    @Nullable
+    Instant getDecidedAt() {
+        return decidedAt;
+    }
+
+    @Nullable
+    String getReason() {
+        return reason;
     }
 
     @Override

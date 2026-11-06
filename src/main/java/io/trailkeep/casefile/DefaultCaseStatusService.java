@@ -60,8 +60,8 @@ class DefaultCaseStatusService implements CaseStatusService {
 
     @Override
     @Transactional(readOnly = true)
-    public ClosableCase closable(Actor actor, String caseNumber) {
-        CaseRecord record = loader.load(actor.permissions(), caseNumber, CaseAction.REQUEST_CLOSURE);
+    public ClosableCase closable(Actor actor, String caseNumber, CaseAction action) {
+        CaseRecord record = loader.load(actor.permissions(), caseNumber, action);
         return new ClosableCase(
                 ref(record),
                 CaseLoader.facts(record),

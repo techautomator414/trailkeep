@@ -4,8 +4,10 @@ package io.trailkeep.casefile;
 
 import io.trailkeep.casefile.CaseService.Actor;
 import io.trailkeep.shared.html.SafeHtml;
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Comments on the case page (BUILD_PLAN §4.3): read oldest first through the actor's {@code CaseScope}, posted, and
@@ -33,6 +35,16 @@ public interface CaseCommentService {
      * @return the comments
      */
     List<CommentView> comments(Actor actor, String caseNumber);
+
+    /**
+     * When the case's latest comment was posted, exactly (the closure module's "Requires Changes until the next
+     * comment"); empty if there is none or the actor may not read the case, {@code NOT_FOUND} for a malformed number.
+     *
+     * @param actor the actor
+     * @param caseNumber the case number as it appears in the URL
+     * @return the instant, or empty
+     */
+    Optional<Instant> lastCommentAt(Actor actor, String caseNumber);
 
     /**
      * Posts a comment with the actor's display name as its author, appends its text to the search text and records
