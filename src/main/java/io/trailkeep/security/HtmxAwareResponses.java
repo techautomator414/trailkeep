@@ -5,6 +5,7 @@ package io.trailkeep.security;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.net.URI;
+import org.jspecify.annotations.Nullable;
 import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.access.AccessDeniedHandler;
 import org.springframework.security.web.access.AccessDeniedHandlerImpl;
@@ -49,7 +50,8 @@ final class HtmxAwareResponses {
         AccessDeniedHandler fullPage = new AccessDeniedHandlerImpl();
         return (request, response, exception) -> {
             if (HTMX.matches(request)) {
-                redirect(request, response, HttpServletResponse.SC_FORBIDDEN, currentPath(request));
+                response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+                response.setHeader("HX-Redirect", reloadTarget(request));
             } else {
                 fullPage.handle(request, response, exception);
             }
@@ -61,8 +63,21 @@ final class HtmxAwareResponses {
         response.setHeader("HX-Redirect", request.getContextPath() + path);
     }
 
+    /**
+     * Where an htmx 403 sends the browser: the path of {@code HX-Current-URL}, which already includes the servlet
+     * context path, or the context root when the header is missing, malformed or names a page outside the context.
+     */
+    private static String reloadTarget(HttpServletRequest request) {
+        String context = request.getContextPath();
+        String path = currentPath(request);
+        if (path != null && (context.isEmpty() || path.equals(context) || path.startsWith(context + "/"))) {
+            return path;
+        }
+        return context + "/";
+    }
+
     /** The path of {@code HX-Current-URL}; only the path is kept, so the redirect can never leave this origin. */
-    static String currentPath(HttpServletRequest request) {
+    static @Nullable String currentPath(HttpServletRequest request) {
         String current = request.getHeader("HX-Current-URL");
         if (current != null) {
             try {
@@ -71,9 +86,9 @@ final class HtmxAwareResponses {
                     return path;
                 }
             } catch (IllegalArgumentException ignored) {
-                // Malformed header: fall back to the root.
+                // Malformed header: the caller falls back to the context root.
             }
         }
-        return "/";
+        return null;
     }
 }

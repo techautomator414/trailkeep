@@ -42,6 +42,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   (`Locale.ROOT`) by every writer (`CaseSearch` on create and rebuild, `CaseSearchJdbcDao` on comment append) and
   matched with `LIKE` against the lower-cased words. Migration `V4_5__search_text_lowercase.sql` lower-cases rows
   written before. ADR-0006's amendment records the convention.
+- The htmx 403 answer no longer doubles the servlet context path (#66). `HtmxAwareResponses.accessDenied` now sends
+  `HX-Redirect` to the path of `HX-Current-URL` as it is (that path already includes the context path), and to
+  `<context path>/` when the header is missing, malformed or names a page outside the context. Deployments at the
+  root context path were not affected.
 
 ### Documentation
 
@@ -182,6 +186,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- ClamAV pod (`deploy/base/clamav.yaml`, `compose.yaml`): clamd now binds `127.0.0.1:3310` only (new
+  `deploy/base/clamd.conf`, shipped as a generated ConfigMap), the TLS sidecar forwards to `127.0.0.1:3310`, and
+  clamd's startup, readiness and liveness probes are `clamdscan --ping` exec probes instead of TCP-socket probes. The
+  compose service runs `clamd --foreground=true` directly, as the pod does, so signatures are the image's. The
+  NetworkPolicy is unchanged (it only admits 3311).
+
 - `ErrorAdvice` maps a `ConstraintViolationException` reaching the web layer to 422 (htmx `problem` fragment or the
   error page) instead of a 5xx (#27).
 - Back-channel logout's loopback `logoutUri` is set from the port the server actually bound, so an instance started
@@ -194,6 +204,54 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - CI installs Semgrep from a hash-pinned lockfile (`.github/requirements/semgrep.txt`, watched by Dependabot), and
   `SECURITY.md` links the private advisory form directly, to satisfy OpenSSF Scorecard Pinned-Dependencies and
   Security-Policy.
+
+### Fixed
+
+- Disabling a user now ends their sessions (#31). The System Admin screen `/admin/users` lists users and disables or
+  enables them; `UserAdminService.disable` writes `DISABLED = TRUE` and then calls `endSessionsOf` (through the new
+  `UserSessionEnder` port, which `security`'s `UserSessionService` extends) in the same transaction, and audits
+  `USER_DISABLED` with the number of ended sessions (`USER_ENABLED` for the reverse). A System Admin cannot disable
+  themselves. This closes the "no caller yet" note under 0.1.0 below.
+
+- Case search works on Oracle again (#69). Hibernate refuses `lower()` on `CASE_SEARCH.SEARCH_TEXT`, which Oracle maps
+  to `CLOB`, so `LikeSearchGateway` no longer applies a function to the column: `SEARCH_TEXT` is now stored lower-cased
+  (`Locale.ROOT`) by every writer (`CaseSearch` on create and rebuild, `CaseSearchJdbcDao` on comment append) and
+  matched with `LIKE` against the lower-cased words. Migration `V4_5__search_text_lowercase.sql` lower-cases rows
+  written before. ADR-0006's amendment records the convention.
+- The htmx 403 answer no longer doubles the servlet context path (#66). `HtmxAwareResponses.accessDenied` now sends
+  `HX-Redirect` to the path of `HX-Current-URL` as it is (that path already includes the context path), and to
+  `<context path>/` when the header is missing, malformed or names a page outside the context. Deployments at the
+  root context path were not affected.
+
+- ADR-0006 no longer says both drivers accept the character-stream bind; on Oracle the search append binds a CLOB.
+- Oracle Free 23 `oracle-it` failures (ORA-12516) in `OracleDatabaseGrantsIT`: the grants probes share one connection per grantee and test contexts use a small Hikari pool.
+
+### Security
+
+- CI's Semgrep lockfile resolves the Dependabot alerts for `mcp` (1.30.0) and `opentelemetry-api` (1.45.2, with the rest
+  of the opentelemetry family): every Semgrep release up to 1.184.0 pins `mcp==1.29.0` and `opentelemetry-api<1.38`, so
+  `.github/requirements/semgrep-overrides.in` lifts those pins when the lockfile is compiled (the job installs with
+  `--no-deps` and never runs `semgrep mcp`).
+
+### Documentation
+
+- ADR-0006 amended (2026-11-05): the `LIKE` adapter contributes a predicate to the scoped statement instead of
+  returning candidate ids; IMPLEMENTATION_PLAN A.1 #7 marked *(amended r4)* and search removed from Part B's
+  native-SQL uses.
+- `HANDOFF.md` open owner items 6 and 7: the bnd annotations licence metadata (pinned at 4.3.1) and how ClamAV
+  signatures are kept current in a cluster.
+- Importer design (`docs/design/importer.md`) and ADR-0014 (Proposed): import compliance case history from SQL Server,
+  Oracle or PostgreSQL, or from files exported from them, through a canonical staging model, a validated mapping file,
+  a dry run with an authenticated in-app sign-off by any Compliance Admin, bound to the recorded scanning mode, an
+  idempotent load through import-only domain APIs that never touches the source, and a reconciliation report.
+  ADR-0014 records the owner's decisions of 2026-11-05: two non-login import principals, a separate
+  `TRAILKEEP_IMPORT` login, go-live alerts pre-marked, cases past purge or on legacy legal hold imported and held,
+  legacy change history in an insert-only `CASE_IMPORTED_EVENT` table on the History tab, default owners with a
+  later `relink-owners`, and delta changes reported, never overwritten, with a closure worklist. It also records the
+  owner-accepted risk that imported attachments are stored `NOT_SCANNED` in `external` scanning mode (ADR-0013),
+  amends Part B to allow one importer source-query DAO and profile-filtered staging entities, and lists the new
+  dependencies with their licences. WP-26 is planned as 31 PRs.
+
 ## [0.1.0] - 2026-11-04
 
 The walking skeleton: IMPLEMENTATION_PLAN Phase 1 (Part D pull requests 1 to 12) plus WP-09 and WP-10. The platform,
