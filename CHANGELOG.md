@@ -42,6 +42,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   (`Locale.ROOT`) by every writer (`CaseSearch` on create and rebuild, `CaseSearchJdbcDao` on comment append) and
   matched with `LIKE` against the lower-cased words. Migration `V4_5__search_text_lowercase.sql` lower-cases rows
   written before. ADR-0006's amendment records the convention.
+- The htmx 403 answer no longer doubles the servlet context path (#66). `HtmxAwareResponses.accessDenied` now sends
+  `HX-Redirect` to the path of `HX-Current-URL` as it is (that path already includes the context path), and to
+  `<context path>/` when the header is missing, malformed or names a page outside the context. Deployments at the
+  root context path were not affected.
 
 ### Documentation
 
