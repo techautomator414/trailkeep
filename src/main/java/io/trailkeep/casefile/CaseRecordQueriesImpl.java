@@ -86,21 +86,22 @@ class CaseRecordQueriesImpl implements CaseRecordQueries {
 
     @Override
     public List<CaseListRow> list(CaseScope scope, CaseListQuery request, int pageSize) {
-        return page(scope, request, pageSize, CaseListRow.class, false);
+        return page(scope, request, pageSize, entityManager.getCriteriaBuilder().createQuery(CaseListRow.class), false);
     }
 
     @Override
     public List<CaseExportRow> export(CaseScope scope, CaseListQuery request, int pageSize) {
-        return page(scope, request, pageSize, CaseExportRow.class, true);
+        return page(
+                scope, request, pageSize, entityManager.getCriteriaBuilder().createQuery(CaseExportRow.class), true);
     }
 
     /**
      * One page of the list's projection, or of the export's, which adds the subject and the description: selected
      * as they are, with no function applied, because the description is a CLOB on Oracle.
      */
-    private <T> List<T> page(CaseScope scope, CaseListQuery request, int pageSize, Class<T> type, boolean details) {
+    private <T> List<T> page(
+            CaseScope scope, CaseListQuery request, int pageSize, CriteriaQuery<T> query, boolean details) {
         CriteriaBuilder cb = entityManager.getCriteriaBuilder();
-        CriteriaQuery<T> query = cb.createQuery(type);
         Root<CaseRecord> root = query.from(CaseRecord.class);
         Join<CaseRecord, CaseType> caseType = root.join(CaseType.class);
         caseType.on(cb.equal(caseType.get("id"), root.get("caseTypeId")));
@@ -122,7 +123,7 @@ class CaseRecordQueriesImpl implements CaseRecordQueries {
             columns.add(root.get("subjectText"));
             columns.add(root.get("description"));
         }
-        query.select(cb.construct(type, columns.toArray(new Selection<?>[0])))
+        query.select(cb.construct(query.getResultType(), columns.toArray(new Selection<?>[0])))
                 .where(where(scope, request.filter(), root, query, cb))
                 .orderBy(order(request, sortKey(request.sort(), root, sla, cb), cb), cb.asc(root.get("id")));
         long offset = (long) (request.page() - 1) * pageSize;
