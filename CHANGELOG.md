@@ -9,6 +9,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Request Update screens (WP-18 part b): "Request update" on the case page opens a native dialog whose recipient is an
+  ARIA APG "combobox with list autocomplete" (`app.js`, over a native `<select>` that is the control without
+  JavaScript and on the fallback page `/cases/{number}/request-update`) listing only the enabled team members and
+  Compliance Admins who can read the case, never the actor; 422 and 409 come back on the form page with an error
+  summary. The case page lists the open requests ("Update requested from X on date by Y, awaiting an answer") with
+  "Mark answered" for the requester and for Managers and Compliance Admins. The dashboard's "Needs attention" lists the
+  requests addressed to the person, each linking to the case's comments.
 - Request Update, model and flows (WP-18 part a, no screen yet): `UPDATE_REQUEST` (`V4_10__update_request.sql`,
   `UpdateRequest` entity; the runtime user may SELECT, INSERT and UPDATE it, never DELETE) and the `updaterequest`
   module's `UpdateRequestService`. A person who may `REQUEST_UPDATE` asks one enabled person who can read the case
