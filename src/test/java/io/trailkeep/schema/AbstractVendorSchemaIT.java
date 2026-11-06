@@ -256,6 +256,18 @@ abstract class AbstractVendorSchemaIT {
         assertThat(unique).contains("UK_SAVED_VIEW_USER_NAME:1:USER_ID", "UK_SAVED_VIEW_USER_NAME:2:NAME");
     }
 
+    @Test
+    void alertsAreMigratedWithTheirEntity() {
+        assertThat(Arrays.stream(flyway.info().applied()).map(MigrationInfo::getScript))
+                .contains("V4_9__user_alert.sql");
+        assertThat(SchemaMetadataDiff.expectedColumns(entityManagerFactory))
+                .containsEntry("USER_ALERT.MESSAGE", column("USER_ALERT", "MESSAGE", false, 300L))
+                .containsEntry("USER_ALERT.LINK", column("USER_ALERT", "LINK", false, 500L))
+                .containsKeys("USER_ALERT.ID", "USER_ALERT.USER_ID", "USER_ALERT.CREATED_AT");
+        assertThat(nullableColumns(Set.of("USER_ALERT")))
+                .containsExactlyInAnyOrder("USER_ALERT.CASE_ID", "USER_ALERT.READ_AT");
+    }
+
     private static SchemaMetadataDiff.ExpectedColumn column(
             String table, String column, boolean nullable, @Nullable Long length) {
         return new SchemaMetadataDiff.ExpectedColumn(table, column, nullable, length);

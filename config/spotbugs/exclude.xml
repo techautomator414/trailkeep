@@ -119,6 +119,13 @@
     Content-Disposition file name is "cases-" plus a formatted timestamp, never
     user input; every cell is quoted and defused against formula injection by CsvFormat. Covered by CsvFormatTest,
     CaseExportIT, OracleCaseExportIT and CaseExportControllerIT. Approved in the security-reviewer role on #84.
+    AlertController (WP-17 part c): behind login; GET /alerts lists only the signed-in person's alerts (the page is
+    parsed to a number and clamped, nothing else is read) and marks nothing read; POST /alerts/{id}/read and POST
+    /alerts/{id}/delete carry CSRF (403 without) and every lookup carries the person's own id, so another person's
+    alert or an unknown id is 404, never 403. The redirect is the fixed path /alerts plus a parsed page number. Alert
+    text and links are written only by NotificationService (a link is a single-slash path inside the application)
+    and echoed through th:text and @{...}. Covered by UserAlertServiceIT, AlertControllerIT and AlertsAccessibilityIT.
+    Approved in the security-reviewer role on #96.
     Approved in the security-reviewer role on #20. Listed by class, never by pattern alone, so each new controller
     is reviewed the same way.
   -->
@@ -138,6 +145,7 @@
       <Class name="io.trailkeep.web.SavedViewController"/>
       <Class name="io.trailkeep.web.CaseHistoryController"/>
       <Class name="io.trailkeep.web.CaseExportController"/>
+      <Class name="io.trailkeep.web.AlertController"/>
     </Or>
   </Match>
   <!--

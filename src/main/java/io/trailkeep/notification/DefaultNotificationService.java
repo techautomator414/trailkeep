@@ -53,13 +53,20 @@ class DefaultNotificationService implements NotificationService {
         if (!path.startsWith("/") || path.startsWith("//") || path.indexOf('\\') >= 0) {
             throw new IllegalArgumentException("a deep link is an absolute path on this application");
         }
+        if (users.permissionsOf(userId).disabled()) {
+            return false;
+        }
+        Map<String, Object> withLink = new HashMap<>(model);
+        withLink.put("link", baseUrl + path);
+        UserAlert alert =
+                new UserAlert(userId, templates.renderAlert(templateId, withLink), path, caseId, clock.instant());
+        entityManager.persist(alert);
+        LOG.info("Alert {} written for user {}", alert.getId(), userId);
         Optional<String> address = users.mailAddress(userId);
         if (address.isEmpty()) {
             LOG.info("User {} has no mail address; no mail queued", userId);
             return false;
         }
-        Map<String, Object> withLink = new HashMap<>(model);
-        withLink.put("link", baseUrl + path);
         enqueue(address.get(), templateId, withLink, caseId);
         return true;
     }

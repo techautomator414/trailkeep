@@ -78,6 +78,7 @@ class CommentAddedMailIT {
     @AfterEach
     void removeCommittedRows() {
         jdbc.update("DELETE FROM NOTIFICATION_OUTBOX WHERE CASE_ID = ?", caseId);
+        jdbc.update("DELETE FROM USER_ALERT WHERE CASE_ID = ?", caseId);
         jdbc.update("DELETE FROM AUDIT_EVENT WHERE CASE_ID = ?", caseId);
         jdbc.update("DELETE FROM CASE_COMMENT WHERE CASE_ID = ?", caseId);
         jdbc.update("DELETE FROM CASE_SEARCH WHERE CASE_ID = ?", caseId);
@@ -110,6 +111,15 @@ class CommentAddedMailIT {
                     .contains("<a href=\"" + link + "\">", "Seed case " + caseId)
                     .doesNotContain(COMMENT, "Synthetic description");
         });
+        // And the owner's in-app alert for the same event (WP-17 part c).
+        assertThat(jdbc.queryForList("SELECT * FROM USER_ALERT WHERE CASE_ID = ?", caseId))
+                .singleElement()
+                .satisfies(alert -> assertThat(alert)
+                        .containsEntry("USER_ID", owner)
+                        .containsEntry(
+                                "MESSAGE",
+                                "Synthetic Colleague commented on " + number + ", \"Seed case " + caseId + "\"")
+                        .containsEntry("LINK", "/cases/" + number + "#comments"));
     }
 
     @Test
@@ -123,6 +133,8 @@ class CommentAddedMailIT {
 
         assertThat(mails()).isEmpty();
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM CASE_COMMENT WHERE CASE_ID = ?", Long.class, caseId))
+                .isZero();
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM USER_ALERT WHERE CASE_ID = ?", Long.class, caseId))
                 .isZero();
     }
 

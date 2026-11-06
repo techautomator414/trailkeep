@@ -9,6 +9,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- In-app alerts (WP-17 part c): `USER_ALERT` (`V4_9__user_alert.sql`, `UserAlert` entity; the runtime user may
+  SELECT, INSERT, UPDATE and DELETE it). `NotificationService.notifyUser` writes the person's alert (one line from the
+  mail's `<id>.alert.txt`, with a link inside the application) in the same transaction as their mail; a person without
+  an address still gets the alert, a disabled one gets neither. The header gains "Alerts" with an unread badge (the
+  link is named "Alerts, 3 unread"); `/alerts` lists the person's alerts newest first, 50 to a page with plain links,
+  and reading it marks nothing read. "Mark read" and "Delete" are CSRF-protected POSTs on the person's own alerts;
+  another person's alert is 404. Alerts never carry a description or subject text.
 - Outbox dispatcher and the first mail (WP-17 part b): `OutboxDispatcher` runs every minute on every web replica
   (no ShedLock: the claim's `SKIP LOCKED` and lease give each row to one replica), reaps lapsed claims, then sends due
   rows 50 at a time over one SMTP connection as multipart text + HTML with no transaction open. A sent row is `SENT`;

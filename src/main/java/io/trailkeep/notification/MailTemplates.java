@@ -54,6 +54,33 @@ class MailTemplates {
         return new RenderedMail(subject, text.process(templateId, context).strip(), html.process(templateId, context));
     }
 
+    /**
+     * Renders the one-line in-app alert for a mail, from {@code <id>.alert.txt} in text mode, with the same model.
+     *
+     * @param templateId the mail's template id
+     * @param model the values the template reads
+     * @return the alert's message on one line, cut to {@value UserAlert#MAX_MESSAGE} characters with an ellipsis
+     *     (a long title must never refuse the change it reports)
+     * @throws IllegalArgumentException for an id that is not a template name, or an empty message
+     */
+    String renderAlert(String templateId, Map<String, ?> model) {
+        if (!ID.matcher(templateId).matches()) {
+            throw new IllegalArgumentException("not a mail template id");
+        }
+        Context context = new Context();
+        context.setVariables(new HashMap<String, Object>(model));
+        String message = text.process(templateId + ".alert", context).strip().replaceAll("\\s+", " ");
+        if (message.isEmpty()) {
+            throw new IllegalArgumentException("an alert needs a message");
+        }
+        if (message.length() <= UserAlert.MAX_MESSAGE) {
+            return message;
+        }
+        int cut = UserAlert.MAX_MESSAGE - 1;
+        // Never between the two halves of a surrogate pair.
+        return message.substring(0, Character.isLowSurrogate(message.charAt(cut)) ? cut - 1 : cut) + "…";
+    }
+
     private static SpringTemplateEngine engine(TemplateMode mode, String suffix) {
         ClassLoaderTemplateResolver resolver = new ClassLoaderTemplateResolver();
         resolver.setPrefix("templates/notification/");

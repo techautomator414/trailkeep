@@ -38,6 +38,12 @@
               <li><a th:href="@{/cases/views}" th:text="#{tk.nav.views.manage}">Manage views</a></li>
             </ul>
           </details></li>
+        <!-- The person's alerts (WP-17 part c); the badge counts the unread ones and the link's name says so
+             ("Alerts, 3 unread"), starting with the visible "Alerts 3" (WCAG 2.5.3 label in name). -->
+        <li th:with="unread=${@alertNav.unread()}"><a th:href="@{/alerts}"
+            th:attr="aria-label=${unread > 0} ? #{tk.nav.alerts.unread(${unread})} : null"><span
+            th:text="#{tk.nav.alerts}">Alerts</span> <span th:if="${unread > 0}" class="badge text-bg-light"
+            th:text="${unread}">3</span></a></li>
       </ul>
     </nav>
     <!-- htmx posts the sign-out so the provider's end-session URL comes back as HX-Redirect: a form redirect to
