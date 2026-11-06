@@ -20,6 +20,8 @@ import java.util.List;
  * @param caseTypes every case type, by name, to filter by
  * @param teams the teams of the cases the person reads, by name
  * @param owners the owners of the cases the person reads, by name
+ * @param offersSensitivity whether the filters offer sensitivity: only to someone who reads other people's
+ *     restricted cases ({@link CaseScopeService#readsOthersRestricted})
  */
 public record CaseList(
         List<Row> rows,
@@ -28,7 +30,8 @@ public record CaseList(
         int pages,
         List<Choice> caseTypes,
         List<Choice> teams,
-        List<Choice> owners) {
+        List<Choice> owners,
+        boolean offersSensitivity) {
 
     /** Copies the lists. */
     public CaseList {

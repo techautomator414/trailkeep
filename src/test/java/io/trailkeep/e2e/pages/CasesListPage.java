@@ -62,6 +62,72 @@ public final class CasesListPage {
     }
 
     /**
+     * Presses a key that moves focus without an htmx request (opening or closing a dialog) and waits for focus.
+     *
+     * @param key the key, as Playwright names it
+     * @param id where focus should land
+     */
+    public void pressAndWaitForFocusOn(String key, String id) {
+        page.keyboard().press(key);
+        page.waitForFunction("id => document.activeElement && document.activeElement.id === id", id);
+    }
+
+    /**
+     * Presses Tab until the focused element has an accessible name given by {@code aria-label}, at most a few times.
+     *
+     * @param label the {@code aria-label}
+     * @param presses the most presses allowed
+     */
+    public void tabToLabel(String label, int presses) {
+        for (int i = 1; i <= presses; i++) {
+            page.keyboard().press("Tab");
+            if (label.equals(page.evaluate("() => document.activeElement.getAttribute('aria-label')"))) {
+                return;
+            }
+        }
+        throw new AssertionError("Tab never reached the control labelled " + label);
+    }
+
+    /**
+     * Whether the filter dialog is open as a modal dialog.
+     *
+     * @return {@code true} while it is shown modal
+     */
+    public boolean filtersShownModal() {
+        return Boolean.TRUE.equals(
+                page.evaluate("() => document.getElementById('tk-filter-dialog').matches(':modal')"));
+    }
+
+    /**
+     * Whether the filter dialog is open at all.
+     *
+     * @return {@code true} while it is open, modal or not
+     */
+    public boolean filtersOpen() {
+        return Boolean.TRUE.equals(page.evaluate("() => document.getElementById('tk-filter-dialog').open"));
+    }
+
+    /**
+     * The accessible names of the active-filter chips.
+     *
+     * @return one {@code aria-label} per chip, in order
+     */
+    public List<String> chips() {
+        return lines(page.evaluate("() => Array.from(document.querySelectorAll('.tk-chips a'))"
+                + ".map(a => a.getAttribute('aria-label')).join('\\n')"));
+    }
+
+    /**
+     * The value of a form control.
+     *
+     * @param id the control's id
+     * @return its value
+     */
+    public String value(String id) {
+        return String.valueOf(page.evaluate("id => document.getElementById(id).value", id));
+    }
+
+    /**
      * The element with focus.
      *
      * @return its id, or an empty string

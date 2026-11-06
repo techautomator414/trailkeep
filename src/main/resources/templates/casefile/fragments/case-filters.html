@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- The cases list's filter controls (BUILD_PLAN §4.4), rendered in the page and, with oob=true, again in every htmx
+     response with hx-swap-oob, so a chip removed or a header sorted leaves the form showing what the URL says. The
+     first status box carries data-tk-dialog-focus: app.js focuses it when the dialog opens. -->
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<body>
+<div th:fragment="search(oob)" id="tk-search-field" class="col-12 col-lg-6"
+     th:attr="hx-swap-oob=${oob ? 'true' : null}">
+  <label class="form-label" for="tk-q" th:text="#{tk.list.q}">Search</label>
+  <input id="tk-q" class="form-control" type="search" name="q" th:value="${query.filter.text}"
+         th:maxlength="${maxText}" aria-describedby="tk-q-hint">
+  <p id="tk-q-hint" class="form-text mb-0" th:text="#{tk.list.q.hint}">Up to ten words; every word must appear.</p>
+</div>
+
+<div th:fragment="fields(oob)" id="tk-filter-fields" class="row g-3" th:with="f=${query.filter}"
+     th:attr="hx-swap-oob=${oob ? 'true' : null}">
+  <fieldset th:replace="~{casefile/fragments/case-filters :: checks('status', ${statuses}, ${f.statuses},
+                         'tk.case.status.', #{tk.list.status}, #{tk.list.status.hint})}"></fieldset>
+  <fieldset th:replace="~{casefile/fragments/case-filters :: checks('sla', ${slaStates}, ${f.slaStates},
+                         'tk.list.sla.', #{tk.list.sla.state}, #{tk.list.sla.hint})}"></fieldset>
+  <div class="col-12 col-sm-6">
+    <label class="form-label" for="tk-priority" th:text="#{tk.new.priority}">Priority</label>
+    <select id="tk-priority" class="form-select" name="priority">
+      <option value="" th:text="#{tk.list.any}">Any</option>
+      <option th:each="p : ${priorities}" th:value="${p}" th:selected="${f.priority == p}"
+              th:text="#{'tk.new.priority.' + ${p}}">High</option>
+    </select>
+  </div>
+  <div class="col-12 col-sm-6" th:if="${list.offersSensitivity}">
+    <label class="form-label" for="tk-sensitivity" th:text="#{tk.new.sensitivity}">Sensitivity</label>
+    <select id="tk-sensitivity" class="form-select" name="sensitivity">
+      <option value="" th:text="#{tk.list.any}">Any</option>
+      <option th:each="s : ${sensitivities}" th:value="${s}" th:selected="${f.sensitivity == s}"
+              th:text="#{'tk.list.sensitivity.' + ${s}}">Restricted</option>
+    </select>
+  </div>
+  <div class="col-12 col-sm-6">
+    <label class="form-label" for="tk-from" th:text="#{tk.list.from}">Identified from</label>
+    <input id="tk-from" class="form-control" type="date" name="from" th:value="${f.identifiedFrom}">
+  </div>
+  <div class="col-12 col-sm-6">
+    <label class="form-label" for="tk-to" th:text="#{tk.list.to}">Identified to</label>
+    <input id="tk-to" class="form-control" type="date" name="to" th:value="${f.identifiedTo}">
+  </div>
+  <div class="col-12 col-sm-6">
+    <label class="form-label" for="tk-type" th:text="#{tk.case.type}">Case type</label>
+    <select id="tk-type" class="form-select" name="type">
+      <option value="" th:text="#{tk.list.any}">Any</option>
+      <option th:each="o : ${list.caseTypes}" th:value="${o.id}" th:selected="${f.caseTypeId == o.id}"
+              th:text="${o.name}">Type</option>
+    </select>
+  </div>
+  <div class="col-12 col-sm-6">
+    <label class="form-label" for="tk-team" th:text="#{tk.case.team}">Team</label>
+    <select id="tk-team" class="form-select" name="team">
+      <option value="" th:text="#{tk.list.any}">Any</option>
+      <option th:each="o : ${list.teams}" th:value="${o.id}" th:selected="${f.teamId == o.id}"
+              th:text="${o.name}">Team</option>
+    </select>
+  </div>
+  <div class="col-12 col-sm-6">
+    <label class="form-label" for="tk-owner" th:text="#{tk.case.owner}">Owner</label>
+    <select id="tk-owner" class="form-select" name="owner">
+      <option value="" th:text="#{tk.list.owner.anyone}">Anyone</option>
+      <option value="me" th:selected="${f.mine}" th:text="#{tk.list.owner.me}">Me</option>
+      <option th:each="o : ${list.owners}" th:value="${o.id}" th:selected="${f.ownerId == o.id}"
+              th:text="${o.name}">Owner</option>
+    </select>
+  </div>
+  <input type="hidden" name="sort" th:value="${#strings.toLowerCase(query.sort)}">
+  <input type="hidden" name="dir" th:value="${query.descending ? 'desc' : 'asc'}">
+</div>
+
+<fieldset th:fragment="checks(name, values, chosen, prefix, legend, hint)" class="col-12 col-sm-6"
+          th:aria-describedby="'tk-' + ${name} + '-hint'">
+  <legend class="form-label fs-6" th:text="${legend}">Status</legend>
+  <div class="form-check" th:each="v, at : ${values}">
+    <input class="form-check-input" type="checkbox" th:name="${name}" th:id="'tk-' + ${name} + '-' + ${v}"
+           th:value="${v}" th:checked="${chosen.contains(v)}"
+           th:attr="data-tk-dialog-focus=${name == 'status' and at.first ? 'true' : null}">
+    <label class="form-check-label" th:for="'tk-' + ${name} + '-' + ${v}" th:text="#{${prefix + v}}">Open</label>
+  </div>
+  <p th:id="'tk-' + ${name} + '-hint'" class="form-text mb-0" th:text="${hint}">None ticked: any.</p>
+</fieldset>
+</body>
+</html>

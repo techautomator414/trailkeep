@@ -32,6 +32,11 @@ body { color: var(--tk-ink); display: flex; flex-direction: column; min-height: 
 .tk-dialog { max-width: 32rem; border: 2px solid var(--tk-ink); border-radius: 0.5rem; padding: 1.5rem; }
 .tk-dialog::backdrop { background: rgb(0 0 0 / 50%); }
 .tk-dialog-actions { display: flex; gap: 0.75rem; flex-wrap: wrap; }
+.tk-filter-dialog { max-width: 48rem; width: calc(100% - 2rem); }
+/* Rendered open by the server (no JavaScript): part of the page, not an overlay. */
+.tk-filter-dialog:not(:modal) { position: static; width: auto; margin: 1rem 0; }
+.tk-chip-remove { display: inline-block; min-height: 24px; color: var(--tk-ink); text-decoration: none; }
+.tk-chip-remove:hover { text-decoration: underline; }
 
 .tk-problem { border-left: 4px solid #b3261e; padding: 0.75rem 1rem; background: #fdf2f1; }
 

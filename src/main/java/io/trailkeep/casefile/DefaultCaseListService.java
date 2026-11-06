@@ -85,7 +85,15 @@ class DefaultCaseListService implements CaseListService {
         List<Choice> types = caseTypes.findAllByOrderByNameAsc().stream()
                 .map(type -> new Choice(Objects.requireNonNull(type.getId()), type.getName()))
                 .toList();
-        return new CaseList(shown, total, query.page(), pages, types, byName(teams), byName(owners));
+        return new CaseList(
+                shown,
+                total,
+                query.page(),
+                pages,
+                types,
+                byName(teams),
+                byName(owners),
+                scopes.readsOthersRestricted(actor.permissions()));
     }
 
     private static Set<Long> ids(List<CaseListRow.TeamOwner> pairs, ToLongFunction<CaseListRow.TeamOwner> id) {

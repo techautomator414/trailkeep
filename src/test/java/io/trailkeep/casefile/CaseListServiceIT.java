@@ -2,6 +2,7 @@
 // Copyright 2026 Charlie Genova and contributors
 package io.trailkeep.casefile;
 
+import static io.trailkeep.casefile.FilterBuilder.filter;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.trailkeep.casefile.CaseService.Actor;
@@ -12,6 +13,7 @@ import io.trailkeep.shared.Sensitivity;
 import io.trailkeep.testsupport.CaseSeed;
 import io.trailkeep.testsupport.PostgresTestcontainersConfiguration;
 import io.trailkeep.testsupport.RequiresDocker;
+import io.trailkeep.user.GlobalRole;
 import io.trailkeep.user.TeamRole;
 import io.trailkeep.user.UserPermissions;
 import jakarta.persistence.EntityManager;
@@ -36,8 +38,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * The cases list on PostgreSQL (WP-15 part 1): restricted and other-team cases are absent from rows, counts and the
- * filters' choices exactly as if they did not exist; the basic filters; every allow-listed sort with stable paging;
- * and a page read in six statements.
+ * filters' choices exactly as if they did not exist; the basic filters; SLA state, priority, the identified range
+ * with both ends included, and sensitivity, which is offered only to people who read others' restricted cases and
+ * never widens what the scope reads; every allow-listed sort with stable paging; and a page read in six statements.
  */
 // "IT" is the Failsafe suffix Part B mandates for integration tests, not an abbreviation.
 @SuppressWarnings("checkstyle:AbbreviationAsWordInName")
@@ -141,8 +144,75 @@ class CaseListServiceIT {
         assertThat(numbers(filtered(analyst, Set.of(), null, manager, true))).containsExactlyInAnyOrder(mine, closed);
         assertThat(numbers(list.list(
                         actor(manager, TeamRole.MANAGER),
-                        query(new CaseFilter(Set.of(), null, otherTeam, null, false, ""), CaseSort.OPENED, true, 1))))
+                        query(filter().team(otherTeam).build(), CaseSort.OPENED, true, 1))))
                 .isEmpty();
+    }
+
+    @Test
+    void slaStatePriorityAndTheIdentifiedRangeNarrowWithBothEndsOfTheRangeIncluded() {
+        // IDENTIFIED_ON is a calendar date, entered as a day in app.timezone, so the range compares days, inclusive.
+        LocalDate day = LocalDate.now(ZoneOffset.UTC).minusDays(20);
+        final CaseNumber before =
+                create(fields(analyst, team, "Synthetic before", CasePriority.NORMAL, day.minusDays(1)));
+        final CaseNumber first = create(fields(analyst, team, "Synthetic first", CasePriority.HIGH, day));
+        final CaseNumber last = create(fields(analyst, team, "Synthetic last", CasePriority.NORMAL, day.plusDays(1)));
+        final CaseNumber after = create(fields(analyst, team, "Synthetic after", CasePriority.HIGH, day.plusDays(2)));
+        sla(before, SlaState.ON_TRACK);
+        sla(first, SlaState.OVERDUE);
+        sla(last, SlaState.ON_TRACK);
+        sla(after, SlaState.AT_RISK);
+
+        assertThat(numbers(listed(analyst, filter().identified(day, day.plusDays(1)))))
+                .containsExactlyInAnyOrder(first, last);
+        assertThat(numbers(listed(analyst, filter().identified(day, day)))).containsExactly(first);
+        assertThat(numbers(listed(analyst, filter().identified(day.plusDays(1), null))))
+                .containsExactlyInAnyOrder(last, after);
+        assertThat(numbers(listed(analyst, filter().identified(null, day.minusDays(1)))))
+                .containsExactly(before);
+        assertThat(numbers(listed(analyst, filter().sla(SlaState.OVERDUE, SlaState.AT_RISK))))
+                .containsExactlyInAnyOrder(first, after);
+        assertThat(numbers(listed(analyst, filter().sla(SlaState.ON_TRACK)))).containsExactlyInAnyOrder(before, last);
+        assertThat(listed(analyst, filter().sla(SlaState.BREACHED)).total()).isZero();
+        assertThat(numbers(listed(analyst, filter().priority(CasePriority.HIGH))))
+                .containsExactlyInAnyOrder(first, after);
+        CaseList all = listed(
+                analyst,
+                filter().priority(CasePriority.HIGH).sla(SlaState.OVERDUE).identified(day, day));
+        assertThat(all.total()).isEqualTo(1);
+        assertThat(numbers(all)).containsExactly(first);
+    }
+
+    @Test
+    void sensitivityIsOfferedOnlyToThoseWhoReadOthersRestrictedCasesAndNeverWidensTheScope() {
+        final CaseNumber standard = create(analyst, team, "Synthetic standard", Sensitivity.STANDARD);
+        final CaseNumber restricted = create(analyst, team, "Synthetic restricted", Sensitivity.RESTRICTED);
+
+        for (long outsider : List.of(colleague, reader)) {
+            CaseList asked = listed(outsider, filter().sensitivity(Sensitivity.RESTRICTED));
+            assertThat(asked.rows()).isEmpty();
+            assertThat(asked.total()).isZero();
+            assertThat(asked.offersSensitivity()).isFalse();
+            assertThat(numbers(listed(outsider, filter().sensitivity(Sensitivity.STANDARD))))
+                    .containsExactly(standard);
+        }
+        // The owner reads their own restricted case, so the filter finds it, but reads no one else's: not offered.
+        CaseList owners = listed(analyst, filter().sensitivity(Sensitivity.RESTRICTED));
+        assertThat(numbers(owners)).containsExactly(restricted);
+        assertThat(owners.offersSensitivity()).isFalse();
+        CaseList managers = listed(manager, filter().sensitivity(Sensitivity.RESTRICTED));
+        assertThat(numbers(managers)).containsExactly(restricted);
+        assertThat(managers.offersSensitivity()).isTrue();
+        assertThat(listed(otherManager, filter().sensitivity(Sensitivity.RESTRICTED))
+                        .total())
+                .isZero();
+        assertThat(list.list(global(GlobalRole.COMPLIANCE_ADMIN), query(CaseFilter.none(), CaseSort.OPENED, true, 1))
+                        .offersSensitivity())
+                .isTrue();
+        CaseList systemAdmins = list.list(
+                global(GlobalRole.SYSTEM_ADMIN),
+                query(filter().sensitivity(Sensitivity.RESTRICTED).build(), CaseSort.OPENED, true, 1));
+        assertThat(systemAdmins.offersSensitivity()).isFalse();
+        assertThat(systemAdmins.total()).isZero();
     }
 
     @Test
@@ -196,8 +266,15 @@ class CaseListServiceIT {
         statistics.clear();
         CaseList page;
         try {
-            page = search(manager, "counted");
-            // Count, rows, team and owner pairs, team names, owner names, case types.
+            page = listed(
+                    manager,
+                    filter().text("counted")
+                            .sla(SlaState.ON_TRACK, SlaState.AT_RISK)
+                            .priority(CasePriority.NORMAL)
+                            .sensitivity(Sensitivity.STANDARD)
+                            .identified(LocalDate.now(ZoneOffset.UTC).minusDays(1), null));
+            // Count, rows, team and owner pairs, team names, owner names, case types. The SLA states are a
+            // subquery inside the count and the rows, and whether to offer sensitivity is a matrix decision.
             assertThat(statistics.getPrepareStatementCount()).isEqualTo(6);
         } finally {
             statistics.setStatisticsEnabled(false);
@@ -218,16 +295,19 @@ class CaseListServiceIT {
     }
 
     private CaseList search(long user, String text) {
-        return list.list(
-                actor(user, roleOf(user)),
-                query(new CaseFilter(Set.of(), null, null, null, false, text), CaseSort.OPENED, true, 1));
+        return list.list(actor(user, roleOf(user)), query(filter().text(text).build(), CaseSort.OPENED, true, 1));
+    }
+
+    private CaseList listed(long user, FilterBuilder filter) {
+        return list.list(actor(user, roleOf(user)), query(filter.build(), CaseSort.OPENED, true, 1));
     }
 
     private CaseList filtered(
             long user, Set<CaseStatus> statuses, @Nullable Long type, @Nullable Long owner, boolean mine) {
-        return list.list(
-                actor(user, roleOf(user)),
-                query(new CaseFilter(statuses, type, null, owner, mine, ""), CaseSort.OPENED, true, 1));
+        FilterBuilder filter = filter().statuses(statuses.toArray(CaseStatus[]::new))
+                .type(type)
+                .owner(owner);
+        return listed(user, mine ? filter.mine() : filter);
     }
 
     private static CaseListQuery query(CaseFilter filter, CaseSort sort, boolean descending, int page) {
@@ -285,6 +365,15 @@ class CaseListServiceIT {
         long user = seed.user();
         seed.member(user, inTeam, role);
         return user;
+    }
+
+    private Actor global(GlobalRole role) {
+        return new Actor(new UserPermissions(seed.user(), false, Set.of(role), Map.of()), "Synthetic Global User");
+    }
+
+    private void sla(CaseNumber number, SlaState state) {
+        entityManager.flush();
+        jdbc.update("UPDATE CASE_SLA SET SLA_STATE = ? WHERE CASE_ID = ?", state.name(), seed.caseId(number));
     }
 
     private void status(CaseNumber number, CaseStatus status) {
