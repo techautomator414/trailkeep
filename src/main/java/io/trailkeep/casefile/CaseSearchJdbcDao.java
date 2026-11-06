@@ -38,16 +38,17 @@ class CaseSearchJdbcDao {
      * Appends text to a case's search text, in the caller's transaction.
      *
      * @param caseId the case
-     * @param fragment the text to append, separator included
+     * @param fragment the text to append, separator included; stored lower-cased ({@link CaseSearch#normalized})
      * @param now when it was written
      * @return {@code true} if the case had a search row to append to
      */
     boolean append(long caseId, String fragment, Instant now) {
+        String stored = CaseSearch.normalized(fragment);
         return jdbc.update(APPEND, statement -> {
                     if (oracle) {
-                        statement.setClob(1, new StringReader(fragment), fragment.length());
+                        statement.setClob(1, new StringReader(stored), stored.length());
                     } else {
-                        statement.setCharacterStream(1, new StringReader(fragment), fragment.length());
+                        statement.setCharacterStream(1, new StringReader(stored), stored.length());
                     }
                     statement.setObject(2, OffsetDateTime.ofInstant(now, ZoneOffset.UTC));
                     statement.setLong(3, caseId);

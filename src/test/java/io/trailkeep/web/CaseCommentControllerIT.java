@@ -28,6 +28,7 @@ import jakarta.persistence.EntityManager;
 import jakarta.servlet.http.Cookie;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -145,7 +146,8 @@ class CaseCommentControllerIT {
                 .containsEntry("AUTHOR_ID", ANALYST)
                 .containsEntry("AUTHOR_NAME_SNAPSHOT", "Synthetic Comment Analyst");
         assertThat(jdbc.queryForObject("SELECT SEARCH_TEXT FROM CASE_SEARCH WHERE CASE_ID = ?", String.class, caseId))
-                .isEqualTo("Synthetic comment case\nSynthetic description\n" + MARKDOWN + "\nSecond line");
+                .isEqualTo("synthetic comment case\nsynthetic description\n" + MARKDOWN.toLowerCase(Locale.ROOT)
+                        + "\nsecond line");
         Map<String, Object> event = jdbc.queryForMap(
                 "SELECT ACTOR_ID, ENTITY_TYPE, OLD_VALUES_JSON, NEW_VALUES_JSON FROM AUDIT_EVENT"
                         + " WHERE CASE_ID = ? AND ACTION = 'COMMENT_ADDED'",

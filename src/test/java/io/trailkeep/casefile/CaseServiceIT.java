@@ -25,6 +25,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -109,7 +110,9 @@ class CaseServiceIT {
         assertThat(instant(sla, "AT_RISK_AT")).isEqualTo(anchor.plus(24, ChronoUnit.DAYS));
 
         String search = jdbc.queryForObject("SELECT SEARCH_TEXT FROM CASE_SEARCH WHERE CASE_ID = ?", String.class, id);
-        assertThat(search).contains("Synthetic title", DESCRIPTION).doesNotContain(SUBJECT);
+        assertThat(search)
+                .contains("synthetic title", DESCRIPTION.toLowerCase(Locale.ROOT))
+                .doesNotContain(SUBJECT.toLowerCase(Locale.ROOT));
 
         Map<String, Object> event = jdbc.queryForMap(
                 "SELECT ACTOR_ID, ENTITY_TYPE, ENTITY_ID, ACTION, NEW_VALUES_JSON, AT_TS FROM AUDIT_EVENT"

@@ -7,12 +7,16 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.Instant;
+import java.util.Locale;
 import org.hibernate.Length;
 import org.jspecify.annotations.Nullable;
 
 /**
  * A case's search text ({@code CASE_SEARCH}): title and description, later comments (WP-13); never the subject. A
  * side table without {@code @Version}, so a colleague's comment never fails your save (BUILD_PLAN §8 rule 4).
+ *
+ * <p>The text is stored lower-cased ({@link #normalized}), by every writer, so the search can use {@code LIKE} alone:
+ * Hibernate refuses {@code lower()} on a column Oracle maps to {@code CLOB} (ADR-0006, amended).
  */
 @Entity
 @Table(name = "CASE_SEARCH")
@@ -40,7 +44,7 @@ class CaseSearch {
      */
     CaseSearch(long caseId, String text, Instant now) {
         this.caseId = caseId;
-        this.text = text;
+        this.text = normalized(text);
         this.updatedAt = now;
     }
 
@@ -51,8 +55,18 @@ class CaseSearch {
      * @param now when it was written
      */
     void rebuild(String text, Instant now) {
-        this.text = text;
+        this.text = normalized(text);
         this.updatedAt = now;
+    }
+
+    /**
+     * The form in which search text is stored and matched; the query's words get the same treatment.
+     *
+     * @param text the text as written
+     * @return the text lower-cased with {@link Locale#ROOT}
+     */
+    static String normalized(String text) {
+        return text.toLowerCase(Locale.ROOT);
     }
 
     @Override

@@ -13,11 +13,12 @@ import java.util.Locale;
 import org.springframework.stereotype.Component;
 
 /**
- * The portable v1 {@link SearchGateway}: {@code CASE_ID IN (SELECT … FROM CASE_SEARCH WHERE LOWER(SEARCH_TEXT) LIKE
- * ? ESCAPE '\' AND …)}, one bound pattern per word, or the case number containing the text. It is a scan on both
- * vendors, which ADR-0006 accepts at 50k cases. Criteria, not native SQL: JPA expresses {@code LIKE} on the {@code
- * CLOB}/{@code text} column on both vendors, and only a predicate lets the scope filter in the same statement. {@code
- * %}, {@code _} and the escape character in the text match themselves.
+ * The portable v1 {@link SearchGateway}: {@code CASE_ID IN (SELECT … FROM CASE_SEARCH WHERE SEARCH_TEXT LIKE ?
+ * ESCAPE '\' AND …)}, one bound pattern per word, or the case number containing the text. {@code SEARCH_TEXT} is
+ * stored lower-cased (see {@link CaseSearch}) and the words are lower-cased here, so no function is applied to the
+ * {@code CLOB}. It is a scan on both vendors, which ADR-0006 accepts at 50k cases. Criteria, not native SQL: JPA
+ * expresses {@code LIKE} on the {@code CLOB}/{@code text} column on both vendors, and only a predicate lets the
+ * scope filter in the same statement. {@code %}, {@code _} and the escape character in the text match themselves.
  */
 @Component
 class LikeSearchGateway implements SearchGateway {
@@ -31,7 +32,7 @@ class LikeSearchGateway implements SearchGateway {
     public Predicate matches(String text, Root<CaseRecord> caseRoot, CriteriaQuery<?> query, CriteriaBuilder cb) {
         Subquery<Long> matching = query.subquery(Long.class);
         Root<CaseSearch> search = matching.from(CaseSearch.class);
-        Expression<String> haystack = cb.lower(search.<String>get("text"));
+        Expression<String> haystack = search.<String>get("text");
         Predicate[] words = Arrays.stream(text.split("\\s+"))
                 .map(word -> word.toLowerCase(Locale.ROOT))
                 .distinct()
