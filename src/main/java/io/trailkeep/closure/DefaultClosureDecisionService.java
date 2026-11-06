@@ -218,7 +218,11 @@ class DefaultClosureDecisionService implements ClosureDecisionService {
                 requestId,
                 action,
                 changes));
-        LOG.info("Closure request {} on case id {}: {}", requestId, moved.ref().id(), action);
+        // The action is in the audit trail; the log carries ids only.
+        LOG.info(
+                "Closure request {} on case id {} decided or reassigned",
+                requestId,
+                moved.ref().id());
     }
 
     /** Mail and alert with number, title and a link, plus the template's own values; never a reason or summary. */
