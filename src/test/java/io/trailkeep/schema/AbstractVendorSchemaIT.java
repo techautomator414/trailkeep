@@ -269,6 +269,22 @@ abstract class AbstractVendorSchemaIT {
     }
 
     @Test
+    void closureRequestsAreMigratedWithTheirEntity() {
+        assertThat(Arrays.stream(flyway.info().applied()).map(MigrationInfo::getScript))
+                .contains("V5__closure.sql");
+        assertThat(SchemaMetadataDiff.expectedColumns(entityManagerFactory))
+                .containsEntry("CLOSURE_REQUEST.OUTCOME", column("CLOSURE_REQUEST", "OUTCOME", false, 40L))
+                .containsEntry("CLOSURE_REQUEST.REASON", column("CLOSURE_REQUEST", "REASON", true, 1000L))
+                .containsKeys("CLOSURE_REQUEST.RESOLUTION_SUMMARY", "CLOSURE_REQUEST.VERSION");
+        assertThat(nullableColumns(Set.of("CLOSURE_REQUEST")))
+                .containsExactlyInAnyOrder(
+                        "CLOSURE_REQUEST.FOLLOW_UP_ACTIONS",
+                        "CLOSURE_REQUEST.DECIDED_BY",
+                        "CLOSURE_REQUEST.DECIDED_AT",
+                        "CLOSURE_REQUEST.REASON");
+    }
+
+    @Test
     void updateRequestsAreMigratedWithTheirEntity() {
         assertThat(Arrays.stream(flyway.info().applied()).map(MigrationInfo::getScript))
                 .contains("V4_10__update_request.sql");

@@ -9,6 +9,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Request Closure, schema and request (WP-19 part a, no screen yet): `CLOSURE_REQUEST` (`V5__closure.sql`,
+  `ClosureRequest` entity; decisions `PENDING`/`APPROVED`/`REJECTED`/`CHANGES_REQUESTED`, a check that the requester
+  is never the approver; the runtime user may SELECT, INSERT and UPDATE it, never DELETE) and the `closure` module's
+  `ClosureService`. A person who may `REQUEST_CLOSURE` an open case picks one of the case type's outcomes (kept as a
+  text snapshot), writes a resolution summary (1 to 5000 characters) and optional follow-up actions, and names an
+  approver from the team's enabled Managers minus the requester and the owner, or, when that leaves nobody,
+  the Compliance Admins (IMPLEMENTATION_PLAN A.2 #18). The case moves to `PENDING_CLOSURE` under its row lock
+  (`CaseStatusService`), so of two racing requests one wins and the other is refused; `CLOSURE_REQUESTED` is audited
+  with summary and follow-ups redacted, and the approver gets the `closure-requested` mail and alert (number, title,
+  requester, outcome and a link, never the summary). A pending case cannot be requested again or reassigned.
 - Request Update screens (WP-18 part b): "Request update" on the case page opens a native dialog whose recipient is an
   ARIA APG "combobox with list autocomplete" (`app.js`, over a native `<select>` that is the control without
   JavaScript and on the fallback page `/cases/{number}/request-update`) listing only the enabled team members and
