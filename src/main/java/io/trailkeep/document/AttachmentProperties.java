@@ -21,7 +21,9 @@ import org.springframework.validation.annotation.Validated;
  *
  * @param tempDir where an upload is written while it is checked and scanned; an {@code emptyDir} in deployments.
  *     Only ever a parent directory: a file's name never forms a path.
- * @param maxBytes the largest file accepted; {@code spring.servlet.multipart.max-file-size} follows it
+ * @param maxBytes the largest file accepted; {@code spring.servlet.multipart.max-file-size} follows it, but
+ *     {@code spring.servlet.multipart.max-request-size} does not and must stay at least 1 MiB above it (startup fails
+ *     otherwise, see {@link AttachmentConfig}); raise both together
  * @param maxImagePixels the largest width times height accepted for a PNG or JPEG, read from its header
  * @param scanning who scans uploads for malware (ADR-0013): {@code clamd}, the default, or {@code external}. An unset
  *     value never turns scanning off, and an unknown one fails startup.
