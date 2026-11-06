@@ -235,6 +235,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Documentation
 
+- `HANDOFF.md` refreshed to the end of Phase 2 (WP-15 parts 1a to 4 and WP-16 merged; the p95 measurement, WP-15
+  part 5, in flight): progress table, what is on `main`, four new decisions (`VIEW_RESTRICTED` through one
+  `RestrictedReadAudit`, the export audit's `query`, exports and the connection cap, History as a page), #82 closed,
+  and the next steps (WP-15 part 5, then WP-17 to WP-19); `README.md` status block to match.
 - `HANDOFF.md` refreshed to the state after WP-11 to WP-14 and WP-15 parts 1a, 1b, 2 and 3 (progress table, what is on
   `main`, schema, decisions, known gaps, what comes next); `README.md` status and `CONTRIBUTING.md` compose line no
   longer say that no case can be created or that ClamAV is still to come.
