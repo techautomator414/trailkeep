@@ -21,7 +21,6 @@ import io.trailkeep.shared.config.AppProperties;
 import io.trailkeep.user.UserDirectoryService;
 import io.trailkeep.user.UserPermissions;
 import jakarta.persistence.EntityManager;
-import java.time.Instant;
 import java.time.InstantSource;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
@@ -111,7 +110,7 @@ class DefaultUpdateRequestService implements UpdateRequestService {
             throw new UpdateRequestException(Kind.CONFLICT, "an update is already requested from this person");
         }
         long id = Objects.requireNonNull(request.getId());
-        String recipientName = name(recipientId);
+        String recipientName = directory.displayName(recipientId).orElse("");
         audit.record(new AuditEntry(
                 actorId,
                 actor.displayName(),
@@ -160,23 +159,22 @@ class DefaultUpdateRequestService implements UpdateRequestService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<CaseRequest> forCase(Actor actor, String caseNumber) {
-        List<UpdateRequest> found = requests.findForCase(scopes.forUser(actor.permissions()), parse(caseNumber));
+    public List<CaseRequest> openForCase(Actor actor, String caseNumber) {
+        CaseNumber number = cases.actionable(actor, caseNumber, CaseAction.VIEW).number();
+        List<UpdateRequest> found =
+                open(scopes.forUser(actor.permissions()), number).toList();
         Map<Long, String> names = directory.displayNames(found.stream()
-                .flatMap(r -> Stream.of(r.getRequestedBy(), r.getRequestedFrom(), r.getAnsweredBy()))
-                .filter(Objects::nonNull)
+                .flatMap(r -> Stream.of(r.getRequestedBy(), r.getRequestedFrom()))
                 .distinct()
                 .toList());
         return found.stream()
                 .map(r -> new CaseRequest(
                         Objects.requireNonNull(r.getId()),
+                        r.getRequestedBy(),
                         names.getOrDefault(r.getRequestedBy(), ""),
                         names.getOrDefault(r.getRequestedFrom(), ""),
-                        local(r.getRequestedAt()),
-                        r.getMessage(),
-                        r.getAnsweredAt() == null ? null : local(Objects.requireNonNull(r.getAnsweredAt())),
-                        r.getAnsweredBy() == null ? null : names.get(r.getAnsweredBy()),
-                        r.getAnsweredByCommentId() != null))
+                        LocalDateTime.ofInstant(r.getRequestedAt(), zone).truncatedTo(ChronoUnit.MINUTES),
+                        r.getMessage()))
                 .toList();
     }
 
@@ -232,22 +230,6 @@ class DefaultUpdateRequestService implements UpdateRequestService {
 
     private Stream<UpdateRequest> open(CaseScope scope, CaseNumber number) {
         return requests.findForCase(scope, number).stream().filter(UpdateRequest::isOpen);
-    }
-
-    private String name(long userId) {
-        return directory.displayName(userId).orElse("");
-    }
-
-    private LocalDateTime local(Instant instant) {
-        return LocalDateTime.ofInstant(instant, zone).truncatedTo(ChronoUnit.MINUTES);
-    }
-
-    private static CaseNumber parse(String caseNumber) {
-        try {
-            return CaseNumber.parse(caseNumber);
-        } catch (IllegalArgumentException malformed) {
-            throw new UpdateRequestException(Kind.NOT_FOUND, "not a case number");
-        }
     }
 
     /**

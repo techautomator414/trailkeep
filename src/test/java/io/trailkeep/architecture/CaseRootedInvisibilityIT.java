@@ -206,6 +206,10 @@ class CaseRootedInvisibilityIT {
             // An action filter that keeps everything.
             return Set.of();
         }
+        if (type == Collection.class) {
+            // Case ids, such as the cases a list in another module names.
+            return List.of(call.caseId());
+        }
         if (type == CaseFilter.class) {
             return CaseFilter.none();
         }

@@ -9,6 +9,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Request Update, model and flows (WP-18 part a, no screen yet): `UPDATE_REQUEST` (`V4_10__update_request.sql`,
+  `UpdateRequest` entity; the runtime user may SELECT, INSERT and UPDATE it, never DELETE) and the `updaterequest`
+  module's `UpdateRequestService`. A person who may `REQUEST_UPDATE` asks one enabled person who can read the case
+  (422 otherwise, also for themselves or a message outside 1 to 2000 characters); one open request per case and
+  recipient (409, held by a unique `OPEN_KEY` on both vendors). The request is audited as `UPDATE_REQUESTED` with the
+  message redacted and reaches the recipient as the `update-requested` mail and alert (number, title, requester and a
+  link, never the message). The recipient's comment on the case answers their open requests in the posting
+  transaction (`casefile` publishes `CommentPosted`, consumed `BEFORE_COMMIT`); "Mark answered" is the requester's,
+  or needs the new matrix action `ANSWER_UPDATE` (Managers and Compliance Admins); both are audited as
+  `UPDATE_ANSWERED`, once. Open requests are listed for a case and for the person asked.
 - In-app alerts (WP-17 part c): `USER_ALERT` (`V4_9__user_alert.sql`, `UserAlert` entity; the runtime user may
   SELECT, INSERT, UPDATE and DELETE it). `NotificationService.notifyUser` writes the person's alert (one line from the
   mail's `<id>.alert.txt`, with a link inside the application) in the same transaction as their mail; a person without

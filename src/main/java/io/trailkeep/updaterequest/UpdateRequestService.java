@@ -7,7 +7,6 @@ import io.trailkeep.shared.CaseNumber;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.List;
-import org.jspecify.annotations.Nullable;
 
 /**
  * Request Update (BUILD_PLAN §4.3, IMPLEMENTATION_PLAN A.4 #31): the "email someone" of the legacy tool, tracked on the
@@ -20,26 +19,23 @@ import org.jspecify.annotations.Nullable;
 public interface UpdateRequestService {
 
     /**
-     * A request as the case page shows it.
+     * An open request as the case page shows it ("Update requested from X on date: awaiting"); answered requests are
+     * on the History page.
      *
      * @param id the request's id, which "Mark answered" names
+     * @param requestedById who asked, so the page knows whether the reader may mark it as its requester
      * @param requestedBy who asked, by name
      * @param requestedFrom who was asked, by name
      * @param requestedAt when, in {@code app.timezone}, to the minute
      * @param message what was asked; possible PHI, shown on the case page only
-     * @param answeredAt when it was answered, in {@code app.timezone}, or {@code null} while open
-     * @param answeredBy who answered it, by name, or {@code null} while open
-     * @param byComment whether the answer was a comment rather than "Mark answered"
      */
     record CaseRequest(
             long id,
+            long requestedById,
             String requestedBy,
             String requestedFrom,
             LocalDateTime requestedAt,
-            String message,
-            @Nullable LocalDateTime answeredAt,
-            @Nullable String answeredBy,
-            boolean byComment) {}
+            String message) {}
 
     /**
      * An open request addressed to the person, for the dashboard's "Needs attention".
@@ -74,13 +70,13 @@ public interface UpdateRequestService {
     void markAnswered(Actor actor, String caseNumber, long requestId);
 
     /**
-     * A case's requests, newest first; empty if the actor may not read the case.
+     * A case's open requests, newest first; {@code NOT_FOUND} if the actor may not read the case.
      *
      * @param actor the actor
      * @param caseNumber the case number as it appears in the URL
-     * @return the requests
+     * @return the open requests
      */
-    List<CaseRequest> forCase(Actor actor, String caseNumber);
+    List<CaseRequest> openForCase(Actor actor, String caseNumber);
 
     /**
      * The open requests addressed to the actor on cases they read, newest first, at most 100.

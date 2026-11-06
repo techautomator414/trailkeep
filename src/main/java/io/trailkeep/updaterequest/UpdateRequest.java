@@ -81,18 +81,8 @@ class UpdateRequest {
         this.requestedFrom = requestedFrom;
         this.message = message;
         this.requestedAt = now;
-        this.openKey = openKey(caseId, requestedFrom);
-    }
-
-    /**
-     * The key that allows one open request per case and recipient.
-     *
-     * @param caseId the case
-     * @param requestedFrom the recipient
-     * @return the key
-     */
-    static String openKey(long caseId, long requestedFrom) {
-        return caseId + ":" + requestedFrom;
+        // One open request per case and recipient (the column's unique key); cleared when answered.
+        this.openKey = caseId + ":" + requestedFrom;
     }
 
     @Nullable
@@ -118,21 +108,6 @@ class UpdateRequest {
 
     long getCaseId() {
         return caseId;
-    }
-
-    @Nullable
-    Instant getAnsweredAt() {
-        return answeredAt;
-    }
-
-    @Nullable
-    Long getAnsweredBy() {
-        return answeredBy;
-    }
-
-    @Nullable
-    Long getAnsweredByCommentId() {
-        return answeredByCommentId;
     }
 
     boolean isOpen() {
