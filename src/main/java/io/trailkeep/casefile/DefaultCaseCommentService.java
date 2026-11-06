@@ -30,6 +30,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -38,7 +39,7 @@ import org.springframework.transaction.annotation.Transactional;
  * transaction; the append takes no lock on the case row, so posting never conflicts with an edit (BUILD_PLAN §8 rule
  * 4). A pin is a {@code CASE_COMMENT_PIN} row, inserted or deleted with its audit event; the comment is untouched.
  * A comment by anyone but the case's owner also queues the {@code comment-added} mail to the owner, in the same
- * transaction.
+ * transaction, and every comment publishes {@link CommentPosted} there for modules that react to it.
  */
 @Service
 @Transactional
@@ -56,6 +57,7 @@ class DefaultCaseCommentService implements CaseCommentService {
     private final EntityManager entityManager;
     private final AuditRecorder audit;
     private final NotificationService notifications;
+    private final ApplicationEventPublisher events;
     private final InstantSource clock;
     private final ZoneId zone;
 
@@ -69,6 +71,7 @@ class DefaultCaseCommentService implements CaseCommentService {
             EntityManager entityManager,
             AuditRecorder audit,
             NotificationService notifications,
+            ApplicationEventPublisher events,
             InstantSource clock,
             AppProperties app) {
         this.loader = loader;
@@ -80,6 +83,7 @@ class DefaultCaseCommentService implements CaseCommentService {
         this.entityManager = entityManager;
         this.audit = audit;
         this.notifications = notifications;
+        this.events = events;
         this.clock = clock;
         this.zone = app.timezone();
     }
@@ -132,6 +136,8 @@ class DefaultCaseCommentService implements CaseCommentService {
                 "COMMENT_ADDED",
                 audit.diff(null, new PostedComment(text))));
         LOG.info("Comment {} added to case id {}", commentId, caseId);
+        events.publishEvent(
+                new CommentPosted(caseId, record.getCaseNumber(), commentId, actorId, actor.displayName(), now));
         if (record.getOwnerId() != actorId) {
             // Number, title, who and a link: never the comment, description or subject (BUILD_PLAN §4.7, §9).
             String number = record.getCaseNumber().toString();

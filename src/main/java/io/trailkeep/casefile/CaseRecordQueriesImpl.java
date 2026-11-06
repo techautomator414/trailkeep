@@ -6,6 +6,7 @@ import io.trailkeep.shared.CaseNumber;
 import io.trailkeep.shared.CaseStatus;
 import io.trailkeep.shared.access.CaseScope;
 import jakarta.persistence.EntityManager;
+import jakarta.persistence.Tuple;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.CriteriaQuery;
 import jakarta.persistence.criteria.Expression;
@@ -20,6 +21,7 @@ import jakarta.persistence.criteria.Selection;
 import jakarta.persistence.criteria.Subquery;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -143,6 +145,21 @@ class CaseRecordQueriesImpl implements CaseRecordQueries {
                 .distinct(true)
                 .where(scope.toPredicate(root, query, cb));
         return entityManager.createQuery(query).getResultList();
+    }
+
+    @Override
+    public List<CaseService.CaseRef> refs(CaseScope scope, Collection<Long> caseIds) {
+        CriteriaBuilder cb = entityManager.getCriteriaBuilder();
+        CriteriaQuery<Tuple> query = cb.createTupleQuery();
+        Root<CaseRecord> root = query.from(CaseRecord.class);
+        query.select(cb.tuple(root.get("id"), root.get("caseNumber"), root.get("title")))
+                .where(root.get("id").in(caseIds), scope.toPredicate(root, query, cb));
+        return entityManager
+                .createQuery(query)
+                .getResultStream()
+                .map(row -> new CaseService.CaseRef(
+                        row.get(0, Long.class), CaseNumber.parse(row.get(1, String.class)), row.get(2, String.class)))
+                .toList();
     }
 
     /** The scope and the filter, as one conjunction; archived cases only when a status filter names them. */

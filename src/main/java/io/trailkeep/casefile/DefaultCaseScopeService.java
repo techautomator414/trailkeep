@@ -16,6 +16,7 @@ import jakarta.persistence.criteria.CriteriaQuery;
 import jakarta.persistence.criteria.Expression;
 import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
+import jakarta.persistence.criteria.Subquery;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -78,6 +79,14 @@ class DefaultCaseScopeService implements CaseScopeService {
                 cb.equal(caseId, record.get("id")),
                 cb.equal(record.get("caseNumber"), caseNumber.toString()),
                 scope.toPredicate(record, query, cb));
+    }
+
+    @Override
+    public Predicate readableCases(CaseScope scope, Expression<?> caseId, CriteriaQuery<?> query, CriteriaBuilder cb) {
+        Subquery<Long> readable = query.subquery(Long.class);
+        Root<CaseRecord> record = readable.from(CaseRecord.class);
+        readable.select(record.<Long>get("id")).where(scope.toPredicate(record, query, cb));
+        return caseId.in(readable);
     }
 
     private boolean views(UserPermissions user, long teamId, Sensitivity sensitivity, boolean owner) {

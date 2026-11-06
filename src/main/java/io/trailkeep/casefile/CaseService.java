@@ -2,10 +2,13 @@
 // Copyright 2026 Charlie Genova and contributors
 package io.trailkeep.casefile;
 
+import io.trailkeep.security.CaseAction;
 import io.trailkeep.shared.CaseNumber;
 import io.trailkeep.user.UserPermissions;
 import jakarta.validation.Valid;
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -22,6 +25,15 @@ public interface CaseService {
      * @param displayName the actor's display name, kept in the audit trail
      */
     record Actor(UserPermissions permissions, String displayName) {}
+
+    /**
+     * A case as another module may name it: its id, number and title; never its description or subject.
+     *
+     * @param id the case's id
+     * @param number the case number
+     * @param title the title
+     */
+    record CaseRef(long id, CaseNumber number, String title) {}
 
     /**
      * Something the create form offers to pick.
@@ -152,6 +164,27 @@ public interface CaseService {
      * @return the case's id
      */
     long attachableCaseId(Actor actor, String caseNumber);
+
+    /**
+     * A case on which the actor may perform an action, for other modules (such as {@code updaterequest}):
+     * {@code NOT_FOUND} as for {@link #view}, then {@code FORBIDDEN} if the matrix denies the action. It runs in the
+     * caller's transaction if there is one.
+     *
+     * @param actor the actor
+     * @param caseNumber the case number as it appears in the URL
+     * @param action the action
+     * @return the case
+     */
+    CaseRef actionable(Actor actor, String caseNumber, CaseAction action);
+
+    /**
+     * Several cases by id, those the actor reads, for lists in other modules.
+     *
+     * @param actor the actor
+     * @param caseIds the cases' ids
+     * @return each readable case by id; unreadable and unknown ids are absent
+     */
+    Map<Long, CaseRef> refs(Actor actor, Collection<Long> caseIds);
 
     /**
      * The id of a case the actor may download attachments of, for the {@code document} module: {@code NOT_FOUND} as

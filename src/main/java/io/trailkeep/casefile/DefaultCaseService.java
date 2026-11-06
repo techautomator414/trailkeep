@@ -25,10 +25,13 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -212,6 +215,22 @@ class DefaultCaseService implements CaseService {
                 allowed(actor, record, CaseAction.COMMENT),
                 allowed(actor, record, CaseAction.PIN),
                 allowed(actor, record, CaseAction.RELEASE_QUARANTINE));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public CaseRef actionable(Actor actor, String caseNumber, CaseAction action) {
+        CaseRecord record = loader.load(actor.permissions(), caseNumber, action);
+        return new CaseRef(Objects.requireNonNull(record.getId()), record.getCaseNumber(), record.getTitle());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Map<Long, CaseRef> refs(Actor actor, Collection<Long> caseIds) {
+        return caseIds.isEmpty()
+                ? Map.of()
+                : cases.refs(scopes.forUser(actor.permissions()), caseIds).stream()
+                        .collect(Collectors.toUnmodifiableMap(CaseRef::id, ref -> ref));
     }
 
     @Override

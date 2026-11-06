@@ -36,6 +36,8 @@ ANALYST,*,*,*,*,DENY
 *,*,RESTRICTED,*,UNRESTRICT,ALLOW
 *,OWNER,*,*,DECIDE_CLOSURE,DENY
 *,*,*,PENDING_CLOSURE,DECIDE_CLOSURE|REASSIGN_APPROVER,ALLOW
+# Marking someone else's update request answered (§4.3 "Mark answered", WP-18): Managers and Compliance Admins.
+*,*,*,OPEN|PENDING_CLOSURE,ANSWER_UPDATE,ALLOW
 *,*,*,CLOSED,REOPEN,ALLOW
 # Reassignment is blocked while a closure request is pending.
 *,*,*,OPEN|CLOSED,REASSIGN,ALLOW

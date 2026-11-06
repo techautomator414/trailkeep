@@ -31,6 +31,7 @@
 --   SAVED_VIEW            S I   D    -            a person's saved views; saved and deleted, never changed (V4.7)
 --   NOTIFICATION_OUTBOX   S I U      S D          mail outbox; the purge user trims sent rows (V4.8)
 --   USER_ALERT            S I U D    -            in-app alerts; marked read and deleted by their person (V4.9)
+--   UPDATE_REQUEST        S I U      -            update requests; answered, never deleted (V4.10)
 --   SEQ_APP_USER          SELECT     -            Oracle's sequence privilege is SELECT (NEXTVAL)
 --   SEQ_TEAM              SELECT     -
 --   SEQ_AUDIT_EVENT       SELECT     -
@@ -46,6 +47,7 @@
 --   SEQ_SAVED_VIEW        SELECT     -
 --   SEQ_NOTIFICATION_OUTBOX SELECT   -
 --   SEQ_USER_ALERT        SELECT     -
+--   SEQ_UPDATE_REQUEST    SELECT     -
 --
 -- Later migrations add their rows to the cursor below. Fixed rules for them: the app user has no UPDATE or DELETE
 -- on CASE_COMMENT, CASE_ATTACHMENT_CHUNK, AUDIT_EVENT and ALERT_LEDGER, and no DELETE on CASE_ATTACHMENT; it may DELETE only from CASE_COMMENT_PIN, SAVED_VIEW, USER_ALERT,
@@ -89,7 +91,9 @@ DECLARE
     UNION ALL SELECT 'NOTIFICATION_OUTBOX', 'SELECT,DELETE', UPPER('${purge_user}') FROM DUAL
     UNION ALL SELECT 'SEQ_NOTIFICATION_OUTBOX', 'SELECT', UPPER('${app_user}') FROM DUAL
     UNION ALL SELECT 'USER_ALERT', 'SELECT,INSERT,UPDATE,DELETE', UPPER('${app_user}') FROM DUAL
-    UNION ALL SELECT 'SEQ_USER_ALERT', 'SELECT', UPPER('${app_user}') FROM DUAL;
+    UNION ALL SELECT 'SEQ_USER_ALERT', 'SELECT', UPPER('${app_user}') FROM DUAL
+    UNION ALL SELECT 'UPDATE_REQUEST', 'SELECT,INSERT,UPDATE', UPPER('${app_user}') FROM DUAL
+    UNION ALL SELECT 'SEQ_UPDATE_REQUEST', 'SELECT', UPPER('${app_user}') FROM DUAL;
   keep PLS_INTEGER;
 BEGIN
   FOR w IN wanted LOOP

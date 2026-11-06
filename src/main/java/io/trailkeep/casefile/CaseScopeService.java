@@ -50,4 +50,16 @@ public interface CaseScopeService {
      */
     Predicate readableCase(
             CaseScope scope, CaseNumber caseNumber, Expression<?> caseId, CriteriaQuery<?> query, CriteriaBuilder cb);
+
+    /**
+     * Restricts a query over such a table to rows of any case the scope reads: {@code caseId IN} a subquery of the
+     * readable cases' ids, for a list across cases (such as a person's open update requests).
+     *
+     * @param scope the caller's scope
+     * @param caseId the querying row's case-id attribute
+     * @param query the query being built
+     * @param cb the criteria builder
+     * @return a predicate true exactly for rows of readable cases
+     */
+    Predicate readableCases(CaseScope scope, Expression<?> caseId, CriteriaQuery<?> query, CriteriaBuilder cb);
 }

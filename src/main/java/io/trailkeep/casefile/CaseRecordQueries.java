@@ -4,6 +4,7 @@ package io.trailkeep.casefile;
 
 import io.trailkeep.shared.CaseNumber;
 import io.trailkeep.shared.access.CaseScope;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -78,4 +79,13 @@ interface CaseRecordQueries {
      * @return the pairs, in no order
      */
     List<CaseListRow.TeamOwner> teamsAndOwners(CaseScope scope);
+
+    /**
+     * Several cases by id, number and title only, those the scope reads; unreadable and unknown ids give nothing.
+     *
+     * @param scope the caller's scope
+     * @param caseIds the ids, at most a page's worth
+     * @return the readable cases, in no order
+     */
+    List<CaseService.CaseRef> refs(CaseScope scope, Collection<Long> caseIds);
 }
