@@ -243,6 +243,8 @@ class CaseListAccessibilityIT {
         assertThat(page.url()).contains("q=" + word, "priority=HIGH");
         assertThat(list.chips()).containsExactly("Remove filter: Search " + word, "Remove filter: Priority High");
         assertThat(shell.axeViolations()).isEmpty();
+        // Focus a person moves on (Escape, then Tab at once) is not pulled back to "Filters" by the late close event.
+        assertThat(list.focusMovedOnBeforeTheCloseEventStays()).isTrue();
 
         // Escape closes the dialog and focus returns to "Filters".
         page.locator("#tk-filters-open").focus();

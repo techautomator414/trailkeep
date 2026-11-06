@@ -24,6 +24,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- A closed dialog no longer pulls focus back to the control that opened it after the person has moved on. The
+  `close` event arrives after the browser has already restored focus, so a quick Escape then Tab (or Enter) could
+  land back on the opener. `app.js` now returns focus only when focus is lost or still inside the dialog. This was
+  what made the cases-list filter keyboard walk (`CaseListAccessibilityIT`) flaky on `main`; that walk now also waits
+  for htmx to settle before each keyboard step.
 - Disabling a user now ends their sessions (#31). The System Admin screen `/admin/users` lists users and disables or
   enables them; `UserAdminService.disable` writes `DISABLED = TRUE` and then calls `endSessionsOf` (through the new
   `UserSessionEnder` port, which `security`'s `UserSessionService` extends) in the same transaction, and audits

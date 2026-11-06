@@ -3,6 +3,7 @@
 package io.trailkeep.e2e.pages;
 
 import com.microsoft.playwright.Page;
+import java.util.ArrayList;
 import java.util.List;
 import org.jspecify.annotations.Nullable;
 
@@ -41,6 +42,7 @@ public final class CasesListPage {
      * @return how many presses it took
      */
     public int tabTo(String id, int presses) {
+        waitForSettle();
         for (int i = 1; i <= presses; i++) {
             page.keyboard().press("Tab");
             if (id.equals(focusedId())) {
@@ -56,6 +58,8 @@ public final class CasesListPage {
      * @param id where focus should land
      */
     public void pressEnterAndWaitForFocusOn(String id) {
+        // Enter on a control swapped in by htmx before it settled would be a plain navigation, not an htmx request.
+        waitForSettle();
         markResultsStale();
         page.keyboard().press("Enter");
         waitForFocusOn(id);
@@ -68,24 +72,62 @@ public final class CasesListPage {
      * @param id where focus should land
      */
     public void pressAndWaitForFocusOn(String key, String id) {
+        waitForSettle();
         page.keyboard().press(key);
         page.waitForFunction("id => document.activeElement && document.activeElement.id === id", id);
+        waitForSettle();
     }
 
     /**
      * Presses Tab until the focused element has an accessible name given by {@code aria-label}, at most a few times.
+     * It first waits until htmx has settled, so the tab order is that of the swapped content. On failure the message
+     * lists every element focus visited, which tells a real tab-order change from a timing problem.
      *
      * @param label the {@code aria-label}
      * @param presses the most presses allowed
      */
     public void tabToLabel(String label, int presses) {
+        waitForSettle();
+        List<String> visited = new ArrayList<>(presses + 1);
+        visited.add(focused());
         for (int i = 1; i <= presses; i++) {
             page.keyboard().press("Tab");
+            visited.add(focused());
             if (label.equals(page.evaluate("() => document.activeElement.getAttribute('aria-label')"))) {
                 return;
             }
         }
-        throw new AssertionError("Tab never reached the control labelled " + label);
+        throw new AssertionError("Tab never reached the control labelled " + label + " in " + presses
+                + " presses; focus went " + String.join(" -> ", visited));
+    }
+
+    /**
+     * Opens the filter dialog, closes it and at once moves focus to the first chip, as a fast keyboard user does
+     * (Escape, then Tab) before the dialog's {@code close} event has been dispatched, then waits for that event.
+     *
+     * @return {@code true} if focus is still on the chip, so the close handler did not pull it back to "Filters"
+     */
+    public boolean focusMovedOnBeforeTheCloseEventStays() {
+        return Boolean.TRUE.equals(page.evaluate("async () => {"
+                + " const dialog = document.getElementById('tk-filter-dialog');"
+                + " window.trailkeep.dialogs.open(dialog, document.getElementById('tk-filters-open'));"
+                + " const chip = document.querySelector('.tk-chips a');"
+                + " dialog.close(); chip.focus();"
+                + " await new Promise(done => window.setTimeout(done, 100));"
+                + " return document.activeElement === chip; }"));
+    }
+
+    /** Waits until no htmx request, swap or settle is in progress, so swapped content has its hx-* bound. */
+    public void waitForSettle() {
+        page.waitForFunction("() => !document.querySelector('.htmx-request, .htmx-swapping, .htmx-settling')");
+    }
+
+    /** The focused element, described for a diagnostic: tag, id, aria-label and text. */
+    private String focused() {
+        return String.valueOf(page.evaluate("() => { const e = document.activeElement; if (!e) { return 'none'; }"
+                + " return e.tagName.toLowerCase() + (e.id ? '#' + e.id : '')"
+                + " + (e.getAttribute('aria-label') ? '[' + e.getAttribute('aria-label') + ']' : '')"
+                + " + ' \"' + (e.textContent || '').replace(/\\s+/g, ' ').trim().slice(0, 40) + '\"'; }"));
     }
 
     /**
