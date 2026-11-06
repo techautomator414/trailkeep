@@ -9,16 +9,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
-- Closure decisions, reopen and approver reassignment (WP-19 part b, no screen yet): `ClosureDecisionService`.
-  The request's approver approves (the case is `CLOSED`, `CLOSED_AT` stamped, the SLA finalised as `MET` or
-  `BREACHED`), rejects or requests changes (a reason of 1 to 1000 characters; the case is `OPEN` again); a Manager or
-  Compliance Admin reopens a closed case (the next `SLA_CYCLE`, its clock from the reopen instant) or reassigns a
-  pending request's approver by the request-time rule. Each runs under the case's row lock, which re-reads the case and
-  re-evaluates the permission matrix, then re-checks the request (still pending, the actor its approver and not the
-  owner) and writes it with one versioned conditional update, so a concurrent approve and reject yield exactly one
-  decision. Audited as `CLOSURE_APPROVED`, `CLOSURE_REJECTED`, `CLOSURE_CHANGES_REQUESTED`, `CASE_REOPENED` and
-  `APPROVER_REASSIGNED` (reasons redacted); the requester gets `closure-decided`, the owner `case-reopened` and a new
-  approver `closure-requested`, never a reason or a summary.
+- Closure decisions and approver reassignment (WP-19 part b, no screen yet): `ClosureDecisionService`. The
+  request's approver approves (the case is `CLOSED`, `CLOSED_AT` stamped, the SLA finalised as `MET` or `BREACHED`),
+  rejects or requests changes (a reason of 1 to 1000 characters; the case is `OPEN` again); a Manager or Compliance
+  Admin reassigns a pending request's approver by the request-time rule. Each runs under the case's row lock, which
+  re-reads the case and re-evaluates the permission matrix, then re-checks the request (still pending, the actor its
+  approver and not the owner) and writes it with one versioned conditional update, so a concurrent approve and reject
+  yield exactly one decision. Audited as `CLOSURE_APPROVED`, `CLOSURE_REJECTED`, `CLOSURE_CHANGES_REQUESTED` and
+  `APPROVER_REASSIGNED` (reasons redacted); the requester and the owner get `closure-decided` (once each, never the
+  approver) and a new approver `closure-requested`, never a reason or a summary.
 - Request Closure, schema and request (WP-19 part a, no screen yet): `CLOSURE_REQUEST` (`V5__closure.sql`,
   `ClosureRequest` entity; decisions `PENDING`/`APPROVED`/`REJECTED`/`CHANGES_REQUESTED`, a check that the requester
   is never the approver; the runtime user may SELECT, INSERT and UPDATE it, never DELETE) and the `closure` module's

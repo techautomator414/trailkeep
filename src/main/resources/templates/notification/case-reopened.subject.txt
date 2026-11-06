@@ -1,2 +1,0 @@
-/*[- SPDX-License-Identifier: Apache-2.0. Subject of the mail to a case's owner when the closed case is reopened. -]*/
-[(${caseNumber})] was reopened

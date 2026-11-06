@@ -41,9 +41,9 @@ import org.springframework.transaction.support.TransactionTemplate;
 /**
  * Closure decisions, once per vendor (WP-19 part b): approving closes the case, stamps {@code CLOSED_AT} and
  * finalises the SLA ({@code MET} or {@code BREACHED}); rejecting and requesting changes need a reason, which is
- * redacted in the audit and never mailed, and reopen the case; only the request's approver decides, once, and a
- * concurrent approve and reject yield exactly one decision; reopening starts the next SLA cycle from now; approver
- * reassignment follows the request-time rule. Rows are committed and removed after each test.
+ * redacted in the audit and never mailed, and reopen the case; the requester and the owner are told, never the
+ * approver; only the request's approver decides, once, and a concurrent approve and reject yield exactly one
+ * decision; approver reassignment follows the request-time rule. Rows are committed and removed after each test.
  */
 // "IT" is the Failsafe suffix Part B mandates for integration tests, not an abbreviation.
 @SuppressWarnings("checkstyle:AbbreviationAsWordInName")
@@ -125,7 +125,7 @@ abstract class AbstractClosureDecisionIT {
                 .satisfies(row -> assertThat(((Number) Objects.requireNonNull(row.get("VERSION"))).intValue())
                         .isEqualTo(1));
         assertThat(audits(number, "CLOSURE_APPROVED")).isEqualTo(1L);
-        assertThat(mail(number, owner)).contains("approved your request to close case " + number);
+        assertThat(mail(number, owner)).contains("approved the request to close case " + number);
     }
 
     @Test
@@ -147,7 +147,7 @@ abstract class AbstractClosureDecisionIT {
                         first))
                 .contains("REJECTED")
                 .doesNotContain(REASON);
-        assertThat(mail(number, owner)).contains("rejected your request").doesNotContain(REASON);
+        assertThat(mail(number, owner)).contains("rejected the request").doesNotContain(REASON);
 
         long second = request(number);
         decide(approver, TeamRole.MANAGER, number, second, ClosureDecision.CHANGES_REQUESTED, REASON);
@@ -199,26 +199,34 @@ abstract class AbstractClosureDecisionIT {
     }
 
     @Test
-    void reopeningStartsTheNextSlaCycleFromNowAndTellsTheOwner() {
-        decide(approver, TeamRole.MANAGER, number, request(number), ClosureDecision.APPROVED, null);
-        refused(() -> reopen(owner, TeamRole.ANALYST), Kind.FORBIDDEN);
+    void decisionTellsTheRequesterAndTheOwnerOnceEachAndNeverTheApprover() {
+        long colleague = member(TeamRole.ANALYST);
+        long id = Objects.requireNonNull(transactions.execute(status -> closures.requestClosure(
+                actor(colleague, TeamRole.ANALYST),
+                number.toString(),
+                "Resolved",
+                "Synthetic summary",
+                null,
+                approver)));
 
-        final Instant before = Instant.now();
-        reopen(otherManager, TeamRole.MANAGER);
+        decide(approver, TeamRole.MANAGER, number, id, ClosureDecision.APPROVED, null);
 
-        assertThat(caseRow(number)).containsEntry("STATUS", "OPEN").containsEntry("CLOSED_AT", null);
-        Map<String, Object> sla =
-                jdbc.queryForMap("SELECT SLA_STATE, SLA_CYCLE FROM CASE_SLA WHERE CASE_ID = ?", seed.caseId(number));
-        assertThat(sla).containsEntry("SLA_STATE", "ON_TRACK");
-        assertThat(((Number) Objects.requireNonNull(sla.get("SLA_CYCLE"))).intValue())
-                .isEqualTo(2);
-        Instant due = Objects.requireNonNull(jdbc.queryForObject(
-                        "SELECT SLA_DUE_AT FROM CASE_SLA WHERE CASE_ID = ?", Timestamp.class, seed.caseId(number)))
-                .toInstant();
-        assertThat(due).isBetween(before.plus(Duration.ofDays(29)), before.plus(Duration.ofDays(31)));
-        assertThat(audits(number, "CASE_REOPENED")).isEqualTo(1L);
-        assertThat(mail(number, owner)).contains("reopened your case " + number);
-        refused(() -> reopen(otherManager, TeamRole.MANAGER), Kind.FORBIDDEN);
+        assertThat(mail(number, colleague)).contains("approved the request to close case " + number);
+        assertThat(mail(number, owner)).contains("approved the request to close case " + number);
+        assertThat(jdbc.queryForObject(
+                        "SELECT COUNT(*) FROM USER_ALERT WHERE CASE_ID = ? AND USER_ID = ?",
+                        Long.class,
+                        seed.caseId(number),
+                        owner))
+                .isEqualTo(1L);
+        // The approver had the request's own alert, and nothing for their decision.
+        assertThat(jdbc.queryForObject(
+                        "SELECT COUNT(*) FROM USER_ALERT WHERE CASE_ID = ? AND USER_ID = ?",
+                        Long.class,
+                        seed.caseId(number),
+                        approver))
+                .isEqualTo(1L);
+        assertThat(mail(number, approver)).doesNotContain("approved the request");
     }
 
     @Test
@@ -269,10 +277,6 @@ abstract class AbstractClosureDecisionIT {
             @Nullable String reason) {
         transactions.executeWithoutResult(
                 status -> decisions.decide(actor(by, role), caseNumber.toString(), id, decision, reason));
-    }
-
-    private void reopen(long by, TeamRole role) {
-        transactions.executeWithoutResult(status -> decisions.reopen(actor(by, role), number.toString()));
     }
 
     private void reassign(long by, TeamRole role, long id, long to) {

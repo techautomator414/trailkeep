@@ -1,9 +1,9 @@
-/*[- SPDX-License-Identifier: Apache-2.0. Plain-text part of the closure-decided mail: the case number, title, the
-     approver and the decision with a deep link; never the reason, the summary, the description or the subject
-     (BUILD_PLAN §9). -]*/
-[(${decider})] [(${verb})] your request to close case [(${caseNumber})], "[(${title})]".
+/*[- SPDX-License-Identifier: Apache-2.0. Plain-text part of the closure-decided mail, to the requester and the case's
+     owner: the case number, title, the approver and the decision with a deep link; never the reason, the summary,
+     the description or the subject (BUILD_PLAN §4.7, §9). -]*/
+[(${decider})] [(${verb})] the request to close case [(${caseNumber})], "[(${title})]".
 
 Open the case to read the decision:
 [(${link})]
 
-You receive this because you requested the closure.
+You receive this because you requested the closure or own the case.

@@ -23,6 +23,7 @@ import java.time.InstantSource;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.stream.Stream;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -30,7 +31,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Decides, reopens and reassigns; see {@link ClosureDecisionService}. Each operation first takes the case's row lock
+ * Decides and reassigns; see {@link ClosureDecisionService}. Each operation first takes the case's row lock
  * through {@link CaseStatusService#move}, which re-reads the case and re-evaluates the matrix on what the lock holds.
  * Under that lock the request is read and re-checked (still pending; the actor is its approver; the approver is not
  * the owner), and written by one conditional update that matches only the pending row at the version read, so a
@@ -116,31 +117,13 @@ class DefaultClosureDecisionService implements ClosureDecisionService {
                 requestId,
                 "CLOSURE_" + decision.name(),
                 audit.diff(new Decided(ClosureDecision.PENDING, null), new Decided(decision, text)));
-        tell(
-                request.getRequestedBy(),
-                actorId,
-                "closure-decided",
-                moved,
-                Map.of("decider", actor.displayName(), "verb", Objects.requireNonNull(VERBS.get(decision))));
-    }
-
-    @Override
-    public void reopen(Actor actor, String caseNumber) {
-        MovedCase moved = statuses.move(actor, caseNumber, CaseAction.REOPEN, CaseStatus.CLOSED, CaseStatus.OPEN);
-        audit.record(new AuditEntry(
-                actor.permissions().userId(),
-                actor.displayName(),
-                AuditOrigin.UI,
-                moved.ref().id(),
-                "CASE",
-                moved.ref().id(),
-                "CASE_REOPENED",
-                audit.diff(new Status(CaseStatus.CLOSED), new Status(CaseStatus.OPEN))));
-        Long owner = moved.facts().ownerId();
-        if (owner != null) {
-            tell(owner, actor.permissions().userId(), "case-reopened", moved, Map.of("reopener", actor.displayName()));
-        }
-        LOG.info("Case id {} reopened", moved.ref().id());
+        // BUILD_PLAN §4.7: the owner and the requester, once each, never the approver who decided.
+        Map<String, String> model =
+                Map.of("decider", actor.displayName(), "verb", Objects.requireNonNull(VERBS.get(decision)));
+        Stream.of(request.getRequestedBy(), moved.facts().ownerId())
+                .filter(Objects::nonNull)
+                .distinct()
+                .forEach(person -> tell(person, actorId, "closure-decided", moved, model));
     }
 
     @Override
@@ -260,11 +243,4 @@ class DefaultClosureDecisionService implements ClosureDecisionService {
      * @param approver who decides, by name
      */
     record Reassigned(String approver) {}
-
-    /**
-     * The audit snapshot of a reopen.
-     *
-     * @param status the case's status
-     */
-    record Status(CaseStatus status) {}
 }

@@ -1,8 +1,0 @@
-/*[- SPDX-License-Identifier: Apache-2.0. Plain-text part of the case-reopened mail: number, title, who reopened it
-     and a deep link, never the description or the subject (BUILD_PLAN §9). -]*/
-[(${reopener})] reopened your case [(${caseNumber})], "[(${title})]". Its SLA starts a new cycle today.
-
-Open the case:
-[(${link})]
-
-You receive this because you own the case.
