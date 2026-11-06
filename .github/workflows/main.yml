@@ -22,8 +22,11 @@ on:
 
 permissions: {}
 
+# The event is part of the group so that a push (which cancels the run before it) never cancels a run someone
+# requested by hand with `gh workflow run main.yml`. Called from nightly.yml or release.yml, the workflow and event
+# are the caller's, so those runs keep a group of their own as before.
 concurrency:
-  group: main-gates-${{ github.workflow }}-${{ github.ref }}
+  group: main-gates-${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'push' }}
 
 env:
