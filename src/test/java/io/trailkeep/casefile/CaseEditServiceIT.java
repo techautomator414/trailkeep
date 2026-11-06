@@ -97,7 +97,7 @@ class CaseEditServiceIT {
                 .containsEntry("SUBJECT_TEXT", null)
                 .containsEntry("VERSION", before.version() + 1);
         assertThat(jdbc.queryForObject("SELECT SEARCH_TEXT FROM CASE_SEARCH WHERE CASE_ID = ?", String.class, id))
-                .isEqualTo("Edited title\nEdited synthetic description");
+                .isEqualTo("edited title\nedited synthetic description");
         Map<String, Object> event = jdbc.queryForMap(
                 "SELECT ACTOR_ID, ENTITY_ID, OLD_VALUES_JSON, NEW_VALUES_JSON FROM AUDIT_EVENT"
                         + " WHERE CASE_ID = ? AND ACTION = 'CASE_UPDATED'",

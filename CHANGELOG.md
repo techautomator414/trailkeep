@@ -22,6 +22,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   compose service runs `clamd --foreground=true` directly, as the pod does, so signatures are the image's. The
   NetworkPolicy is unchanged (it only admits 3311).
 
+### Fixed
+
+- Case search works on Oracle again (#69). Hibernate refuses `lower()` on `CASE_SEARCH.SEARCH_TEXT`, which Oracle maps
+  to `CLOB`, so `LikeSearchGateway` no longer applies a function to the column: `SEARCH_TEXT` is now stored lower-cased
+  (`Locale.ROOT`) by every writer (`CaseSearch` on create and rebuild, `CaseSearchJdbcDao` on comment append) and
+  matched with `LIKE` against the lower-cased words. Migration `V4_5__search_text_lowercase.sql` lower-cases rows
+  written before. ADR-0006's amendment records the convention.
+
 ### Documentation
 
 - ADR-0006 amended (2026-11-05): the `LIKE` adapter contributes a predicate to the scoped statement instead of

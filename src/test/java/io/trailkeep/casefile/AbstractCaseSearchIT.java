@@ -17,6 +17,7 @@ import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -124,7 +125,8 @@ abstract class AbstractCaseSearchIT {
         post(atTheCap);
 
         assertThat(searchText())
-                .isEqualTo("Synthetic searchable title\n" + DESCRIPTION + "\n" + overVarcharLimit + "\n" + atTheCap);
+                .isEqualTo(lower(
+                        "Synthetic searchable title\n" + DESCRIPTION + "\n" + overVarcharLimit + "\n" + atTheCap));
     }
 
     @Test
@@ -134,7 +136,8 @@ abstract class AbstractCaseSearchIT {
         edit("Synthetic edited title");
 
         assertThat(searchText())
-                .isEqualTo("Synthetic edited title\n" + DESCRIPTION + "\nSynthetic comment with a *findable* word");
+                .isEqualTo(
+                        lower("Synthetic edited title\n" + DESCRIPTION + "\nSynthetic comment with a *findable* word"));
     }
 
     @Test
@@ -156,7 +159,8 @@ abstract class AbstractCaseSearchIT {
         first.get(30, TimeUnit.SECONDS);
         second.get(30, TimeUnit.SECONDS);
 
-        assertThat(searchText()).endsWith("\nFirst concurrent synthetic comment\nSecond concurrent synthetic comment");
+        assertThat(searchText())
+                .endsWith(lower("\nFirst concurrent synthetic comment\nSecond concurrent synthetic comment"));
     }
 
     @Test
@@ -179,7 +183,7 @@ abstract class AbstractCaseSearchIT {
         edit.get(30, TimeUnit.SECONDS);
 
         assertThat(searchText())
-                .isEqualTo("Raced title\n" + DESCRIPTION + "\nSynthetic comment written during an edit");
+                .isEqualTo(lower("Raced title\n" + DESCRIPTION + "\nSynthetic comment written during an edit"));
     }
 
     @Test
@@ -248,6 +252,11 @@ abstract class AbstractCaseSearchIT {
 
     private Future<?> inTransaction(Runnable work) {
         return workers.submit(() -> transactions.executeWithoutResult(status -> work.run()));
+    }
+
+    /** Search text is stored lower-cased (ADR-0006, amended). */
+    private static String lower(String text) {
+        return text.toLowerCase(Locale.ROOT);
     }
 
     private String searchText() {
