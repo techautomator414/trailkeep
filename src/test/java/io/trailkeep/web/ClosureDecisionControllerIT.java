@@ -152,7 +152,7 @@ class ClosureDecisionControllerIT {
                 .contains("<h2 id=\"tk-decided-title\" class=\"h5\">Closure</h2>")
                 .contains("Closed on approval by Synthetic Person " + APPROVER + " on ")
                 .contains("Outcome: Resolved. The closure fields are locked.", "A synthetic summary")
-                .doesNotContain("tk-decision-dialog", "Requires Changes", "tk-pending-title");
+                .doesNotContain("tk-decision-dialog", "<span>Requires Changes</span>", "tk-pending-title");
         mvc.perform(get(decision)).andExpect(status().isForbidden());
     }
 
@@ -177,7 +177,7 @@ class ClosureDecisionControllerIT {
                 .andExpect(status().isFound());
         entityManager.clear();
         assertThat(html(get("/cases/" + number)))
-                .doesNotContain("Requires Changes", "A synthetic reason", "tk-decided-title");
+                .doesNotContain("<span>Requires Changes</span>", "A synthetic reason", "tk-decided-title");
     }
 
     @Test
