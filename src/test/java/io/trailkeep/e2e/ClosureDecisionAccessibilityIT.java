@@ -203,7 +203,7 @@ class ClosureDecisionAccessibilityIT {
      */
     private CaseNumber pendingCase() {
         long analyst = signIn("alpha.analyst", ALPHA_ANALYST);
-        long manager = signIn("alpha.manager1", ALPHA_MANAGER);
+        final long manager = signIn("alpha.manager1", ALPHA_MANAGER);
         CaseSeed seed = new CaseSeed(jdbc);
         team = seed.team();
         caseType = seed.caseType();

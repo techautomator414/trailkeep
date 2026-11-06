@@ -44,8 +44,8 @@ import org.springframework.transaction.annotation.Transactional;
  * and Reject or request changes (a dialog opener that is also a link to the same form as a page); approving closes
  * the case and shows its closure, locked; rejecting or requesting changes reopens it with the "Requires Changes"
  * badge and the reason until the next comment. A refused form is 422 with each wrong field marked and summarized, a
- * decision that lost a race 409 with Reload; CSRF is required; another Manager and the owner are 403, an outsider and a request id that is not the case's
- * pending request 404. Anonymous requests go to the identity provider.
+ * decision that lost a race 409 with Reload; CSRF is required; another Manager and the owner are 403, an outsider
+ * and a request id that is not the case's pending request 404. Anonymous requests go to the identity provider.
  */
 // "IT" is the Failsafe suffix Part B mandates for integration tests, not an abbreviation.
 @SuppressWarnings("checkstyle:AbbreviationAsWordInName")
@@ -205,7 +205,7 @@ class ClosureDecisionControllerIT {
 
     @Test
     @WithAppUser(id = APPROVER, team = TEAM, teamRole = TeamRole.MANAGER)
-    void aDecisionThatLostTheRaceIsAConflictWithReload() throws Exception {
+    void decisionThatLostTheRaceIsAConflictWithReload() throws Exception {
         // The test's one transaction shares the persistence context with the request: the request read here stays
         // managed at its version while the row moves on underneath, as a concurrent decision would move it.
         assertThat(closures.pending(owner, number.toString())).isPresent();
@@ -242,7 +242,7 @@ class ClosureDecisionControllerIT {
 
     @Test
     @WithAppUser(id = APPROVER, team = TEAM, teamRole = TeamRole.MANAGER)
-    void aRequestThatIsNotTheCasesPendingOneIsNotFound() throws Exception {
+    void requestThatIsNotTheCasesPendingOneIsNotFound() throws Exception {
         mvc.perform(get("/cases/" + number + "/closure/not-an-id/decision")).andExpect(status().isNotFound());
         mvc.perform(post("/cases/" + number + "/closure/" + (requestId + 1) + "/decision")
                         .param("decision", "APPROVED")
