@@ -134,6 +134,15 @@
     path /cases/ plus a parsed case number. The message is echoed only through th:text and never mailed. Covered by
     UpdateRequestIT, OracleUpdateRequestIT, UpdateRequestControllerIT and UpdateRequestAccessibilityIT.
     Approved in the security-reviewer role on #98.
+    ClosureController (WP-19 part c1): behind login; GET /cases/{n}/request-closure and POST of the same path, the POST
+    with CSRF (403 without). ClosureService.choices decides 404 (the person's CaseScope) and 403 (REQUEST_CLOSURE, open
+    cases only) before any input is read; the form is then checked against those choices (an outcome of the case type,
+    a summary of 1 to 5000 characters, follow-ups up to 5000, an approver the A.2 #18 rule allows: 422 with each field
+    marked), and the service re-checks all of it under the case row lock (409 with Reload when the case moved on). The
+    approver id is parsed leniently to -1. The redirect is the fixed path /cases/ plus a parsed case number. Summary
+    and follow-ups are echoed only through th:text and never mailed. Covered by ClosureRequestIT,
+    OracleClosureRequestIT, ClosureControllerIT and RequestClosureAccessibilityIT.
+    Approved in the security-reviewer role on #104.
     Approved in the security-reviewer role on #20. Listed by class, never by pattern alone, so each new controller
     is reviewed the same way.
   -->
@@ -155,6 +164,7 @@
       <Class name="io.trailkeep.web.CaseExportController"/>
       <Class name="io.trailkeep.web.AlertController"/>
       <Class name="io.trailkeep.web.UpdateRequestController"/>
+      <Class name="io.trailkeep.web.ClosureController"/>
     </Or>
   </Match>
   <!--

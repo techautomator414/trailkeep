@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- The Request closure form (BUILD_PLAN §4.3, WP-19 part c1), in the case page's dialog and on its own page. Outcome is
+     the case type's list; the approver is a native <select> of the people the rules allow, which app.js turns into the
+     ARIA APG combobox (as Request update does). Each refused field carries aria-invalid and its message; the page
+     version summarizes them above the form. The summary's character count is shown by app.js (data-tk-count). -->
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<body>
+<form th:fragment="form(number, choices, f, errors, dialog)" method="post"
+      th:action="@{/cases/{n}/request-closure(n=${number})}">
+  <div class="mb-3" th:with="e=${#lists.contains(errors, 'outcome')}">
+    <label class="form-label" for="tk-outcome" th:text="#{tk.closure.outcome}">Outcome (required)</label>
+    <select class="form-select" id="tk-outcome" name="outcome" required
+            th:attr="aria-invalid=${e},aria-describedby=${e} ? 'tk-outcome-error' : null,
+                     data-tk-dialog-focus=${dialog} ? 'true' : null">
+      <option value="" th:text="#{tk.closure.outcome.choose}">Choose an outcome</option>
+      <option th:each="o : ${choices.outcomes}" th:value="${o}" th:text="${o}" th:selected="${o == f.outcome}">
+        Resolved</option>
+    </select>
+    <div th:if="${e}" class="invalid-feedback d-block" id="tk-outcome-error" th:text="#{tk.closure.error.outcome}">
+      Choose an outcome.</div>
+  </div>
+  <div class="mb-3" th:with="e=${#lists.contains(errors, 'summary')}">
+    <label class="form-label" for="tk-summary" th:text="#{tk.closure.summary}">Resolution summary (required)</label>
+    <textarea class="form-control" id="tk-summary" name="summary" rows="5" required maxlength="5000"
+              th:attr="aria-invalid=${e},aria-describedby=${e} ? 'tk-summary-error tk-summary-hint' : 'tk-summary-hint',
+                       data-tk-count=#{tk.closure.count}"
+              th:text="${f.summary}"></textarea>
+    <div th:if="${e}" class="invalid-feedback d-block" id="tk-summary-error" th:text="#{tk.closure.error.summary}">
+      Write a summary.</div>
+    <div class="form-text" id="tk-summary-hint" th:text="#{tk.closure.text.hint}">Up to 5000 characters.</div>
+  </div>
+  <div class="mb-3" th:with="e=${#lists.contains(errors, 'followUps')}">
+    <label class="form-label" for="tk-follow-ups" th:text="#{tk.closure.followUps}">Follow-up actions (optional)</label>
+    <textarea class="form-control" id="tk-follow-ups" name="followUps" rows="3" maxlength="5000"
+              th:attr="aria-invalid=${e},
+                       aria-describedby=${e} ? 'tk-follow-ups-error tk-follow-ups-hint' : 'tk-follow-ups-hint',
+                       data-tk-count=#{tk.closure.count}"
+              th:text="${f.followUps}"></textarea>
+    <div th:if="${e}" class="invalid-feedback d-block" id="tk-follow-ups-error"
+         th:text="#{tk.closure.error.followUps}">Too long.</div>
+    <div class="form-text" id="tk-follow-ups-hint" th:text="#{tk.closure.text.hint}">Up to 5000 characters.</div>
+  </div>
+  <div class="mb-3" th:with="e=${#lists.contains(errors, 'approverId')}">
+    <label class="form-label" for="tk-approver" th:text="#{tk.closure.approver}">Approver (required)</label>
+    <select class="form-select" id="tk-approver" name="approverId" required data-tk-combobox
+            th:attr="aria-invalid=${e},
+                     aria-describedby=${e} ? 'tk-approver-error tk-approver-hint' : 'tk-approver-hint'">
+      <option value="" th:text="#{tk.closure.approver.choose}">Choose an approver</option>
+      <option th:each="a : ${choices.approvers}" th:value="${a.id}" th:text="${a.name}"
+              th:selected="${a.id == f.approverId}">Name</option>
+    </select>
+    <div th:if="${e}" class="invalid-feedback d-block" id="tk-approver-error" th:text="#{tk.closure.error.approverId}">
+      Choose an approver.</div>
+    <div class="form-text" id="tk-approver-hint" th:text="#{tk.closure.approver.hint}">The team's Managers.</div>
+  </div>
+  <div class="tk-dialog-actions">
+    <button class="btn btn-primary" type="submit" th:text="#{tk.closure.send}">Request closure</button>
+    <a class="btn btn-outline-secondary" th:href="@{/cases/{n}(n=${number})}"
+       th:attr="data-tk-dialog-close=${dialog} ? 'true' : null"
+       th:text="${dialog} ? #{tk.request.cancel} : #{tk.request.back}">Cancel</a>
+  </div>
+</form>
+</body>
+</html>

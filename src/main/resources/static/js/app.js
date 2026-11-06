@@ -259,6 +259,10 @@
       select.required = false;
       select.hidden = true;
       select.after(input, list);
+      // An error summary's link to the select now leads to the combobox.
+      document.querySelectorAll('a[href="#' + select.id + '"]').forEach(function (link) {
+        link.setAttribute('href', '#' + input.id);
+      });
 
       const shown = function () {
         return Array.from(list.children).filter(function (item) { return !item.hidden; });
@@ -333,7 +337,29 @@
     });
   }
 
+  /**
+   * A visible character count under a textarea[data-tk-count][maxlength] ("12 of 5000 characters"), from the
+   * attribute's text with {0} and {1}. The limit is also in the field's hint and enforced by maxlength, so the count
+   * is a visual aid and stays out of the accessibility tree rather than announcing every keystroke.
+   */
+  function wireCounters() {
+    document.querySelectorAll('textarea[data-tk-count][maxlength]').forEach(function (area) {
+      const count = document.createElement('div');
+      count.className = 'form-text';
+      count.setAttribute('aria-hidden', 'true');
+      const update = function () {
+        count.textContent = area.getAttribute('data-tk-count')
+          .replace('{0}', String(area.value.replace(/\r\n/g, '\n').length))
+          .replace('{1}', area.getAttribute('maxlength'));
+      };
+      area.after(count);
+      area.addEventListener('input', update);
+      update();
+    });
+  }
+
   document.addEventListener('DOMContentLoaded', function () {
+    wireCounters();
     wireComboboxes();
     wireForms();
     wireRows();

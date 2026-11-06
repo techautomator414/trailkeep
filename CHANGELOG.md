@@ -9,6 +9,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Request closure screen (WP-19 part c1): "Request closure" on an open case's page, offered when the matrix allows
+  it, opens a native dialog (fallback page `/cases/{number}/request-closure` without JavaScript) with the case type's
+  outcomes, the resolution summary and optional follow-up actions (5000 characters each, with a visible count) and the
+  approver as the same APG combobox as Request update, listing only the approvers the separation-of-duties rule
+  allows. A refused form is 422 with each wrong field marked and summarized; a case that moved on is 409 with Reload.
+  A pending case shows a "Pending closure" banner (requester, time, approver, outcome, summary and follow-ups) and no
+  longer offers Request closure, Edit or Reassign.
 - Reopen (WP-19 part b2, no screen yet): `CASE_REOPEN` (`V5_1__case_reopen.sql`, `CaseReopen` entity, append-only;
   the runtime user may SELECT and INSERT it only) and `ClosureDecisionService.reopen`. A Manager or Compliance Admin
   reopens a closed case with a reason of 1 to 1000 characters: the case is `OPEN` again with `CLOSED_AT` cleared, the

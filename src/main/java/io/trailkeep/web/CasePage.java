@@ -8,6 +8,7 @@ import io.trailkeep.casefile.CaseCommentService.CommentView;
 import io.trailkeep.casefile.CaseService;
 import io.trailkeep.casefile.CaseService.Actor;
 import io.trailkeep.casefile.CaseView;
+import io.trailkeep.closure.ClosureService;
 import io.trailkeep.document.CaseAttachmentService;
 import io.trailkeep.security.CaseAction;
 import io.trailkeep.security.TrailkeepOidcUser;
@@ -31,6 +32,7 @@ class CasePage {
     private final CaseCommentService comments;
     private final CaseAttachmentService attachments;
     private final UpdateRequestService requests;
+    private final ClosureService closures;
     private final UserDirectoryService directory;
 
     CasePage(
@@ -39,12 +41,14 @@ class CasePage {
             CaseCommentService comments,
             CaseAttachmentService attachments,
             UpdateRequestService requests,
+            ClosureService closures,
             UserDirectoryService directory) {
         this.cases = cases;
         this.assignments = assignments;
         this.comments = comments;
         this.attachments = attachments;
         this.requests = requests;
+        this.closures = closures;
         this.directory = directory;
     }
 
@@ -96,6 +100,11 @@ class CasePage {
         model.addAttribute("requests", requests.openForCase(actor, number));
         boolean requestable = cases.allows(actor, number, CaseAction.REQUEST_UPDATE);
         model.addAttribute("recipients", requestable ? requests.recipients(actor, number) : null);
+        // Request closure's choices when the matrix allows it (an open case), and a pending request's banner (WP-19).
+        boolean closable = cases.allows(actor, number, CaseAction.REQUEST_CLOSURE);
+        model.addAttribute("closureChoices", closable ? closures.choices(actor, number) : null);
+        model.addAttribute("closureForm", ClosureController.ClosureForm.EMPTY);
+        model.addAttribute("pendingClosure", closures.pending(actor, number).orElse(null));
         // Taken only once the case has been read, so a page that answers 404 never consumes a notice.
         model.addAttribute("notice", CaseNotice.take(request, view.number()));
         return "casefile/case";

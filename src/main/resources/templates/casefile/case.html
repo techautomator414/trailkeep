@@ -30,8 +30,20 @@
     <li class="tk-chip" th:if="${c.priority.name() == 'HIGH'}">
       <span aria-hidden="true">!</span> <span th:text="#{tk.case.high}">High priority</span></li>
   </ul>
-  <p class="tk-dialog-actions"
-     th:if="${c.editable or c.reassignable or c.restrictable or c.unrestrictable or recipients != null}">
+  <section th:if="${pendingClosure != null}" class="alert alert-info" aria-labelledby="tk-pending-title"
+           th:with="p=${pendingClosure}">
+    <h2 id="tk-pending-title" class="h5" th:text="#{tk.closure.pending}">Pending closure</h2>
+    <p th:text="#{tk.closure.pending.text(${p.requestedBy}, ${#temporals.format(p.requestedAt, 'yyyy-MM-dd HH:mm')},
+                  ${p.approver}, ${p.outcome})}">Requested by X; approver Y; outcome Z.</p>
+    <h3 class="h6" th:text="#{tk.closure.summary.title}">Resolution summary</h3>
+    <p class="tk-description" th:text="${p.summary}">Summary</p>
+    <th:block th:if="${p.followUps != null}">
+      <h3 class="h6" th:text="#{tk.closure.followUps.title}">Follow-up actions</h3>
+      <p class="tk-description mb-0" th:text="${p.followUps}">Follow-ups</p>
+    </th:block>
+  </section>
+  <p class="tk-dialog-actions" th:if="${c.editable or c.reassignable or c.restrictable or c.unrestrictable
+                                       or recipients != null or closureChoices != null}">
     <a th:if="${c.editable}" class="btn btn-primary" th:href="@{/cases/{n}/edit(n=${c.number})}"
        th:text="#{tk.case.edit}">Edit</a>
     <a th:if="${reassign != null}" class="btn btn-outline-primary" th:href="@{/cases/{n}/reassign(n=${c.number})}"
@@ -44,7 +56,16 @@
     <a th:if="${recipients != null}" class="btn btn-outline-primary"
        th:href="@{/cases/{n}/request-update(n=${c.number})}" data-tk-dialog-open="tk-request-dialog"
        aria-haspopup="dialog" th:text="#{tk.request.open}">Request update</a>
+    <a th:if="${closureChoices != null}" class="btn btn-outline-primary"
+       th:href="@{/cases/{n}/request-closure(n=${c.number})}" data-tk-dialog-open="tk-closure-dialog"
+       aria-haspopup="dialog" th:text="#{tk.closure.open}">Request closure</a>
   </p>
+  <dialog th:if="${closureChoices != null}" id="tk-closure-dialog" class="tk-dialog"
+          aria-labelledby="tk-closure-title">
+    <h2 id="tk-closure-title" th:text="#{tk.closure.title(${c.number})}">Request closure</h2>
+    <form th:replace="~{casefile/fragments/closure-request :: form(${c.number}, ${closureChoices},
+                       ${closureForm}, ${ {} }, true)}"></form>
+  </dialog>
   <dialog th:if="${recipients != null}" id="tk-request-dialog" class="tk-dialog" aria-labelledby="tk-request-title">
     <h2 id="tk-request-title" th:text="#{tk.request.title(${c.number})}">Request an update</h2>
     <form th:replace="~{casefile/fragments/update-request :: form(${c.number}, ${recipients}, -1, '', null, true)}">

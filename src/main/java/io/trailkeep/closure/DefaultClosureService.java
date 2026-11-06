@@ -6,22 +6,29 @@ import io.trailkeep.audit.AuditEntry;
 import io.trailkeep.audit.AuditOrigin;
 import io.trailkeep.audit.AuditRecorder;
 import io.trailkeep.audit.Redacted;
+import io.trailkeep.casefile.CaseScopeService;
 import io.trailkeep.casefile.CaseService.Actor;
 import io.trailkeep.casefile.CaseStatusService;
 import io.trailkeep.casefile.CaseStatusService.ClosableCase;
 import io.trailkeep.notification.NotificationService;
 import io.trailkeep.security.CaseAction;
 import io.trailkeep.security.CasePermissionService;
+import io.trailkeep.shared.CaseNumber;
 import io.trailkeep.shared.CaseStatus;
 import io.trailkeep.shared.DomainException.Kind;
 import io.trailkeep.shared.access.CaseAccessPath;
+import io.trailkeep.shared.config.AppProperties;
 import io.trailkeep.user.UserDirectoryService;
 import jakarta.persistence.EntityManager;
 import java.time.InstantSource;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.temporal.ChronoUnit;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -46,7 +53,10 @@ class DefaultClosureService implements ClosureService {
     private final NotificationService notifications;
     private final AuditRecorder audit;
     private final EntityManager entityManager;
+    private final ClosureRequestRepository requests;
+    private final CaseScopeService scopes;
     private final InstantSource clock;
+    private final ZoneId zone;
 
     DefaultClosureService(
             CaseStatusService statuses,
@@ -55,20 +65,59 @@ class DefaultClosureService implements ClosureService {
             NotificationService notifications,
             AuditRecorder audit,
             EntityManager entityManager,
-            InstantSource clock) {
+            ClosureRequestRepository requests,
+            CaseScopeService scopes,
+            InstantSource clock,
+            AppProperties app) {
         this.statuses = statuses;
         this.permissions = permissions;
         this.directory = directory;
         this.notifications = notifications;
         this.audit = audit;
         this.entityManager = entityManager;
+        this.requests = requests;
+        this.scopes = scopes;
         this.clock = clock;
+        this.zone = app.timezone();
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<Approver> approvers(Actor actor, String caseNumber) {
+        return approversOf(actor, statuses.closable(actor, caseNumber));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ClosureChoices choices(Actor actor, String caseNumber) {
         ClosableCase closable = statuses.closable(actor, caseNumber);
+        return new ClosureChoices(closable.outcomes(), approversOf(actor, closable));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<PendingClosure> pending(Actor actor, String caseNumber) {
+        CaseNumber number;
+        try {
+            number = CaseNumber.parse(caseNumber);
+        } catch (IllegalArgumentException malformed) {
+            return Optional.empty();
+        }
+        return requests.findForCase(scopes.forUser(actor.permissions()), number).stream()
+                .filter(r -> r.getDecision() == ClosureDecision.PENDING)
+                .findFirst()
+                .map(r -> new PendingClosure(
+                        Objects.requireNonNull(r.getId()),
+                        r.getOutcome(),
+                        directory.displayName(r.getRequestedBy()).orElse(""),
+                        r.getApproverId(),
+                        directory.displayName(r.getApproverId()).orElse(""),
+                        LocalDateTime.ofInstant(r.getRequestedAt(), zone).truncatedTo(ChronoUnit.MINUTES),
+                        r.getResolutionSummary(),
+                        r.getFollowUpActions()));
+    }
+
+    private List<Approver> approversOf(Actor actor, ClosableCase closable) {
         List<Long> ids = permissions.approverCandidates(
                 closable.facts(), actor.permissions().userId());
         Map<Long, String> names = directory.displayNames(ids);
