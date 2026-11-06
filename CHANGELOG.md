@@ -66,6 +66,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Documentation
 
+- `HANDOFF.md` refreshed to the state after WP-11 to WP-14 and WP-15 parts 1a, 1b, 2 and 3 (progress table, what is on
+  `main`, schema, decisions, known gaps, what comes next); `README.md` status and `CONTRIBUTING.md` compose line no
+  longer say that no case can be created or that ClamAV is still to come.
 - ADR-0006 amended (2026-11-05): the `LIKE` adapter contributes a predicate to the scoped statement instead of
   returning candidate ids; IMPLEMENTATION_PLAN A.1 #7 marked *(amended r4)* and search removed from Part B's
   native-SQL uses.
