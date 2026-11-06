@@ -49,6 +49,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - The `local` seed (`LocalConfigSeed`) compares names stripped, as the service stores them (#67, item 4): a seed name
   with leading or trailing whitespace no longer fails the second start with "the name is taken", and a case type's
   `slaPolicy` reference is matched stripped too.
+- Two small edge cases from the bug hunt (#67, item 11): a case description whose line breaks arrive as CRLF is
+  checked against the 20 000 limit with each break counted once, as the form's `maxlength` and the comment service
+  count it (`CaseFields` and `CaseChanges` normalise to LF), so a full description no longer fails with 422; and the
+  audit actor-name snapshot is no longer cut between the two halves of a surrogate pair.
 
 ### Documentation
 

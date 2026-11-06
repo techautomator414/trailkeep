@@ -23,4 +23,10 @@ public record CaseChanges(
         @NotBlank @Size(max = 200) String title,
         @NotNull CasePriority priority,
         @Redacted @Nullable @Size(max = 1000) String subjectText,
-        @Redacted @NotBlank @Size(max = 20_000) String description) {}
+        @Redacted @NotBlank @Size(max = 20_000) String description) {
+
+    /** Counts a line break once, as the form's {@code maxlength} does (a browser submits CRLF). */
+    public CaseChanges {
+        description = CaseFields.lineFeeds(description);
+    }
+}
