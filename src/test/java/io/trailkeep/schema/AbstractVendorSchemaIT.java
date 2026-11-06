@@ -192,6 +192,33 @@ abstract class AbstractVendorSchemaIT {
         assertThat(indexes).contains("IX_AUT_TEAM_USER:TEAM_ID", "PK_APP_USER_TEAM:USER_ID");
     }
 
+    @Test
+    void savedViewsAreMigratedWithTheirEntityAndEachPersonsNamesAreUnique() throws SQLException {
+        assertThat(Arrays.stream(flyway.info().applied()).map(MigrationInfo::getScript))
+                .contains("V4_7__saved_view.sql");
+        assertThat(SchemaMetadataDiff.expectedColumns(entityManagerFactory))
+                .containsEntry("SAVED_VIEW.NAME", column("SAVED_VIEW", "NAME", false, 100L))
+                .containsEntry("SAVED_VIEW.QUERY", column("SAVED_VIEW", "QUERY", false, 1000L))
+                .containsKeys("SAVED_VIEW.ID", "SAVED_VIEW.USER_ID", "SAVED_VIEW.CREATED_AT");
+        assertThat(nullableColumns(Set.of("SAVED_VIEW"))).isEmpty();
+        List<String> unique = new ArrayList<>();
+        try (Connection connection = dataSource.getConnection()) {
+            DatabaseMetaData metaData = connection.getMetaData();
+            String table = metaData.storesLowerCaseIdentifiers() ? "saved_view" : "SAVED_VIEW";
+            try (ResultSet rows = metaData.getIndexInfo(null, databaseProperties.schema(), table, true, true)) {
+                while (rows.next()) {
+                    String name = rows.getString("INDEX_NAME");
+                    if (name != null) {
+                        unique.add(name.toUpperCase(Locale.ROOT) + ":" + rows.getShort("ORDINAL_POSITION") + ":"
+                                + rows.getString("COLUMN_NAME").toUpperCase(Locale.ROOT));
+                    }
+                }
+            }
+        }
+
+        assertThat(unique).contains("UK_SAVED_VIEW_USER_NAME:1:USER_ID", "UK_SAVED_VIEW_USER_NAME:2:NAME");
+    }
+
     private static SchemaMetadataDiff.ExpectedColumn column(
             String table, String column, boolean nullable, @Nullable Long length) {
         return new SchemaMetadataDiff.ExpectedColumn(table, column, nullable, length);
