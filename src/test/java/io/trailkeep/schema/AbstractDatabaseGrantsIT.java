@@ -56,7 +56,8 @@ abstract class AbstractDatabaseGrantsIT {
 
     /**
      * Identity (V1), audit (V2), admin (V3), case (V4), comment (V4.1), pin (V4.2), attachment (V4.3), saved view
-     * (V4.7), outbox (V4.8) and alert (V4.9) tables, and the column each probe touches: the first key column.
+     * (V4.7), outbox (V4.8), alert (V4.9) and update request (V4.10) tables, and the column each probe touches: the
+     * first key column.
      */
     static final Map<String, String> TABLES = Map.ofEntries(
             Map.entry("APP_USER", "ID"),
@@ -79,7 +80,8 @@ abstract class AbstractDatabaseGrantsIT {
             Map.entry("OIDC_SESSION", "SESSION_ID"),
             Map.entry("SAVED_VIEW", "ID"),
             Map.entry("NOTIFICATION_OUTBOX", "ID"),
-            Map.entry("USER_ALERT", "ID"));
+            Map.entry("USER_ALERT", "ID"),
+            Map.entry("UPDATE_REQUEST", "ID"));
 
     /** What the runtime user may do; anything absent is denied. */
     static final Map<String, Set<Privilege>> APP_USER_GRANTS = Map.ofEntries(
@@ -107,7 +109,9 @@ abstract class AbstractDatabaseGrantsIT {
             // Mail is sent and its status changed, never deleted by the app: trimming sent rows is the purge user's.
             Map.entry("NOTIFICATION_OUTBOX", EnumSet.of(Privilege.SELECT, Privilege.INSERT, Privilege.UPDATE)),
             // A person marks their alerts read and deletes them (BUILD_PLAN §8 rule 7 allows DELETE here).
-            Map.entry("USER_ALERT", EnumSet.allOf(Privilege.class)));
+            Map.entry("USER_ALERT", EnumSet.allOf(Privilege.class)),
+            // A request is answered, never deleted: it is case history.
+            Map.entry("UPDATE_REQUEST", EnumSet.of(Privilege.SELECT, Privilege.INSERT, Privilege.UPDATE)));
 
     /** What the purge user may do on these tables: trim the outbox (V4.8); its case-data grants arrive with WP-24. */
     static final Map<String, Set<Privilege>> PURGE_USER_GRANTS =
@@ -125,7 +129,8 @@ abstract class AbstractDatabaseGrantsIT {
             "SEQ_CASE_ATTACHMENT",
             "SEQ_SAVED_VIEW",
             "SEQ_NOTIFICATION_OUTBOX",
-            "SEQ_USER_ALERT");
+            "SEQ_USER_ALERT",
+            "SEQ_UPDATE_REQUEST");
 
     /**
      * One open connection per grantee for the whole class. Opening a connection per probe (about 100 in a burst, each

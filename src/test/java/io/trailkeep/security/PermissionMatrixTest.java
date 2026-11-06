@@ -170,6 +170,7 @@ class PermissionMatrixTest {
             case UNRESTRICT -> c.sensitivity() == RESTRICTED;
             case DECIDE_CLOSURE -> c.status() == PENDING_CLOSURE && !c.owner();
             case REASSIGN_APPROVER -> c.status() == PENDING_CLOSURE;
+            case ANSWER_UPDATE -> c.status() == OPEN || c.status() == PENDING_CLOSURE;
             case REOPEN -> c.status() == CLOSED;
             case RELEASE_QUARANTINE -> c.role() == MatrixRole.COMPLIANCE_ADMIN;
             default -> false;

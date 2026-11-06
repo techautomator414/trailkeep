@@ -22,6 +22,8 @@ public enum CaseAction {
     UNRESTRICT,
     /** Ask a user for an update by email. */
     REQUEST_UPDATE,
+    /** Mark someone else's update request answered (the requester marks their own under {@link #REQUEST_UPDATE}). */
+    ANSWER_UPDATE,
     /** Request closure. */
     REQUEST_CLOSURE,
     /** Approve or reject a pending closure request (the requester is excluded by the closure service). */

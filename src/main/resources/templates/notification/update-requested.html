@@ -1,0 +1,15 @@
+<!--/* SPDX-License-Identifier: Apache-2.0. HTML part of the update-requested mail: simple, linear HTML with the same
+     content as the text part (BUILD_PLAN §10.1), never the request's message. */-->
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+<meta charset="UTF-8">
+<title th:text="|Update requested on ${caseNumber}|">Update requested</title>
+</head>
+<body>
+<p><span th:text="${requester}">Someone</span> asked you for an update on case <span th:text="${caseNumber}">CASE</span>,
+  &ldquo;<span th:text="${title}">title</span>&rdquo;.</p>
+<p><a th:href="${link}" th:text="|Open ${caseNumber} to read the request and answer it|">Open the case</a></p>
+<p>You receive this because an update was requested from you.</p>
+</body>
+</html>

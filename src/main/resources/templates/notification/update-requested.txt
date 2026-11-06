@@ -1,0 +1,8 @@
+/*[- SPDX-License-Identifier: Apache-2.0. Plain-text part of the update-requested mail. It carries the case number,
+     title, requester and a deep link, never the request's message, the description or the subject (BUILD_PLAN §9). -]*/
+[(${requester})] asked you for an update on case [(${caseNumber})], "[(${title})]".
+
+Open the case to read the request and answer it with a comment:
+[(${link})]
+
+You receive this because an update was requested from you.

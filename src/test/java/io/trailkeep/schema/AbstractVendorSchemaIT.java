@@ -268,6 +268,22 @@ abstract class AbstractVendorSchemaIT {
                 .containsExactlyInAnyOrder("USER_ALERT.CASE_ID", "USER_ALERT.READ_AT");
     }
 
+    @Test
+    void updateRequestsAreMigratedWithTheirEntity() {
+        assertThat(Arrays.stream(flyway.info().applied()).map(MigrationInfo::getScript))
+                .contains("V4_10__update_request.sql");
+        assertThat(SchemaMetadataDiff.expectedColumns(entityManagerFactory))
+                .containsEntry("UPDATE_REQUEST.OPEN_KEY", column("UPDATE_REQUEST", "OPEN_KEY", true, 41L))
+                .containsKeys("UPDATE_REQUEST.MESSAGE", "UPDATE_REQUEST.REQUESTED_FROM");
+        assertThat(nullableColumns(Set.of("UPDATE_REQUEST")))
+                .containsExactlyInAnyOrder(
+                        "UPDATE_REQUEST.LAST_REMINDED_AT",
+                        "UPDATE_REQUEST.ANSWERED_AT",
+                        "UPDATE_REQUEST.ANSWERED_BY",
+                        "UPDATE_REQUEST.ANSWERED_BY_COMMENT_ID",
+                        "UPDATE_REQUEST.OPEN_KEY");
+    }
+
     private static SchemaMetadataDiff.ExpectedColumn column(
             String table, String column, boolean nullable, @Nullable Long length) {
         return new SchemaMetadataDiff.ExpectedColumn(table, column, nullable, length);
