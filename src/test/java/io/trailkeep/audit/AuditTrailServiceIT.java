@@ -13,6 +13,7 @@ import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.CriteriaQuery;
 import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
+import java.util.Set;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -104,6 +105,39 @@ class AuditTrailServiceIT {
         assertThat(trail.forCase(NOTHING_READABLE, 999L, 10))
                 .as("unreadable and absent cases are indistinguishable")
                 .isEqualTo(trail.forCase(NOTHING_READABLE, CASE_A, 10));
+    }
+
+    @Test
+    void pageSkipsFiltersAndCountsNewestFirst() {
+        AuditTrailService.AuditPage all = trail.pageForCase(CaseScope.system(), CASE_A, Set.of(), 0, 10);
+        assertThat(all.total()).isEqualTo(2);
+        assertThat(all.records()).extracting(AuditRecord::action).containsExactly("UPDATE", "CREATE");
+
+        AuditTrailService.AuditPage second = trail.pageForCase(CaseScope.system(), CASE_A, Set.of(), 1, 1);
+        assertThat(second.total()).as("the total does not depend on the page").isEqualTo(2);
+        assertThat(second.records()).extracting(AuditRecord::action).containsExactly("CREATE");
+
+        AuditTrailService.AuditPage creates = trail.pageForCase(CaseScope.system(), CASE_A, Set.of("CREATE"), 0, 10);
+        assertThat(creates.total()).isEqualTo(1);
+        assertThat(creates.records()).extracting(AuditRecord::action).containsExactly("CREATE");
+        assertThat(trail.pageForCase(CaseScope.system(), CASE_A, Set.of(), 5, 10)
+                        .records())
+                .as("a page past the end is empty")
+                .isEmpty();
+    }
+
+    @Test
+    void pageOfUnreadableOrAbsentCaseIsEmptyWithTotalOfZero() {
+        assertThat(trail.pageForCase(NOTHING_READABLE, CASE_A, Set.of(), 0, 10).total())
+                .isZero();
+        assertThat(trail.pageForCase(NOTHING_READABLE, CASE_A, Set.of(), 0, 10).records())
+                .isEmpty();
+        assertThat(trail.pageForCase(CaseScope.system(), 999L, Set.of(), 0, 10).total())
+                .isZero();
+        assertThatThrownBy(() -> trail.pageForCase(CaseScope.system(), CASE_A, Set.of(), -1, 10))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> trail.pageForCase(CaseScope.system(), CASE_A, Set.of(), 0, 0))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
