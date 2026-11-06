@@ -39,4 +39,20 @@ public record CaseFields(
         @Min(1) long ownerId,
         @Redacted @Nullable @Size(max = 1000) String subjectText,
         @Redacted @NotBlank @Size(max = 20_000) String description,
-        @NotNull Sensitivity sensitivity) {}
+        @NotNull Sensitivity sensitivity) {
+
+    /** Counts a line break once, as the form's {@code maxlength} does (a browser submits CRLF). */
+    public CaseFields {
+        description = lineFeeds(description);
+    }
+
+    /**
+     * A textarea's text with each CRLF as one line feed; the size limit applies to this form, as for comments.
+     *
+     * @param text the submitted text, or {@code null} if the field was missing
+     * @return the text with CRLF replaced by LF
+     */
+    static String lineFeeds(String text) {
+        return text == null ? text : text.replace("\r\n", "\n");
+    }
+}

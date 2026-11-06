@@ -38,7 +38,11 @@ public record AuditEntry(
         requireCode(entityType, "entityType");
         requireCode(action, "action");
         if (actorName != null && actorName.length() > MAX_NAME_LENGTH) {
-            actorName = actorName.substring(0, MAX_NAME_LENGTH);
+            // Never cut between the two halves of a surrogate pair.
+            int end = Character.isHighSurrogate(actorName.charAt(MAX_NAME_LENGTH - 1))
+                    ? MAX_NAME_LENGTH - 1
+                    : MAX_NAME_LENGTH;
+            actorName = actorName.substring(0, end);
         }
     }
 
