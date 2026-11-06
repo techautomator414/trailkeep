@@ -109,10 +109,6 @@ class ClosureRequest {
         return id;
     }
 
-    long getCaseId() {
-        return caseId;
-    }
-
     long getApproverId() {
         return approverId;
     }

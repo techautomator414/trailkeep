@@ -41,7 +41,13 @@ enum CaseNotice {
     /** An update request marked answered. */
     UPDATE_ANSWERED,
     /** Closure requested; the case is pending closure. */
-    CLOSURE_REQUESTED;
+    CLOSURE_REQUESTED,
+    /** Closure approved; the case is closed. */
+    CLOSURE_APPROVED,
+    /** Closure rejected; the case is open again. */
+    CLOSURE_REJECTED,
+    /** Changes requested; the case is open again. */
+    CLOSURE_CHANGES_REQUESTED;
 
     private static final String ATTRIBUTE = "tk.caseNotice";
 

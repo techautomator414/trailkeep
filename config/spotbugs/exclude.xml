@@ -143,6 +143,16 @@
     and follow-ups are echoed only through th:text and never mailed. Covered by ClosureRequestIT,
     OracleClosureRequestIT, ClosureControllerIT and RequestClosureAccessibilityIT.
     Approved in the security-reviewer role on #104.
+    ClosureDecisionController (WP-19 part c2): behind login; GET /cases/{n}/closure/{id}/decision and POST of the
+    same path, the POST with CSRF (403 without). ClosureService.decidable decides 404 (the person's CaseScope; a
+    request id that is not the case's pending request, parsed leniently to -1) and 403 (DECIDE_CLOSURE, pending cases
+    only, never the owner; and only the request's named approver) before any input is read. The decision is matched
+    against the ClosureDecision names (anything else, PENDING included, is a 422) and the reason must be 1 to 1000
+    characters unless approving; ClosureDecisionService re-checks all of it under the case row lock at the request's
+    version (409 with Reload when a concurrent decision got there first). The redirect is the fixed path /cases/
+    plus a parsed case number. The reason is echoed only through th:text and never mailed. Covered by
+    ClosureDecisionIT, OracleClosureDecisionIT, ClosureDecisionControllerIT and ClosureDecisionAccessibilityIT.
+    Needs security-reviewer approval.
     Approved in the security-reviewer role on #20. Listed by class, never by pattern alone, so each new controller
     is reviewed the same way.
   -->
@@ -165,6 +175,7 @@
       <Class name="io.trailkeep.web.AlertController"/>
       <Class name="io.trailkeep.web.UpdateRequestController"/>
       <Class name="io.trailkeep.web.ClosureController"/>
+      <Class name="io.trailkeep.web.ClosureDecisionController"/>
     </Or>
   </Match>
   <!--

@@ -3,7 +3,6 @@
 package io.trailkeep.closure;
 
 import io.trailkeep.casefile.CaseService.Actor;
-import io.trailkeep.shared.CaseNumber;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -96,17 +95,6 @@ public interface ClosureService {
             boolean requiresChanges) {}
 
     /**
-     * A request waiting for the actor's decision, for the dashboard's "Pending my approval".
-     *
-     * @param id the request
-     * @param caseNumber the case
-     * @param caseTitle the case's title
-     * @param requestedBy who asked, by name
-     * @param outcome the outcome requested
-     */
-    record AwaitingApproval(long id, CaseNumber caseNumber, String caseTitle, String requestedBy, String outcome) {}
-
-    /**
      * The case's latest request, if the actor reads the case and it is decided (an open case's latest request may
      * have been sent back; a closed case's was approved).
      *
@@ -117,22 +105,16 @@ public interface ClosureService {
     Optional<DecidedClosure> lastDecision(Actor actor, String caseNumber);
 
     /**
-     * The pending requests the actor is the approver of, on cases they read, oldest first, at most 100.
+     * The pending request the actor would decide ({@code DECIDE_CLOSURE}): {@code NOT_FOUND}, then
+     * {@code FORBIDDEN}, then {@code NOT_FOUND} if the request is not the case's pending one and {@code FORBIDDEN} if
+     * the actor is not its approver; the same refusals as {@code ClosureDecisionService.decide}.
      *
-     * @param actor the actor
-     * @return the requests
-     */
-    List<AwaitingApproval> awaitingMyApproval(Actor actor);
-
-    /**
-     * Who a pending request may be reassigned to ({@code REASSIGN_APPROVER}): the A.2 #18 rule for its original
-     * requester, minus its current approver, by name. {@code NOT_FOUND}, then {@code FORBIDDEN}.
-     *
-     * @param actor who reassigns
+     * @param actor the approver
      * @param caseNumber the case number as it appears in the URL
-     * @return the approvers, by name; empty if nothing is pending
+     * @param requestId the pending request
+     * @return the request
      */
-    List<Approver> reassignChoices(Actor actor, String caseNumber);
+    PendingClosure decidable(Actor actor, String caseNumber, long requestId);
 
     /**
      * The form's choices for a case the actor may request closure of: {@code NOT_FOUND}, then {@code FORBIDDEN} as
