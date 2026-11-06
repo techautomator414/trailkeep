@@ -9,10 +9,12 @@ nothing about it. Each case has an owner, a type, an SLA clock, comments, attach
 approval moment: closure. The system emails people before deadlines pass, sends an automated aging report,
 and keeps an evidence-grade history.
 
-> **Status: 0.1.0, the walking skeleton.** Phase 1 of `IMPLEMENTATION_PLAN.md` is merged (build and scanning
-> gates, two-vendor schema tooling, identity, OIDC login and shared sessions, audit, web shell, container and deploy
-> base), together with team and case-configuration administration (WP-09, WP-10). About a third of the planned
-> work packages are done. **No case can be created yet**: the first end-user feature is WP-11. Read
+> **Status: Phase 2 in progress, after the 0.1.0 walking skeleton.** Phase 1 of `IMPLEMENTATION_PLAN.md` is merged
+> (build and scanning gates, two-vendor schema tooling, identity, OIDC login and shared sessions, audit, web shell,
+> container and deploy base), with team and case-configuration administration (WP-09, WP-10) and, in Phase 2, case
+> create, view, edit, reassign and restrict, comments, attachments with virus scanning, and a filtered, searchable
+> cases list (WP-11 to WP-14, and WP-15 parts 1a, 1b and 2). About half of the planned work packages are done. **Cases
+> cannot be closed yet** and there is no email or SLA alerting: those are Phases 3 and 4. Read
 > [`HANDOFF.md`](HANDOFF.md) for exactly what exists, what does not, and what comes next.
 
 ## What it does
@@ -44,7 +46,7 @@ container. No JavaScript build toolchain, no JSON API in v1, no Lombok.
 | [`SECURITY.md`](SECURITY.md) | How to report a vulnerability |
 | [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md) | Contributor Covenant 2.1 |
 | [`CLAUDE.md`](CLAUDE.md) | Working agreement for AI coding sessions (much of this code is written with AI assistance; every PR passes the same gates regardless of author) |
-| [`HANDOFF.md`](HANDOFF.md) | Where the build stands at 0.1.0: what is merged, what is not, decisions taken, open issues, and the next work package |
+| [`HANDOFF.md`](HANDOFF.md) | Where the build stands (refreshed after WP-11 to WP-15 part 2; written at 0.1.0): what is merged, what is not, decisions taken, open issues, and the next work package |
 | [`CHANGELOG.md`](CHANGELOG.md) | What each release and each merged pull request changed |
 | [`adr/`](adr/README.md) | Architecture decision records, including the ones that superseded a line of the plans |
 
@@ -57,8 +59,9 @@ docker compose up -d                 # PostgreSQL 16 and Keycloak 26 with the de
 ```
 
 Open `http://localhost:8080` and sign in with a dev-realm user (`deploy/local/keycloak/README.md`): `system.admin`
-manages teams at `/admin/teams`, `compliance.admin` manages SLA policies and case types under `/admin`. Mailpit
-and ClamAV join the compose stack with the email (WP-17) and attachments (WP-14) work packages.
+manages teams at `/admin/teams`, `compliance.admin` manages SLA policies and case types under `/admin`, and
+`alpha.analyst` can create a case at `/cases/new` and work it from `/cases`. ClamAV (with its TLS sidecar) is in the
+compose stack; Mailpit joins it with the email work package (WP-17).
 
 ## Security posture
 
