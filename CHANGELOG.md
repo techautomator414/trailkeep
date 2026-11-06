@@ -9,6 +9,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Cases list performance at 50 000 cases (WP-15 part 5): a deterministic synthetic seed
+  (`perf/seed-cases-postgresql.sql`), `PerfCasesListIT` (tagged `perf`, run by the new `perf-it` profile's `perf-50k`
+  execution and by the nightly `perf` job, which replaces the k6 placeholder) that measures the list, the sorts, a
+  deep page, the search, the export and the saved-view query in-process and fails if `GET /cases` reaches a p95 of
+  500 ms or the search 1 s, and a k6 smoke (`perf/k6/cases-smoke.js`) run by hand against a running stack. Measured on
+  PostgreSQL 16: `GET /cases` p95 132 ms, search p95 109 ms, an export of 9 645 rows about 0.5 s
+  (`docs/perf/cases-list-50k.md`, with index recommendations that are not applied).
 - History page (WP-16 part 2): `GET /cases/{number}/history`, linked as "History" from the case page beside Comments
   and Attachments, lists the case's audit events newest first, 50 to a page, with who, when (in `app.timezone`, in a
   `time` element), origin (screen, scheduled job, import) and, for field changes, old to new; owners and teams are

@@ -27,15 +27,42 @@ jobs:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
       NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
 
-  k6:
-    name: k6 (50k cases / 500k comments)
+  # The cases list at 50 000 synthetic cases on PostgreSQL (WP-15 part 5, docs/perf/cases-list-50k.md): every
+  # scenario is a full request in-process (security, scoped queries, Thymeleaf), and the job fails if GET /cases p95
+  # reaches 500 ms or the search p95 reaches 1 s. The k6 smoke (perf/k6/cases-smoke.js) needs a running app behind the
+  # identity provider and runs by hand; the 500k-comment k6 run arrives with WP-30.
+  perf:
+    name: perf (50k cases on PostgreSQL)
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 30
     permissions:
       contents: read
     steps:
-      - name: Placeholder until WP-30
-        run: echo "::notice title=k6 not yet active::Performance scripts arrive with WP-30; nothing to run yet."
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Temurin 21
+        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      - name: Measure the cases list at 50k
+        run: ./mvnw -B -ntp -Pperf-it test-compile failsafe:integration-test@perf-50k failsafe:verify@perf-50k
+
+      - name: Upload the measurements
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: perf-50k
+          path: |
+            target/perf
+            target/failsafe-reports/perf-50k
+          if-no-files-found: ignore
+          retention-days: 30
 
   zap:
     name: zap (authenticated full + API scan)
