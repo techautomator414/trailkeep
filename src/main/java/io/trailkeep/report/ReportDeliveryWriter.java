@@ -106,7 +106,7 @@ class ReportDeliveryWriter {
         String name = directory.team(team).map(TeamSummary::name).orElse("");
         Map<String, Object> model = Map.of("team", name, "asOf", report.asOf().toString());
         for (long person : recipients(team)) {
-            notifications.notifyUser(person, "report-ready", model, null, "/reports/runs/" + run.getId());
+            notifications.notifyOfReport(person, "report-ready", model, run.getId(), "/reports/runs/" + run.getId());
         }
         schedule.ran(now, zone);
         return true;

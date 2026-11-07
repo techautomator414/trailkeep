@@ -323,6 +323,23 @@ abstract class AbstractVendorSchemaIT {
                         "UPDATE_REQUEST.OPEN_KEY");
     }
 
+    @Test
+    void reportDeliveryTablesAreMigratedWithTheirEntities() {
+        assertThat(Arrays.stream(flyway.info().applied()).map(MigrationInfo::getScript))
+                .contains("V7__report_delivery.sql");
+        assertThat(SchemaMetadataDiff.expectedColumns(entityManagerFactory))
+                .containsEntry("REPORT_RUN.REPORT", column("REPORT_RUN", "REPORT", false, 16L))
+                .containsKeys(
+                        "REPORT_SCHEDULE.TEAM_ID",
+                        "REPORT_SCHEDULE.NEXT_RUN_AT",
+                        "REPORT_SCHEDULE.VERSION",
+                        "REPORT_RUN.HTML",
+                        "REPORT_RUN.CSV",
+                        "REPORT_RUN.AS_OF");
+        assertThat(nullableColumns(Set.of("REPORT_SCHEDULE", "REPORT_RUN")))
+                .containsExactly("REPORT_SCHEDULE.LAST_RUN_AT");
+    }
+
     private static SchemaMetadataDiff.ExpectedColumn column(
             String table, String column, boolean nullable, @Nullable Long length) {
         return new SchemaMetadataDiff.ExpectedColumn(table, column, nullable, length);
