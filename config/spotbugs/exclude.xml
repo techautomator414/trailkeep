@@ -170,7 +170,7 @@
     with Reload when the case moved on). The redirect is the fixed path /cases/ plus a parsed case number. The reason
     is echoed only through th:text and never mailed. Covered by CaseReopenIT, OracleCaseReopenIT,
     CaseReopenControllerIT and CaseReopenAccessibilityIT.
-    Needs security-reviewer approval.
+    Approved in the security-reviewer role on #107.
     Approved in the security-reviewer role on #20. Listed by class, never by pattern alone, so each new controller
     is reviewed the same way.
   -->
