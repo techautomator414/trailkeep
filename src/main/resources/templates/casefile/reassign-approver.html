@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Reassign approver without JavaScript and after a refused post (BUILD_PLAN §4.3, WP-19 part c2b): 422 with the
+     approver summarized and linked, 409 with Reload when the request was decided or reassigned meanwhile. -->
+<html lang="en" xmlns:th="http://www.thymeleaf.org" th:replace="~{web/layout :: page(~{::title}, ~{::main})}">
+<head><title th:text="#{tk.approver.title(${number})} + ' · ' + ${@branding.name()}">Reassign approver</title></head>
+<body>
+<main id="main" class="container tk-main" tabindex="-1">
+  <h1 th:text="#{tk.approver.title(${number})}">Reassign the approver</h1>
+  <div th:unless="${#lists.isEmpty(approverErrors)}" class="alert alert-danger" role="alert" tabindex="-1"
+       data-tk-error-summary aria-labelledby="tk-approver-errors">
+    <h2 id="tk-approver-errors" class="h5" th:text="#{tk.approver.errors}">The approver was not changed.</h2>
+    <ul><li><a class="alert-link" href="#tk-new-approver" th:text="#{tk.closure.error.approverId}">Choose.</a></li></ul>
+  </div>
+  <div th:if="${conflict}" class="alert alert-warning" role="alert" tabindex="-1" data-tk-error-summary
+       aria-labelledby="tk-approver-conflict">
+    <h2 id="tk-approver-conflict" class="h5" th:text="#{tk.decision.conflict}">This request changed.</h2>
+    <p><a class="btn btn-primary" th:href="@{/cases/{n}(n=${number})}" th:text="#{tk.edit.reload}">Reload</a></p>
+  </div>
+  <form th:replace="~{casefile/fragments/closure-decision :: approver(${number}, ${requestId}, ${approvers},
+                     ${chosen}, ${approverErrors}, false)}"></form>
+</main>
+</body>
+</html>

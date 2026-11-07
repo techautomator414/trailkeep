@@ -9,6 +9,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Reassign approver and "Pending my approval" (WP-19 part c2b): Managers and Compliance Admins see "Reassign
+  approver" on a pending case's banner. It opens a native dialog (fallback page `/cases/{number}/closure/{id}/approver`)
+  with the same APG combobox as Request closure, listing who the separation-of-duties rule allows for the original
+  requester, minus the current approver. The new approver gets the closure-requested mail and alert. A refused choice
+  is 422 and a reassignment that lost a race is 409 with Reload. The dashboard's "Needs attention" now lists the
+  closure requests waiting for the person's decision, oldest first, each with "Approve closure" and a link to "Reject
+  or request changes"; update requests follow under their own heading.
 - Closure decision screens (WP-19 part c2): the named approver sees "Approve closure" (one button) and "Reject or
   request changes" (a native dialog; fallback page `/cases/{number}/closure/{id}/decision` without JavaScript) on a
   pending case's banner. The dialog has a required Reject / Request changes choice and a required reason of up to 1000
