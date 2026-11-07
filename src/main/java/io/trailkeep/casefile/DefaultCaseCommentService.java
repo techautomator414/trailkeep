@@ -22,6 +22,7 @@ import java.time.InstantSource;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -108,6 +109,14 @@ class DefaultCaseCommentService implements CaseCommentService {
                             pinned.contains(id));
                 })
                 .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<Instant> lastCommentAt(Actor actor, String caseNumber) {
+        return comments.findForCase(scopes.forUser(actor.permissions()), CaseLoader.parse(caseNumber)).stream()
+                .map(CaseComment::getCreatedAt)
+                .max(Comparator.naturalOrder());
     }
 
     @Override

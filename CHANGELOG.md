@@ -9,6 +9,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Closure decision screens (WP-19 part c2): the named approver sees "Approve closure" (one button) and "Reject or
+  request changes" (a native dialog; fallback page `/cases/{number}/closure/{id}/decision` without JavaScript) on a
+  pending case's banner. The dialog has a required Reject / Request changes choice and a required reason of up to 1000
+  characters with a visible count; a refused form is 422 with each field marked and summarized, a decision that lost
+  a race is 409 with Reload, and anyone but the approver is 403. An approved case shows its closure (approver, time,
+  outcome, summary and follow-ups), locked. A case sent back shows a "Requires Changes" badge and the reason until
+  the next comment.
 - Request closure screen (WP-19 part c1): "Request closure" on an open case's page, offered when the matrix allows
   it, opens a native dialog (fallback page `/cases/{number}/request-closure` without JavaScript) with the case type's
   outcomes, the resolution summary and optional follow-up actions (5000 characters each, with a visible count) and the

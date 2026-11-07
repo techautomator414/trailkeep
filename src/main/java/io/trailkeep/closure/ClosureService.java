@@ -69,6 +69,54 @@ public interface ClosureService {
             @Nullable String followUps) {}
 
     /**
+     * The latest decided closure request of a case, as the case page shows it: on a closed case the closure itself
+     * (locked), on an open case the reason it was sent back. Case content: shown to whoever reads the case.
+     *
+     * @param id the request
+     * @param decision the decision
+     * @param decidedBy who decided, by name
+     * @param decidedAt when, in {@code app.timezone}, to the minute
+     * @param reason why, or {@code null}
+     * @param outcome the outcome requested
+     * @param summary the resolution summary
+     * @param followUps the follow-up actions, or {@code null}
+     * @param requiresChanges sent back (rejected or changes requested) and nobody has commented since: the case
+     *     page's "Requires Changes" badge (BUILD_PLAN §4.3)
+     */
+    record DecidedClosure(
+            long id,
+            ClosureDecision decision,
+            String decidedBy,
+            LocalDateTime decidedAt,
+            @Nullable String reason,
+            String outcome,
+            String summary,
+            @Nullable String followUps,
+            boolean requiresChanges) {}
+
+    /**
+     * The case's latest request, if the actor reads the case and it is decided (an open case's latest request may
+     * have been sent back; a closed case's was approved).
+     *
+     * @param actor the actor
+     * @param caseNumber the case number as it appears in the URL
+     * @return the decision, or empty
+     */
+    Optional<DecidedClosure> lastDecision(Actor actor, String caseNumber);
+
+    /**
+     * The pending request the actor would decide ({@code DECIDE_CLOSURE}): {@code NOT_FOUND}, then
+     * {@code FORBIDDEN}, then {@code NOT_FOUND} if the request is not the case's pending one and {@code FORBIDDEN} if
+     * the actor is not its approver; the same refusals as {@code ClosureDecisionService.decide}.
+     *
+     * @param actor the approver
+     * @param caseNumber the case number as it appears in the URL
+     * @param requestId the pending request
+     * @return the request
+     */
+    PendingClosure decidable(Actor actor, String caseNumber, long requestId);
+
+    /**
      * The form's choices for a case the actor may request closure of: {@code NOT_FOUND}, then {@code FORBIDDEN} as
      * for {@link #requestClosure}.
      *

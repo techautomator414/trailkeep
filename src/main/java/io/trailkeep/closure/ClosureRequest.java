@@ -142,6 +142,21 @@ class ClosureRequest {
         return decision;
     }
 
+    @Nullable
+    Long getDecidedBy() {
+        return decidedBy;
+    }
+
+    @Nullable
+    Instant getDecidedAt() {
+        return decidedAt;
+    }
+
+    @Nullable
+    String getReason() {
+        return reason;
+    }
+
     @Override
     public boolean equals(@Nullable Object other) {
         return this == other || (other instanceof ClosureRequest that && id != null && Objects.equals(id, that.id));

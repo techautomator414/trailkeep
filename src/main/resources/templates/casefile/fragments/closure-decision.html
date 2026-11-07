@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Deciding a closure request (BUILD_PLAN §4.3, WP-19 part c2), in the case page's dialogs and on their own page.
+     "fields" shows a request's summary and follow-ups (case content, read only). "approve" is Approve as one button.
+     "decide" is Reject or request changes: a radio group and the required reason (1000 characters, counted by
+     app.js). Each refused field carries aria-invalid and its message. -->
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<body>
+<th:block th:fragment="fields(summary, followUps)">
+  <h3 class="h6" th:text="#{tk.closure.summary.title}">Resolution summary</h3>
+  <p class="tk-description" th:text="${summary}">Summary</p>
+  <th:block th:if="${followUps != null}">
+    <h3 class="h6" th:text="#{tk.closure.followUps.title}">Follow-up actions</h3>
+    <p class="tk-description mb-0" th:text="${followUps}">Follow-ups</p>
+  </th:block>
+</th:block>
+
+<form th:fragment="approve(number, id, describedBy)" method="post" class="d-inline"
+      th:action="@{/cases/{n}/closure/{id}/decision(n=${number},id=${id})}">
+  <input type="hidden" name="decision" value="APPROVED">
+  <button class="btn btn-primary" type="submit" th:attr="aria-describedby=${describedBy}"
+          th:text="#{tk.decision.approve}">Approve closure</button>
+</form>
+
+<form th:fragment="decide(number, id, f, errors, dialog)" method="post"
+      th:action="@{/cases/{n}/closure/{id}/decision(n=${number},id=${id})}">
+  <fieldset class="mb-3" th:with="e=${#lists.contains(errors, 'decision')}"
+            th:attr="aria-describedby=${e} ? 'tk-decision-error' : null">
+    <legend class="form-label fs-6" th:text="#{tk.decision.choice}">Decision (required)</legend>
+    <div class="form-check" th:each="d, s : ${ {'REJECTED', 'CHANGES_REQUESTED'} }">
+      <input class="form-check-input" type="radio" name="decision" required th:id="'tk-decision-' + ${d}"
+             th:value="${d}" th:checked="${d == f.decision}"
+             th:attr="aria-invalid=${e},data-tk-dialog-focus=${dialog and s.first} ? 'true' : null">
+      <label class="form-check-label" th:for="'tk-decision-' + ${d}" th:text="#{'tk.decision.' + ${d}}">Reject</label>
+    </div>
+    <div th:if="${e}" class="invalid-feedback d-block" id="tk-decision-error" th:text="#{tk.decision.error.decision}">
+      Choose.</div>
+  </fieldset>
+  <div class="mb-3" th:with="e=${#lists.contains(errors, 'reason')}">
+    <label class="form-label" for="tk-reason" th:text="#{tk.decision.reason}">Reason (required)</label>
+    <textarea class="form-control" id="tk-reason" name="reason" rows="4" required maxlength="1000"
+              th:attr="aria-invalid=${e},aria-describedby=${e} ? 'tk-reason-error tk-reason-hint' : 'tk-reason-hint',
+                       data-tk-count=#{tk.closure.count}" th:text="${f.reason}"></textarea>
+    <div th:if="${e}" class="invalid-feedback d-block" id="tk-reason-error" th:text="#{tk.decision.error.reason}">
+      Write a reason.</div>
+    <div class="form-text" id="tk-reason-hint" th:text="#{tk.decision.reason.hint}">Up to 1000 characters.</div>
+  </div>
+  <div class="tk-dialog-actions">
+    <button class="btn btn-primary" type="submit" th:text="#{tk.decision.send}">Send back</button>
+    <a class="btn btn-outline-secondary" th:href="@{/cases/{n}(n=${number})}"
+       th:attr="data-tk-dialog-close=${dialog} ? 'true' : null"
+       th:text="${dialog} ? #{tk.request.cancel} : #{tk.request.back}">Cancel</a>
+  </div>
+</form>
+</body>
+</html>

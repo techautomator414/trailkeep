@@ -45,7 +45,20 @@ public interface CaseStatusService {
      * @param caseNumber the case number as it appears in the URL
      * @return the case with its facts and outcomes
      */
-    ClosableCase closable(Actor actor, String caseNumber);
+    default ClosableCase closable(Actor actor, String caseNumber) {
+        return closable(actor, caseNumber, CaseAction.REQUEST_CLOSURE);
+    }
+
+    /**
+     * The case, if the actor may perform a closure action on it ({@code REASSIGN_APPROVER}, say): {@code NOT_FOUND},
+     * then {@code FORBIDDEN} if the matrix denies the action. Read only; nothing is locked.
+     *
+     * @param actor the actor
+     * @param caseNumber the case number as it appears in the URL
+     * @param action the action
+     * @return the case with its facts and outcomes
+     */
+    ClosableCase closable(Actor actor, String caseNumber, CaseAction action);
 
     /**
      * A case a status move locked, as the lock holds it.

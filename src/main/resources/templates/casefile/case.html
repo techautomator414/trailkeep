@@ -8,7 +8,9 @@
      list; Pin and Unpin are one-button forms (no menu, so no JavaScript), and after either the page opens at that
      comment. Attachments follow, from document/fragments/attachments; their upload form is offered with the comment
      form, because one matrix row covers both. Links to the Comments and Attachments sections and to the History page
-     (WP-16) sit under the action buttons; the other actions arrive with WP-19. -->
+     (WP-16) sit under the action buttons. A pending closure's banner carries its decision actions (WP-19): Approve as
+     one button and Reject or request changes for the named approver; once decided,
+     an open case sent back shows "Requires Changes" until the next comment and a closed case its locked closure. -->
 <html lang="en" xmlns:th="http://www.thymeleaf.org" th:replace="~{web/layout :: page(~{::title}, ~{::main})}">
 <head><title th:text="${c.number} + ' ' + ${c.title} + ' · ' + ${@branding.name()}">Case</title></head>
 <body>
@@ -29,18 +31,39 @@
       <span aria-hidden="true">&#x1F512;</span> <span th:text="#{tk.case.restricted}">Restricted</span></li>
     <li class="tk-chip" th:if="${c.priority.name() == 'HIGH'}">
       <span aria-hidden="true">!</span> <span th:text="#{tk.case.high}">High priority</span></li>
+    <li class="tk-chip" th:if="${lastDecision != null and lastDecision.requiresChanges}">
+      <span aria-hidden="true">&#x21BA;</span> <span th:text="#{tk.decision.badge}">Requires Changes</span></li>
   </ul>
   <section th:if="${pendingClosure != null}" class="alert alert-info" aria-labelledby="tk-pending-title"
            th:with="p=${pendingClosure}">
     <h2 id="tk-pending-title" class="h5" th:text="#{tk.closure.pending}">Pending closure</h2>
-    <p th:text="#{tk.closure.pending.text(${p.requestedBy}, ${#temporals.format(p.requestedAt, 'yyyy-MM-dd HH:mm')},
-                  ${p.approver}, ${p.outcome})}">Requested by X; approver Y; outcome Z.</p>
-    <h3 class="h6" th:text="#{tk.closure.summary.title}">Resolution summary</h3>
-    <p class="tk-description" th:text="${p.summary}">Summary</p>
-    <th:block th:if="${p.followUps != null}">
-      <h3 class="h6" th:text="#{tk.closure.followUps.title}">Follow-up actions</h3>
-      <p class="tk-description mb-0" th:text="${p.followUps}">Follow-ups</p>
+    <p id="tk-pending-text" th:text="#{tk.closure.pending.text(${p.requestedBy},
+       ${#temporals.format(p.requestedAt, 'yyyy-MM-dd HH:mm')}, ${p.approver}, ${p.outcome})}">Requested by X.</p>
+    <th:block th:replace="~{casefile/fragments/closure-decision :: fields(${p.summary}, ${p.followUps})}"/>
+    <div class="tk-dialog-actions mt-3" th:if="${decides}">
+      <form th:replace="~{casefile/fragments/closure-decision :: approve(${c.number}, ${p.id}, 'tk-pending-text')}">
+      </form>
+      <a class="btn btn-outline-dark" th:href="@{/cases/{n}/closure/{id}/decision(n=${c.number},id=${p.id})}"
+         data-tk-dialog-open="tk-decision-dialog" aria-haspopup="dialog" th:text="#{tk.decision.open}">Reject or
+        request changes</a>
+    </div>
+  </section>
+  <dialog th:if="${decides}" id="tk-decision-dialog" class="tk-dialog" aria-labelledby="tk-decision-title">
+    <h2 id="tk-decision-title" th:text="#{tk.decision.title(${c.number})}">Reject or request changes</h2>
+    <form th:replace="~{casefile/fragments/closure-decision :: decide(${c.number}, ${pendingClosure.id},
+                       ${decisionForm}, ${ {} }, true)}"></form>
+  </dialog>
+  <section th:if="${lastDecision != null and (lastDecision.requiresChanges or c.status.name() == 'CLOSED')}"
+           th:with="d=${lastDecision}" th:class="${d.requiresChanges} ? 'alert alert-warning' : 'alert alert-secondary'"
+           aria-labelledby="tk-decided-title">
+    <h2 id="tk-decided-title" class="h5" th:text="#{'tk.decision.heading.' + ${d.decision}}">Closure</h2>
+    <p th:text="#{'tk.decision.decided.' + ${d.decision}(${d.decidedBy},
+                  ${#temporals.format(d.decidedAt, 'yyyy-MM-dd HH:mm')}, ${d.outcome})}">Approved by X.</p>
+    <th:block th:if="${d.reason != null}">
+      <h3 class="h6" th:text="#{tk.decision.reason.title}">Reason</h3>
+      <p class="tk-description" th:text="${d.reason}">Reason</p>
     </th:block>
+    <th:block th:replace="~{casefile/fragments/closure-decision :: fields(${d.summary}, ${d.followUps})}"/>
   </section>
   <p class="tk-dialog-actions" th:if="${c.editable or c.reassignable or c.restrictable or c.unrestrictable
                                        or recipients != null or closureChoices != null}">

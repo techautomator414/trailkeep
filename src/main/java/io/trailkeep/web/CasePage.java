@@ -9,6 +9,7 @@ import io.trailkeep.casefile.CaseService;
 import io.trailkeep.casefile.CaseService.Actor;
 import io.trailkeep.casefile.CaseView;
 import io.trailkeep.closure.ClosureService;
+import io.trailkeep.closure.ClosureService.PendingClosure;
 import io.trailkeep.document.CaseAttachmentService;
 import io.trailkeep.security.CaseAction;
 import io.trailkeep.security.TrailkeepOidcUser;
@@ -100,14 +101,30 @@ class CasePage {
         model.addAttribute("requests", requests.openForCase(actor, number));
         boolean requestable = cases.allows(actor, number, CaseAction.REQUEST_UPDATE);
         model.addAttribute("recipients", requestable ? requests.recipients(actor, number) : null);
-        // Request closure's choices when the matrix allows it (an open case), and a pending request's banner (WP-19).
-        boolean closable = cases.allows(actor, number, CaseAction.REQUEST_CLOSURE);
-        model.addAttribute("closureChoices", closable ? closures.choices(actor, number) : null);
-        model.addAttribute("closureForm", ClosureController.ClosureForm.EMPTY);
-        model.addAttribute("pendingClosure", closures.pending(actor, number).orElse(null));
+        closure(actor, number, model);
         // Taken only once the case has been read, so a page that answers 404 never consumes a notice.
         model.addAttribute("notice", CaseNotice.take(request, view.number()));
         return "casefile/case";
+    }
+
+    /**
+     * WP-19: Request closure's choices when the matrix allows it (an open case); a pending request's banner with
+     * Approve and Reject or request changes for its approver; the latest decision (the "Requires Changes" badge on an
+     * open case, the locked closure fields on a closed one).
+     */
+    private void closure(Actor actor, String number, Model model) {
+        boolean closable = cases.allows(actor, number, CaseAction.REQUEST_CLOSURE);
+        model.addAttribute("closureChoices", closable ? closures.choices(actor, number) : null);
+        model.addAttribute("closureForm", ClosureController.ClosureForm.EMPTY);
+        PendingClosure pending = closures.pending(actor, number).orElse(null);
+        model.addAttribute("pendingClosure", pending);
+        model.addAttribute(
+                "decides",
+                pending != null
+                        && pending.approverId() == actor.permissions().userId()
+                        && cases.allows(actor, number, CaseAction.DECIDE_CLOSURE));
+        model.addAttribute("decisionForm", ClosureDecisionController.DecisionForm.EMPTY);
+        model.addAttribute("lastDecision", closures.lastDecision(actor, number).orElse(null));
     }
 
     /**
