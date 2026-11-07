@@ -21,6 +21,8 @@ import io.trailkeep.shared.config.AppProperties;
 import io.trailkeep.user.UserDirectoryService;
 import io.trailkeep.user.UserPermissions;
 import jakarta.persistence.EntityManager;
+import jakarta.persistence.Tuple;
+import java.time.Instant;
 import java.time.InstantSource;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
@@ -38,6 +40,7 @@ import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
@@ -54,6 +57,11 @@ class DefaultUpdateRequestService implements UpdateRequestService {
     private static final Logger LOG = LoggerFactory.getLogger(DefaultUpdateRequestService.class);
     private static final String ANSWER = "UPDATE UpdateRequest r SET r.answeredAt = :now, r.answeredBy = :by,"
             + " r.answeredByCommentId = :comment, r.openKey = NULL WHERE r.id = :id AND r.answeredAt IS NULL";
+    private static final String DUE = "SELECT r.id, r.caseId, r.requestedFrom, r.requestedBy FROM UpdateRequest r"
+            + " WHERE r.answeredAt IS NULL AND r.id > :after AND COALESCE(r.lastRemindedAt, r.requestedAt) <= :cutoff"
+            + " ORDER BY r.id";
+    private static final String REMINDED =
+            "UPDATE UpdateRequest r SET r.lastRemindedAt = :now WHERE r.id = :id AND r.answeredAt IS NULL";
 
     private final UpdateRequestRepository requests;
     private final CaseService cases;
@@ -201,6 +209,31 @@ class DefaultUpdateRequestService implements UpdateRequestService {
     private boolean readsCase(long userId, CaseNumber number) {
         UserPermissions person = directory.permissionsOf(userId);
         return !person.disabled() && scopes.forUser(person).canRead(number);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<DueReminder> dueForReminder(Instant cutoff, long afterId, int limit) {
+        return entityManager
+                .createQuery(DUE, Tuple.class)
+                .setParameter("after", afterId)
+                .setParameter("cutoff", cutoff)
+                .setMaxResults(limit)
+                .getResultStream()
+                .map(row -> new DueReminder(
+                        row.get(0, Long.class), row.get(1, Long.class), row.get(2, Long.class), row.get(3, Long.class)))
+                .toList();
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public boolean reminded(long requestId, Instant now) {
+        return entityManager
+                        .createQuery(REMINDED)
+                        .setParameter("now", now)
+                        .setParameter("id", requestId)
+                        .executeUpdate()
+                == 1;
     }
 
     @Override

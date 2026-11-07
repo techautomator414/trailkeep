@@ -23,6 +23,7 @@ import io.trailkeep.shared.access.CaseAccessPath;
 import io.trailkeep.shared.config.AppProperties;
 import io.trailkeep.user.UserDirectoryService;
 import jakarta.persistence.EntityManager;
+import jakarta.persistence.Tuple;
 import java.time.Instant;
 import java.time.InstantSource;
 import java.time.LocalDateTime;
@@ -50,6 +51,9 @@ import org.springframework.transaction.annotation.Transactional;
 class DefaultClosureService implements ClosureService {
 
     private static final Logger LOG = LoggerFactory.getLogger(DefaultClosureService.class);
+    private static final String PENDING_SINCE =
+            "SELECT r.id, r.caseId, r.approverId, r.requestedBy, r.outcome FROM ClosureRequest r"
+                    + " WHERE r.decision = :pending AND r.requestedAt <= :cutoff AND r.id > :after ORDER BY r.id";
 
     private final CaseStatusService statuses;
     private final CasePermissionService permissions;
@@ -92,6 +96,25 @@ class DefaultClosureService implements ClosureService {
         this.comments = comments;
         this.clock = clock;
         this.zone = app.timezone();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<AwaitingDecision> pendingSince(Instant cutoff, long afterId, int limit) {
+        return entityManager
+                .createQuery(PENDING_SINCE, Tuple.class)
+                .setParameter("pending", ClosureDecision.PENDING)
+                .setParameter("cutoff", cutoff)
+                .setParameter("after", afterId)
+                .setMaxResults(limit)
+                .getResultStream()
+                .map(row -> new AwaitingDecision(
+                        row.get(0, Long.class),
+                        row.get(1, Long.class),
+                        row.get(2, Long.class),
+                        row.get(3, Long.class),
+                        row.get(4, String.class)))
+                .toList();
     }
 
     @Override
