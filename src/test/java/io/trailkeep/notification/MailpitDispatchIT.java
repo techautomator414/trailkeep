@@ -147,6 +147,41 @@ class MailpitDispatchIT {
                 .contains("Synthetic SLA case", "was due on <span>2026-12-01</span>", "<a href=\"" + link + "\">");
     }
 
+    @Test
+    void theThreeReminderMailsArriveWithTheirSubjectsAndLinks() throws Exception {
+        String link = "https://trailkeep.example.invalid/cases/CASE-2026-000044";
+        Map<String, String> model = Map.of(
+                "caseNumber", "CASE-2026-000044",
+                "title", "Synthetic reminder case",
+                "requester", "Synthetic Requester",
+                "outcome", "Resolved",
+                "due", "2026-10-01",
+                "days", "14",
+                "link", link);
+        transactions.executeWithoutResult(status -> {
+            notifications.enqueue("recipient@example.invalid", "update-reminder", model, null);
+            notifications.enqueue("approver@example.invalid", "closure-reminder", model, null);
+            notifications.enqueue("owner@example.invalid", "sla-overdue-repeat", model, null);
+        });
+
+        assertThat(dispatcher.dispatch()).isEqualTo(3);
+
+        Map<String, String> textBySubject = new HashMap<>();
+        for (JsonNode listed : get("/api/v1/messages").get("messages")) {
+            JsonNode message = get("/api/v1/message/" + listed.get("ID").asString());
+            textBySubject.put(
+                    message.get("Subject").asString(), message.get("Text").asString());
+        }
+        assertThat(textBySubject)
+                .containsOnlyKeys(
+                        "Reminder: an update is still requested on CASE-2026-000044",
+                        "Reminder: closure of CASE-2026-000044 awaits your decision",
+                        "Still overdue: CASE-2026-000044, 14 days past 2026-10-01");
+        assertThat(textBySubject.values()).allSatisfy(text -> assertThat(text).contains("Synthetic", link));
+        assertThat(textBySubject.get("Reminder: closure of CASE-2026-000044 awaits your decision"))
+                .contains("Synthetic Requester is still waiting for your decision", "with the outcome \"Resolved\"");
+    }
+
     private JsonNode get(String path) throws IOException, InterruptedException {
         HttpResponse<String> response = http.send(request(path).GET().build(), HttpResponse.BodyHandlers.ofString());
         assertThat(response.statusCode()).isEqualTo(200);

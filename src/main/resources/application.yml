@@ -157,6 +157,14 @@ app:
   sla:
     evaluate-cron: "0 */15 * * * *"
     health-grace: 30m
+  # Reminders tick (WP-17b, BUILD_PLAN §6): hourly, on one replica at a time. Open update requests and pending closure
+  # requests are reminded after this many days since they were made or last reminded; health-grace as for the
+  # evaluator, two ticks. "-" turns the tick off, as the test profiles do.
+  reminders:
+    cron: "0 7 * * * *"
+    update-request-days: 3
+    closure-days: 3
+    health-grace: 2h
 
 server:
   port: 8080

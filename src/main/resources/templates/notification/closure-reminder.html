@@ -1,0 +1,16 @@
+<!--/* SPDX-License-Identifier: Apache-2.0. HTML part of the closure-reminder mail: simple, linear HTML with the same
+     content as the text part (BUILD_PLAN §10.1), never the resolution summary. */-->
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+<meta charset="UTF-8">
+<title th:text="|Reminder: closure of ${caseNumber}|">Reminder</title>
+</head>
+<body>
+<p>Reminder: <span th:text="${requester}">Someone</span> is still waiting for your decision on closing case
+  <span th:text="${caseNumber}">CASE</span>, &ldquo;<span th:text="${title}">title</span>&rdquo;, with the outcome
+  &ldquo;<span th:text="${outcome}">Resolved</span>&rdquo;.</p>
+<p><a th:href="${link}" th:text="|Open ${caseNumber} to decide|">Open the case</a></p>
+<p>You receive this because you are the approver.</p>
+</body>
+</html>

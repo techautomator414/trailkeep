@@ -107,4 +107,34 @@ public interface UpdateRequestService {
      * @return the requests
      */
     List<OpenRequest> openFor(Actor actor);
+
+    /**
+     * An open request due a reminder (BUILD_PLAN §6 "Reminders tick"); never the message.
+     *
+     * @param id the request
+     * @param caseId its case
+     * @param recipientId who was asked
+     * @param requestedBy who asked
+     */
+    record DueReminder(long id, long caseId, long recipientId, long requestedBy) {}
+
+    /**
+     * Open requests last asked or reminded at or before {@code cutoff}, with ids after {@code afterId}, in id order,
+     * at most {@code limit}: one page of the reminders tick. No {@code CaseScope}: the tick is the system.
+     *
+     * @param cutoff the latest ask or reminder that is due again
+     * @param afterId the last id of the previous page, or 0
+     * @param limit the page size
+     * @return the requests
+     */
+    List<DueReminder> dueForReminder(Instant cutoff, long afterId, int limit);
+
+    /**
+     * Records a reminder in the caller's transaction ({@code LAST_REMINDED_AT}), if the request is still open.
+     *
+     * @param requestId the request
+     * @param now when
+     * @return whether it was open
+     */
+    boolean reminded(long requestId, Instant now);
 }

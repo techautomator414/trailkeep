@@ -1,0 +1,2 @@
+/*[- SPDX-License-Identifier: Apache-2.0. Subject of the reminder to the person an update was asked from. -]*/
+Reminder: an update is still requested on [(${caseNumber})]

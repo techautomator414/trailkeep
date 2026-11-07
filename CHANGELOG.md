@@ -9,6 +9,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Reminders tick (WP-17b).
+  - The job: `reminders-tick`, hourly (`app.reminders.cron`), on one replica at a time under ShedLock, in pages of 500 with one transaction each.
+  - Three passes:
+    - the recipient of an update request still open `app.reminders.update-request-days` (3) after it was made or last reminded gets `update-reminder`;
+    - the approver of a closure request still pending `app.reminders.closure-days` (3) after it was made or last reminded gets `closure-reminder`;
+    - an overdue case's owner, and the Managers the policy escalates to, get `sla-overdue-repeat` every `SLA_POLICY.OVERDUE_REMINDER_DAYS` after the breach.
+  - Each reminder is a mail and an in-app alert; none carries the request's message or the closure's summary.
+  - Each reminder's ledger row is keyed by its request and UTC day, or by its overdue period, so a second tick or a restart never repeats one. Nobody who can no longer read the case is reminded.
+  - Its own cluster-level health indicator, `remindersTick`, reads `JOB_RUN` (grace `app.reminders.health-grace`, 2 hours) and is outside the probe groups, with the gauge `trailkeep.reminders.age`. No migration.
 - SLA screens once the evaluator moves states (WP-21 part c): the SLA chip on the case page and in the cases list now reads "At risk, N days left" and "Overdue N days" (BUILD_PLAN §4.3), still icon and text, never colour alone, and the History page shows the evaluator's changes with the states by name ("SLA state: On track → At risk"). The SLA filter already offered every state and is unchanged. This completes WP-21.
 - SLA alerts, metrics and health (WP-21 part b).
   - When a case turns at risk, its owner is told by mail and in-app alert (`sla-at-risk`).

@@ -4,6 +4,7 @@ package io.trailkeep.closure;
 
 import io.trailkeep.casefile.CaseService.Actor;
 import io.trailkeep.shared.CaseNumber;
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -197,6 +198,28 @@ public interface ClosureService {
      * @return the approvers, by name
      */
     List<Approver> approvers(Actor actor, String caseNumber);
+
+    /**
+     * A pending request waiting long enough for its approver to be reminded (BUILD_PLAN §6 "Reminders tick").
+     *
+     * @param id the request
+     * @param caseId its case
+     * @param approverId who decides
+     * @param requestedBy who asked
+     * @param outcome the outcome requested
+     */
+    record AwaitingDecision(long id, long caseId, long approverId, long requestedBy, String outcome) {}
+
+    /**
+     * Pending requests made at or before {@code cutoff}, with ids after {@code afterId}, in id order, at most
+     * {@code limit}: one page of the reminders tick. No {@code CaseScope}: the tick is the system.
+     *
+     * @param cutoff the latest request time that is due a reminder
+     * @param afterId the last id of the previous page, or 0
+     * @param limit the page size
+     * @return the requests
+     */
+    List<AwaitingDecision> pendingSince(Instant cutoff, long afterId, int limit);
 
     /**
      * Requests closure: the case moves to {@code PENDING_CLOSURE}, {@code CLOSURE_REQUESTED} is audited with the

@@ -6,6 +6,7 @@ import io.trailkeep.shared.CaseNumber;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 
 /**
  * The {@code CASE_SLA} side table as the {@code sla} module's evaluator sees it (BUILD_PLAN §6, ADR-0007): which cases
@@ -35,8 +36,35 @@ public interface CaseSlaService {
      * @param ownerId the owner
      * @param teamId the owning team
      * @param escalateTo who hears of an overdue case, from the case type's SLA policy
+     * @param cycle the case's current SLA cycle
      */
-    record SlaCase(CaseNumber number, String title, long ownerId, long teamId, EscalateTo escalateTo) {}
+    record SlaCase(CaseNumber number, String title, long ownerId, long teamId, EscalateTo escalateTo, int cycle) {}
+
+    /**
+     * Cases as their alerts and reminders address them, for jobs (no {@code CaseScope}: the job is the system).
+     *
+     * @param caseIds the cases
+     * @return each case by id; unknown ids are absent
+     */
+    Map<Long, SlaCase> about(Collection<Long> caseIds);
+
+    /**
+     * An overdue case, for the reminders tick's repeats (BUILD_PLAN §6).
+     *
+     * @param caseId the case
+     * @param dueAt when it was due in its current cycle
+     * @param reminderDays how often it is reminded once overdue ({@code SLA_POLICY.OVERDUE_REMINDER_DAYS})
+     */
+    record OverdueCase(long caseId, Instant dueAt, int reminderDays) {}
+
+    /**
+     * The overdue cases with ids after {@code afterId}, in id order, at most {@code limit}: one page of the repeats.
+     *
+     * @param afterId the last id of the previous page, or 0
+     * @param limit the page size
+     * @return the cases
+     */
+    List<OverdueCase> overdue(long afterId, int limit);
 
     /**
      * The cases whose SLA should move on at {@code now}, by id: on track and past their at-risk time, or at risk and

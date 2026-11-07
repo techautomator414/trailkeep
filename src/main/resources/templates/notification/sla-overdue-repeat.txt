@@ -1,0 +1,9 @@
+/*[- SPDX-License-Identifier: Apache-2.0. Plain-text part of the sla-overdue-repeat mail (WP-17b, BUILD_PLAN §6), every
+     SLA_POLICY.OVERDUE_REMINDER_DAYS while a case stays overdue, to the people the overdue mail went to: the case
+     number, title, due date, days overdue and a deep link; never the description or the subject (BUILD_PLAN §9). -]*/
+Case [(${caseNumber})], "[(${title})]", is still overdue: it was due on [(${due})], [(${days})] days ago.
+
+Open the case:
+[(${link})]
+
+You receive this because you own the case or manage its team.
