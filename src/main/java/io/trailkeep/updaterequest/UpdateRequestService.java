@@ -112,8 +112,7 @@ public interface UpdateRequestService {
      * @param page the page, from 1
      * @return the page, with the total
      */
-<<<<<<< HEAD
-    List<OpenRequest> openFor(Actor actor);
+    Paged<OpenRequest> openFor(Actor actor, int page);
 
     /**
      * An open request due a reminder (BUILD_PLAN §6 "Reminders tick"); never the message.
@@ -144,7 +143,4 @@ public interface UpdateRequestService {
      * @return whether it was open
      */
     boolean reminded(long requestId, Instant now);
-=======
-    Paged<OpenRequest> openFor(Actor actor, int page);
->>>>>>> 607a699 (web: dashboard KPI tiles, My cases and paged Needs attention (WP-20, WIP))
 }
