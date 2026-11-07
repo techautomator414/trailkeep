@@ -47,6 +47,7 @@ public final class ReportFixture {
     public static final long ANALYST = 984_002L;
     public static final long OTHER_OWNER = 984_003L;
     public static final long BETA_ANALYST = 984_004L;
+    public static final long SYSTEM_ADMIN = 984_005L;
     public static final long ALPHA = 984_011L;
     public static final long BETA = 984_012L;
     public static final String ALPHA_NAME = "Alpha Reporting Team";
@@ -99,12 +100,7 @@ public final class ReportFixture {
 
     /** Writes the users, teams, case types and cases in the class comment. */
     public void seed() {
-        user(MANAGER, "Synthetic Report Manager");
-        user(ANALYST, "Synthetic Report Analyst");
-        user(OTHER_OWNER, "Synthetic Restricted Owner");
-        user(BETA_ANALYST, "Synthetic Beta Analyst");
-        jdbc.update("INSERT INTO TEAM (ID, NAME) VALUES (?, ?)", ALPHA, ALPHA_NAME);
-        jdbc.update("INSERT INTO TEAM (ID, NAME) VALUES (?, ?)", BETA, BETA_NAME);
+        people();
         jdbc.update("INSERT INTO SLA_POLICY (ID, NAME, TARGET_DAYS) VALUES (?, ?, ?)", POLICY, "Report policy", 30);
         jdbc.update("INSERT INTO CASE_TYPE (ID, NAME, SLA_POLICY_ID) VALUES (?, ?, ?)", ACCESS_ID, ACCESS, POLICY);
         jdbc.update("INSERT INTO CASE_TYPE (ID, NAME, SLA_POLICY_ID) VALUES (?, ?, ?)", HANDLING_ID, HANDLING, POLICY);
@@ -130,6 +126,26 @@ public final class ReportFixture {
         closed(BETA, ACCESS_ID, BETA_ANALYST, CLOSED, inside.plusSeconds(60), "BREACHED");
         open(BETA, ACCESS_ID, BETA_ANALYST, OPEN, 45, "OVERDUE");
         open(BETA, ACCESS_ID, BETA_ANALYST, PENDING, 95, "AT_RISK");
+    }
+
+    /** The users, the teams and who is what in them; {@link #SYSTEM_ADMIN} holds only that global role. */
+    private void people() {
+        user(MANAGER, "Synthetic Report Manager");
+        user(ANALYST, "Synthetic Report Analyst");
+        user(OTHER_OWNER, "Synthetic Restricted Owner");
+        user(BETA_ANALYST, "Synthetic Beta Analyst");
+        user(SYSTEM_ADMIN, "Synthetic System Admin");
+        jdbc.update("INSERT INTO APP_USER_GLOBAL_ROLE (USER_ID, GLOBAL_ROLE) VALUES (?, 'SYSTEM_ADMIN')", SYSTEM_ADMIN);
+        jdbc.update("INSERT INTO TEAM (ID, NAME) VALUES (?, ?)", ALPHA, ALPHA_NAME);
+        jdbc.update("INSERT INTO TEAM (ID, NAME) VALUES (?, ?)", BETA, BETA_NAME);
+        member(MANAGER, ALPHA, "MANAGER");
+        member(ANALYST, ALPHA, "ANALYST");
+        member(OTHER_OWNER, ALPHA, "ANALYST");
+        member(BETA_ANALYST, BETA, "ANALYST");
+    }
+
+    private void member(long user, long team, String role) {
+        jdbc.update("INSERT INTO APP_USER_TEAM (USER_ID, TEAM_ID, ROLE_IN_TEAM) VALUES (?, ?, ?)", user, team, role);
     }
 
     private void open(long team, long type, long owner, String status, int age, String sla) {
