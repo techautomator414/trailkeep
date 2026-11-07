@@ -58,6 +58,7 @@ class DefaultClosureService implements ClosureService {
     private final AuditRecorder audit;
     private final EntityManager entityManager;
     private final ClosureRequestRepository requests;
+    private final CaseReopenRepository reopens;
     private final CaseScopeService scopes;
     private final CaseService cases;
     private final CaseCommentService comments;
@@ -72,6 +73,7 @@ class DefaultClosureService implements ClosureService {
             AuditRecorder audit,
             EntityManager entityManager,
             ClosureRequestRepository requests,
+            CaseReopenRepository reopens,
             CaseScopeService scopes,
             CaseService cases,
             CaseCommentService comments,
@@ -84,11 +86,27 @@ class DefaultClosureService implements ClosureService {
         this.audit = audit;
         this.entityManager = entityManager;
         this.requests = requests;
+        this.reopens = reopens;
         this.scopes = scopes;
         this.cases = cases;
         this.comments = comments;
         this.clock = clock;
         this.zone = app.timezone();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<Reopened> lastReopen(Actor actor, String caseNumber) {
+        CaseNumber number = parsed(caseNumber);
+        List<CaseReopen> all =
+                number == null ? List.of() : reopens.findForCase(scopes.forUser(actor.permissions()), number);
+        return all.stream()
+                .findFirst()
+                .map(r -> new Reopened(
+                        directory.displayName(r.getReopenedBy()).orElse(""),
+                        minute(r.getReopenedAt()),
+                        r.getReason(),
+                        r.getSlaCycle()));
     }
 
     @Override
@@ -203,13 +221,17 @@ class DefaultClosureService implements ClosureService {
 
     /** The case's requests, newest first; none for a malformed, absent or unreadable case. */
     private List<ClosureRequest> forCase(Actor actor, String caseNumber) {
-        CaseNumber number;
+        CaseNumber number = parsed(caseNumber);
+        return number == null ? List.of() : requests.findForCase(scopes.forUser(actor.permissions()), number);
+    }
+
+    /** The case number, or {@code null} for a malformed one (which reads as an absent case). */
+    private static @Nullable CaseNumber parsed(String caseNumber) {
         try {
-            number = CaseNumber.parse(caseNumber);
+            return CaseNumber.parse(caseNumber);
         } catch (IllegalArgumentException malformed) {
-            return List.of();
+            return null;
         }
-        return requests.findForCase(scopes.forUser(actor.permissions()), number);
     }
 
     private LocalDateTime minute(Instant at) {

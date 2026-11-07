@@ -172,6 +172,8 @@ class CaseReopenAccessibilityIT {
         assertThat(page.textContent(".tk-chips"))
                 .contains("Open", "Reopened", "SLA: ")
                 .doesNotContain("SLA met");
+        assertThat(page.textContent("section[aria-labelledby='tk-reopened-title']"))
+                .contains("Reopened by ", "SLA cycle 2", REASON);
         assertThat(page.querySelector("a[data-tk-dialog-open='tk-closure-dialog']"))
                 .isNotNull();
         assertThat(page.querySelector("a[data-tk-dialog-open='tk-reopen-dialog']"))
