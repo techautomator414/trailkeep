@@ -56,7 +56,8 @@ abstract class AbstractDatabaseGrantsIT {
 
     /**
      * Identity (V1), audit (V2), admin (V3), case (V4), comment (V4.1), pin (V4.2), attachment (V4.3), saved view
-     * (V4.7), outbox (V4.8), alert (V4.9), update request (V4.10), closure (V5), reopen (V5.1) and SLA job (V6)
+     * (V4.7), outbox (V4.8), alert (V4.9), update request (V4.10), closure (V5), reopen (V5.1), SLA job (V6) and
+     * report delivery (V7)
      * tables, and the column each probe touches: the first key column.
      */
     static final Map<String, String> TABLES = Map.ofEntries(
@@ -86,7 +87,9 @@ abstract class AbstractDatabaseGrantsIT {
             Map.entry("CASE_REOPEN", "ID"),
             Map.entry("ALERT_LEDGER", "ID"),
             Map.entry("JOB_RUN", "JOB_NAME"),
-            Map.entry("SHEDLOCK", "NAME"));
+            Map.entry("SHEDLOCK", "NAME"),
+            Map.entry("REPORT_SCHEDULE", "ID"),
+            Map.entry("REPORT_RUN", "ID"));
 
     /** What the runtime user may do; anything absent is denied. */
     static final Map<String, Set<Privilege>> APP_USER_GRANTS = Map.ofEntries(
@@ -126,7 +129,11 @@ abstract class AbstractDatabaseGrantsIT {
             // Each job's last success, replaced on every successful run.
             Map.entry("JOB_RUN", EnumSet.of(Privilege.SELECT, Privilege.INSERT, Privilege.UPDATE)),
             // ShedLock's JDBC provider inserts and updates its lock rows and never deletes one, so no DELETE.
-            Map.entry("SHEDLOCK", EnumSet.of(Privilege.SELECT, Privilege.INSERT, Privilege.UPDATE)));
+            Map.entry("SHEDLOCK", EnumSet.of(Privilege.SELECT, Privilege.INSERT, Privilege.UPDATE)),
+            // A schedule is edited and disabled, never deleted.
+            Map.entry("REPORT_SCHEDULE", EnumSet.of(Privilege.SELECT, Privilege.INSERT, Privilege.UPDATE)),
+            // A run is what was sent: written once, never changed or deleted by the app.
+            Map.entry("REPORT_RUN", EnumSet.of(Privilege.SELECT, Privilege.INSERT)));
 
     /** What the purge user may do on these tables: trim the outbox (V4.8); its case-data grants arrive with WP-24. */
     static final Map<String, Set<Privilege>> PURGE_USER_GRANTS =
@@ -148,7 +155,9 @@ abstract class AbstractDatabaseGrantsIT {
             "SEQ_UPDATE_REQUEST",
             "SEQ_CLOSURE_REQUEST",
             "SEQ_CASE_REOPEN",
-            "SEQ_ALERT_LEDGER");
+            "SEQ_ALERT_LEDGER",
+            "SEQ_REPORT_SCHEDULE",
+            "SEQ_REPORT_RUN");
 
     /**
      * One open connection per grantee for the whole class. Opening a connection per probe (about 100 in a burst, each
