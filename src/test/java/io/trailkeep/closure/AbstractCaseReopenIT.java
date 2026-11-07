@@ -189,6 +189,29 @@ abstract class AbstractCaseReopenIT {
                 .isEqualTo("PENDING_CLOSURE");
     }
 
+    @Test
+    void latestReopenIsReadThroughTheScope() {
+        assertThat(closures.lastReopen(actor(reader, TeamRole.READER), number.toString()))
+                .isEmpty();
+        reopen(reopener, TeamRole.MANAGER, "Synthetic first reason");
+        long again = request(owner);
+        transactions.executeWithoutResult(status -> decisions.decide(
+                actor(approver, TeamRole.MANAGER), number.toString(), again, ClosureDecision.APPROVED, null));
+        reopen(reopener, TeamRole.MANAGER, REASON);
+
+        assertThat(closures.lastReopen(actor(reader, TeamRole.READER), number.toString()))
+                .hasValueSatisfying(latest -> {
+                    assertThat(latest.reason()).isEqualTo(REASON);
+                    assertThat(latest.slaCycle()).isEqualTo(3);
+                    assertThat(latest.reopenedBy()).isEqualTo("Seed User " + reopener);
+                    assertThat(latest.reopenedAt().getSecond()).isZero();
+                });
+        // Without a role in the team the case is unreadable, and its reopen with it.
+        assertThat(closures.lastReopen(actor(reader, null), number.toString())).isEmpty();
+        assertThat(closures.lastReopen(actor(reader, TeamRole.READER), "not-a-case-number"))
+                .isEmpty();
+    }
+
     private long request(long by) {
         return Objects.requireNonNull(transactions.execute(status -> closures.requestClosure(
                 actor(by, TeamRole.ANALYST), number.toString(), "Resolved", "Synthetic summary", null, approver)));

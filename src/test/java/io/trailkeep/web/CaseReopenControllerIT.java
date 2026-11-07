@@ -131,7 +131,8 @@ class CaseReopenControllerIT {
         assertThat(html(get("/cases/" + number)))
                 .containsPattern("href=\"" + reopen + "\"\\s+data-tk-dialog-open=\"tk-reopen-dialog\"")
                 .contains("<dialog id=\"tk-reopen-dialog\" class=\"tk-dialog\"", "maxlength=\"1000\"")
-                .contains("Closed</li>", "SLA met");
+                .contains("Closed</li>", "SLA met")
+                .doesNotContain("tk-reopened-title");
         assertThat(html(get(reopen)))
                 .contains("<h1>Reopen " + number + "</h1>", "Back to the case")
                 .doesNotContain("data-tk-dialog-focus");
@@ -149,6 +150,9 @@ class CaseReopenControllerIT {
         assertThat(html(get("/cases/" + number)))
                 .contains("Open</li>", "<span>Reopened</span></li>", "SLA: ")
                 .contains("href=\"/cases/" + number + "/request-closure\"")
+                .contains("<h2 id=\"tk-reopened-title\" class=\"h5\">Reopened</h2>")
+                .contains("Reopened by Synthetic Person " + MANAGER + " on ", ". SLA cycle 2 runs from then.")
+                .contains("<p class=\"tk-description mb-0\">A synthetic reason</p>")
                 .doesNotContain("SLA met", "tk-reopen-dialog", "tk-decided-title");
         assertThat(jdbc.queryForObject(
                         "SELECT SLA_CYCLE FROM CASE_SLA WHERE CASE_ID = (SELECT ID FROM CASE_RECORD"
