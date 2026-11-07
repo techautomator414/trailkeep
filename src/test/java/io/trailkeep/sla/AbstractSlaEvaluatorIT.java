@@ -140,26 +140,7 @@ abstract class AbstractSlaEvaluatorIT {
                 .containsEntry("pendingClosure", List.of("AT_RISK"));
         assertThat(ledger("SLA_AT_RISK")).isEqualTo(9);
         assertThat(ledger("SLA_OVERDUE")).isEqualTo(8);
-        // Exactly one mail and one alert per case, type and person: the owner at risk; the owner and the two enabled
-        // Managers overdue (the policy escalates to them by default); never the disabled Manager.
-        assertThat(mails("sla-at-risk")).isEqualTo(9);
-        assertThat(mails("sla-overdue")).isEqualTo(8 * 3);
-        assertThat(count("SELECT COUNT(*) FROM USER_ALERT WHERE CASE_ID IN"
-                        + " (SELECT ID FROM CASE_RECORD WHERE TEAM_ID = ?)"))
-                .isEqualTo(9 + 8 * 3);
-        assertThat(jdbc.queryForList(
-                        "SELECT CASE_ID FROM NOTIFICATION_OUTBOX WHERE CASE_ID IN"
-                                + " (SELECT ID FROM CASE_RECORD WHERE TEAM_ID = ?)"
-                                + " GROUP BY CASE_ID, TEMPLATE_ID, RECIPIENT HAVING COUNT(*) > 1",
-                        Long.class,
-                        team))
-                .isEmpty();
-        assertThat(jdbc.queryForList(
-                        "SELECT DISTINCT RECIPIENT FROM NOTIFICATION_OUTBOX WHERE TEMPLATE_ID = 'sla-at-risk'"
-                                + " AND CASE_ID IN (SELECT ID FROM CASE_RECORD WHERE TEAM_ID = ?)",
-                        String.class,
-                        team))
-                .containsExactly(address(owner));
+        assertOneMailAndAlertEach();
         assertThat(count("SELECT COUNT(*) FROM AUDIT_EVENT WHERE ACTION = 'SLA_STATE_CHANGED' AND ORIGIN = 'SCHEDULER'"
                         + " AND CASE_ID IN (SELECT ID FROM CASE_RECORD WHERE TEAM_ID = ?)"))
                 .isEqualTo(17);
@@ -178,7 +159,7 @@ abstract class AbstractSlaEvaluatorIT {
                 "UPDATE SLA_POLICY SET ESCALATE_TO = 'OWNER'"
                         + " WHERE ID = (SELECT SLA_POLICY_ID FROM CASE_TYPE WHERE ID = ?)",
                 seed.caseType());
-        long overdue = sla(CaseStatus.OPEN, "AT_RISK", 1, T0, T0.plus(Duration.ofDays(1)));
+        final long overdue = sla(CaseStatus.OPEN, "AT_RISK", 1, T0, T0.plus(Duration.ofDays(1)));
         long gone = seed.user();
         users.add(gone);
         jdbc.update("UPDATE APP_USER SET DISABLED = ? WHERE ID = ?", true, gone);
@@ -335,6 +316,32 @@ abstract class AbstractSlaEvaluatorIT {
                 },
                 team);
         return versions;
+    }
+
+    /**
+     * Exactly one mail and one alert per case, type and person after the fixture's runs: the owner at risk (9 cases);
+     * the owner and the two enabled Managers overdue (8 cases; the policy escalates to them by default); never the
+     * disabled Manager.
+     */
+    private void assertOneMailAndAlertEach() {
+        assertThat(mails("sla-at-risk")).isEqualTo(9);
+        assertThat(mails("sla-overdue")).isEqualTo(8 * 3);
+        assertThat(count("SELECT COUNT(*) FROM USER_ALERT WHERE CASE_ID IN"
+                        + " (SELECT ID FROM CASE_RECORD WHERE TEAM_ID = ?)"))
+                .isEqualTo(9 + 8 * 3);
+        assertThat(jdbc.queryForList(
+                        "SELECT CASE_ID FROM NOTIFICATION_OUTBOX WHERE CASE_ID IN"
+                                + " (SELECT ID FROM CASE_RECORD WHERE TEAM_ID = ?)"
+                                + " GROUP BY CASE_ID, TEMPLATE_ID, RECIPIENT HAVING COUNT(*) > 1",
+                        Long.class,
+                        team))
+                .isEmpty();
+        assertThat(jdbc.queryForList(
+                        "SELECT DISTINCT RECIPIENT FROM NOTIFICATION_OUTBOX WHERE TEMPLATE_ID = 'sla-at-risk'"
+                                + " AND CASE_ID IN (SELECT ID FROM CASE_RECORD WHERE TEAM_ID = ?)",
+                        String.class,
+                        team))
+                .containsExactly(address(owner));
     }
 
     private long mails(String template) {
