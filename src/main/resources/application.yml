@@ -152,9 +152,11 @@ app:
     enabled: true
     lease: 5m
   # SLA evaluator (WP-21, BUILD_PLAN §6): every 15 minutes, on one replica at a time (ShedLock on the SHEDLOCK table).
-  # "-" turns it off, as the test profiles do.
+  # "-" turns it off, as the test profiles do. health-grace: how long after its last success on any replica (JOB_RUN)
+  # the evaluator's cluster-level health indicator stays up; two evaluation periods. It is in neither probe group.
   sla:
     evaluate-cron: "0 */15 * * * *"
+    health-grace: 30m
 
 server:
   port: 8080

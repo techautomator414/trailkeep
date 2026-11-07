@@ -3,6 +3,7 @@
 package io.trailkeep.sla;
 
 import io.trailkeep.casefile.CaseSlaService;
+import io.trailkeep.sla.SlaChunkWriter.Chunk;
 import java.time.Instant;
 import java.time.InstantSource;
 import java.util.List;
@@ -32,11 +33,15 @@ class SlaEvaluator {
 
     private final CaseSlaService slas;
     private final SlaChunkWriter writer;
+    private final JobRuns runs;
+    private final SlaMetrics metrics;
     private final InstantSource clock;
 
-    SlaEvaluator(CaseSlaService slas, SlaChunkWriter writer, InstantSource clock) {
+    SlaEvaluator(CaseSlaService slas, SlaChunkWriter writer, JobRuns runs, SlaMetrics metrics, InstantSource clock) {
         this.slas = slas;
         this.writer = writer;
+        this.runs = runs;
+        this.metrics = metrics;
         this.clock = clock;
     }
 
@@ -54,12 +59,18 @@ class SlaEvaluator {
      */
     int evaluate(Instant now) {
         List<Long> candidates = slas.dueForEvaluation(now);
-        int moved = 0;
+        Chunk done = Chunk.NONE;
         for (int start = 0; start < candidates.size(); start += CHUNK) {
-            moved += writer.write(candidates.subList(start, Math.min(candidates.size(), start + CHUNK)), now);
+            Chunk chunk = writer.write(candidates.subList(start, Math.min(candidates.size(), start + CHUNK)), now);
+            metrics.committed(chunk);
+            done = done.plus(chunk);
         }
-        writer.succeeded(JOB, clock.instant(), moved);
-        LOG.info("SLA evaluation: {} candidates, {} transitions", candidates.size(), moved);
-        return moved;
+        runs.succeeded(JOB, clock.instant(), done.moved());
+        LOG.info(
+                "SLA evaluation: {} candidates, {} transitions, {} people told",
+                candidates.size(),
+                done.moved(),
+                done.alerted());
+        return done.moved();
     }
 }

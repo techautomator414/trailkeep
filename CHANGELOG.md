@@ -9,6 +9,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- SLA alerts, metrics and health (WP-21 part b).
+  - When a case turns at risk, its owner is told by mail and in-app alert (`sla-at-risk`).
+  - When it turns overdue, the owner is told and so, when the SLA policy escalates to them (`ESCALATE_TO`), are the team's enabled Managers (`sla-overdue`). A disabled owner's alerts go to the Managers instead.
+  - The mails carry the case number, title, due date and a link, never the description or subject.
+  - Each alert is written with its ledger row in the evaluator's chunk transaction, so it is sent once per case, type and SLA cycle, whatever the restarts.
+  - Counters `trailkeep.sla.transitions` and `trailkeep.sla.alerts`.
+  - A cluster-level health indicator, `slaEvaluator`: up while the evaluator's last success in `JOB_RUN` is within `app.sla.health-grace` (30 minutes), down after that. It is outside the liveness and readiness probe groups, with the gauge `trailkeep.sla.evaluator.age`.
+  - The History page labels the evaluator's transitions.
 - SLA evaluator, without alerts yet (WP-21 part a).
   - `V6__sla_alerts` adds:
     - `ALERT_LEDGER`, with the unique `(CASE_ID, ALERT_TYPE, SLA_CYCLE, PERIOD_KEY)` that keeps an alert to once per cycle and period;

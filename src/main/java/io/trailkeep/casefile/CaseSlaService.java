@@ -2,27 +2,41 @@
 // Copyright 2026 Charlie Genova and contributors
 package io.trailkeep.casefile;
 
+import io.trailkeep.shared.CaseNumber;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 
 /**
  * The {@code CASE_SLA} side table as the {@code sla} module's evaluator sees it (BUILD_PLAN §6, ADR-0007): which cases
- * are due a transition, and the transitions themselves. Neither reads nor writes the case row, so nobody editing a
- * case ever meets a conflict caused by the evaluator. No {@code CaseScope}: the evaluator is the system, not a person.
+ * are due a transition, and the transitions themselves. It never writes or locks the case row (it only reads the
+ * number, title, owner and team its alerts need), so nobody editing a case ever meets a conflict caused by the
+ * evaluator. No {@code CaseScope}: the evaluator is the system, not a person.
  */
 public interface CaseSlaService {
 
     /**
-     * One state change of a case's SLA.
+     * One state change of a case's SLA, with what its alerts need (never the description or the subject).
      *
      * @param caseId the case
      * @param from the state before
      * @param to the state after: {@code AT_RISK} or {@code OVERDUE}
      * @param cycle the SLA cycle it happened in
      * @param dueAt when the case is due in that cycle
+     * @param about the case's number, title, owner, team and escalation rule
      */
-    record SlaTransition(long caseId, SlaState from, SlaState to, int cycle, Instant dueAt) {}
+    record SlaTransition(long caseId, SlaState from, SlaState to, int cycle, Instant dueAt, SlaCase about) {}
+
+    /**
+     * A case as its SLA alerts address it.
+     *
+     * @param number the case number
+     * @param title the title
+     * @param ownerId the owner
+     * @param teamId the owning team
+     * @param escalateTo who hears of an overdue case, from the case type's SLA policy
+     */
+    record SlaCase(CaseNumber number, String title, long ownerId, long teamId, EscalateTo escalateTo) {}
 
     /**
      * The cases whose SLA should move on at {@code now}, by id: on track and past their at-risk time, or at risk and

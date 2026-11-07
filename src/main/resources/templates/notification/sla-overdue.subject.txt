@@ -1,0 +1,2 @@
+/*[- SPDX-License-Identifier: Apache-2.0. Subject of the mail when a case's SLA turns overdue. -]*/
+Overdue: [(${caseNumber})] was due on [(${due})]

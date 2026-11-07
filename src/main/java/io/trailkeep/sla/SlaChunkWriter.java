@@ -6,11 +6,21 @@ import io.trailkeep.audit.AuditEntry;
 import io.trailkeep.audit.AuditOrigin;
 import io.trailkeep.audit.AuditRecorder;
 import io.trailkeep.casefile.CaseSlaService;
+import io.trailkeep.casefile.CaseSlaService.SlaCase;
 import io.trailkeep.casefile.CaseSlaService.SlaTransition;
+import io.trailkeep.casefile.EscalateTo;
 import io.trailkeep.casefile.SlaState;
+import io.trailkeep.notification.NotificationService;
+import io.trailkeep.shared.config.AppProperties;
+import io.trailkeep.user.UserDirectoryService;
 import jakarta.persistence.EntityManager;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -24,24 +34,59 @@ class SlaChunkWriter {
 
     private final CaseSlaService slas;
     private final AuditRecorder audit;
+    private final NotificationService notifications;
+    private final UserDirectoryService directory;
     private final EntityManager entityManager;
+    private final ZoneId zone;
 
-    SlaChunkWriter(CaseSlaService slas, AuditRecorder audit, EntityManager entityManager) {
+    SlaChunkWriter(
+            CaseSlaService slas,
+            AuditRecorder audit,
+            NotificationService notifications,
+            UserDirectoryService directory,
+            EntityManager entityManager,
+            AppProperties app) {
         this.slas = slas;
         this.audit = audit;
+        this.notifications = notifications;
+        this.directory = directory;
         this.entityManager = entityManager;
+        this.zone = app.timezone();
     }
 
     /**
-     * Moves one chunk of cases on.
+     * What one chunk did.
+     *
+     * @param atRisk cases that turned at risk
+     * @param overdue cases that turned overdue
+     * @param alerted people told, one per case and person
+     */
+    record Chunk(int atRisk, int overdue, int alerted) {
+
+        /** Nothing moved. */
+        static final Chunk NONE = new Chunk(0, 0, 0);
+
+        Chunk plus(Chunk other) {
+            return new Chunk(atRisk + other.atRisk, overdue + other.overdue, alerted + other.alerted);
+        }
+
+        int moved() {
+            return atRisk + overdue;
+        }
+    }
+
+    /**
+     * Moves one chunk of cases on, and tells the people each change concerns (BUILD_PLAN §6): at risk, the owner;
+     * overdue, the owner and, when the policy escalates to them, the team's enabled Managers. A case whose owner is
+     * disabled tells the Managers instead. Each alert and mail rides on its ledger row, so it is sent once per cycle.
      *
      * @param caseIds at most one chunk of candidate ids
      * @param now the evaluation instant
-     * @return how many cases changed state
+     * @return what changed
      */
-    int write(List<Long> caseIds, Instant now) {
-        List<SlaTransition> moved = slas.advance(caseIds, now);
-        for (SlaTransition t : moved) {
+    Chunk write(List<Long> caseIds, Instant now) {
+        Chunk done = Chunk.NONE;
+        for (SlaTransition t : slas.advance(caseIds, now)) {
             audit.record(new AuditEntry(
                     null,
                     null,
@@ -51,26 +96,33 @@ class SlaChunkWriter {
                     t.caseId(),
                     "SLA_STATE_CHANGED",
                     audit.diff(new State(t.from(), t.cycle()), new State(t.to(), t.cycle()))));
-            AlertType alert = t.to() == SlaState.AT_RISK ? AlertType.SLA_AT_RISK : AlertType.SLA_OVERDUE;
-            entityManager.persist(new AlertLedger(t.caseId(), alert, t.cycle(), now));
+            boolean atRisk = t.to() == SlaState.AT_RISK;
+            entityManager.persist(new AlertLedger(
+                    t.caseId(), atRisk ? AlertType.SLA_AT_RISK : AlertType.SLA_OVERDUE, t.cycle(), now));
+            SlaCase about = t.about();
+            Map<String, String> model = Map.of(
+                    "caseNumber", about.number().toString(),
+                    "title", about.title(),
+                    "due", LocalDate.ofInstant(t.dueAt(), zone).toString());
+            List<Long> people = recipients(about, !atRisk);
+            people.forEach(person -> notifications.notifyUser(
+                    person, atRisk ? "sla-at-risk" : "sla-overdue", model, t.caseId(), "/cases/" + about.number()));
+            done = done.plus(new Chunk(atRisk ? 1 : 0, atRisk ? 0 : 1, people.size()));
         }
-        return moved.size();
+        return done;
     }
 
-    /**
-     * Records a successful run in {@code JOB_RUN}.
-     *
-     * @param job the job's name
-     * @param at when the run finished
-     * @param items how many items it handled
-     */
-    void succeeded(String job, Instant at, int items) {
-        JobRun run = entityManager.find(JobRun.class, job);
-        if (run == null) {
-            run = new JobRun(job);
-            entityManager.persist(run);
+    /** The owner, and the team's enabled Managers when the policy escalates or the owner is disabled; once each. */
+    private List<Long> recipients(SlaCase about, boolean overdue) {
+        boolean ownerActive = !directory.permissionsOf(about.ownerId()).disabled();
+        Set<Long> people = new LinkedHashSet<>();
+        if (ownerActive) {
+            people.add(about.ownerId());
         }
-        run.succeeded(at, items);
+        if (!ownerActive || (overdue && about.escalateTo() == EscalateTo.OWNER_AND_MANAGERS)) {
+            people.addAll(directory.activeManagersOf(about.teamId()));
+        }
+        return List.copyOf(people);
     }
 
     /**

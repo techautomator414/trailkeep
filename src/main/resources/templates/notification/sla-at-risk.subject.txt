@@ -1,0 +1,2 @@
+/*[- SPDX-License-Identifier: Apache-2.0. Subject of the mail to a case's owner when its SLA turns at risk. -]*/
+At risk: [(${caseNumber})] is due on [(${due})]

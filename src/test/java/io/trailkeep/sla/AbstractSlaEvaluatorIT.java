@@ -4,11 +4,13 @@ package io.trailkeep.sla;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.micrometer.core.instrument.MeterRegistry;
 import io.trailkeep.shared.CaseNumber;
 import io.trailkeep.shared.CaseStatus;
 import io.trailkeep.shared.Sensitivity;
 import io.trailkeep.testsupport.CaseSeed;
 import io.trailkeep.testsupport.RequiresDocker;
+import io.trailkeep.user.TeamRole;
 import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
@@ -27,6 +29,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.aop.support.AopUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.health.contributor.Status;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 
@@ -59,7 +62,14 @@ abstract class AbstractSlaEvaluatorIT {
     @Autowired
     private LockProvider lockProvider;
 
+    @Autowired
+    private SlaEvaluatorHealthIndicator health;
+
+    @Autowired
+    private MeterRegistry registry;
+
     private final List<Long> users = new ArrayList<>();
+    private final List<Long> managers = new ArrayList<>();
     private CaseSeed seed;
     private long team;
     private long owner;
@@ -70,14 +80,26 @@ abstract class AbstractSlaEvaluatorIT {
         team = seed.team();
         owner = seed.user();
         users.add(owner);
+        // Two enabled Managers and a disabled one, who is never told.
+        for (int i = 0; i < 3; i++) {
+            long manager = seed.user();
+            users.add(manager);
+            seed.member(manager, team, TeamRole.MANAGER);
+            managers.add(manager);
+        }
+        jdbc.update("UPDATE APP_USER SET DISABLED = ? WHERE ID = ?", true, managers.remove(2));
     }
 
     @AfterEach
     void removeCommittedRows() {
         String ofTeam = " WHERE CASE_ID IN (SELECT ID FROM CASE_RECORD WHERE TEAM_ID = ?)";
-        for (String table : new String[] {"ALERT_LEDGER", "AUDIT_EVENT", "CASE_SLA"}) {
+        for (String table :
+                new String[] {"ALERT_LEDGER", "AUDIT_EVENT", "NOTIFICATION_OUTBOX", "USER_ALERT", "CASE_SLA"}) {
             jdbc.update("DELETE FROM " + table + ofTeam, team);
         }
+        // Other tests read the aggregate health, which a stale row would take down.
+        jdbc.update("DELETE FROM JOB_RUN WHERE JOB_NAME = ?", SlaEvaluator.JOB);
+        jdbc.update("DELETE FROM APP_USER_TEAM WHERE TEAM_ID = ?", team);
         jdbc.update("DELETE FROM CASE_RECORD WHERE TEAM_ID = ?", team);
         users.forEach(id -> jdbc.update("DELETE FROM APP_USER WHERE ID = ?", id));
         jdbc.update("DELETE FROM TEAM WHERE ID = ?", team);
@@ -90,7 +112,7 @@ abstract class AbstractSlaEvaluatorIT {
     @Test
     void twentyCasesMoveAsExpectedAcrossThreeRunsAndARestart() {
         Map<String, List<Long>> fixture = fixture();
-        Map<Long, Integer> versions = versions();
+        final Map<Long, Integer> versions = versions();
 
         assertThat(evaluator.evaluate(T1)).isEqualTo(11);
         assertThat(states(fixture))
@@ -118,6 +140,7 @@ abstract class AbstractSlaEvaluatorIT {
                 .containsEntry("pendingClosure", List.of("AT_RISK"));
         assertThat(ledger("SLA_AT_RISK")).isEqualTo(9);
         assertThat(ledger("SLA_OVERDUE")).isEqualTo(8);
+        assertOneMailAndAlertEach();
         assertThat(count("SELECT COUNT(*) FROM AUDIT_EVENT WHERE ACTION = 'SLA_STATE_CHANGED' AND ORIGIN = 'SCHEDULER'"
                         + " AND CASE_ID IN (SELECT ID FROM CASE_RECORD WHERE TEAM_ID = ?)"))
                 .isEqualTo(17);
@@ -128,6 +151,47 @@ abstract class AbstractSlaEvaluatorIT {
         Long evaluated = count("SELECT COUNT(*) FROM CASE_SLA WHERE LAST_EVALUATED_AT IS NOT NULL"
                 + " AND CASE_ID IN (SELECT ID FROM CASE_RECORD WHERE TEAM_ID = ?)");
         assertThat(evaluated).as("only the 13 cases that moved").isEqualTo(13);
+    }
+
+    @Test
+    void anOwnerOnlyPolicyAndADisabledOwnerChooseWhoIsTold() {
+        jdbc.update(
+                "UPDATE SLA_POLICY SET ESCALATE_TO = 'OWNER'"
+                        + " WHERE ID = (SELECT SLA_POLICY_ID FROM CASE_TYPE WHERE ID = ?)",
+                seed.caseType());
+        final long overdue = sla(CaseStatus.OPEN, "AT_RISK", 1, T0, T0.plus(Duration.ofDays(1)));
+        long gone = seed.user();
+        users.add(gone);
+        jdbc.update("UPDATE APP_USER SET DISABLED = ? WHERE ID = ?", true, gone);
+        long orphaned = sla(CaseStatus.OPEN, "ON_TRACK", 1, T0, T3);
+        jdbc.update("UPDATE CASE_RECORD SET OWNER_ID = ? WHERE ID = ?", gone, orphaned);
+
+        assertThat(evaluator.evaluate(T1)).isEqualTo(2);
+
+        assertThat(recipients(overdue)).as("owner only, by policy").containsExactly(address(owner));
+        assertThat(recipients(orphaned))
+                .as("a disabled owner's at-risk alert goes to the enabled Managers")
+                .containsExactlyInAnyOrderElementsOf(
+                        managers.stream().map(AbstractSlaEvaluatorIT::address).toList());
+    }
+
+    @Test
+    void healthFollowsTheLastSuccessInJobRun() {
+        jdbc.update("DELETE FROM JOB_RUN WHERE JOB_NAME = ?", SlaEvaluator.JOB);
+        assertThat(health.health().getStatus()).isEqualTo(Status.UNKNOWN);
+        assertThat(registry.get("trailkeep.sla.evaluator.age").gauge().value()).isNaN();
+
+        evaluator.evaluate(T1);
+        assertThat(health.health().getStatus()).isEqualTo(Status.UP);
+
+        jdbc.update(
+                "UPDATE JOB_RUN SET LAST_SUCCESS_AT = ? WHERE JOB_NAME = ?",
+                Timestamp.from(Instant.now().minus(Duration.ofHours(2))),
+                SlaEvaluator.JOB);
+        assertThat(health.health().getStatus())
+                .as("stale past the 30-minute grace")
+                .isEqualTo(Status.DOWN);
+        assertThat(registry.get("trailkeep.sla.evaluator.age").gauge().value()).isGreaterThanOrEqualTo(7200);
     }
 
     @Test
@@ -252,6 +316,46 @@ abstract class AbstractSlaEvaluatorIT {
                 },
                 team);
         return versions;
+    }
+
+    /**
+     * Exactly one mail and one alert per case, type and person after the fixture's runs: the owner at risk (9 cases);
+     * the owner and the two enabled Managers overdue (8 cases; the policy escalates to them by default); never the
+     * disabled Manager.
+     */
+    private void assertOneMailAndAlertEach() {
+        assertThat(mails("sla-at-risk")).isEqualTo(9);
+        assertThat(mails("sla-overdue")).isEqualTo(8 * 3);
+        assertThat(count("SELECT COUNT(*) FROM USER_ALERT WHERE CASE_ID IN"
+                        + " (SELECT ID FROM CASE_RECORD WHERE TEAM_ID = ?)"))
+                .isEqualTo(9 + 8 * 3);
+        assertThat(jdbc.queryForList(
+                        "SELECT CASE_ID FROM NOTIFICATION_OUTBOX WHERE CASE_ID IN"
+                                + " (SELECT ID FROM CASE_RECORD WHERE TEAM_ID = ?)"
+                                + " GROUP BY CASE_ID, TEMPLATE_ID, RECIPIENT HAVING COUNT(*) > 1",
+                        Long.class,
+                        team))
+                .isEmpty();
+        assertThat(jdbc.queryForList(
+                        "SELECT DISTINCT RECIPIENT FROM NOTIFICATION_OUTBOX WHERE TEMPLATE_ID = 'sla-at-risk'"
+                                + " AND CASE_ID IN (SELECT ID FROM CASE_RECORD WHERE TEAM_ID = ?)",
+                        String.class,
+                        team))
+                .containsExactly(address(owner));
+    }
+
+    private long mails(String template) {
+        return count("SELECT COUNT(*) FROM NOTIFICATION_OUTBOX WHERE TEMPLATE_ID = '" + template + "'"
+                + " AND CASE_ID IN (SELECT ID FROM CASE_RECORD WHERE TEAM_ID = ?)");
+    }
+
+    private List<String> recipients(long caseId) {
+        return jdbc.queryForList(
+                "SELECT RECIPIENT FROM NOTIFICATION_OUTBOX WHERE CASE_ID = ? ORDER BY RECIPIENT", String.class, caseId);
+    }
+
+    private static String address(long user) {
+        return "seed" + user + "@example.test";
     }
 
     private long ledger(String type) {
