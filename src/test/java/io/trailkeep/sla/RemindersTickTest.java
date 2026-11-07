@@ -26,7 +26,7 @@ class RemindersTickTest {
     private final RemindersTick tick = new RemindersTick(writer, runs, InstantSource.fixed(NOW), 3, 5);
 
     @Test
-    void eachPassPagesUntilAShortPageAndTheTickRecordsItsSuccess() {
+    void eachPassPagesUntilItsPageIsShortThenTheTickRecordsItsSuccess() {
         Instant updates = NOW.minus(Duration.ofDays(3));
         when(writer.updateRequests(updates, 0, NOW)).thenReturn(new Page(500, SlaEvaluator.CHUNK, 4));
         when(writer.updateRequests(updates, 500, NOW)).thenReturn(new Page(620, 120, 1));
