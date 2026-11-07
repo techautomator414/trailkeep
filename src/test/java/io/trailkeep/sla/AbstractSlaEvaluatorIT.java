@@ -17,10 +17,15 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
+import net.javacrumbs.shedlock.core.LockConfiguration;
+import net.javacrumbs.shedlock.core.LockProvider;
+import net.javacrumbs.shedlock.core.SimpleLock;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.aop.support.AopUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -50,6 +55,9 @@ abstract class AbstractSlaEvaluatorIT {
 
     @Autowired
     private JdbcTemplate jdbc;
+
+    @Autowired
+    private LockProvider lockProvider;
 
     private final List<Long> users = new ArrayList<>();
     private CaseSeed seed;
@@ -154,6 +162,26 @@ abstract class AbstractSlaEvaluatorIT {
         assertThat(evaluator.evaluate(T1)).isEqualTo(cases);
         assertThat(ledger("SLA_AT_RISK")).isEqualTo(cases);
         assertThat(evaluator.evaluate(T1)).isZero();
+    }
+
+    @Test
+    void theLockHoldsOnDatabaseTimeAndTheEvaluatorIsBehindIt() {
+        String name = "sla-evaluator-it-" + team;
+        LockConfiguration config = new LockConfiguration(Instant.now(), name, Duration.ofMinutes(14), Duration.ZERO);
+        try {
+            Optional<SimpleLock> first = lockProvider.lock(config);
+            assertThat(first).isPresent();
+            assertThat(lockProvider.lock(config)).as("held by the first").isEmpty();
+            first.orElseThrow().unlock();
+            Optional<SimpleLock> again = lockProvider.lock(config);
+            assertThat(again).as("free once unlocked").isPresent();
+            again.orElseThrow().unlock();
+        } finally {
+            jdbc.update("DELETE FROM SHEDLOCK WHERE NAME = ?", name);
+        }
+        assertThat(AopUtils.isAopProxy(evaluator))
+                .as("@SchedulerLock is applied through a proxy")
+                .isTrue();
     }
 
     /** The 20 cases, by what the timeline does to them. */
