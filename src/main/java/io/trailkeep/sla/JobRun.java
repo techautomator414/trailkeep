@@ -50,6 +50,14 @@ class JobRun {
         this.lastItems = items;
     }
 
+    Instant getLastSuccessAt() {
+        return lastSuccessAt;
+    }
+
+    int getLastItems() {
+        return lastItems;
+    }
+
     @Override
     public boolean equals(@Nullable Object other) {
         return this == other || (other instanceof JobRun that && jobName.equals(that.jobName));

@@ -1,0 +1,15 @@
+<!--/* SPDX-License-Identifier: Apache-2.0. HTML part of the sla-overdue mail: simple, linear HTML with the same content
+     as the text part (BUILD_PLAN §10.1), never the description or the subject. */-->
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+<meta charset="UTF-8">
+<title th:text="|Overdue: ${caseNumber}|">Overdue</title>
+</head>
+<body>
+<p>Case <span th:text="${caseNumber}">CASE</span>, &ldquo;<span th:text="${title}">title</span>&rdquo;, is overdue: it
+  was due on <span th:text="${due}">date</span>.</p>
+<p><a th:href="${link}" th:text="|Open ${caseNumber}|">Open the case</a></p>
+<p>You receive this because you own the case or manage its team.</p>
+</body>
+</html>

@@ -2,14 +2,18 @@
 // Copyright 2026 Charlie Genova and contributors
 package io.trailkeep.casefile;
 
+import io.trailkeep.shared.CaseNumber;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.LockModeType;
+import jakarta.persistence.Tuple;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,6 +31,9 @@ class DefaultCaseSlaService implements CaseSlaService {
     private static final String LOCK = "SELECT s FROM CaseSla s WHERE s.caseId IN :ids ORDER BY s.caseId";
     private static final String MOVE = "UPDATE CaseSla s SET s.state = :to, s.lastEvaluatedAt = :now"
             + " WHERE s.caseId IN :ids AND s.state = :from";
+    private static final String ABOUT = "SELECT r.id, r.caseNumber, r.title, r.ownerId, r.teamId, p.escalateTo"
+            + " FROM CaseRecord r, CaseType t, SlaPolicy p"
+            + " WHERE t.id = r.caseTypeId AND p.id = t.slaPolicyId AND r.id IN :ids";
 
     private final EntityManager entityManager;
 
@@ -56,18 +63,28 @@ class DefaultCaseSlaService implements CaseSlaService {
                 .setParameter("ids", caseIds)
                 .setLockMode(LockModeType.PESSIMISTIC_WRITE)
                 .getResultList();
-        List<SlaTransition> transitions = new ArrayList<>(rows.size());
         Map<Move, List<Long>> moves = new LinkedHashMap<>();
+        List<CaseSla> moving = new ArrayList<>(rows.size());
         for (CaseSla row : rows) {
             SlaState to = row.next(now);
             if (to != null) {
-                transitions.add(new SlaTransition(row.getCaseId(), row.getState(), to, row.getCycle(), row.getDueAt()));
+                moving.add(row);
                 moves.computeIfAbsent(new Move(row.getState(), to), move -> new ArrayList<>())
                         .add(row.getCaseId());
             }
             // The bulk updates below bypass the persistence context; nothing in this transaction may see a stale row.
             entityManager.detach(row);
         }
+        Map<Long, SlaCase> about = about(moving.stream().map(CaseSla::getCaseId).toList());
+        List<SlaTransition> transitions = moving.stream()
+                .map(row -> new SlaTransition(
+                        row.getCaseId(),
+                        row.getState(),
+                        Objects.requireNonNull(row.next(now)),
+                        row.getCycle(),
+                        row.getDueAt(),
+                        Objects.requireNonNull(about.get(row.getCaseId()))))
+                .toList();
         moves.forEach((move, ids) -> entityManager
                 .createQuery(MOVE)
                 .setParameter("from", move.from())
@@ -76,6 +93,27 @@ class DefaultCaseSlaService implements CaseSlaService {
                 .setParameter("ids", ids)
                 .executeUpdate());
         return transitions;
+    }
+
+    /** What the alerts of these cases need, by case id. */
+    private Map<Long, SlaCase> about(List<Long> caseIds) {
+        Map<Long, SlaCase> about = new HashMap<>();
+        if (!caseIds.isEmpty()) {
+            for (Tuple row : entityManager
+                    .createQuery(ABOUT, Tuple.class)
+                    .setParameter("ids", caseIds)
+                    .getResultList()) {
+                about.put(
+                        row.get(0, Long.class),
+                        new SlaCase(
+                                CaseNumber.parse(row.get(1, String.class)),
+                                row.get(2, String.class),
+                                row.get(3, Long.class),
+                                row.get(4, Long.class),
+                                row.get(5, EscalateTo.class)));
+            }
+        }
+        return about;
     }
 
     /** One kind of change, written by one bulk update. */

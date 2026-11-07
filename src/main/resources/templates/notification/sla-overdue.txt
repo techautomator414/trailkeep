@@ -1,0 +1,9 @@
+/*[- SPDX-License-Identifier: Apache-2.0. Plain-text part of the sla-overdue mail, once per SLA cycle at the breach
+     (BUILD_PLAN §6): to the case's owner and, when the SLA policy escalates to them, the team's Managers. The case
+     number, title, due date and a deep link; never the description or the subject (BUILD_PLAN §9). -]*/
+Case [(${caseNumber})], "[(${title})]", is overdue: it was due on [(${due})].
+
+Open the case:
+[(${link})]
+
+You receive this because you own the case or manage its team.

@@ -1,0 +1,15 @@
+<!--/* SPDX-License-Identifier: Apache-2.0. HTML part of the sla-at-risk mail: simple, linear HTML with the same content
+     as the text part (BUILD_PLAN §10.1), never the description or the subject. */-->
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+<meta charset="UTF-8">
+<title th:text="|At risk: ${caseNumber}|">At risk</title>
+</head>
+<body>
+<p>Case <span th:text="${caseNumber}">CASE</span>, &ldquo;<span th:text="${title}">title</span>&rdquo;, is at risk of
+  missing its SLA: it is due on <span th:text="${due}">date</span>.</p>
+<p><a th:href="${link}" th:text="|Open ${caseNumber}|">Open the case</a></p>
+<p>You receive this because you own the case.</p>
+</body>
+</html>
