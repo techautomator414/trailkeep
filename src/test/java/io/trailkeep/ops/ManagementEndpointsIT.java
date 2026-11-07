@@ -65,6 +65,10 @@ class ManagementEndpointsIT {
         HealthEndpointGroup readiness = Objects.requireNonNull(groups.get("readiness"));
         assertThat(liveness.isMember("clusterJob")).isFalse();
         assertThat(readiness.isMember("clusterJob")).isFalse();
+        // The real one, the SLA evaluator's last success in JOB_RUN (WP-21), is outside both groups too.
+        assertThat(liveness.isMember("slaEvaluator")).isFalse();
+        assertThat(readiness.isMember("slaEvaluator")).isFalse();
+        assertThat(groups.getPrimary().isMember("slaEvaluator")).isTrue();
         assertThat(liveness.isMember("livenessState")).isTrue();
         assertThat(readiness.isMember("readinessState")).isTrue();
 

@@ -11,6 +11,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 import org.junit.jupiter.api.AfterEach;
@@ -112,6 +113,38 @@ class MailpitDispatchIT {
                 .containsEntry("LOCKED_UNTIL", null)
                 .containsEntry("LAST_ERROR", null)
                 .doesNotContainEntry("SENT_AT", null);
+    }
+
+    @Test
+    void theSlaMailsArriveWithTheNumberTitleDueDateAndLink() throws Exception {
+        String link = "https://trailkeep.example.invalid/cases/CASE-2026-000043";
+        Map<String, String> model = Map.of(
+                "caseNumber", "CASE-2026-000043",
+                "title", "Synthetic SLA case",
+                "due", "2026-12-01",
+                "link", link);
+        transactions.executeWithoutResult(status -> {
+            notifications.enqueue("owner@example.invalid", "sla-at-risk", model, null);
+            notifications.enqueue("manager@example.invalid", "sla-overdue", model, null);
+        });
+
+        assertThat(dispatcher.dispatch()).isEqualTo(2);
+
+        Map<String, JsonNode> bySubject = new HashMap<>();
+        for (JsonNode listed : get("/api/v1/messages").get("messages")) {
+            JsonNode message = get("/api/v1/message/" + listed.get("ID").asString());
+            bySubject.put(message.get("Subject").asString(), message);
+        }
+        assertThat(bySubject)
+                .containsOnlyKeys(
+                        "At risk: CASE-2026-000043 is due on 2026-12-01",
+                        "Overdue: CASE-2026-000043 was due on 2026-12-01");
+        JsonNode atRisk = Objects.requireNonNull(bySubject.get("At risk: CASE-2026-000043 is due on 2026-12-01"));
+        JsonNode overdue = Objects.requireNonNull(bySubject.get("Overdue: CASE-2026-000043 was due on 2026-12-01"));
+        assertThat(atRisk.get("Text").asString())
+                .contains("\"Synthetic SLA case\", is at risk of missing its SLA: it is due on 2026-12-01.", link);
+        assertThat(overdue.get("HTML").asString())
+                .contains("Synthetic SLA case", "was due on <span>2026-12-01</span>", "<a href=\"" + link + "\">");
     }
 
     private JsonNode get(String path) throws IOException, InterruptedException {
