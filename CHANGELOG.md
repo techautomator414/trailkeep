@@ -9,6 +9,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Dashboard (WP-20, BUILD_PLAN §4.1), everything through the person's `CaseScope`.
+  - Five KPI tiles, each a count in text and a link: My open cases, At risk and Overdue (each opening the cases list so filtered), Pending my approval and Update requests for me (each leading to its list below).
+  - "My cases": the person's open cases by SLA due date with the SLA chip, at most ten, with "See all N of my open cases".
+  - "Needs attention": its two lists are now paged by 20 with plain previous and next links instead of capped at 100. Approve and the decision link stay on each approval.
 - Reminders tick (WP-17b).
   - The job: `reminders-tick`, hourly (`app.reminders.cron`), on one replica at a time under ShedLock, in pages of 500 with one transaction each.
   - Three passes:
