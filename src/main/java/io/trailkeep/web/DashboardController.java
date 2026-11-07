@@ -82,8 +82,8 @@ class DashboardController {
                         new Tile("mine", myCases.total(), cases(mine)),
                         new Tile("atRisk", lists.count(actor, atRisk.filter()), cases(atRisk)),
                         new Tile("overdue", lists.count(actor, overdue.filter()), cases(overdue)),
-                        new Tile("approvals", waiting.total(), "#tk-approvals"),
-                        new Tile("requests", asked.total(), "#tk-requests")));
+                        new Tile("approvals", waiting.total(), waiting.total() > 0 ? "#tk-approvals" : "#tk-attention"),
+                        new Tile("requests", asked.total(), asked.total() > 0 ? "#tk-requests" : "#tk-attention")));
         model.addAttribute("myCases", myCases.rows().stream().limit(MY_CASES).toList());
         model.addAttribute("myCasesTotal", myCases.total());
         model.addAttribute("allMine", cases(mine));
