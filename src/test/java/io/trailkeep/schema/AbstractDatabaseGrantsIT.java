@@ -56,8 +56,8 @@ abstract class AbstractDatabaseGrantsIT {
 
     /**
      * Identity (V1), audit (V2), admin (V3), case (V4), comment (V4.1), pin (V4.2), attachment (V4.3), saved view
-     * (V4.7), outbox (V4.8), alert (V4.9), update request (V4.10), closure (V5) and reopen (V5.1) tables, and the
-     * column each probe touches: the first key column.
+     * (V4.7), outbox (V4.8), alert (V4.9), update request (V4.10), closure (V5), reopen (V5.1) and SLA job (V6)
+     * tables, and the column each probe touches: the first key column.
      */
     static final Map<String, String> TABLES = Map.ofEntries(
             Map.entry("APP_USER", "ID"),
@@ -83,7 +83,10 @@ abstract class AbstractDatabaseGrantsIT {
             Map.entry("USER_ALERT", "ID"),
             Map.entry("UPDATE_REQUEST", "ID"),
             Map.entry("CLOSURE_REQUEST", "ID"),
-            Map.entry("CASE_REOPEN", "ID"));
+            Map.entry("CASE_REOPEN", "ID"),
+            Map.entry("ALERT_LEDGER", "ID"),
+            Map.entry("JOB_RUN", "JOB_NAME"),
+            Map.entry("SHEDLOCK", "NAME"));
 
     /** What the runtime user may do; anything absent is denied. */
     static final Map<String, Set<Privilege>> APP_USER_GRANTS = Map.ofEntries(
@@ -117,7 +120,13 @@ abstract class AbstractDatabaseGrantsIT {
             // A closure request is decided, never deleted: it is case history.
             Map.entry("CLOSURE_REQUEST", EnumSet.of(Privilege.SELECT, Privilege.INSERT, Privilege.UPDATE)),
             // A reopen is history: written once, never changed or deleted by the app.
-            Map.entry("CASE_REOPEN", EnumSet.of(Privilege.SELECT, Privilege.INSERT)));
+            Map.entry("CASE_REOPEN", EnumSet.of(Privilege.SELECT, Privilege.INSERT)),
+            // An alert once raised is history: never changed or deleted by the app (BUILD_PLAN §8 rule 7).
+            Map.entry("ALERT_LEDGER", EnumSet.of(Privilege.SELECT, Privilege.INSERT)),
+            // Each job's last success, replaced on every successful run.
+            Map.entry("JOB_RUN", EnumSet.of(Privilege.SELECT, Privilege.INSERT, Privilege.UPDATE)),
+            // ShedLock inserts, updates and may delete its lock rows (BUILD_PLAN §8 rule 7 allows DELETE here).
+            Map.entry("SHEDLOCK", EnumSet.allOf(Privilege.class)));
 
     /** What the purge user may do on these tables: trim the outbox (V4.8); its case-data grants arrive with WP-24. */
     static final Map<String, Set<Privilege>> PURGE_USER_GRANTS =
@@ -138,7 +147,8 @@ abstract class AbstractDatabaseGrantsIT {
             "SEQ_USER_ALERT",
             "SEQ_UPDATE_REQUEST",
             "SEQ_CLOSURE_REQUEST",
-            "SEQ_CASE_REOPEN");
+            "SEQ_CASE_REOPEN",
+            "SEQ_ALERT_LEDGER");
 
     /**
      * One open connection per grantee for the whole class. Opening a connection per probe (about 100 in a burst, each
