@@ -19,7 +19,9 @@ import io.trailkeep.security.CasePermissionService;
 import io.trailkeep.shared.CaseNumber;
 import io.trailkeep.shared.CaseStatus;
 import io.trailkeep.shared.DomainException.Kind;
+import io.trailkeep.shared.Paged;
 import io.trailkeep.shared.access.CaseAccessPath;
+import io.trailkeep.shared.access.CaseScope;
 import io.trailkeep.shared.config.AppProperties;
 import io.trailkeep.user.UserDirectoryService;
 import jakarta.persistence.EntityManager;
@@ -170,9 +172,17 @@ class DefaultClosureService implements ClosureService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<AwaitingApproval> awaitingMyApproval(Actor actor) {
-        List<ClosureRequest> pending = requests.findPendingFor(
-                scopes.forUser(actor.permissions()), actor.permissions().userId());
+    public Paged<AwaitingApproval> awaitingMyApproval(Actor actor, int page) {
+        CaseScope scope = scopes.forUser(actor.permissions());
+        long me = actor.permissions().userId();
+        return Paged.of(
+                page,
+                PAGE_SIZE,
+                () -> requests.countPendingFor(scope, me),
+                offset -> awaiting(actor, requests.findPendingFor(scope, me, offset, PAGE_SIZE)));
+    }
+
+    private List<AwaitingApproval> awaiting(Actor actor, List<ClosureRequest> pending) {
         Map<Long, CaseRef> refs = cases.refs(
                 actor, pending.stream().map(ClosureRequest::getCaseId).toList());
         Map<Long, String> names = directory.displayNames(

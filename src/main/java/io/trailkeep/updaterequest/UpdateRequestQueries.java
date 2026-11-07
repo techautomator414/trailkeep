@@ -9,9 +9,6 @@ import java.util.List;
 /** The scoped update-request queries; implemented with the Criteria API in {@link UpdateRequestQueriesImpl}. */
 interface UpdateRequestQueries {
 
-    /** The most open requests one list shows, far under Oracle's 1000-element {@code IN} limit for their cases. */
-    int MAX_OPEN = 100;
-
     /**
      * A case's requests, newest first, if the scope reads the case; an unreadable and an absent case alike give none.
      *
@@ -22,11 +19,22 @@ interface UpdateRequestQueries {
     List<UpdateRequest> findForCase(CaseScope scope, CaseNumber caseNumber);
 
     /**
-     * The open requests addressed to a person on cases the scope reads, newest first, at most {@link #MAX_OPEN}.
+     * One page of the open requests addressed to a person on cases the scope reads, newest first.
      *
      * @param scope the caller's scope
      * @param recipientId the person asked
+     * @param offset the page's first row, from 0
+     * @param limit the page size
      * @return the requests
      */
-    List<UpdateRequest> findOpenFrom(CaseScope scope, long recipientId);
+    List<UpdateRequest> findOpenFrom(CaseScope scope, long recipientId, int offset, int limit);
+
+    /**
+     * How many open requests are addressed to a person on cases the scope reads.
+     *
+     * @param scope the caller's scope
+     * @param recipientId the person asked
+     * @return the count
+     */
+    long countOpenFrom(CaseScope scope, long recipientId);
 }

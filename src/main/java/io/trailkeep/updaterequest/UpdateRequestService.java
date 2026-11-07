@@ -4,6 +4,7 @@ package io.trailkeep.updaterequest;
 
 import io.trailkeep.casefile.CaseService.Actor;
 import io.trailkeep.shared.CaseNumber;
+import io.trailkeep.shared.Paged;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -100,13 +101,18 @@ public interface UpdateRequestService {
      */
     List<CaseRequest> openForCase(Actor actor, String caseNumber);
 
+    /** Rows per page of {@link #openFor}. */
+    int PAGE_SIZE = 20;
+
     /**
-     * The open requests addressed to the actor on cases they read, newest first, at most 100.
+     * One page of the open requests addressed to the actor on cases they read, newest first, {@link #PAGE_SIZE} to a
+     * page; a page past the last shows the last.
      *
      * @param actor the actor
-     * @return the requests
+     * @param page the page, from 1
+     * @return the page, with the total
      */
-    List<OpenRequest> openFor(Actor actor);
+    Paged<OpenRequest> openFor(Actor actor, int page);
 
     /**
      * An open request due a reminder (BUILD_PLAN §6 "Reminders tick"); never the message.

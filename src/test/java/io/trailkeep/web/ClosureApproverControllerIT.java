@@ -250,7 +250,10 @@ class ClosureApproverControllerIT {
     @Test
     @WithAppUser(id = COLLEAGUE, team = TEAM, teamRole = TeamRole.MANAGER)
     void nobodyElsesDashboardListsIt() throws Exception {
-        assertThat(html(get("/"))).contains("Nothing needs your attention.").doesNotContain("Pending my approval");
+        // The "Pending my approval" tile stays (WP-20), at 0; the list does not.
+        assertThat(html(get("/")))
+                .contains("Nothing needs your attention.")
+                .doesNotContain("id=\"tk-approvals\"", "Approve closure");
     }
 
     private String html(MockHttpServletRequestBuilder request) throws Exception {

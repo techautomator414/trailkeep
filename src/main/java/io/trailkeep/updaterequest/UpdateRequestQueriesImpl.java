@@ -8,6 +8,7 @@ import io.trailkeep.shared.access.CaseScope;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.CriteriaQuery;
+import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
 import java.util.List;
 
@@ -38,16 +39,39 @@ class UpdateRequestQueriesImpl implements UpdateRequestQueries {
     }
 
     @Override
-    public List<UpdateRequest> findOpenFrom(CaseScope scope, long recipientId) {
+    public List<UpdateRequest> findOpenFrom(CaseScope scope, long recipientId, int offset, int limit) {
         CriteriaBuilder cb = entityManager.getCriteriaBuilder();
         CriteriaQuery<UpdateRequest> query = cb.createQuery(UpdateRequest.class);
         Root<UpdateRequest> request = query.from(UpdateRequest.class);
         query.select(request)
-                .where(
-                        cb.equal(request.get("requestedFrom"), recipientId),
-                        cb.isNull(request.get("answeredAt")),
-                        scopes.readableCases(scope, request.get("caseId"), query, cb))
+                .where(openFrom(scope, recipientId, request, query, cb))
                 .orderBy(cb.desc(request.get("requestedAt")), cb.desc(request.get("id")));
-        return entityManager.createQuery(query).setMaxResults(MAX_OPEN).getResultList();
+        return entityManager
+                .createQuery(query)
+                .setFirstResult(offset)
+                .setMaxResults(limit)
+                .getResultList();
+    }
+
+    @Override
+    public long countOpenFrom(CaseScope scope, long recipientId) {
+        CriteriaBuilder cb = entityManager.getCriteriaBuilder();
+        CriteriaQuery<Long> query = cb.createQuery(Long.class);
+        Root<UpdateRequest> request = query.from(UpdateRequest.class);
+        query.select(cb.count(request)).where(openFrom(scope, recipientId, request, query, cb));
+        return entityManager.createQuery(query).getSingleResult();
+    }
+
+    private Predicate[] openFrom(
+            CaseScope scope,
+            long recipientId,
+            Root<UpdateRequest> request,
+            CriteriaQuery<?> query,
+            CriteriaBuilder cb) {
+        return new Predicate[] {
+            cb.equal(request.get("requestedFrom"), recipientId),
+            cb.isNull(request.get("answeredAt")),
+            scopes.readableCases(scope, request.get("caseId"), query, cb)
+        };
     }
 }

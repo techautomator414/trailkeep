@@ -15,6 +15,7 @@ import java.time.Duration;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import org.jspecify.annotations.Nullable;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.wait.strategy.Wait;
@@ -24,6 +25,12 @@ import org.testcontainers.images.builder.Transferable;
  * A Keycloak container with the dev realm ({@code deploy/local/keycloak/trailkeep-dev-realm.json}) whose redirect URIs
  * name a fixed application port chosen up front, plus the properties that point the {@code idp} client at it. Used by
  * the login IT and the browser E2E tests with {@code webEnvironment = DEFINED_PORT}.
+ *
+ * <p>Test classes run one after another in one JVM and each starts its own realm, so {@link #start()} first stops the
+ * realm of the class before it. Without that, every such class left a Keycloak container (about 0.9 GB each) running
+ * until the JVM ended: 24 of them by the time the last integration test started ClamAV, which is more than a 16 GB CI
+ * runner holds (the runner was shut down mid-build on #115). A cached application context of an earlier class is
+ * never used again, because the context cache key includes that class's own property source.
  */
 public final class KeycloakDevRealm {
 
@@ -49,6 +56,9 @@ public final class KeycloakDevRealm {
 
     private static final Pattern ACCESS_TOKEN = Pattern.compile("\"access_token\"\\s*:\\s*\"([^\"]+)\"");
 
+    /** The realm of the class that ran last, stopped when the next one starts. */
+    private static @Nullable KeycloakDevRealm last;
+
     private final int appPort;
     private final GenericContainer<?> container;
 
@@ -58,11 +68,16 @@ public final class KeycloakDevRealm {
     }
 
     /**
-     * Picks a free application port and starts Keycloak with the realm rewritten for it.
+     * Stops the realm a previous test class started, picks a free application port and starts Keycloak with the realm
+     * rewritten for it.
      *
      * @return the running realm
      */
-    public static KeycloakDevRealm start() {
+    public static synchronized KeycloakDevRealm start() {
+        if (last != null) {
+            last.container.stop();
+            last = null;
+        }
         int port = freePort();
         String realm;
         try {
@@ -90,7 +105,9 @@ public final class KeycloakDevRealm {
                         .forPort(8080)
                         .withStartupTimeout(Duration.ofMinutes(3)));
         container.start();
-        return new KeycloakDevRealm(port, container);
+        KeycloakDevRealm started = new KeycloakDevRealm(port, container);
+        last = started;
+        return started;
     }
 
     /**

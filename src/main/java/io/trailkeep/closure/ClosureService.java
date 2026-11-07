@@ -4,6 +4,7 @@ package io.trailkeep.closure;
 
 import io.trailkeep.casefile.CaseService.Actor;
 import io.trailkeep.shared.CaseNumber;
+import io.trailkeep.shared.Paged;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -137,13 +138,18 @@ public interface ClosureService {
      */
     record AwaitingApproval(long id, CaseNumber caseNumber, String caseTitle, String requestedBy, String outcome) {}
 
+    /** Rows per page of {@link #awaitingMyApproval}. */
+    int PAGE_SIZE = 20;
+
     /**
-     * The pending requests the actor is the approver of, on cases they read, oldest first, at most 100.
+     * One page of the pending requests the actor is the approver of, on cases they read, oldest first,
+     * {@link #PAGE_SIZE} to a page; a page past the last shows the last.
      *
      * @param actor the actor
-     * @return the requests
+     * @param page the page, from 1
+     * @return the page, with the total
      */
-    List<AwaitingApproval> awaitingMyApproval(Actor actor);
+    Paged<AwaitingApproval> awaitingMyApproval(Actor actor, int page);
 
     /**
      * Who a pending request may be reassigned to ({@code REASSIGN_APPROVER}): the A.2 #18 rule for its original

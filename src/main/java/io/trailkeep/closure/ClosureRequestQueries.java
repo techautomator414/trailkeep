@@ -20,12 +20,23 @@ interface ClosureRequestQueries {
     List<ClosureRequest> findForCase(CaseScope scope, CaseNumber caseNumber);
 
     /**
-     * The pending requests a person is the approver of, on cases the scope reads, oldest first, at most 100 (the
+     * One page of the pending requests a person is the approver of, on cases the scope reads, oldest first (the
      * dashboard's "Pending my approval").
      *
      * @param scope the caller's scope
      * @param approverId the approver
+     * @param offset the page's first row, from 0
+     * @param limit the page size
      * @return the requests
      */
-    List<ClosureRequest> findPendingFor(CaseScope scope, long approverId);
+    List<ClosureRequest> findPendingFor(CaseScope scope, long approverId, int offset, int limit);
+
+    /**
+     * How many pending requests a person is the approver of, on cases the scope reads.
+     *
+     * @param scope the caller's scope
+     * @param approverId the approver
+     * @return the count
+     */
+    long countPendingFor(CaseScope scope, long approverId);
 }

@@ -129,7 +129,9 @@ abstract class AbstractUpdateRequestIT {
                         .doesNotContain(QUESTION));
         assertThat(jdbc.queryForObject("SELECT USER_ID FROM USER_ALERT WHERE CASE_ID = ?", Long.class, caseId))
                 .isEqualTo(colleague);
-        assertThat(requests.openFor(actor(colleague, TeamRole.ANALYST)))
+        assertThat(requests.openFor(actor(colleague, TeamRole.ANALYST), 1).total())
+                .isOne();
+        assertThat(requests.openFor(actor(colleague, TeamRole.ANALYST), 1).rows())
                 .singleElement()
                 .satisfies(open -> assertThat(open)
                         .extracting(OpenRequest::id, OpenRequest::caseNumber, OpenRequest::caseTitle)

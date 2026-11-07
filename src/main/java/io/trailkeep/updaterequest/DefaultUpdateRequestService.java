@@ -15,6 +15,7 @@ import io.trailkeep.notification.NotificationService;
 import io.trailkeep.security.CaseAction;
 import io.trailkeep.shared.CaseNumber;
 import io.trailkeep.shared.DomainException.Kind;
+import io.trailkeep.shared.Paged;
 import io.trailkeep.shared.access.CaseAccessPath;
 import io.trailkeep.shared.access.CaseScope;
 import io.trailkeep.shared.config.AppProperties;
@@ -238,9 +239,17 @@ class DefaultUpdateRequestService implements UpdateRequestService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<OpenRequest> openFor(Actor actor) {
-        List<UpdateRequest> open = requests.findOpenFrom(
-                scopes.forUser(actor.permissions()), actor.permissions().userId());
+    public Paged<OpenRequest> openFor(Actor actor, int page) {
+        CaseScope scope = scopes.forUser(actor.permissions());
+        long me = actor.permissions().userId();
+        return Paged.of(
+                page,
+                PAGE_SIZE,
+                () -> requests.countOpenFrom(scope, me),
+                offset -> rows(actor, requests.findOpenFrom(scope, me, offset, PAGE_SIZE)));
+    }
+
+    private List<OpenRequest> rows(Actor actor, List<UpdateRequest> open) {
         Collection<Long> caseIds =
                 open.stream().map(UpdateRequest::getCaseId).distinct().toList();
         Map<Long, CaseRef> refs = cases.refs(actor, caseIds);

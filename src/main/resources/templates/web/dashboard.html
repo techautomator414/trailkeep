@@ -1,8 +1,11 @@
 <!DOCTYPE html>
 <!-- SPDX-License-Identifier: Apache-2.0 -->
-<!-- The dashboard (BUILD_PLAN §4.1). "Needs attention" lists the closure requests waiting for the person's decision,
-     each with Approve and a link to Reject or request changes (WP-19), then the update requests addressed to them,
-     newest first, each a plain link to its case's comments, where a comment answers it (WP-18). -->
+<!-- The dashboard (BUILD_PLAN §4.1, WP-20), all through the person's CaseScope. KPI tiles: a count in text and a link
+     each (the cases list so filtered, or the list below). "My cases": the person's open cases by SLA due date, at most
+     ten, with the SLA chip (icon and text) and a link to all of them. "Needs attention": the closure requests waiting
+     for the person's decision, oldest first, each with Approve and a link to Reject or request changes (WP-19), then
+     the update requests addressed to them, newest first, each a link to its case's comments (WP-18); each list is
+     paged by 20 with plain links, the other list's page kept. -->
 <html lang="en" xmlns:th="http://www.thymeleaf.org"
       th:replace="~{web/layout :: page(~{::title}, ~{::main})}">
 <head><title th:text="#{tk.dashboard.title} + ' · ' + ${@branding.name()}">Dashboard</title></head>
@@ -11,13 +14,40 @@
   <h1 th:text="#{tk.dashboard.title}">Dashboard</h1>
   <p th:text="#{tk.dashboard.welcome(${displayName})}">Signed in.</p>
   <p><a class="btn btn-primary" th:href="@{/cases/new}" th:text="#{tk.new.link}">New case</a></p>
+  <h2 id="tk-kpi" class="visually-hidden" th:text="#{tk.dashboard.kpi}">At a glance</h2>
+  <ul class="tk-tiles" aria-labelledby="tk-kpi">
+    <li th:each="t : ${tiles}"><a class="tk-tile" th:href="${t.href}"><span class="tk-tile-count" th:text="${t.count}"
+        >3</span> <span th:text="#{'tk.dashboard.tile.' + ${t.key}}">My open cases</span></a></li>
+  </ul>
+  <h2 id="tk-mine" th:text="#{tk.dashboard.mine}">My cases</h2>
+  <p th:if="${myCases.isEmpty()}" th:text="#{tk.dashboard.mine.none}">You own no open case.</p>
+  <table th:unless="${myCases.isEmpty()}" class="table table-sm" aria-labelledby="tk-mine">
+    <thead><tr>
+      <th scope="col" th:text="#{tk.list.number}">Case number</th>
+      <th scope="col" th:text="#{tk.list.titlecol}">Title</th>
+      <th scope="col" th:text="#{tk.list.status}">Status</th>
+      <th scope="col" th:text="#{tk.list.sla}">SLA</th>
+    </tr></thead>
+    <tbody>
+    <tr th:each="r : ${myCases}">
+      <th scope="row"><a th:href="@{/cases/{n}(n=${r.number})}" th:text="${r.number}">CASE-2026-000001</a></th>
+      <td th:text="${r.title}">Title</td>
+      <td th:text="#{'tk.case.status.' + ${r.status}}">Open</td>
+      <td th:with="days=${r.sla.daysLeft}, gone=${-r.sla.daysLeft}">
+        <span aria-hidden="true" th:text="#{'tk.case.sla.icon.' + ${r.sla.state}}">○</span>
+        <span th:text="#{${'tk.case.sla.' + r.sla.state}(${days},${gone})}">SLA: 12 days left</span></td>
+    </tr>
+    </tbody>
+  </table>
+  <p th:if="${myCasesTotal > myCases.size()}"><a th:href="${allMine}"
+      th:text="#{tk.dashboard.mine.all(${myCasesTotal})}">See all 12 of my open cases</a></p>
   <h2 id="tk-attention" th:text="#{tk.dashboard.attention}">Needs attention</h2>
-  <p th:if="${attention.isEmpty() and approvals.isEmpty()}" th:text="#{tk.dashboard.attention.none}">Nothing needs
+  <p th:if="${attention.total == 0 and approvals.total == 0}" th:text="#{tk.dashboard.attention.none}">Nothing needs
     your attention.</p>
-  <th:block th:unless="${approvals.isEmpty()}">
+  <th:block th:if="${approvals.total > 0}">
     <h3 id="tk-approvals" class="h5" th:text="#{tk.dashboard.approvals}">Pending my approval</h3>
     <ul aria-labelledby="tk-approvals">
-      <li th:each="a : ${approvals}" class="mb-2"><a th:id="'tk-approval-' + ${a.id}"
+      <li th:each="a : ${approvals.rows}" class="mb-2"><a th:id="'tk-approval-' + ${a.id}"
           th:href="@{/cases/{n}(n=${a.caseNumber})}" th:text="#{tk.dashboard.approval(${a.requestedBy},
           ${a.caseNumber}, ${a.caseTitle}, ${a.outcome})}">X requested closure of CASE</a>
         <div class="tk-dialog-actions mt-1">
@@ -27,15 +57,31 @@
              th:href="@{/cases/{n}/closure/{id}/decision(n=${a.caseNumber},id=${a.id})}"
              th:text="#{tk.decision.open}">Reject or request changes</a></div></li>
     </ul>
+    <nav th:replace="~{web/dashboard :: pages(${approvals}, 'approvals', ${attention.page}, 'tk-approvals')}"></nav>
   </th:block>
-  <th:block th:unless="${attention.isEmpty()}">
+  <th:block th:if="${attention.total > 0}">
     <h3 id="tk-requests" class="h5" th:text="#{tk.dashboard.requests}">Update requests for you</h3>
     <ul aria-labelledby="tk-requests">
-      <li th:each="r : ${attention}"><a th:href="@{/cases/{n}(n=${r.caseNumber})} + '#comments'"
+      <li th:each="r : ${attention.rows}"><a th:href="@{/cases/{n}(n=${r.caseNumber})} + '#comments'"
           th:text="#{tk.dashboard.attention.request(${r.requestedBy}, ${r.caseNumber}, ${r.caseTitle})}">X asked you
           for an update on CASE</a></li>
     </ul>
+    <nav th:replace="~{web/dashboard :: pages(${attention}, 'requests', ${approvals.page}, 'tk-requests')}"></nav>
   </th:block>
 </main>
+<!-- One list's pages: "Page N of M" and plain previous and next links, which keep the other list's page and land on
+     the list's heading. -->
+<nav th:fragment="pages(p, name, other, anchor)" th:if="${p.pages > 1}"
+     th:aria-label="#{tk.dashboard.pages.__${name}__}">
+  <p th:text="#{tk.list.page(${p.page}, ${p.pages})}">Page 1 of 2.</p>
+  <ul class="pagination" th:with="o=${name == 'approvals'} ? 'requests' : 'approvals'">
+    <li class="page-item" th:if="${p.page > 1}"><a class="page-link" rel="prev"
+        th:href="@{/(__${name}__=${p.page - 1},__${o}__=${other})} + '#' + ${anchor}" th:text="#{tk.list.previous}"
+        >Previous page</a></li>
+    <li class="page-item" th:if="${p.page < p.pages}"><a class="page-link" rel="next"
+        th:href="@{/(__${name}__=${p.page + 1},__${o}__=${other})} + '#' + ${anchor}" th:text="#{tk.list.next}"
+        >Next page</a></li>
+  </ul>
+</nav>
 </body>
 </html>
