@@ -13,7 +13,8 @@ import org.jspecify.annotations.Nullable;
  * The aging and SLA-compliance reports (BUILD_PLAN §4.5, WP-22) over the cases the actor reads: a Manager sees their
  * teams, a Compliance Admin every team, and a Reader or Analyst their teams without the restricted cases they cannot
  * read (§3.2 "Run reports / export", §3.3). Somebody with no team role and no Compliance Admin role (a System Admin)
- * is refused ({@code FORBIDDEN}). Counts only, by team and case type, with a total row.
+ * is refused ({@code FORBIDDEN}). Counts only, aging by team and owner and compliance by team and case type, each
+ * with a total row.
  */
 public interface ReportService {
 
@@ -21,9 +22,10 @@ public interface ReportService {
      * One aging line.
      *
      * @param team the team's name
+     * @param owner the owner's display name
      * @param counts the counts
      */
-    record AgingLine(String team, AgingRow counts) {}
+    record AgingLine(String team, String owner, AgingRow counts) {}
 
     /**
      * The aging report.

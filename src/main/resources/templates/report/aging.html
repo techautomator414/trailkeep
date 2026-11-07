@@ -14,14 +14,14 @@
       <thead>
       <tr>
         <th scope="col" th:text="#{tk.case.team}">Team</th>
-        <th scope="col" th:text="#{tk.case.type}">Case type</th>
+        <th scope="col" th:text="#{tk.case.owner}">Owner</th>
         <th scope="col" th:each="k : ${cols}" th:text="#{'tk.report.col.' + ${k}}">0–30 days</th>
       </tr>
       </thead>
       <tbody>
       <tr th:each="l : ${r.lines}">
         <th scope="row" th:text="${l.team}">Team</th>
-        <td th:text="${l.counts.caseType}">Type</td>
+        <td th:text="${l.owner}">Owner</td>
         <td th:each="k : ${cols}" th:text="${l.counts[k]}">1</td>
       </tr>
       </tbody>

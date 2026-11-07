@@ -26,8 +26,9 @@ import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 
 /**
- * Builds the reports from {@link CaseReportService}'s counts; see {@link ReportService}. The counts come ordered by
- * team id and case type; a stable sort by team name keeps the case types in order within each team.
+ * Builds the reports from {@link CaseReportService}'s counts; see {@link ReportService}. Team and owner names come
+ * from the directory; aging lines sort by team then owner name, and compliance counts, ordered by team id and case
+ * type, by team name alone: the sort is stable, so the case types stay in order within each team.
  */
 @Service
 class DefaultReportService implements ReportService {
@@ -51,13 +52,16 @@ class DefaultReportService implements ReportService {
         LocalDate today = LocalDate.ofInstant(clock.instant(), zone);
         List<AgingRow> rows = counts.aging(actor, today);
         Map<Long, String> teams = teams(rows.stream().map(AgingRow::teamId).toList());
+        Map<Long, String> owners =
+                directory.displayNames(rows.stream().map(AgingRow::ownerId).toList());
         List<AgingLine> lines = rows.stream()
-                .map(row -> new AgingLine(teams.getOrDefault(row.teamId(), ""), row))
-                .sorted(Comparator.comparing(AgingLine::team))
+                .map(row -> new AgingLine(
+                        teams.getOrDefault(row.teamId(), ""), owners.getOrDefault(row.ownerId(), ""), row))
+                .sorted(Comparator.comparing(AgingLine::team).thenComparing(AgingLine::owner))
                 .toList();
         AgingRow total = new AgingRow(
                 0,
-                "",
+                0,
                 sum(rows, AgingRow::upTo30),
                 sum(rows, AgingRow::upTo60),
                 sum(rows, AgingRow::upTo90),

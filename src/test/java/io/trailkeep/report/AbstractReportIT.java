@@ -5,9 +5,13 @@ package io.trailkeep.report;
 import static io.trailkeep.testsupport.ReportFixture.ACCESS;
 import static io.trailkeep.testsupport.ReportFixture.ALPHA;
 import static io.trailkeep.testsupport.ReportFixture.ALPHA_NAME;
+import static io.trailkeep.testsupport.ReportFixture.ANALYST;
 import static io.trailkeep.testsupport.ReportFixture.BETA;
+import static io.trailkeep.testsupport.ReportFixture.BETA_ANALYST;
 import static io.trailkeep.testsupport.ReportFixture.BETA_NAME;
 import static io.trailkeep.testsupport.ReportFixture.HANDLING;
+import static io.trailkeep.testsupport.ReportFixture.MANAGER;
+import static io.trailkeep.testsupport.ReportFixture.OTHER_OWNER;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -52,8 +56,12 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional
 abstract class AbstractReportIT {
 
-    private static final AgingRow ALPHA_ACCESS_AGING = new AgingRow(ALPHA, ACCESS, 3, 1, 2, 1, 2, 1, 3, 1);
-    private static final AgingRow ALPHA_HANDLING_AGING = new AgingRow(ALPHA, HANDLING, 0, 1, 0, 0, 0, 1, 0, 0);
+    private static final AgingLine ANALYST_AGING =
+            new AgingLine(ALPHA_NAME, "Synthetic Report Analyst", new AgingRow(ALPHA, ANALYST, 2, 2, 0, 0, 1, 2, 1, 0));
+    private static final AgingLine MANAGER_AGING =
+            new AgingLine(ALPHA_NAME, "Synthetic Report Manager", new AgingRow(ALPHA, MANAGER, 0, 0, 2, 1, 1, 0, 1, 1));
+    private static final AgingLine RESTRICTED_AGING = new AgingLine(
+            ALPHA_NAME, "Synthetic Restricted Owner", new AgingRow(ALPHA, OTHER_OWNER, 1, 0, 0, 0, 0, 0, 1, 0));
     private static final ComplianceRow ALPHA_ACCESS = new ComplianceRow(ALPHA, ACCESS, 1, 1, 1, 3);
     private static final ComplianceRow ALPHA_HANDLING = new ComplianceRow(ALPHA, HANDLING, 1, 0, 1, 0);
 
@@ -85,10 +93,8 @@ abstract class AbstractReportIT {
 
         AgingReport aging = reports.aging(manager);
         assertThat(aging.asOf()).isEqualTo(today);
-        assertThat(aging.lines())
-                .containsExactly(
-                        new AgingLine(ALPHA_NAME, ALPHA_ACCESS_AGING), new AgingLine(ALPHA_NAME, ALPHA_HANDLING_AGING));
-        assertThat(aging.total()).isEqualTo(new AgingRow(0, "", 3, 2, 2, 1, 2, 2, 3, 1));
+        assertThat(aging.lines()).containsExactly(ANALYST_AGING, MANAGER_AGING, RESTRICTED_AGING);
+        assertThat(aging.total()).isEqualTo(new AgingRow(0, 0, 3, 2, 2, 1, 2, 2, 3, 1));
 
         ComplianceReport compliance = compliance(manager);
         assertThat(compliance.lines())
@@ -105,10 +111,7 @@ abstract class AbstractReportIT {
     void anAnalystDoesNotCountTheRestrictedCaseTheyDoNotOwn() {
         Actor analyst = team(ReportFixture.ANALYST, ALPHA, TeamRole.ANALYST);
 
-        assertThat(reports.aging(analyst).lines())
-                .containsExactly(
-                        new AgingLine(ALPHA_NAME, new AgingRow(ALPHA, ACCESS, 2, 1, 2, 1, 2, 1, 2, 1)),
-                        new AgingLine(ALPHA_NAME, ALPHA_HANDLING_AGING));
+        assertThat(reports.aging(analyst).lines()).containsExactly(ANALYST_AGING, MANAGER_AGING);
         assertThat(compliance(analyst).lines())
                 .containsExactly(
                         new ComplianceLine(ALPHA_NAME, new ComplianceRow(ALPHA, ACCESS, 1, 1, 1, 2), 50),
@@ -118,16 +121,14 @@ abstract class AbstractReportIT {
     @Test
     void complianceAdminsCountEveryTeamAndReadersTheirOwn() {
         Actor admin = global(GlobalRole.COMPLIANCE_ADMIN);
-        AgingLine betaAging = new AgingLine(BETA_NAME, new AgingRow(BETA, ACCESS, 1, 1, 0, 1, 1, 1, 1, 0));
+        AgingLine betaAging = new AgingLine(
+                BETA_NAME, "Synthetic Beta Analyst", new AgingRow(BETA, BETA_ANALYST, 1, 1, 0, 1, 1, 1, 1, 0));
         ComplianceLine betaCompliance = new ComplianceLine(BETA_NAME, new ComplianceRow(BETA, ACCESS, 1, 1, 1, 1), 50);
 
         assertThat(reports.aging(admin).lines())
                 .filteredOn(
                         line -> line.counts().teamId() == ALPHA || line.counts().teamId() == BETA)
-                .containsExactly(
-                        new AgingLine(ALPHA_NAME, ALPHA_ACCESS_AGING),
-                        new AgingLine(ALPHA_NAME, ALPHA_HANDLING_AGING),
-                        betaAging);
+                .containsExactly(ANALYST_AGING, MANAGER_AGING, RESTRICTED_AGING, betaAging);
         assertThat(compliance(admin).lines())
                 .filteredOn(
                         line -> line.counts().teamId() == ALPHA || line.counts().teamId() == BETA)
@@ -148,7 +149,7 @@ abstract class AbstractReportIT {
 
         AgingReport aging = reports.aging(manager);
         assertThat(aging.lines()).isEmpty();
-        assertThat(aging.total()).isEqualTo(new AgingRow(0, "", 0, 0, 0, 0, 0, 0, 0, 0));
+        assertThat(aging.total()).isEqualTo(new AgingRow(0, 0, 0, 0, 0, 0, 0, 0, 0, 0));
         ComplianceReport compliance = compliance(manager);
         assertThat(compliance.lines()).isEmpty();
         assertThat(compliance.withinSla()).isNull();

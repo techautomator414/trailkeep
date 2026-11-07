@@ -22,9 +22,10 @@ import java.util.function.BiFunction;
 
 /**
  * Criteria implementation of {@link CaseReportQueries}: one {@code GROUP BY} each over the case, its type and its SLA
- * row, with {@code SUM(CASE WHEN … THEN 1 ELSE 0 END)} per column, so a report costs one statement however many
- * cases it covers. The scope's predicate is the first condition, as in every case-rooted query; no SQL function
- * touches a CLOB, and nothing but counts, team ids and case type names leaves.
+ * row (aging by team and owner, compliance by team and type), with {@code SUM(CASE WHEN … THEN 1 ELSE 0 END)} per
+ * column, so a report costs one statement however many cases it covers. The scope's predicate is the first condition,
+ * as in every case-rooted query; no SQL function touches a CLOB, and nothing but counts, team and owner ids and case
+ * type names leaves.
  */
 class CaseReportQueriesImpl implements CaseReportQueries {
 
@@ -39,13 +40,13 @@ class CaseReportQueriesImpl implements CaseReportQueries {
     @Override
     public List<AgingRow> aging(CaseScope scope, LocalDate today) {
         CriteriaBuilder cb = entityManager.getCriteriaBuilder();
-        Grouped g = new Grouped(cb);
+        Grouped g = new Grouped(cb, true);
         Expression<LocalDate> identified = g.record.<LocalDate>get("identifiedOn");
         Expression<SlaState> state = g.sla.<SlaState>get("state");
         return g.rows(
                 scope,
                 g.record.get("status").in(OPEN),
-                (type, n) -> new AgingRow(n[0], type, n[2], n[3], n[4], n[5], n[6], n[7], n[8], n[9]),
+                (row, n) -> new AgingRow(n[0], n[1], n[2], n[3], n[4], n[5], n[6], n[7], n[8], n[9]),
                 count(cb, cb.greaterThanOrEqualTo(identified, today.minusDays(30))),
                 count(cb, cb.between(identified, today.minusDays(60), today.minusDays(31))),
                 count(cb, cb.between(identified, today.minusDays(90), today.minusDays(61))),
@@ -59,7 +60,7 @@ class CaseReportQueriesImpl implements CaseReportQueries {
     @Override
     public List<ComplianceRow> compliance(CaseScope scope, Instant from, Instant until) {
         CriteriaBuilder cb = entityManager.getCriteriaBuilder();
-        Grouped g = new Grouped(cb);
+        Grouped g = new Grouped(cb, false);
         Expression<Instant> closedAt = g.record.<Instant>get("closedAt");
         Expression<SlaState> state = g.sla.<SlaState>get("state");
         Predicate closed = cb.and(
@@ -70,7 +71,7 @@ class CaseReportQueriesImpl implements CaseReportQueries {
         return g.rows(
                 scope,
                 cb.or(closed, open),
-                (type, n) -> new ComplianceRow(n[0], type, n[2], n[3], n[4], n[5]),
+                (row, n) -> new ComplianceRow(n[0], row.get(1, String.class), n[2], n[3], n[4], n[5]),
                 count(cb, cb.and(closed, cb.equal(state, SlaState.MET))),
                 count(cb, cb.and(closed, cb.equal(state, SlaState.BREACHED))),
                 count(cb, cb.and(open, cb.equal(state, SlaState.AT_RISK))),
@@ -81,7 +82,7 @@ class CaseReportQueriesImpl implements CaseReportQueries {
         return cb.sum(cb.<Integer>selectCase().when(when, 1).otherwise(0));
     }
 
-    /** The row's numeric columns by position (the team id, then the counts); a {@code SUM} over no rows is 0. */
+    /** The row's numeric columns by position (the team id, an owner id, the counts); anything else is 0. */
     private static long[] numbers(Tuple row) {
         long[] numbers = new long[row.getElements().size()];
         for (int column = 0; column < numbers.length; column++) {
@@ -91,7 +92,7 @@ class CaseReportQueriesImpl implements CaseReportQueries {
         return numbers;
     }
 
-    /** One grouped report query: the case, its type and its SLA row, by team and type. */
+    /** One grouped report query: the case, its type and its SLA row, by team and then owner or case type. */
     private final class Grouped {
 
         private final CriteriaBuilder cb;
@@ -99,19 +100,21 @@ class CaseReportQueriesImpl implements CaseReportQueries {
         private final Root<CaseRecord> record;
         private final Root<CaseType> type;
         private final Root<CaseSla> sla;
+        private final Expression<?> by;
 
-        Grouped(CriteriaBuilder cb) {
+        Grouped(CriteriaBuilder cb, boolean byOwner) {
             this.cb = cb;
             this.query = cb.createTupleQuery();
             this.record = query.from(CaseRecord.class);
             this.type = query.from(CaseType.class);
             this.sla = query.from(CaseSla.class);
+            this.by = byOwner ? record.get("ownerId") : type.get("name");
         }
 
-        /** Runs the query, selecting the team, the type's name, then the counts, and maps each row (name, numbers). */
+        /** Runs the query, selecting the team, {@code by}, then the counts, and maps each row with its numbers. */
         <T> List<T> rows(
-                CaseScope scope, Predicate which, BiFunction<String, long[], T> mapper, Expression<?>... counts) {
-            List<Selection<?>> columns = new ArrayList<>(List.of(record.get("teamId"), type.get("name")));
+                CaseScope scope, Predicate which, BiFunction<Tuple, long[], T> mapper, Expression<?>... counts) {
+            List<Selection<?>> columns = new ArrayList<>(List.of(record.get("teamId"), by));
             columns.addAll(List.of(counts));
             query.select(cb.tuple(columns.toArray(Selection<?>[]::new)))
                     .where(
@@ -119,10 +122,10 @@ class CaseReportQueriesImpl implements CaseReportQueries {
                             cb.equal(type.get("id"), record.get("caseTypeId")),
                             cb.equal(sla.get("caseId"), record.get("id")),
                             which)
-                    .groupBy(record.get("teamId"), type.get("name"))
-                    .orderBy(cb.asc(record.get("teamId")), cb.asc(type.get("name")));
+                    .groupBy(record.get("teamId"), by)
+                    .orderBy(cb.asc(record.get("teamId")), cb.asc(by));
             return entityManager.createQuery(query).getResultList().stream()
-                    .map(row -> mapper.apply(row.get(1, String.class), numbers(row)))
+                    .map(row -> mapper.apply(row, numbers(row)))
                     .toList();
         }
     }

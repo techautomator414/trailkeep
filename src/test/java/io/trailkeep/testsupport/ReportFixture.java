@@ -14,16 +14,17 @@ import org.springframework.jdbc.core.JdbcTemplate;
  * The reports' hand-computed fixture (WP-22): two teams, two case types and nineteen synthetic cases written straight
  * to the tables, ages counted back from {@code today} and closures placed on the edges of the period
  * {@link #from()} to {@link #to()} (today − 14 to today − 1, whole days in the given zone). Use it inside a
- * rolled-back transaction. What each case is, and so what each report cell must say:
+ * rolled-back transaction. What each case is, and so what each report cell must say (aging lines are by team and
+ * owner, compliance lines by team and case type):
  *
  * <pre>
  * team ALPHA, type ACCESS (owner ANALYST unless noted)
  *   OPEN       identified today        ON_TRACK        aging 0–30
  *   OPEN       identified today − 30   AT_RISK         aging 0–30 (edge)
  *   PENDING    identified today − 31   OVERDUE         aging 31–60 (edge)
- *   OPEN       identified today − 61   NOT_APPLICABLE  aging 61–90 (edge)
- *   OPEN       identified today − 90   ON_TRACK        aging 61–90 (edge)
- *   OPEN       identified today − 91   OVERDUE         aging over 90 (edge)
+ *   OPEN       owner MANAGER, today − 61   NOT_APPLICABLE  aging 61–90 (edge)
+ *   OPEN       owner MANAGER, today − 90   ON_TRACK        aging 61–90 (edge)
+ *   OPEN       owner MANAGER, today − 91   OVERDUE         aging over 90 (edge)
  *   OPEN       RESTRICTED, owner OTHER_OWNER, today − 5, OVERDUE: a Manager reads it, the Analyst does not
  *   CLOSED     at the period's first instant           MET       counted
  *   CLOSED     at 23:00 on the period's last day       BREACHED  counted
@@ -110,9 +111,9 @@ public final class ReportFixture {
         open(ALPHA, ACCESS_ID, ANALYST, OPEN, 0, "ON_TRACK");
         open(ALPHA, ACCESS_ID, ANALYST, OPEN, 30, "AT_RISK");
         open(ALPHA, ACCESS_ID, ANALYST, PENDING, 31, "OVERDUE");
-        open(ALPHA, ACCESS_ID, ANALYST, OPEN, 61, "NOT_APPLICABLE");
-        open(ALPHA, ACCESS_ID, ANALYST, OPEN, 90, "ON_TRACK");
-        open(ALPHA, ACCESS_ID, ANALYST, OPEN, 91, "OVERDUE");
+        open(ALPHA, ACCESS_ID, MANAGER, OPEN, 61, "NOT_APPLICABLE");
+        open(ALPHA, ACCESS_ID, MANAGER, OPEN, 90, "ON_TRACK");
+        open(ALPHA, ACCESS_ID, MANAGER, OPEN, 91, "OVERDUE");
         kase(ALPHA, ACCESS_ID, OTHER_OWNER, "RESTRICTED", OPEN, today.minusDays(5), "OVERDUE", null);
         closed(ALPHA, ACCESS_ID, ANALYST, CLOSED, first, "MET");
         closed(ALPHA, ACCESS_ID, ANALYST, CLOSED, after.minusSeconds(3600), "BREACHED");

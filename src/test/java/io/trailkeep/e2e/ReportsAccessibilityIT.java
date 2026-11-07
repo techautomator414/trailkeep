@@ -138,7 +138,10 @@ class ReportsAccessibilityIT {
         assertClean("Aging");
         assertThat(page.locator("table.tk-report caption").textContent()).startsWith("Open and pending-closure cases");
         assertThat(page.locator("tbody th[scope='row']").allTextContents())
-                .containsExactly(ReportFixture.ALPHA_NAME, ReportFixture.ALPHA_NAME);
+                .containsOnly(ReportFixture.ALPHA_NAME)
+                .hasSize(3);
+        assertThat(page.locator("tbody td:first-of-type").allTextContents())
+                .containsExactly("Synthetic Report Analyst", "Synthetic Report Manager", "Synthetic Restricted Owner");
         assertThat(page.locator("tfoot td").allTextContents()).containsExactly("3", "2", "2", "1", "2", "2", "3", "1");
 
         page.emulateMedia(new Page.EmulateMediaOptions().setMedia(Media.PRINT));

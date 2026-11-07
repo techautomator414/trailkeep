@@ -77,10 +77,11 @@ class ReportControllerIT {
                 .contains("<p class=\"tk-report-links\"><a href=\"/reports/compliance\">SLA compliance</a></p>")
                 .contains("<table class=\"table table-sm tk-report\"><caption>Open and pending-closure cases on "
                         + LocalDate.ofInstant(clock.instant(), app.timezone()) + ", by days since identified")
-                .contains("<thead><tr><th scope=\"col\">Team</th><th scope=\"col\">Case type</th>"
+                .contains("<thead><tr><th scope=\"col\">Team</th><th scope=\"col\">Owner</th>"
                         + "<th scope=\"col\">0–30 days</th><th scope=\"col\">31–60 days</th>")
-                .contains(ALPHA_ROW + "<td>Access review</td>" + cells(3, 1, 2, 1, 2, 1, 3, 1) + "</tr>")
-                .contains(ALPHA_ROW + "<td>Data handling</td>" + cells(0, 1, 0, 0, 0, 1, 0, 0) + "</tr>")
+                .contains(ALPHA_ROW + "<td>Synthetic Report Analyst</td>" + cells(2, 2, 0, 0, 1, 2, 1, 0) + "</tr>")
+                .contains(ALPHA_ROW + "<td>Synthetic Report Manager</td>" + cells(0, 0, 2, 1, 1, 0, 1, 1) + "</tr>")
+                .contains(ALPHA_ROW + "<td>Synthetic Restricted Owner</td>" + cells(1, 0, 0, 0, 0, 0, 1, 0) + "</tr>")
                 .contains("<tfoot><tr><th scope=\"row\" colspan=\"2\">Total</th>" + cells(3, 2, 2, 1, 2, 2, 3, 1))
                 .doesNotContain("Beta Reporting Team", "Synthetic report case", "Synthetic description");
     }
@@ -95,7 +96,6 @@ class ReportControllerIT {
                 .contains("<input class=\"form-control\" type=\"date\" id=\"tk-from\" name=\"from\" value=\"" + from
                         + "\">")
                 .contains("<label class=\"form-label\" for=\"tk-to\">To</label>")
-                .contains("<p>67% of the cases closed in the period were closed within the SLA.</p>")
                 .contains("<caption>Cases closed from " + from + " to " + to)
                 .contains("<th scope=\"col\">Closed late</th><th scope=\"col\">At risk</th>"
                         + "<th scope=\"col\">Overdue</th><th scope=\"col\">Share within SLA</th>")

@@ -21,38 +21,34 @@
       <div class="col-auto"><button class="btn btn-primary" type="submit" th:text="#{tk.report.show}">Show</button></div>
     </div>
   </form>
-  <th:block th:unless="${e}">
-    <p th:text="${r.withinSla == null} ? #{tk.report.compliance.noneClosed}
-                 : #{tk.report.compliance.share(${r.withinSla})}">75% closed within the SLA.</p>
-    <div class="table-responsive">
-      <table class="table table-sm tk-report">
-        <caption th:text="#{tk.report.compliance.caption(${r.from}, ${r.to})}">SLA compliance</caption>
-        <thead>
-        <tr>
-          <th scope="col" th:text="#{tk.case.team}">Team</th>
-          <th scope="col" th:text="#{tk.case.type}">Case type</th>
-          <th scope="col" th:each="k : ${cols}" th:text="#{'tk.report.col.' + ${k}}">Met</th>
-          <th scope="col" th:text="#{tk.report.col.withinSla}">Share within SLA</th>
-        </tr>
-        </thead>
-        <tbody>
-        <tr th:each="l : ${r.lines}">
-          <th scope="row" th:text="${l.team}">Team</th>
-          <td th:text="${l.counts.caseType}">Type</td>
-          <td th:each="k : ${cols}" th:text="${l.counts[k]}">3</td>
-          <td th:text="${l.withinSla == null} ? '–' : ${l.withinSla} + '%'">75%</td>
-        </tr>
-        </tbody>
-        <tfoot>
-        <tr>
-          <th scope="row" colspan="2" th:text="#{tk.report.total}">Total</th>
-          <td th:each="k : ${cols}" th:text="${r.total[k]}">3</td>
-          <td th:text="${r.withinSla == null} ? '–' : ${r.withinSla} + '%'">75%</td>
-        </tr>
-        </tfoot>
-      </table>
-    </div>
-  </th:block>
+  <div class="table-responsive" th:unless="${e}">
+    <table class="table table-sm tk-report">
+      <caption th:text="#{tk.report.compliance.caption(${r.from}, ${r.to})}">SLA compliance</caption>
+      <thead>
+      <tr>
+        <th scope="col" th:text="#{tk.case.team}">Team</th>
+        <th scope="col" th:text="#{tk.case.type}">Case type</th>
+        <th scope="col" th:each="k : ${cols}" th:text="#{'tk.report.col.' + ${k}}">Met</th>
+        <th scope="col" th:text="#{tk.report.col.withinSla}">Share within SLA</th>
+      </tr>
+      </thead>
+      <tbody>
+      <tr th:each="l : ${r.lines}">
+        <th scope="row" th:text="${l.team}">Team</th>
+        <td th:text="${l.counts.caseType}">Type</td>
+        <td th:each="k : ${cols}" th:text="${l.counts[k]}">3</td>
+        <td th:text="${l.withinSla == null} ? '–' : ${l.withinSla} + '%'">75%</td>
+      </tr>
+      </tbody>
+      <tfoot>
+      <tr>
+        <th scope="row" colspan="2" th:text="#{tk.report.total}">Total</th>
+        <td th:each="k : ${cols}" th:text="${r.total[k]}">3</td>
+        <td th:text="${r.withinSla == null} ? '–' : ${r.withinSla} + '%'">75%</td>
+      </tr>
+      </tfoot>
+    </table>
+  </div>
 </main>
 </body>
 </html>

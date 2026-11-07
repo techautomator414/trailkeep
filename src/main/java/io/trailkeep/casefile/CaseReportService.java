@@ -8,17 +8,16 @@ import java.util.List;
 
 /**
  * The counts behind the reports (BUILD_PLAN §4.5, WP-22), over the cases the actor reads ({@code CaseScope}: a Reader
- * or Analyst never counts a restricted case they cannot read), one grouped query each, by team and case type.
- * Counts only: no case text of any kind (§3.3).
+ * or Analyst never counts a restricted case they cannot read), one grouped query each: aging by team and owner,
+ * compliance by team and case type. Counts only: no case text of any kind (§3.3).
  */
 public interface CaseReportService {
 
     /**
-     * Open and pending-closure cases of one team and case type, by age since the matter was identified and by SLA
-     * state.
+     * Open and pending-closure cases of one team and owner, by age since the matter was identified and by SLA state.
      *
      * @param teamId the team
-     * @param caseType the case type's name
+     * @param ownerId the owner
      * @param upTo30 identified 0 to 30 days ago
      * @param upTo60 31 to 60 days ago
      * @param upTo90 61 to 90 days ago
@@ -30,7 +29,7 @@ public interface CaseReportService {
      */
     record AgingRow(
             long teamId,
-            String caseType,
+            long ownerId,
             long upTo30,
             long upTo60,
             long upTo90,
@@ -54,11 +53,11 @@ public interface CaseReportService {
     record ComplianceRow(long teamId, String caseType, long met, long breached, long atRisk, long overdue) {}
 
     /**
-     * The aging counts as of {@code today}, by team and case type.
+     * The aging counts as of {@code today}, by team and owner.
      *
      * @param actor the actor
      * @param today the day ages count to, in {@code app.timezone}
-     * @return the rows, by team id and case type name
+     * @return the rows, by team id and owner id
      */
     List<AgingRow> aging(Actor actor, LocalDate today);
 

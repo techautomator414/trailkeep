@@ -13,11 +13,11 @@ import java.util.List;
 interface CaseReportQueries {
 
     /**
-     * Open and pending-closure cases the scope reads, counted by age and SLA state, by team and case type.
+     * Open and pending-closure cases the scope reads, counted by age and SLA state, by team and owner.
      *
      * @param scope the caller's scope
      * @param today the day ages count to
-     * @return the rows, ordered by team id and case type name
+     * @return the rows, ordered by team id and owner id
      */
     List<AgingRow> aging(CaseScope scope, LocalDate today);
 
