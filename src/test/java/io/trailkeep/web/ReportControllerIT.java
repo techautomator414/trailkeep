@@ -6,6 +6,7 @@ import static io.trailkeep.testsupport.ReportFixture.ALPHA;
 import static io.trailkeep.testsupport.ReportFixture.MANAGER;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import io.trailkeep.shared.config.AppProperties;
@@ -15,6 +16,7 @@ import io.trailkeep.testsupport.RequiresDocker;
 import io.trailkeep.testsupport.WithAppUser;
 import io.trailkeep.user.GlobalRole;
 import io.trailkeep.user.TeamRole;
+import java.nio.charset.StandardCharsets;
 import java.time.InstantSource;
 import java.time.LocalDate;
 import org.junit.jupiter.api.BeforeEach;
@@ -23,7 +25,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
+import org.springframework.http.HttpHeaders;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultMatcher;
@@ -74,7 +78,7 @@ class ReportControllerIT {
     void theAgingPageIsATableWithHeadersAndATotalRow() throws Exception {
         assertThat(page(get("/reports/aging"), status().isOk()))
                 .contains("<li><a href=\"/reports/aging\">Reports</a></li>")
-                .contains("<p class=\"tk-report-links\"><a href=\"/reports/compliance\">SLA compliance</a></p>")
+                .contains("<p class=\"tk-report-links\"><a href=\"/reports/compliance\">SLA compliance</a>")
                 .contains("<table class=\"table table-sm tk-report\"><caption>Open and pending-closure cases on "
                         + LocalDate.ofInstant(clock.instant(), app.timezone()) + ", by days since identified")
                 .contains("<thead><tr><th scope=\"col\">Team</th><th scope=\"col\">Owner</th>"
@@ -127,16 +131,60 @@ class ReportControllerIT {
     }
 
     @Test
+    @WithAppUser(id = MANAGER, team = ALPHA, teamRole = TeamRole.MANAGER)
+    void theCsvIsAnUncachedUnsniffedAttachmentLinkedFromEachReport() throws Exception {
+        String from = fixture.from().toString();
+        String to = fixture.to().toString();
+        assertThat(page(get("/reports/aging"), status().isOk()))
+                .contains("<a class=\"ms-3\" href=\"/reports/aging.csv\">" + "Export CSV</a>");
+        assertThat(page(period(from, to), status().isOk()))
+                .contains("href=\"/reports/compliance.csv?from=" + from + "&amp;to=" + to + "\">Export CSV</a>");
+        assertThat(page(period(to, from), unprocessable())).doesNotContain("compliance.csv");
+
+        MockHttpServletResponse aging = csv(get("/reports/aging.csv"));
+        assertThat(aging.getHeader(HttpHeaders.CONTENT_DISPOSITION))
+                .isEqualTo("attachment; filename=\"aging-" + LocalDate.ofInstant(clock.instant(), app.timezone())
+                        + ".csv\"");
+        assertThat(aging.getContentAsString(StandardCharsets.UTF_8))
+                .startsWith("﻿\"Team\",\"Owner\",\"0-30 days\"")
+                .contains("\"Alpha Reporting Team\",\"Synthetic Report Manager\",\"0\",\"0\",\"2\",\"1\",")
+                .endsWith("\"Total\",\"\",\"3\",\"2\",\"2\",\"1\",\"2\",\"2\",\"3\",\"1\"\r\n");
+        MockHttpServletResponse compliance =
+                csv(get("/reports/compliance.csv").param("from", from).param("to", to));
+        assertThat(compliance.getHeader(HttpHeaders.CONTENT_DISPOSITION))
+                .isEqualTo("attachment; filename=\"sla-compliance-" + from + "-to-" + to + ".csv\"");
+        assertThat(compliance.getContentAsString(StandardCharsets.UTF_8))
+                .endsWith("\"Total\",\"\",\"2\",\"1\",\"2\",\"3\",\"67\"\r\n");
+        mvc.perform(get("/reports/compliance.csv").param("from", to).param("to", from))
+                .andExpect(unprocessable());
+    }
+
+    @Test
     @WithAppUser(id = ReportFixture.SYSTEM_ADMIN, globalRole = GlobalRole.SYSTEM_ADMIN)
     void someoneWithNeitherATeamRoleNorComplianceAdminIsForbidden() throws Exception {
         mvc.perform(get("/reports/aging")).andExpect(status().isForbidden());
         mvc.perform(get("/reports/compliance").param("from", "not a date")).andExpect(status().isForbidden());
+        mvc.perform(get("/reports/aging.csv")).andExpect(status().isForbidden());
+        mvc.perform(get("/reports/compliance.csv")).andExpect(status().isForbidden());
     }
 
     @Test
     void anonymousRequestsGoToTheIdentityProvider() throws Exception {
         mvc.perform(get("/reports/aging")).andExpect(status().isFound());
         mvc.perform(get("/reports/compliance")).andExpect(status().isFound());
+        mvc.perform(get("/reports/aging.csv")).andExpect(status().isFound());
+        mvc.perform(get("/reports/compliance.csv")).andExpect(status().isFound());
+    }
+
+    private MockHttpServletResponse csv(MockHttpServletRequestBuilder request) throws Exception {
+        MockHttpServletResponse response = mvc.perform(request)
+                .andExpect(status().isOk())
+                .andExpect(header().string(HttpHeaders.CONTENT_TYPE, "text/csv;charset=UTF-8"))
+                .andExpect(header().string("X-Content-Type-Options", "nosniff"))
+                .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "private, no-store"))
+                .andReturn()
+                .getResponse();
+        return response;
     }
 
     /** The page with the white space between tags removed, so rows read as one line. */

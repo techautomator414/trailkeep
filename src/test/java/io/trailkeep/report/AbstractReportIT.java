@@ -18,6 +18,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import io.trailkeep.casefile.CaseReportService.AgingRow;
 import io.trailkeep.casefile.CaseReportService.ComplianceRow;
 import io.trailkeep.casefile.CaseService.Actor;
+import io.trailkeep.report.ReportExportService.Csv;
 import io.trailkeep.report.ReportService.AgingLine;
 import io.trailkeep.report.ReportService.AgingReport;
 import io.trailkeep.report.ReportService.ComplianceLine;
@@ -25,13 +26,16 @@ import io.trailkeep.report.ReportService.ComplianceReport;
 import io.trailkeep.shared.DomainException;
 import io.trailkeep.shared.DomainException.Kind;
 import io.trailkeep.shared.config.AppProperties;
+import io.trailkeep.shared.csv.CsvFormat;
 import io.trailkeep.testsupport.ReportFixture;
 import io.trailkeep.testsupport.RequiresDocker;
 import io.trailkeep.user.GlobalRole;
 import io.trailkeep.user.TeamRole;
 import io.trailkeep.user.UserPermissions;
+import jakarta.persistence.EntityManager;
 import java.time.InstantSource;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
@@ -47,7 +51,9 @@ import org.springframework.transaction.annotation.Transactional;
  * not count the restricted case they do not own; a Compliance Admin counts every team; the totals and the share
  * within the SLA (rounded half up) follow; the age buckets and the period are exact at their edges, archived cases and
  * closures outside the period are not counted. A person with neither a team role nor Compliance Admin is refused,
- * and a period that does not parse, runs backwards or is over 366 days is invalid.
+ * and a period that does not parse, runs backwards or is over 366 days is invalid. The CSV (part b) holds the same
+ * cells, header first and the total row last, with formula-like names defused; every export is audited, a refused or
+ * invalid one is not.
  */
 // "IT" is the Failsafe suffix Part B mandates for integration tests, not an abbreviation.
 @SuppressWarnings("checkstyle:AbbreviationAsWordInName")
@@ -67,6 +73,12 @@ abstract class AbstractReportIT {
 
     @Autowired
     private ReportService reports;
+
+    @Autowired
+    private ReportExportService exports;
+
+    @Autowired
+    private EntityManager entityManager;
 
     @Autowired
     private JdbcTemplate jdbc;
@@ -184,8 +196,91 @@ abstract class AbstractReportIT {
         assertKind(() -> reports.compliance(systemAdmin, "not a date", null), Kind.FORBIDDEN);
     }
 
+    @Test
+    void theCsvHoldsTheSameCellsAndEveryExportIsAudited() {
+        Actor manager = team(ReportFixture.MANAGER, ALPHA, TeamRole.MANAGER);
+        String header = "\"Team\",\"Owner\",\"0-30 days\",\"31-60 days\",\"61-90 days\",\"Over 90 days\",\"On track\","
+                + "\"At risk\",\"Overdue\",\"No SLA\"\r\n";
+
+        Csv aging = exports.aging(manager);
+        assertThat(aging.fileName()).isEqualTo("aging-" + today + ".csv");
+        assertThat(aging.content())
+                .isEqualTo(CsvFormat.BOM
+                        + header
+                        + csv(ALPHA_NAME, "Synthetic Report Analyst", "2", "2", "0", "0", "1", "2", "1", "0")
+                        + csv(ALPHA_NAME, "Synthetic Report Manager", "0", "0", "2", "1", "1", "0", "1", "1")
+                        + csv(ALPHA_NAME, "Synthetic Restricted Owner", "1", "0", "0", "0", "0", "0", "1", "0")
+                        + csv("Total", "", "3", "2", "2", "1", "2", "2", "3", "1"));
+
+        Csv compliance = exports.compliance(
+                manager, fixture.from().toString(), fixture.to().toString());
+        String period = fixture.from() + "-to-" + fixture.to();
+        assertThat(compliance.fileName()).isEqualTo("sla-compliance-" + period + ".csv");
+        assertThat(compliance.content())
+                .isEqualTo(CsvFormat.BOM
+                        + csv(
+                                "Team",
+                                "Case type",
+                                "Closed within SLA",
+                                "Closed late",
+                                "At risk",
+                                "Overdue",
+                                "Share within SLA (%)")
+                        + csv(ALPHA_NAME, ACCESS, "1", "1", "1", "3", "50")
+                        + csv(ALPHA_NAME, HANDLING, "1", "0", "1", "0", "100")
+                        + csv("Total", "", "2", "1", "2", "3", "67"));
+
+        entityManager.flush();
+        List<Map<String, Object>> events = jdbc.queryForList(
+                "SELECT CASE_ID, ENTITY_TYPE, NEW_VALUES_JSON FROM AUDIT_EVENT"
+                        + " WHERE ACTION = 'REPORT_EXPORTED' AND ACTOR_ID = ? ORDER BY ID",
+                ReportFixture.MANAGER);
+        assertThat(events).hasSize(2);
+        assertThat(events.get(0)).containsEntry("CASE_ID", null).containsEntry("ENTITY_TYPE", "REPORT");
+        assertThat((String) events.get(0).get("NEW_VALUES_JSON"))
+                .contains("\"report\":\"aging\"", "\"period\":\"" + today + "\"", "\"lines\":3");
+        assertThat((String) events.get(1).get("NEW_VALUES_JSON"))
+                .contains("\"report\":\"compliance\"", "\"period\":\"" + period + "\"", "\"lines\":2");
+    }
+
+    @Test
+    void namesThatASpreadsheetWouldRunAreDefusedAndAnEmptyShareIsAnEmptyCell() {
+        jdbc.update("UPDATE TEAM SET NAME = '=HYPERLINK(\"http://example.invalid\")' WHERE ID = ?", ALPHA);
+        jdbc.update("UPDATE APP_USER SET DISPLAY_NAME = '+Synthetic Plus' WHERE ID = ?", ReportFixture.ANALYST);
+        jdbc.update("UPDATE APP_USER SET DISPLAY_NAME = '-Synthetic Minus' WHERE ID = ?", ReportFixture.MANAGER);
+        jdbc.update("UPDATE APP_USER SET DISPLAY_NAME = '@Synthetic At' WHERE ID = ?", ReportFixture.OTHER_OWNER);
+        Actor manager = team(ReportFixture.MANAGER, ALPHA, TeamRole.MANAGER);
+
+        assertThat(exports.aging(manager).content())
+                .contains("\"'=HYPERLINK(\"\"http://example.invalid\"\")\",\"'+Synthetic Plus\",")
+                .contains("\",\"'-Synthetic Minus\",", "\",\"'@Synthetic At\",");
+        jdbc.update("INSERT INTO TEAM (ID, NAME) VALUES (?, ?)", 984_013L, "Empty Reporting Team");
+        assertThat(exports.compliance(team(ReportFixture.MANAGER, 984_013L, TeamRole.MANAGER), null, null)
+                        .content())
+                .endsWith("\r\n" + csv("Total", "", "0", "0", "0", "0", ""));
+    }
+
+    @Test
+    void refusedAndInvalidExportsAreNotAudited() {
+        assertKind(() -> exports.aging(global(GlobalRole.SYSTEM_ADMIN)), Kind.FORBIDDEN);
+        Actor manager = team(ReportFixture.MANAGER, ALPHA, TeamRole.MANAGER);
+        assertKind(() -> exports.compliance(manager, "2026-02-01", "2026-01-31"), Kind.INVALID);
+        entityManager.flush();
+
+        assertThat(jdbc.queryForObject(
+                        "SELECT COUNT(*) FROM AUDIT_EVENT WHERE ACTION = 'REPORT_EXPORTED' AND ACTOR_ID IN (?, ?)",
+                        Long.class,
+                        ReportFixture.MANAGER,
+                        984_009L))
+                .isZero();
+    }
+
     private ComplianceReport compliance(Actor actor) {
         return reports.compliance(actor, fixture.from().toString(), fixture.to().toString());
+    }
+
+    private static String csv(String... cells) {
+        return CsvFormat.line(List.of(cells));
     }
 
     private static void assertKind(Runnable call, Kind kind) {

@@ -5,6 +5,7 @@ package io.trailkeep.e2e;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.microsoft.playwright.Browser;
+import com.microsoft.playwright.Download;
 import com.microsoft.playwright.Page;
 import com.microsoft.playwright.Playwright;
 import com.microsoft.playwright.PlaywrightException;
@@ -15,6 +16,9 @@ import io.trailkeep.testsupport.KeycloakDevRealm;
 import io.trailkeep.testsupport.PostgresTestcontainersConfiguration;
 import io.trailkeep.testsupport.ReportFixture;
 import io.trailkeep.testsupport.RequiresDocker;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.List;
@@ -37,7 +41,8 @@ import org.springframework.test.context.DynamicPropertySource;
 /**
  * The report pages (WP-22 part a) in a real browser after a real OIDC login as the dev realm's {@code alpha.manager1},
  * made a Manager of {@link ReportFixture}'s first team, driven from the keyboard: Tab from the brand reaches the
- * header's "Reports", Enter opens Aging, Tab and Enter follow its link to SLA compliance; the compliance form is
+ * header's "Reports", Enter opens Aging, Tab and Enter on "Export CSV" download its CSV (part b: the file's name and
+ * cells checked), Tab and Enter follow its link to SLA compliance; the compliance form is
  * reached by Tab and a backwards period sent with Enter comes back marked. axe finds 0 violations on each, and the
  * print view shows the table without the header, the footer, the links or the form.
  */
@@ -128,7 +133,7 @@ class ReportsAccessibilityIT {
     }
 
     @Test
-    void theReportsAreReachedFromTheKeyboardAndPrintWithoutTheChrome() {
+    void theReportsAreReachedFromTheKeyboardDownloadAndPrintWithoutTheChrome() throws IOException {
         page.navigate(KEYCLOAK.app("/"));
         page.waitForLoadState();
         page.locator("a.tk-brand").focus();
@@ -153,6 +158,16 @@ class ReportsAccessibilityIT {
 
         page.locator("#main").focus();
         tabTo("SLA compliance", 3);
+        tabTo("Export CSV", 1);
+        Download download = page.waitForDownload(() -> page.keyboard().press("Enter"));
+        assertThat(download.suggestedFilename()).isEqualTo("aging-" + LocalDate.now(ZoneOffset.UTC) + ".csv");
+        assertThat(Files.readString(download.path(), StandardCharsets.UTF_8))
+                .startsWith("﻿\"Team\",\"Owner\",")
+                .contains("\"Alpha Reporting Team\",\"Synthetic Restricted Owner\",\"1\",")
+                .endsWith("\"Total\",\"\",\"3\",\"2\",\"2\",\"1\",\"2\",\"2\",\"3\",\"1\"\r\n");
+
+        page.locator("#main").focus();
+        tabTo("SLA compliance", 3);
         page.keyboard().press("Enter");
         page.waitForURL(url -> url.endsWith("/reports/compliance"));
         assertClean("SLA compliance");
@@ -171,6 +186,7 @@ class ReportsAccessibilityIT {
 
         page.locator("#main").focus();
         tabTo("Aging", 1);
+        tabTo("Export CSV", 1);
         tabToId("tk-from", 1);
         page.fill("#tk-from", "2026-02-01");
         // A date field's month, day and year are Tab stops of their own in Chromium.
