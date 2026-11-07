@@ -10,6 +10,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import io.trailkeep.notification.UserAlertService;
+import io.trailkeep.shared.access.CaseScope;
 import io.trailkeep.testsupport.PostgresTestcontainersConfiguration;
 import io.trailkeep.testsupport.RequiresDocker;
 import io.trailkeep.testsupport.WithAppUser;
@@ -80,7 +81,7 @@ class AlertControllerIT {
                 .contains("class=\"visually-hidden\">: Newer synthetic alert</span>")
                 .doesNotContain("Their private alert", "/alerts/982103/");
         assertThat(page.indexOf("Newer synthetic alert")).isLessThan(page.indexOf("Older synthetic alert"));
-        assertThat(alerts.unread(OWNER)).isEqualTo(2);
+        assertThat(alerts.unread(CaseScope.system(), OWNER)).isEqualTo(2);
     }
 
     @Test
@@ -90,12 +91,12 @@ class AlertControllerIT {
         mvc.perform(post("/alerts/982103/read").with(csrf())).andExpect(status().isNotFound());
         mvc.perform(post("/alerts/982103/delete").with(csrf())).andExpect(status().isNotFound());
         mvc.perform(post("/alerts/not-an-id/delete").with(csrf())).andExpect(status().isNotFound());
-        assertThat(alerts.unread(OTHER)).isEqualTo(1);
+        assertThat(alerts.unread(CaseScope.system(), OTHER)).isEqualTo(1);
 
         mvc.perform(post("/alerts/982102/read").param("page", "1").with(csrf()))
                 .andExpect(status().isFound())
                 .andExpect(redirectedUrl("/alerts?page=1"));
-        assertThat(alerts.unread(OWNER)).isEqualTo(1);
+        assertThat(alerts.unread(CaseScope.system(), OWNER)).isEqualTo(1);
         assertThat(html("/alerts"))
                 .contains("aria-label=\"Alerts, 1 unread\"")
                 .doesNotContain("action=\"/alerts/982102/read");
@@ -103,7 +104,7 @@ class AlertControllerIT {
         mvc.perform(post("/alerts/982101/delete").with(csrf()))
                 .andExpect(status().isFound())
                 .andExpect(redirectedUrl("/alerts?page=1"));
-        assertThat(alerts.unread(OWNER)).isZero();
+        assertThat(alerts.unread(CaseScope.system(), OWNER)).isZero();
         assertThat(html("/alerts"))
                 .doesNotContain("Older synthetic alert", "aria-label=\"Alerts,")
                 .contains("<a href=\"/alerts\"><span>Alerts</span> </a>");
@@ -113,7 +114,7 @@ class AlertControllerIT {
     void anonymousRequestsGoToTheIdentityProvider() throws Exception {
         mvc.perform(get("/alerts")).andExpect(status().isFound());
         mvc.perform(post("/alerts/982103/delete").with(csrf())).andExpect(status().isFound());
-        assertThat(alerts.unread(OTHER)).isEqualTo(1);
+        assertThat(alerts.unread(CaseScope.system(), OTHER)).isEqualTo(1);
     }
 
     private String html(String path) throws Exception {

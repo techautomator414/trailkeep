@@ -285,6 +285,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- The Alerts page and the navigation's unread badge no longer show an alert about a case the person can no longer read
+  (the case became restricted to others, or the person left its team); an alert about no case stays, and the page and
+  the badge count the same alerts (issue #101). `UserAlertService.alerts` and `unread` take the person's `CaseScope`,
+  applied through a subquery on the case entity as `audit` does, so `notification` still does not depend on `casefile`.
+  No migration.
 - `messages.properties` defined `tk.attachment.scan.NOT_SCANNED` twice (same text, so no screen was wrong); the
   duplicate is gone, and `MessagesPropertiesTest` fails the build on any repeated key, which `Properties` would
   otherwise resolve silently to the last one.
