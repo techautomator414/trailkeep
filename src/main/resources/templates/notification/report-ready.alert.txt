@@ -1,0 +1,2 @@
+/*[- SPDX-License-Identifier: Apache-2.0. In-app alert of the report-ready mail: one line, never the report itself. -]*/
+The aging report for [(${team})] as of [(${asOf})] is ready

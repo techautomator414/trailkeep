@@ -4,11 +4,13 @@
 <html lang="en" xmlns:th="http://www.thymeleaf.org" th:replace="~{web/layout :: page(~{::title}, ~{::main})}">
 <head><title th:text="#{tk.report.aging} + ' · ' + ${@branding.name()}">Aging</title></head>
 <body>
-<main id="main" class="container tk-main" tabindex="-1"
-      th:with="cols=${ {'upTo30','upTo60','upTo90','over90','onTrack','atRisk','overdue','noSla'} }">
+<main id="main" class="container tk-main" tabindex="-1">
   <h1 th:text="#{tk.report.aging}">Aging</h1>
   <p class="tk-report-links"><a th:href="@{/reports/compliance}" th:text="#{tk.report.compliance}">SLA compliance</a>
     <a class="ms-3" th:href="@{/reports/aging.csv}" th:text="#{tk.export.csv}">Export CSV</a></p>
+  <!-- The report itself, which a scheduled run (WP-23) renders on its own, outside a request: so no @{} links. -->
+  <th:block th:fragment="report"
+            th:with="cols=${ {'upTo30','upTo60','upTo90','over90','onTrack','atRisk','overdue','noSla'} }">
   <div class="table-responsive">
     <table class="table table-sm tk-report">
       <caption th:text="#{tk.report.aging.caption(${r.asOf})}">Open cases by age and SLA state</caption>
@@ -45,7 +47,7 @@
       </thead>
       <tbody>
       <tr th:each="o : ${r.overdue}">
-        <th scope="row"><a th:href="@{/cases/{n}(n=${o.caseNumber})}" th:text="${o.caseNumber}">CASE-2026-000001</a></th>
+        <th scope="row"><a th:href="|/cases/${o.caseNumber}|" th:text="${o.caseNumber}">CASE-2026-000001</a></th>
         <td th:text="${o.title}">Title</td><td th:text="${o.owner}">Owner</td><td th:text="${o.due}">2026-11-01</td>
         <td th:text="${o.daysOverdue}">6</td>
       </tr>
@@ -64,7 +66,7 @@
       </thead>
       <tbody>
       <tr th:each="w : ${r.waiting}">
-        <th scope="row"><a th:href="@{/cases/{n}(n=${w.caseNumber})}" th:text="${w.caseNumber}">CASE-2026-000001</a></th>
+        <th scope="row"><a th:href="|/cases/${w.caseNumber}|" th:text="${w.caseNumber}">CASE-2026-000001</a></th>
         <td th:text="${w.title}">Title</td><td th:text="${w.askedOf}">Asked of</td><td th:text="${w.askedBy}">Asked by</td>
         <td th:text="${w.requestedOn}">2026-11-01</td><td th:text="${w.daysWaiting}">6</td>
       </tr>
@@ -73,6 +75,7 @@
     </table>
   </div>
   <p th:if="${r.waiting.size() >= listed}" th:text="#{tk.report.listed.first(${listed})}">Only the first 100.</p>
+  </th:block>
 </main>
 </body>
 </html>

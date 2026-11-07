@@ -165,6 +165,13 @@ app:
     update-request-days: 3
     closure-days: 3
     health-grace: 2h
+  # Report delivery (WP-23, BUILD_PLAN §6): hourly, on one replica at a time, it sends each team's aging report when
+  # its REPORT_SCHEDULE says. admins-only: for the first cycle after go-live, send to Compliance Admins only, not to the
+  # teams' Managers. health-grace as for the reminders tick. "-" turns the job off, as the test profiles do.
+  reports:
+    delivery-cron: "0 23 * * * *"
+    admins-only: false
+    health-grace: 2h
 
 server:
   port: 8080

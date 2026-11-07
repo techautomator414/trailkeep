@@ -46,4 +46,18 @@ public interface NotificationService {
      * @throws IllegalArgumentException for a path that does not start with a single {@code /}, or as {@link #enqueue}
      */
     boolean notifyUser(long userId, String templateId, Map<String, ?> model, @Nullable Long caseId, String path);
+
+    /**
+     * Tells a person that a scheduled report is ready (BUILD_PLAN §6 "Aging report delivery"), exactly as {@link
+     * #notifyUser} does for no case, with the queued mail's outbox row naming the run ({@code REPORT_RUN_ID}). The
+     * mail links to the run; it never carries the report.
+     *
+     * @param userId the person
+     * @param templateId the mail's templates under {@code templates/notification/}
+     * @param model the values the templates read, besides {@code link}; never the report's lines
+     * @param reportRunId the run
+     * @param path the page it links to
+     * @return {@code true} if a mail was queued
+     */
+    boolean notifyOfReport(long userId, String templateId, Map<String, ?> model, long reportRunId, String path);
 }

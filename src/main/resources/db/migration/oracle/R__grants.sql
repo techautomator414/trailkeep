@@ -37,6 +37,8 @@
 --   ALERT_LEDGER          S I        -            alert idempotency; never changed, outlives purge (V6)
 --   JOB_RUN               S I U      -            each job's last success, cluster truth (V6)
 --   SHEDLOCK              S I U      -            ShedLock's lock rows; its JDBC provider never deletes (V6)
+--   REPORT_SCHEDULE       S I U      -            report schedules; disabled, never deleted (V7)
+--   REPORT_RUN            S I        -            rendered report runs; history, never changed (V7)
 --   SEQ_APP_USER          SELECT     -            Oracle's sequence privilege is SELECT (NEXTVAL)
 --   SEQ_TEAM              SELECT     -
 --   SEQ_AUDIT_EVENT       SELECT     -
@@ -56,6 +58,8 @@
 --   SEQ_CLOSURE_REQUEST   SELECT     -
 --   SEQ_CASE_REOPEN       SELECT     -
 --   SEQ_ALERT_LEDGER      SELECT     -
+--   SEQ_REPORT_SCHEDULE   SELECT     -
+--   SEQ_REPORT_RUN        SELECT     -
 --
 -- Later migrations add their rows to the cursor below. Fixed rules for them: the app user has no UPDATE or DELETE
 -- on CASE_COMMENT, CASE_ATTACHMENT_CHUNK, AUDIT_EVENT and ALERT_LEDGER, and no DELETE on CASE_ATTACHMENT; it may DELETE only from CASE_COMMENT_PIN, SAVED_VIEW, USER_ALERT,
@@ -109,7 +113,11 @@ DECLARE
     UNION ALL SELECT 'ALERT_LEDGER', 'SELECT,INSERT', UPPER('${app_user}') FROM DUAL
     UNION ALL SELECT 'SEQ_ALERT_LEDGER', 'SELECT', UPPER('${app_user}') FROM DUAL
     UNION ALL SELECT 'JOB_RUN', 'SELECT,INSERT,UPDATE', UPPER('${app_user}') FROM DUAL
-    UNION ALL SELECT 'SHEDLOCK', 'SELECT,INSERT,UPDATE', UPPER('${app_user}') FROM DUAL;
+    UNION ALL SELECT 'SHEDLOCK', 'SELECT,INSERT,UPDATE', UPPER('${app_user}') FROM DUAL
+    UNION ALL SELECT 'REPORT_SCHEDULE', 'SELECT,INSERT,UPDATE', UPPER('${app_user}') FROM DUAL
+    UNION ALL SELECT 'SEQ_REPORT_SCHEDULE', 'SELECT', UPPER('${app_user}') FROM DUAL
+    UNION ALL SELECT 'REPORT_RUN', 'SELECT,INSERT', UPPER('${app_user}') FROM DUAL
+    UNION ALL SELECT 'SEQ_REPORT_RUN', 'SELECT', UPPER('${app_user}') FROM DUAL;
   keep PLS_INTEGER;
 BEGIN
   FOR w IN wanted LOOP

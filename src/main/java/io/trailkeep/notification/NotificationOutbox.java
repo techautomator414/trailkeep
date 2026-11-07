@@ -85,15 +85,23 @@ class NotificationOutbox {
      * @param templateId the template it was rendered from
      * @param mail the rendered subject and bodies
      * @param caseId the case it is about, or {@code null}
+     * @param reportRunId the scheduled report it delivers, or {@code null}
      * @param now when it was queued, and when it is first due
      */
-    NotificationOutbox(String recipient, String templateId, RenderedMail mail, @Nullable Long caseId, Instant now) {
+    NotificationOutbox(
+            String recipient,
+            String templateId,
+            RenderedMail mail,
+            @Nullable Long caseId,
+            @Nullable Long reportRunId,
+            Instant now) {
         this.recipient = recipient;
         this.templateId = templateId;
         this.subject = mail.subject();
         this.bodyText = mail.text();
         this.bodyHtml = mail.html();
         this.caseId = caseId;
+        this.reportRunId = reportRunId;
         this.nextAttemptAt = now;
         this.createdAt = now;
     }

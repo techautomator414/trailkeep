@@ -1,0 +1,15 @@
+<!--/* SPDX-License-Identifier: Apache-2.0. HTML part of the report-ready mail: simple, linear HTML with the same
+     content as the text part (BUILD_PLAN §10.1), never the report itself. */-->
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+<meta charset="UTF-8">
+<title th:text="|Aging report for ${team}|">Aging report</title>
+</head>
+<body>
+<p>The weekly aging report for <span th:text="${team}">Team</span> as of <span th:text="${asOf}">2026-11-09</span>
+  is ready.</p>
+<p><a th:href="${link}" th:text="|Open the aging report for ${team}|">Open the report</a></p>
+<p>You receive this because you are a Manager of the team or a Compliance Admin.</p>
+</body>
+</html>

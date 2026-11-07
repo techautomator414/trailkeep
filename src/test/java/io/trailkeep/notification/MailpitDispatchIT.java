@@ -33,7 +33,8 @@ import tools.jackson.databind.json.JsonMapper;
 /**
  * The dispatcher against a real SMTP server, Mailpit (the image {@code compose.yaml} runs, WP-17): one queued mail
  * arrives exactly once, from {@code app.mail.from}, with its subject, a plain-text and an HTML part and the deep link
- * in both, and its row is {@code SENT} after one attempt; a second pass sends nothing.
+ * in both, and its row is {@code SENT} after one attempt; a second pass sends nothing. The SLA, reminder and
+ * scheduled-report mails (WP-23) arrive with their subjects, contents and links.
  */
 // "IT" is the Failsafe suffix Part B mandates for integration tests, not an abbreviation.
 @SuppressWarnings("checkstyle:AbbreviationAsWordInName")
@@ -180,6 +181,26 @@ class MailpitDispatchIT {
         assertThat(textBySubject.values()).allSatisfy(text -> assertThat(text).contains("Synthetic", link));
         assertThat(textBySubject.get("Reminder: closure of CASE-2026-000044 awaits your decision"))
                 .contains("Synthetic Requester is still waiting for your decision", "with the outcome \"Resolved\"");
+    }
+
+    @Test
+    void theScheduledReportMailArrivesWithTheTeamDayAndLinkOnly() throws Exception {
+        String link = "https://trailkeep.example.invalid/reports/runs/42";
+        transactions.executeWithoutResult(status -> notifications.enqueue(
+                "manager@example.invalid",
+                "report-ready",
+                Map.of("team", "Synthetic <Team>", "asOf", "2026-11-09", "link", link),
+                null));
+
+        assertThat(dispatcher.dispatch()).isEqualTo(1);
+
+        JsonNode message = get("/api/v1/message/"
+                + get("/api/v1/messages").get("messages").get(0).get("ID").asString());
+        assertThat(message.get("Subject").asString()).isEqualTo("Aging report for Synthetic <Team>, 2026-11-09");
+        assertThat(message.get("Text").asString())
+                .contains("The weekly aging report for Synthetic <Team> as of 2026-11-09 is ready.", link);
+        assertThat(message.get("HTML").asString())
+                .contains("Synthetic &lt;Team&gt;", "<a href=\"" + link + "\">Open the aging report for");
     }
 
     private JsonNode get(String path) throws IOException, InterruptedException {

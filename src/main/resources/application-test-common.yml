@@ -20,6 +20,9 @@ app:
   reminders:
     # Likewise; reminder tests call RemindersTick.run(now).
     cron: "-"
+  reports:
+    # Likewise; delivery tests call ReportDeliveryTick.run(now).
+    delivery-cron: "-"
   attachments:
     clamd:
       # Unreachable on purpose, like the provider endpoints below: scanner tests start their own clamd (fake or real).
