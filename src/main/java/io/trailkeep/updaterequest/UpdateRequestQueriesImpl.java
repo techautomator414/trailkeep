@@ -62,6 +62,19 @@ class UpdateRequestQueriesImpl implements UpdateRequestQueries {
         return entityManager.createQuery(query).getSingleResult();
     }
 
+    @Override
+    public List<UpdateRequest> findOpen(CaseScope scope, int limit) {
+        CriteriaBuilder cb = entityManager.getCriteriaBuilder();
+        CriteriaQuery<UpdateRequest> query = cb.createQuery(UpdateRequest.class);
+        Root<UpdateRequest> request = query.from(UpdateRequest.class);
+        query.select(request)
+                .where(
+                        cb.isNull(request.get("answeredAt")),
+                        scopes.readableCases(scope, request.get("caseId"), query, cb))
+                .orderBy(cb.asc(request.get("requestedAt")), cb.asc(request.get("id")));
+        return entityManager.createQuery(query).setMaxResults(limit).getResultList();
+    }
+
     private Predicate[] openFrom(
             CaseScope scope,
             long recipientId,

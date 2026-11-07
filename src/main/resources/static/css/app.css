@@ -93,6 +93,8 @@ tr[data-tk-href] { cursor: pointer; }
 .tk-report td:first-of-type { text-align: left; }
 .tk-report caption { caption-side: top; color: var(--tk-ink); }
 .tk-report tfoot { border-top: 2px solid var(--tk-ink); font-weight: 600; }
+.tk-report-list td { text-align: left; }
+.tk-report-list td:last-child { text-align: right; }
 @media print {
   .tk-header, .tk-footer, .tk-skip-link, .tk-report-form, .tk-report-links, #tk-live, .tk-dialog {
     display: none !important; }

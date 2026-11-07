@@ -249,6 +249,27 @@ class DefaultUpdateRequestService implements UpdateRequestService {
                 offset -> rows(actor, requests.findOpenFrom(scope, me, offset, PAGE_SIZE)));
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public List<Unanswered> unanswered(Actor actor, int limit) {
+        List<UpdateRequest> open = requests.findOpen(scopes.forUser(actor.permissions()), limit);
+        Map<Long, CaseRef> refs = cases.refs(
+                actor, open.stream().map(UpdateRequest::getCaseId).distinct().toList());
+        Map<Long, String> names = directory.displayNames(open.stream()
+                .flatMap(r -> Stream.of(r.getRequestedBy(), r.getRequestedFrom()))
+                .distinct()
+                .toList());
+        return open.stream()
+                .filter(r -> refs.containsKey(r.getCaseId()))
+                .map(r -> new Unanswered(
+                        Objects.requireNonNull(refs.get(r.getCaseId())).number(),
+                        Objects.requireNonNull(refs.get(r.getCaseId())).title(),
+                        names.getOrDefault(r.getRequestedFrom(), ""),
+                        names.getOrDefault(r.getRequestedBy(), ""),
+                        r.getRequestedAt()))
+                .toList();
+    }
+
     private List<OpenRequest> rows(Actor actor, List<UpdateRequest> open) {
         Collection<Long> caseIds =
                 open.stream().map(UpdateRequest::getCaseId).distinct().toList();

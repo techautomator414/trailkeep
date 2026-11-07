@@ -4,6 +4,7 @@ package io.trailkeep.casefile;
 
 import io.trailkeep.casefile.CaseReportService.AgingRow;
 import io.trailkeep.casefile.CaseReportService.ComplianceRow;
+import io.trailkeep.casefile.CaseReportService.OverdueCase;
 import io.trailkeep.shared.access.CaseScope;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -31,4 +32,13 @@ interface CaseReportQueries {
      * @return the rows, ordered by team id and case type name
      */
     List<ComplianceRow> compliance(CaseScope scope, Instant from, Instant until);
+
+    /**
+     * The overdue open and pending-closure cases the scope reads, oldest due first.
+     *
+     * @param scope the caller's scope
+     * @param limit the most to return
+     * @return the cases
+     */
+    List<OverdueCase> overdue(CaseScope scope, int limit);
 }

@@ -3,6 +3,7 @@
 package io.trailkeep.casefile;
 
 import io.trailkeep.casefile.CaseService.Actor;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 
@@ -70,4 +71,23 @@ public interface CaseReportService {
      * @return the rows, by team id and case type name
      */
     List<ComplianceRow> compliance(Actor actor, LocalDate from, LocalDate to);
+
+    /**
+     * One overdue open or pending-closure case for the aging report's list: never its description or subject.
+     *
+     * @param caseNumber the case number
+     * @param title the title
+     * @param ownerId the owner
+     * @param dueAt when the SLA fell due
+     */
+    record OverdueCase(String caseNumber, String title, long ownerId, Instant dueAt) {}
+
+    /**
+     * The overdue open and pending-closure cases the actor reads, oldest due first.
+     *
+     * @param actor the actor
+     * @param limit the most to list
+     * @return the cases
+     */
+    List<OverdueCase> overdue(Actor actor, int limit);
 }

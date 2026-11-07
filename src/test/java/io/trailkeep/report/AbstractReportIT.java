@@ -23,6 +23,8 @@ import io.trailkeep.report.ReportService.AgingLine;
 import io.trailkeep.report.ReportService.AgingReport;
 import io.trailkeep.report.ReportService.ComplianceLine;
 import io.trailkeep.report.ReportService.ComplianceReport;
+import io.trailkeep.report.ReportService.OverdueLine;
+import io.trailkeep.report.ReportService.WaitingLine;
 import io.trailkeep.shared.DomainException;
 import io.trailkeep.shared.DomainException.Kind;
 import io.trailkeep.shared.config.AppProperties;
@@ -67,7 +69,7 @@ abstract class AbstractReportIT {
     private static final AgingLine MANAGER_AGING =
             new AgingLine(ALPHA_NAME, "Synthetic Report Manager", new AgingRow(ALPHA, MANAGER, 0, 0, 2, 1, 1, 0, 1, 1));
     private static final AgingLine RESTRICTED_AGING = new AgingLine(
-            ALPHA_NAME, "Synthetic Restricted Owner", new AgingRow(ALPHA, OTHER_OWNER, 1, 0, 0, 0, 0, 0, 1, 0));
+            ALPHA_NAME, "Synthetic Restricted Owner", new AgingRow(ALPHA, OTHER_OWNER, 0, 1, 0, 0, 0, 0, 1, 0));
     private static final ComplianceRow ALPHA_ACCESS = new ComplianceRow(ALPHA, ACCESS, 1, 1, 1, 3);
     private static final ComplianceRow ALPHA_HANDLING = new ComplianceRow(ALPHA, HANDLING, 1, 0, 1, 0);
 
@@ -106,7 +108,15 @@ abstract class AbstractReportIT {
         AgingReport aging = reports.aging(manager);
         assertThat(aging.asOf()).isEqualTo(today);
         assertThat(aging.lines()).containsExactly(ANALYST_AGING, MANAGER_AGING, RESTRICTED_AGING);
-        assertThat(aging.total()).isEqualTo(new AgingRow(0, 0, 3, 2, 2, 1, 2, 2, 3, 1));
+        assertThat(aging.total()).isEqualTo(new AgingRow(0, 0, 2, 3, 2, 1, 2, 2, 3, 1));
+        assertThat(aging.overdue())
+                .containsExactly(
+                        overdue(5, "Synthetic Report Manager", 61),
+                        overdue(6, "Synthetic Restricted Owner", 5),
+                        overdue(2, "Synthetic Report Analyst", 1));
+        assertThat(aging.waiting())
+                .containsExactly(
+                        waiting(6, "Synthetic Restricted Owner", 8), waiting(0, "Synthetic Report Analyst", 3));
 
         ComplianceReport compliance = compliance(manager);
         assertThat(compliance.lines())
@@ -123,7 +133,11 @@ abstract class AbstractReportIT {
     void anAnalystDoesNotCountTheRestrictedCaseTheyDoNotOwn() {
         Actor analyst = team(ReportFixture.ANALYST, ALPHA, TeamRole.ANALYST);
 
-        assertThat(reports.aging(analyst).lines()).containsExactly(ANALYST_AGING, MANAGER_AGING);
+        AgingReport aging = reports.aging(analyst);
+        assertThat(aging.lines()).containsExactly(ANALYST_AGING, MANAGER_AGING);
+        assertThat(aging.overdue())
+                .containsExactly(overdue(5, "Synthetic Report Manager", 61), overdue(2, "Synthetic Report Analyst", 1));
+        assertThat(aging.waiting()).containsExactly(waiting(0, "Synthetic Report Analyst", 3));
         assertThat(compliance(analyst).lines())
                 .containsExactly(
                         new ComplianceLine(ALPHA_NAME, new ComplianceRow(ALPHA, ACCESS, 1, 1, 1, 2), 50),
@@ -149,8 +163,15 @@ abstract class AbstractReportIT {
                         new ComplianceLine(ALPHA_NAME, ALPHA_HANDLING, 100),
                         betaCompliance);
 
+        AgingReport all = reports.aging(admin);
+        assertThat(all.overdue()).contains(overdue(17, "Synthetic Beta Analyst", 15));
+        assertThat(all.waiting()).contains(waiting(14, "Synthetic Beta Analyst", 1));
+
         Actor reader = team(ReportFixture.BETA_ANALYST, BETA, TeamRole.READER);
-        assertThat(reports.aging(reader).lines()).containsExactly(betaAging);
+        AgingReport beta = reports.aging(reader);
+        assertThat(beta.lines()).containsExactly(betaAging);
+        assertThat(beta.overdue()).containsExactly(overdue(17, "Synthetic Beta Analyst", 15));
+        assertThat(beta.waiting()).containsExactly(waiting(14, "Synthetic Beta Analyst", 1));
         assertThat(compliance(reader).lines()).containsExactly(betaCompliance);
     }
 
@@ -162,6 +183,8 @@ abstract class AbstractReportIT {
         AgingReport aging = reports.aging(manager);
         assertThat(aging.lines()).isEmpty();
         assertThat(aging.total()).isEqualTo(new AgingRow(0, 0, 0, 0, 0, 0, 0, 0, 0, 0));
+        assertThat(aging.overdue()).isEmpty();
+        assertThat(aging.waiting()).isEmpty();
         ComplianceReport compliance = compliance(manager);
         assertThat(compliance.lines()).isEmpty();
         assertThat(compliance.withinSla()).isNull();
@@ -197,20 +220,50 @@ abstract class AbstractReportIT {
     }
 
     @Test
-    void theCsvHoldsTheSameCellsAndEveryExportIsAudited() {
-        Actor manager = team(ReportFixture.MANAGER, ALPHA, TeamRole.MANAGER);
+    void theAgingCsvHoldsTheSameCellsThenTheListsAsSections() {
         String header = "\"Team\",\"Owner\",\"0-30 days\",\"31-60 days\",\"61-90 days\",\"Over 90 days\",\"On track\","
                 + "\"At risk\",\"Overdue\",\"No SLA\"\r\n";
 
-        Csv aging = exports.aging(manager);
-        assertThat(aging.fileName()).isEqualTo("aging-" + today + ".csv");
-        assertThat(aging.content())
+        assertThat(exports.aging(team(ReportFixture.MANAGER, ALPHA, TeamRole.MANAGER))
+                        .content())
                 .isEqualTo(CsvFormat.BOM
                         + header
                         + csv(ALPHA_NAME, "Synthetic Report Analyst", "2", "2", "0", "0", "1", "2", "1", "0")
                         + csv(ALPHA_NAME, "Synthetic Report Manager", "0", "0", "2", "1", "1", "0", "1", "1")
-                        + csv(ALPHA_NAME, "Synthetic Restricted Owner", "1", "0", "0", "0", "0", "0", "1", "0")
-                        + csv("Total", "", "3", "2", "2", "1", "2", "2", "3", "1"));
+                        + csv(ALPHA_NAME, "Synthetic Restricted Owner", "0", "1", "0", "0", "0", "0", "1", "0")
+                        + csv("Total", "", "2", "3", "2", "1", "2", "2", "3", "1")
+                        + "\r\n"
+                        + csv("Overdue case", "Title", "Owner", "Due", "Days overdue")
+                        + csv(caseOf(5), titleOf(5), "Synthetic Report Manager", day(61), "61")
+                        + csv(caseOf(6), titleOf(6), "Synthetic Restricted Owner", day(5), "5")
+                        + csv(caseOf(2), titleOf(2), "Synthetic Report Analyst", day(1), "1")
+                        + "\r\n"
+                        + csv("Unanswered request on", "Title", "Asked of", "Asked by", "Requested on", "Days waiting")
+                        + csv(
+                                caseOf(6),
+                                titleOf(6),
+                                "Synthetic Restricted Owner",
+                                "Synthetic Report Manager",
+                                day(8),
+                                "8")
+                        + csv(
+                                caseOf(0),
+                                titleOf(0),
+                                "Synthetic Report Analyst",
+                                "Synthetic Report Manager",
+                                day(3),
+                                "3"));
+        assertThat(exports.aging(team(ReportFixture.ANALYST, ALPHA, TeamRole.ANALYST))
+                        .content())
+                .doesNotContain(caseOf(6), ReportFixture.MESSAGE);
+    }
+
+    @Test
+    void theCsvHoldsTheSameCellsAndEveryExportIsAudited() {
+        Actor manager = team(ReportFixture.MANAGER, ALPHA, TeamRole.MANAGER);
+
+        Csv aging = exports.aging(manager);
+        assertThat(aging.fileName()).isEqualTo("aging-" + today + ".csv");
 
         Csv compliance = exports.compliance(
                 manager, fixture.from().toString(), fixture.to().toString());
@@ -277,6 +330,29 @@ abstract class AbstractReportIT {
 
     private ComplianceReport compliance(Actor actor) {
         return reports.compliance(actor, fixture.from().toString(), fixture.to().toString());
+    }
+
+    /** The fixture's overdue case at this insertion index, as the list shows it. */
+    private OverdueLine overdue(int index, String owner, int days) {
+        return new OverdueLine(caseOf(index), titleOf(index), owner, today.minusDays(days), days);
+    }
+
+    /** The fixture's open request on the case at this insertion index, asked by its Manager. */
+    private WaitingLine waiting(int index, String askedOf, int days) {
+        return new WaitingLine(
+                caseOf(index), titleOf(index), askedOf, "Synthetic Report Manager", today.minusDays(days), days);
+    }
+
+    private static String caseOf(int index) {
+        return "RPT-2026-" + (984_100 + index);
+    }
+
+    private static String titleOf(int index) {
+        return "Synthetic report case " + (984_100 + index);
+    }
+
+    private String day(int daysAgo) {
+        return today.minusDays(daysAgo).toString();
     }
 
     private static String csv(String... cells) {

@@ -5,7 +5,8 @@
  * and report runs.
  *
  * <p>May call: {@code shared}, {@code audit}, {@code user}, {@code casefile}, {@code sla},
- * {@code notification}. Other modules use only the {@code *Service} interfaces and records in this package.
+ * {@code notification}, and {@code updaterequest} (the aging report's unanswered requests; it does not call back).
+ * Other modules use only the {@code *Service} interfaces and records in this package.
  */
 @NullMarked
 @ApplicationModule(displayName = "Reports")

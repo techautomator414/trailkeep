@@ -39,4 +39,9 @@ class DefaultCaseReportService implements CaseReportService {
                 from.atStartOfDay(zone).toInstant(),
                 to.plusDays(1).atStartOfDay(zone).toInstant());
     }
+
+    @Override
+    public List<OverdueCase> overdue(Actor actor, int limit) {
+        return cases.overdue(scopes.forUser(actor.permissions()), limit);
+    }
 }
