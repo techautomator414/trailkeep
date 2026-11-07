@@ -9,6 +9,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- SLA evaluator, without alerts yet (WP-21 part a).
+  - `V6__sla_alerts` adds:
+    - `ALERT_LEDGER`, with the unique `(CASE_ID, ALERT_TYPE, SLA_CYCLE, PERIOD_KEY)` that keeps an alert to once per cycle and period;
+    - `JOB_RUN`, each job's last success, the cluster truth for health;
+    - `SHEDLOCK`.
+  - Grants on both vendors: the ledger is SELECT and INSERT only for the app user.
+  - ShedLock 7.10.1 (Apache-2.0) runs the evaluator on one replica at a time, on database time.
+  - Every 15 minutes (`app.sla.evaluate-cron`), the evaluator moves cases from On track to At risk to Overdue once their at-risk or due time has passed. It works in id-ordered chunks of 500, one transaction per chunk.
+  - Each transition writes a bulk update of `CASE_SLA`, an `SLA_STATE_CHANGED` history event (origin `SCHEDULER`) and its ledger row. The case row is never touched, and pending closure does not pause the clock.
 - The latest reopen on the case page (WP-19 part c4): under the "Reopened" chip a reopened case shows "Reopened by
   X on date. SLA cycle N runs from then." and the reason. The reason is read from `CASE_REOPEN` through a new scoped
   Criteria query, since the audit trail holds it only redacted.

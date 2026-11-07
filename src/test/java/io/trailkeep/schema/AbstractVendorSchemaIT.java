@@ -279,6 +279,19 @@ abstract class AbstractVendorSchemaIT {
     }
 
     @Test
+    void slaJobTablesAreMigratedWithTheirEntities() {
+        assertThat(Arrays.stream(flyway.info().applied()).map(MigrationInfo::getScript))
+                .contains("V6__sla_alerts.sql");
+        assertThat(SchemaMetadataDiff.expectedColumns(entityManagerFactory))
+                .containsEntry("ALERT_LEDGER.ALERT_TYPE", column("ALERT_LEDGER", "ALERT_TYPE", false, 32L))
+                .containsEntry("ALERT_LEDGER.PERIOD_KEY", column("ALERT_LEDGER", "PERIOD_KEY", false, 32L))
+                .containsEntry("JOB_RUN.JOB_NAME", column("JOB_RUN", "JOB_NAME", false, 64L))
+                .containsKeys("ALERT_LEDGER.SLA_CYCLE", "JOB_RUN.LAST_SUCCESS_AT", "JOB_RUN.LAST_ITEMS");
+        assertThat(nullableColumns(Set.of("ALERT_LEDGER", "JOB_RUN", "SHEDLOCK")))
+                .isEmpty();
+    }
+
+    @Test
     void closureRequestsAreMigratedWithTheirEntity() {
         assertThat(Arrays.stream(flyway.info().applied()).map(MigrationInfo::getScript))
                 .contains("V5__closure.sql");

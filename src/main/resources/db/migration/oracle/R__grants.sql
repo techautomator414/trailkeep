@@ -34,6 +34,9 @@
 --   UPDATE_REQUEST        S I U      -            update requests; answered, never deleted (V4.10)
 --   CLOSURE_REQUEST       S I U      -            closure requests; decided, never deleted (V5)
 --   CASE_REOPEN           S I        -            reopens; history, never changed (V5.1)
+--   ALERT_LEDGER          S I        -            alert idempotency; never changed, outlives purge (V6)
+--   JOB_RUN               S I U      -            each job's last success, cluster truth (V6)
+--   SHEDLOCK              S I U      -            ShedLock's lock rows; its JDBC provider never deletes (V6)
 --   SEQ_APP_USER          SELECT     -            Oracle's sequence privilege is SELECT (NEXTVAL)
 --   SEQ_TEAM              SELECT     -
 --   SEQ_AUDIT_EVENT       SELECT     -
@@ -52,6 +55,7 @@
 --   SEQ_UPDATE_REQUEST    SELECT     -
 --   SEQ_CLOSURE_REQUEST   SELECT     -
 --   SEQ_CASE_REOPEN       SELECT     -
+--   SEQ_ALERT_LEDGER      SELECT     -
 --
 -- Later migrations add their rows to the cursor below. Fixed rules for them: the app user has no UPDATE or DELETE
 -- on CASE_COMMENT, CASE_ATTACHMENT_CHUNK, AUDIT_EVENT and ALERT_LEDGER, and no DELETE on CASE_ATTACHMENT; it may DELETE only from CASE_COMMENT_PIN, SAVED_VIEW, USER_ALERT,
@@ -101,7 +105,11 @@ DECLARE
     UNION ALL SELECT 'CLOSURE_REQUEST', 'SELECT,INSERT,UPDATE', UPPER('${app_user}') FROM DUAL
     UNION ALL SELECT 'SEQ_CLOSURE_REQUEST', 'SELECT', UPPER('${app_user}') FROM DUAL
     UNION ALL SELECT 'CASE_REOPEN', 'SELECT,INSERT', UPPER('${app_user}') FROM DUAL
-    UNION ALL SELECT 'SEQ_CASE_REOPEN', 'SELECT', UPPER('${app_user}') FROM DUAL;
+    UNION ALL SELECT 'SEQ_CASE_REOPEN', 'SELECT', UPPER('${app_user}') FROM DUAL
+    UNION ALL SELECT 'ALERT_LEDGER', 'SELECT,INSERT', UPPER('${app_user}') FROM DUAL
+    UNION ALL SELECT 'SEQ_ALERT_LEDGER', 'SELECT', UPPER('${app_user}') FROM DUAL
+    UNION ALL SELECT 'JOB_RUN', 'SELECT,INSERT,UPDATE', UPPER('${app_user}') FROM DUAL
+    UNION ALL SELECT 'SHEDLOCK', 'SELECT,INSERT,UPDATE', UPPER('${app_user}') FROM DUAL;
   keep PLS_INTEGER;
 BEGIN
   FOR w IN wanted LOOP

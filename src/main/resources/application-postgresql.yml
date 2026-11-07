@@ -17,6 +17,8 @@ spring:
       clob: TEXT
       bytes: BYTEA
       tstz: TIMESTAMP WITH TIME ZONE
+      # UTC database time without a zone, for ShedLock's SHEDLOCK table only (its documented PostgreSQL type).
+      ts: TIMESTAMP
   jpa:
     properties:
       # Fix the dialect version (ADR-0004). These OVERRIDE the product name and version Hibernate detects from
