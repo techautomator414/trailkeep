@@ -23,4 +23,13 @@ public interface CaseListService {
      * @return the page; empty, not an error, when nothing matches or the actor reads nothing
      */
     CaseList list(Actor actor, CaseListQuery query);
+
+    /**
+     * How many cases the actor reads match the filter: one scoped count, as the list's total (the dashboard's tiles).
+     *
+     * @param actor the actor
+     * @param filter the filter; "mine" is the actor as owner
+     * @return the count
+     */
+    long count(Actor actor, CaseFilter filter);
 }

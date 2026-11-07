@@ -251,17 +251,24 @@ abstract class AbstractClosureDecisionIT {
     void pendingMyApprovalAndTheReassignChoicesFollowTheScopeAndTheRule() {
         long id = request(number);
 
-        assertThat(closures.awaitingMyApproval(actor(approver, TeamRole.MANAGER)))
+        assertThat(closures.awaitingMyApproval(actor(approver, TeamRole.MANAGER), 1)
+                        .total())
+                .isOne();
+        assertThat(closures.awaitingMyApproval(actor(approver, TeamRole.MANAGER), 1)
+                        .rows())
                 .singleElement()
                 .satisfies(waiting -> {
                     assertThat(waiting.id()).isEqualTo(id);
                     assertThat(waiting.caseNumber()).isEqualTo(number);
                     assertThat(waiting.outcome()).isEqualTo("Resolved");
                 });
-        assertThat(closures.awaitingMyApproval(actor(otherManager, TeamRole.MANAGER)))
-                .isEmpty();
-        // The approver's request is listed only while they read the case.
-        assertThat(closures.awaitingMyApproval(actor(approver, null))).isEmpty();
+        assertThat(closures.awaitingMyApproval(actor(otherManager, TeamRole.MANAGER), 1)
+                        .total())
+                .isZero();
+        // The approver's request is listed, and counted, only while they read the case.
+        assertThat(closures.awaitingMyApproval(actor(approver, null), 1).rows()).isEmpty();
+        assertThat(closures.awaitingMyApproval(actor(approver, null), 1).total())
+                .isZero();
         assertThat(closures.reassignChoices(actor(otherManager, TeamRole.MANAGER), number.toString(), id))
                 .extracting(ClosureService.Approver::id)
                 .containsExactly(otherManager);

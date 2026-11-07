@@ -56,6 +56,13 @@ class DefaultCaseListService implements CaseListService {
     }
 
     @Override
+    public long count(Actor actor, CaseFilter filter) {
+        return cases.count(
+                scopes.forUser(actor.permissions()),
+                filter.forOwner(actor.permissions().userId()));
+    }
+
+    @Override
     public CaseList list(Actor actor, CaseListQuery requested) {
         CaseScope scope = scopes.forUser(actor.permissions());
         CaseFilter filter = requested.filter().forOwner(actor.permissions().userId());

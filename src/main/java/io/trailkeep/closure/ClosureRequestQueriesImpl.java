@@ -8,6 +8,7 @@ import io.trailkeep.shared.access.CaseScope;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.CriteriaQuery;
+import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
 import java.util.List;
 
@@ -38,16 +39,39 @@ class ClosureRequestQueriesImpl implements ClosureRequestQueries {
     }
 
     @Override
-    public List<ClosureRequest> findPendingFor(CaseScope scope, long approverId) {
+    public List<ClosureRequest> findPendingFor(CaseScope scope, long approverId, int offset, int limit) {
         CriteriaBuilder cb = entityManager.getCriteriaBuilder();
         CriteriaQuery<ClosureRequest> query = cb.createQuery(ClosureRequest.class);
         Root<ClosureRequest> request = query.from(ClosureRequest.class);
         query.select(request)
-                .where(
-                        cb.equal(request.get("approverId"), approverId),
-                        cb.equal(request.get("decision"), ClosureDecision.PENDING),
-                        scopes.readableCases(scope, request.get("caseId"), query, cb))
+                .where(pendingFor(scope, approverId, request, query, cb))
                 .orderBy(cb.asc(request.get("requestedAt")), cb.asc(request.get("id")));
-        return entityManager.createQuery(query).setMaxResults(100).getResultList();
+        return entityManager
+                .createQuery(query)
+                .setFirstResult(offset)
+                .setMaxResults(limit)
+                .getResultList();
+    }
+
+    @Override
+    public long countPendingFor(CaseScope scope, long approverId) {
+        CriteriaBuilder cb = entityManager.getCriteriaBuilder();
+        CriteriaQuery<Long> query = cb.createQuery(Long.class);
+        Root<ClosureRequest> request = query.from(ClosureRequest.class);
+        query.select(cb.count(request)).where(pendingFor(scope, approverId, request, query, cb));
+        return entityManager.createQuery(query).getSingleResult();
+    }
+
+    private Predicate[] pendingFor(
+            CaseScope scope,
+            long approverId,
+            Root<ClosureRequest> request,
+            CriteriaQuery<?> query,
+            CriteriaBuilder cb) {
+        return new Predicate[] {
+            cb.equal(request.get("approverId"), approverId),
+            cb.equal(request.get("decision"), ClosureDecision.PENDING),
+            scopes.readableCases(scope, request.get("caseId"), query, cb)
+        };
     }
 }
