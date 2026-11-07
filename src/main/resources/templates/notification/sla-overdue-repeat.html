@@ -1,0 +1,15 @@
+<!--/* SPDX-License-Identifier: Apache-2.0. HTML part of the sla-overdue-repeat mail: simple, linear HTML with the same
+     content as the text part (BUILD_PLAN §10.1), never the description or the subject. */-->
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+<meta charset="UTF-8">
+<title th:text="|Still overdue: ${caseNumber}|">Still overdue</title>
+</head>
+<body>
+<p>Case <span th:text="${caseNumber}">CASE</span>, &ldquo;<span th:text="${title}">title</span>&rdquo;, is still
+  overdue: it was due on <span th:text="${due}">date</span>, <span th:text="${days}">7</span> days ago.</p>
+<p><a th:href="${link}" th:text="|Open ${caseNumber}|">Open the case</a></p>
+<p>You receive this because you own the case or manage its team.</p>
+</body>
+</html>

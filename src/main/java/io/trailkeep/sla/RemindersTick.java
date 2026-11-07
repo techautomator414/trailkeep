@@ -17,8 +17,9 @@ import org.springframework.stereotype.Component;
  * The reminders tick (BUILD_PLAN §6, IMPLEMENTATION_PLAN WP-17b): hourly, on one replica at a time (ShedLock on
  * database time, held at most 50 minutes and at least 1), it reminds the recipients of update requests open for
  * {@code app.reminders.update-request-days} (default 3) since they were asked or last reminded, and the approvers of
- * closure requests pending for {@code app.reminders.closure-days} (default 3) since they were made or last reminded.
- * Pages of 500 in id order, one transaction each; the run's success goes to {@code JOB_RUN}.
+ * closure requests pending for {@code app.reminders.closure-days} (default 3) since they were made or last reminded,
+ * and repeats the overdue alert every {@code SLA_POLICY.OVERDUE_REMINDER_DAYS} after the breach. Pages of 500 in id
+ * order, one transaction each; the run's success goes to {@code JOB_RUN}.
  */
 @Component
 class RemindersTick {
@@ -62,9 +63,10 @@ class RemindersTick {
     int run(Instant now) {
         int updates = pages(now.minus(updateRequestAge), now, writer::updateRequests);
         int closures = pages(now.minus(closureAge), now, writer::closureRequests);
-        runs.succeeded(JOB, clock.instant(), updates + closures);
-        LOG.info("Reminders tick: {} update-request and {} closure reminders", updates, closures);
-        return updates + closures;
+        int overdue = pages(now, now, (cutoff, after, at) -> writer.overdueCases(after, at));
+        runs.succeeded(JOB, clock.instant(), updates + closures + overdue);
+        LOG.info("Reminders tick: {} update-request, {} closure and {} overdue reminders", updates, closures, overdue);
+        return updates + closures + overdue;
     }
 
     private static int pages(Instant cutoff, Instant now, PageWriter writer) {

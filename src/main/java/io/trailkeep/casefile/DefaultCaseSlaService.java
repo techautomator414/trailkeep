@@ -31,6 +31,10 @@ class DefaultCaseSlaService implements CaseSlaService {
     private static final String LOCK = "SELECT s FROM CaseSla s WHERE s.caseId IN :ids ORDER BY s.caseId";
     private static final String MOVE = "UPDATE CaseSla s SET s.state = :to, s.lastEvaluatedAt = :now"
             + " WHERE s.caseId IN :ids AND s.state = :from";
+    private static final String OVERDUE = "SELECT s.caseId, s.dueAt, p.overdueReminderDays"
+            + " FROM CaseSla s, CaseRecord r, CaseType t, SlaPolicy p"
+            + " WHERE r.id = s.caseId AND t.id = r.caseTypeId AND p.id = t.slaPolicyId"
+            + " AND s.state = :overdue AND s.caseId > :after ORDER BY s.caseId";
     private static final String ABOUT = "SELECT r.id, r.caseNumber, r.title, r.ownerId, r.teamId, p.escalateTo, s.cycle"
             + " FROM CaseRecord r, CaseType t, SlaPolicy p, CaseSla s"
             + " WHERE t.id = r.caseTypeId AND p.id = t.slaPolicyId AND s.caseId = r.id AND r.id IN :ids";
@@ -93,6 +97,20 @@ class DefaultCaseSlaService implements CaseSlaService {
                 .setParameter("ids", ids)
                 .executeUpdate());
         return transitions;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<OverdueCase> overdue(long afterId, int limit) {
+        return entityManager
+                .createQuery(OVERDUE, Tuple.class)
+                .setParameter("overdue", SlaState.OVERDUE)
+                .setParameter("after", afterId)
+                .setMaxResults(limit)
+                .getResultStream()
+                .map(row ->
+                        new OverdueCase(row.get(0, Long.class), row.get(1, Instant.class), row.get(2, Integer.class)))
+                .toList();
     }
 
     @Override

@@ -112,8 +112,15 @@ class SlaChunkWriter {
         return done;
     }
 
-    /** The owner, and the team's enabled Managers when the policy escalates or the owner is disabled; once each. */
-    private List<Long> recipients(SlaCase about, boolean overdue) {
+    /**
+     * Who hears of a case's SLA (also the reminders tick's overdue repeats): the owner, and the team's enabled Managers
+     * when an overdue case's policy escalates to them or the owner is disabled; once each.
+     *
+     * @param about the case
+     * @param overdue whether it is about an overdue case
+     * @return the people, owner first
+     */
+    List<Long> recipients(SlaCase about, boolean overdue) {
         boolean ownerActive = !directory.permissionsOf(about.ownerId()).disabled();
         Set<Long> people = new LinkedHashSet<>();
         if (ownerActive) {

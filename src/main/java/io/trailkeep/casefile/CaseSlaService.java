@@ -49,6 +49,24 @@ public interface CaseSlaService {
     Map<Long, SlaCase> about(Collection<Long> caseIds);
 
     /**
+     * An overdue case, for the reminders tick's repeats (BUILD_PLAN §6).
+     *
+     * @param caseId the case
+     * @param dueAt when it was due in its current cycle
+     * @param reminderDays how often it is reminded once overdue ({@code SLA_POLICY.OVERDUE_REMINDER_DAYS})
+     */
+    record OverdueCase(long caseId, Instant dueAt, int reminderDays) {}
+
+    /**
+     * The overdue cases with ids after {@code afterId}, in id order, at most {@code limit}: one page of the repeats.
+     *
+     * @param afterId the last id of the previous page, or 0
+     * @param limit the page size
+     * @return the cases
+     */
+    List<OverdueCase> overdue(long afterId, int limit);
+
+    /**
      * The cases whose SLA should move on at {@code now}, by id: on track and past their at-risk time, or at risk and
      * past their due time, through the indexes {@code (SLA_STATE, AT_RISK_AT)} and {@code (SLA_STATE, SLA_DUE_AT)}.
      *
