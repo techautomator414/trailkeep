@@ -247,6 +247,30 @@ abstract class AbstractClosureDecisionIT {
         assertThat(caseRow(number)).containsEntry("STATUS", "CLOSED");
     }
 
+    @Test
+    void pendingMyApprovalAndTheReassignChoicesFollowTheScopeAndTheRule() {
+        long id = request(number);
+
+        assertThat(closures.awaitingMyApproval(actor(approver, TeamRole.MANAGER)))
+                .singleElement()
+                .satisfies(waiting -> {
+                    assertThat(waiting.id()).isEqualTo(id);
+                    assertThat(waiting.caseNumber()).isEqualTo(number);
+                    assertThat(waiting.outcome()).isEqualTo("Resolved");
+                });
+        assertThat(closures.awaitingMyApproval(actor(otherManager, TeamRole.MANAGER)))
+                .isEmpty();
+        // The approver's request is listed only while they read the case.
+        assertThat(closures.awaitingMyApproval(actor(approver, null))).isEmpty();
+        assertThat(closures.reassignChoices(actor(otherManager, TeamRole.MANAGER), number.toString(), id))
+                .extracting(ClosureService.Approver::id)
+                .containsExactly(otherManager);
+        refused(() -> closures.reassignChoices(actor(owner, TeamRole.ANALYST), number.toString(), id), Kind.FORBIDDEN);
+        refused(
+                () -> closures.reassignChoices(actor(otherManager, TeamRole.MANAGER), number.toString(), id + 1),
+                Kind.NOT_FOUND);
+    }
+
     private String race(CyclicBarrier together, long id, ClosureDecision decision, @Nullable String reason)
             throws Exception {
         together.await(30, TimeUnit.SECONDS);
