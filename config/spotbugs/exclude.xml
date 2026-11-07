@@ -162,7 +162,7 @@
     Reload when the request was decided or reassigned meanwhile, 422 when the rule no longer allows that person). The
     redirect is the fixed path /cases/ plus a parsed case number. Covered by ClosureDecisionIT,
     OracleClosureDecisionIT, ClosureApproverControllerIT and ClosureApproverAccessibilityIT.
-    Needs security-reviewer approval.
+    Approved in the security-reviewer role on #106.
     Approved in the security-reviewer role on #20. Listed by class, never by pattern alone, so each new controller
     is reviewed the same way.
   -->
