@@ -13,6 +13,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   - Five KPI tiles, each a count in text and a link: My open cases, At risk and Overdue (each opening the cases list so filtered), Pending my approval and Update requests for me (each leading to its list below).
   - "My cases": the person's open cases by SLA due date with the SLA chip, at most ten, with "See all N of my open cases".
   - "Needs attention": its two lists are now paged by 20 with plain previous and next links instead of capped at 100. Approve and the decision link stay on each approval.
+- Aging and SLA-compliance reports as CSV (WP-22 part b): "Export CSV" on each report downloads `/reports/aging.csv` or `/reports/compliance.csv?from=&to=`, the same lines and total row under the same role check, scope and period rules. The cells are written by the cases export's CSV writer, now `shared.csv.CsvFormat` (quoted, formulas starting `= + - @` defused, a byte order mark first); the file is an attachment, `nosniff`, `private, no-store`. Every export is audited as `REPORT_EXPORTED` with the report, its period and its line count.
 - Aging and SLA-compliance reports as HTML (WP-22 part a).
   - "Reports" in the header leads to Aging; each report links to the other.
   - Aging (`/reports/aging`): open and pending-closure cases by team and owner (BUILD_PLAN §4.5), counted by days since identified (0–30, 31–60, 61–90, over 90) and by SLA state, with a total row.

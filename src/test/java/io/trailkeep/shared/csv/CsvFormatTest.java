@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright 2026 Charlie Genova and contributors
-package io.trailkeep.casefile;
+package io.trailkeep.shared.csv;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
