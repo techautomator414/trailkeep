@@ -7,7 +7,7 @@ import org.springframework.data.repository.Repository;
 
 /**
  * Case-rooted access to {@code CASE_RECORD} (ADR-0005): no inherited or derived methods, only the scoped queries of
- * {@link CaseRecordQueries}.
+ * {@link CaseRecordQueries} and the reports' grouped counts of {@link CaseReportQueries}.
  */
 @CaseRooted
-interface CaseRecordRepository extends Repository<CaseRecord, Long>, CaseRecordQueries {}
+interface CaseRecordRepository extends Repository<CaseRecord, Long>, CaseRecordQueries, CaseReportQueries {}

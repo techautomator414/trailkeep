@@ -171,6 +171,14 @@
     is echoed only through th:text and never mailed. Covered by CaseReopenIT, OracleCaseReopenIT,
     CaseReopenControllerIT and CaseReopenAccessibilityIT.
     Approved in the security-reviewer role on #107.
+    ReportController (WP-22 part a): behind login; GET /reports/aging and /reports/compliance, read only.
+    ReportService refuses (403) a person with neither a team role nor Compliance Admin before anything is read, and
+    every count is taken under the person's CaseScope (restricted cases included only where they may read them). The
+    period, from and to, is parsed as ISO dates only (anything else, a backwards period or one over 366 days is a 422
+    with the form marked) and bound as parameters; the raw values are echoed only through th:value. The pages hold
+    counts and team, owner and case-type names, never case text. Covered by ReportIT, OracleReportIT,
+    ReportControllerIT and ReportsAccessibilityIT.
+    Approved in the security-reviewer role on #116.
     Approved in the security-reviewer role on #20. Listed by class, never by pattern alone, so each new controller
     is reviewed the same way.
   -->
@@ -196,6 +204,7 @@
       <Class name="io.trailkeep.web.ClosureDecisionController"/>
       <Class name="io.trailkeep.web.ClosureApproverController"/>
       <Class name="io.trailkeep.web.CaseReopenController"/>
+      <Class name="io.trailkeep.web.ReportController"/>
     </Or>
   </Match>
   <!--

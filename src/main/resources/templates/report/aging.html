@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- The aging report (WP-22): counts only (§3.3), a table with a caption, headers and a total row; app.css prints it. -->
+<html lang="en" xmlns:th="http://www.thymeleaf.org" th:replace="~{web/layout :: page(~{::title}, ~{::main})}">
+<head><title th:text="#{tk.report.aging} + ' · ' + ${@branding.name()}">Aging</title></head>
+<body>
+<main id="main" class="container tk-main" tabindex="-1"
+      th:with="cols=${ {'upTo30','upTo60','upTo90','over90','onTrack','atRisk','overdue','noSla'} }">
+  <h1 th:text="#{tk.report.aging}">Aging</h1>
+  <p class="tk-report-links"><a th:href="@{/reports/compliance}" th:text="#{tk.report.compliance}">SLA compliance</a></p>
+  <div class="table-responsive">
+    <table class="table table-sm tk-report">
+      <caption th:text="#{tk.report.aging.caption(${r.asOf})}">Open cases by age and SLA state</caption>
+      <thead>
+      <tr>
+        <th scope="col" th:text="#{tk.case.team}">Team</th>
+        <th scope="col" th:text="#{tk.case.owner}">Owner</th>
+        <th scope="col" th:each="k : ${cols}" th:text="#{'tk.report.col.' + ${k}}">0–30 days</th>
+      </tr>
+      </thead>
+      <tbody>
+      <tr th:each="l : ${r.lines}">
+        <th scope="row" th:text="${l.team}">Team</th>
+        <td th:text="${l.owner}">Owner</td>
+        <td th:each="k : ${cols}" th:text="${l.counts[k]}">1</td>
+      </tr>
+      </tbody>
+      <tfoot>
+      <tr>
+        <th scope="row" colspan="2" th:text="#{tk.report.total}">Total</th>
+        <td th:each="k : ${cols}" th:text="${r.total[k]}">1</td>
+      </tr>
+      </tfoot>
+    </table>
+  </div>
+</main>
+</body>
+</html>
