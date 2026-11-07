@@ -86,3 +86,19 @@ tr[data-tk-href] { cursor: pointer; }
 @media (forced-colors: active) {
   .tk-listbox [role="option"][aria-selected="true"] { outline: 2px solid Highlight; }
 }
+
+/* Reports (WP-22): numbers right-aligned, the total row ruled off; on paper only the heading, the period and the
+   table, black on white, with the header row repeated on every page and no row split across two. */
+.tk-report td { text-align: right; font-variant-numeric: tabular-nums; }
+.tk-report td:first-of-type { text-align: left; }
+.tk-report caption { caption-side: top; color: var(--tk-ink); }
+.tk-report tfoot { border-top: 2px solid var(--tk-ink); font-weight: 600; }
+@media print {
+  .tk-header, .tk-footer, .tk-skip-link, .tk-report-form, #tk-live, .tk-dialog { display: none !important; }
+  body { display: block; color: #000; background: #fff; }
+  .tk-main { padding: 0; max-width: none; }
+  .table-responsive { overflow: visible; }
+  .tk-report { font-size: 10pt; }
+  .tk-report thead { display: table-header-group; }
+  .tk-report tr { break-inside: avoid; }
+}

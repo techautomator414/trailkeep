@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- The SLA-compliance report (BUILD_PLAN §4.5, WP-22): a plain GET form for the period (dates as yyyy-mm-dd; a bad
+     period is 422 with the form marked), then the cases the person reads closed in it, met or breached, the share
+     within the SLA, and the open cases at risk or overdue now, by team and case type, with a total row. Counts only
+     (§3.3). Printable as is (app.css @media print hides the form). -->
+<html lang="en" xmlns:th="http://www.thymeleaf.org" th:replace="~{web/layout :: page(~{::title}, ~{::main})}">
+<head><title th:text="#{tk.report.compliance} + ' · ' + ${@branding.name()}">SLA compliance</title></head>
+<body>
+<main id="main" class="container tk-main" tabindex="-1">
+  <h1 th:text="#{tk.report.compliance}">SLA compliance</h1>
+  <form class="tk-report-form" method="get" th:action="@{/reports/compliance}" th:with="e=${r == null}">
+    <div th:if="${e}" class="alert alert-danger" role="alert" id="tk-period-error" th:text="#{tk.report.period.invalid}"
+         >Choose a period of up to 366 days, from its first day to its last.</div>
+    <div class="row g-2 align-items-end">
+      <div class="col-auto"><label class="form-label" for="tk-from" th:text="#{tk.report.from}">From</label>
+        <input class="form-control" type="date" id="tk-from" name="from" th:value="${from}"
+               th:attr="aria-invalid=${e},aria-describedby=${e} ? 'tk-period-error' : null"></div>
+      <div class="col-auto"><label class="form-label" for="tk-to" th:text="#{tk.report.to}">To</label>
+        <input class="form-control" type="date" id="tk-to" name="to" th:value="${to}"
+               th:attr="aria-invalid=${e},aria-describedby=${e} ? 'tk-period-error' : null"></div>
+      <div class="col-auto"><button class="btn btn-primary" type="submit" th:text="#{tk.report.show}">Show</button></div>
+    </div>
+  </form>
+  <th:block th:if="${r != null}">
+    <p th:text="${r.withinSla == null} ? #{tk.report.compliance.noneClosed}
+                 : #{tk.report.compliance.share(${r.withinSla})}">75% closed within the SLA.</p>
+    <div class="table-responsive" th:unless="${r.lines.isEmpty()}">
+      <table class="table table-sm tk-report">
+        <caption th:text="#{tk.report.compliance.caption(${r.from}, ${r.to})}">SLA compliance</caption>
+        <thead>
+        <tr>
+          <th scope="col" th:text="#{tk.case.team}">Team</th>
+          <th scope="col" th:text="#{tk.case.type}">Case type</th>
+          <th scope="col" th:each="c : ${ {'met','breached','withinSla','atRisk','overdue'} }"
+              th:text="#{'tk.report.compliance.' + ${c}}">Met</th>
+        </tr>
+        </thead>
+        <tbody>
+        <tr th:each="l : ${r.lines}" th:with="c=${l.counts}">
+          <th scope="row" th:text="${l.team}">Team</th>
+          <td th:text="${c.caseType}">Type</td>
+          <td th:text="${c.met}">3</td><td th:text="${c.breached}">1</td>
+          <td th:text="${l.withinSla == null} ? '–' : ${l.withinSla} + '%'">75%</td>
+          <td th:text="${c.atRisk}">0</td><td th:text="${c.overdue}">0</td>
+        </tr>
+        </tbody>
+        <tfoot>
+        <tr th:with="c=${r.total}">
+          <th scope="row" colspan="2" th:text="#{tk.report.total}">Total</th>
+          <td th:text="${c.met}">3</td><td th:text="${c.breached}">1</td>
+          <td th:text="${r.withinSla == null} ? '–' : ${r.withinSla} + '%'">75%</td>
+          <td th:text="${c.atRisk}">0</td><td th:text="${c.overdue}">0</td>
+        </tr>
+        </tfoot>
+      </table>
+    </div>
+    <p th:if="${r.lines.isEmpty()}" th:text="#{tk.report.none}">No case to report.</p>
+  </th:block>
+</main>
+</body>
+</html>
