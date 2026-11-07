@@ -9,7 +9,7 @@
      comment. Attachments follow, from document/fragments/attachments; their upload form is offered with the comment
      form, because one matrix row covers both. Links to the Comments and Attachments sections and to the History page
      (WP-16) sit under the action buttons. A pending closure's banner carries its decision actions (WP-19): Approve as
-     one button and Reject or request changes for the named approver; once decided,
+     one button and Reject or request changes for the named approver, Reassign approver for Managers; once decided,
      an open case sent back shows "Requires Changes" until the next comment and a closed case its locked closure. -->
 <html lang="en" xmlns:th="http://www.thymeleaf.org" th:replace="~{web/layout :: page(~{::title}, ~{::main})}">
 <head><title th:text="${c.number} + ' ' + ${c.title} + ' · ' + ${@branding.name()}">Case</title></head>
@@ -40,18 +40,30 @@
     <p id="tk-pending-text" th:text="#{tk.closure.pending.text(${p.requestedBy},
        ${#temporals.format(p.requestedAt, 'yyyy-MM-dd HH:mm')}, ${p.approver}, ${p.outcome})}">Requested by X.</p>
     <th:block th:replace="~{casefile/fragments/closure-decision :: fields(${p.summary}, ${p.followUps})}"/>
-    <div class="tk-dialog-actions mt-3" th:if="${decides}">
-      <form th:replace="~{casefile/fragments/closure-decision :: approve(${c.number}, ${p.id}, 'tk-pending-text')}">
-      </form>
-      <a class="btn btn-outline-dark" th:href="@{/cases/{n}/closure/{id}/decision(n=${c.number},id=${p.id})}"
-         data-tk-dialog-open="tk-decision-dialog" aria-haspopup="dialog" th:text="#{tk.decision.open}">Reject or
-        request changes</a>
+    <div class="tk-dialog-actions mt-3" th:if="${decides or reassignChoices != null}">
+      <th:block th:if="${decides}">
+        <form th:replace="~{casefile/fragments/closure-decision :: approve(${c.number}, ${p.id}, 'tk-pending-text')}">
+        </form>
+        <a class="btn btn-outline-dark" th:href="@{/cases/{n}/closure/{id}/decision(n=${c.number},id=${p.id})}"
+           data-tk-dialog-open="tk-decision-dialog" aria-haspopup="dialog" th:text="#{tk.decision.open}">Reject or
+          request changes</a>
+      </th:block>
+      <a th:if="${reassignChoices != null}" class="btn btn-outline-dark"
+         th:href="@{/cases/{n}/closure/{id}/approver(n=${c.number},id=${p.id})}"
+         data-tk-dialog-open="tk-approver-dialog" aria-haspopup="dialog" th:text="#{tk.approver.open}">Reassign
+        approver</a>
     </div>
   </section>
   <dialog th:if="${decides}" id="tk-decision-dialog" class="tk-dialog" aria-labelledby="tk-decision-title">
     <h2 id="tk-decision-title" th:text="#{tk.decision.title(${c.number})}">Reject or request changes</h2>
     <form th:replace="~{casefile/fragments/closure-decision :: decide(${c.number}, ${pendingClosure.id},
                        ${decisionForm}, ${ {} }, true)}"></form>
+  </dialog>
+  <dialog th:if="${reassignChoices != null}" id="tk-approver-dialog" class="tk-dialog"
+          aria-labelledby="tk-approver-title">
+    <h2 id="tk-approver-title" th:text="#{tk.approver.title(${c.number})}">Reassign approver</h2>
+    <form th:replace="~{casefile/fragments/closure-decision :: approver(${c.number}, ${pendingClosure.id},
+                       ${reassignChoices}, -1, ${ {} }, true)}"></form>
   </dialog>
   <section th:if="${lastDecision != null and (lastDecision.requiresChanges or c.status.name() == 'CLOSED')}"
            th:with="d=${lastDecision}" th:class="${d.requiresChanges} ? 'alert alert-warning' : 'alert alert-secondary'"

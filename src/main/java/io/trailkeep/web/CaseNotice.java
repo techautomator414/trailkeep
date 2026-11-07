@@ -47,7 +47,9 @@ enum CaseNotice {
     /** Closure rejected; the case is open again. */
     CLOSURE_REJECTED,
     /** Changes requested; the case is open again. */
-    CLOSURE_CHANGES_REQUESTED;
+    CLOSURE_CHANGES_REQUESTED,
+    /** A pending request's approver changed. */
+    APPROVER_REASSIGNED;
 
     private static final String ATTRIBUTE = "tk.caseNotice";
 
