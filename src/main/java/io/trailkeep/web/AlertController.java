@@ -2,8 +2,10 @@
 // Copyright 2026 Charlie Genova and contributors
 package io.trailkeep.web;
 
+import io.trailkeep.casefile.CaseScopeService;
 import io.trailkeep.notification.UserAlertService;
 import io.trailkeep.security.TrailkeepOidcUser;
+import io.trailkeep.user.UserDirectoryService;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
@@ -14,16 +16,22 @@ import org.springframework.web.bind.annotation.RequestParam;
 
 /**
  * The Alerts page (BUILD_PLAN §4.7 "in-app list"): {@code GET /alerts} lists the person's alerts newest first, 50 to
- * a page with plain previous and next links, and reading it marks nothing read. "Mark read" and "Delete" are POSTs
- * with CSRF that come back to the same page; another person's alert, or an unknown id, is 404.
+ * a page with plain previous and next links, and reading it marks nothing read. It lists only the alerts whose case the
+ * person still reads (their {@code CaseScope}, rebuilt for the request), the same ones the navigation badge counts.
+ * "Mark read" and "Delete" are POSTs with CSRF that come back to the same page; another person's alert, or an unknown
+ * id, is 404.
  */
 @Controller
 class AlertController {
 
     private final UserAlertService alerts;
+    private final CaseScopeService scopes;
+    private final UserDirectoryService directory;
 
-    AlertController(UserAlertService alerts) {
+    AlertController(UserAlertService alerts, CaseScopeService scopes, UserDirectoryService directory) {
         this.alerts = alerts;
+        this.scopes = scopes;
+        this.directory = directory;
     }
 
     @GetMapping("/alerts")
@@ -31,7 +39,10 @@ class AlertController {
             @AuthenticationPrincipal TrailkeepOidcUser principal,
             @RequestParam(name = "page", defaultValue = "1") String page,
             Model model) {
-        model.addAttribute("a", alerts.alerts(principal.userId(), page(page)));
+        model.addAttribute(
+                "a",
+                alerts.alerts(
+                        scopes.forUser(directory.permissionsOf(principal.userId())), principal.userId(), page(page)));
         return "web/alerts";
     }
 

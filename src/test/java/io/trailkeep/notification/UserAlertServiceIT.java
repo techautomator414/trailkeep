@@ -7,6 +7,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.trailkeep.notification.UserAlertService.Alert;
 import io.trailkeep.notification.UserAlertService.AlertPage;
+import io.trailkeep.shared.access.CaseScope;
 import io.trailkeep.testsupport.PostgresTestcontainersConfiguration;
 import io.trailkeep.testsupport.RequiresDocker;
 import jakarta.persistence.EntityManager;
@@ -91,10 +92,10 @@ class UserAlertServiceIT {
         transactions.executeWithoutResult(status -> {
             notifications.notifyUser(PERSON, "comment-added", MODEL, null, "/cases/CASE-2026-000042#comments");
             entityManager.flush();
-            assertThat(alerts.unread(PERSON)).isEqualTo(2);
+            assertThat(alerts.unread(CaseScope.system(), PERSON)).isEqualTo(2);
             status.setRollbackOnly();
         });
-        assertThat(alerts.unread(PERSON)).isEqualTo(1);
+        assertThat(alerts.unread(CaseScope.system(), PERSON)).isEqualTo(1);
         assertThat(mailCount()).isEqualTo(1);
     }
 
@@ -104,13 +105,13 @@ class UserAlertServiceIT {
         Boolean mailed = transactions.execute(
                 status -> notifications.notifyUser(PERSON, "comment-added", MODEL, null, "/cases/x"));
         assertThat(mailed).isFalse();
-        assertThat(alerts.unread(PERSON)).isEqualTo(1);
+        assertThat(alerts.unread(CaseScope.system(), PERSON)).isEqualTo(1);
         assertThat(mailCount()).isZero();
 
         jdbc.update("UPDATE APP_USER SET DISABLED = ? WHERE ID = ?", true, OTHER);
         transactions.executeWithoutResult(
                 status -> notifications.notifyUser(OTHER, "comment-added", MODEL, null, "/cases/x"));
-        assertThat(alerts.unread(OTHER)).isZero();
+        assertThat(alerts.unread(CaseScope.system(), OTHER)).isZero();
     }
 
     @Test
@@ -119,17 +120,19 @@ class UserAlertServiceIT {
                 .forEach(i -> alert(983_100L + i, PERSON, "Synthetic alert " + i, AT.plusSeconds(i)));
         alert(983_200L, OTHER, "Their alert", AT.plusSeconds(3600));
 
-        AlertPage first = alerts.alerts(PERSON, 1);
+        AlertPage first = alerts.alerts(CaseScope.system(), PERSON, 1);
         assertThat(first.page()).isEqualTo(1);
         assertThat(first.pages()).isEqualTo(2);
         assertThat(first.total()).isEqualTo(51);
         assertThat(first.alerts()).hasSize(UserAlertService.PAGE_SIZE);
         assertThat(first.alerts().get(0).message()).isEqualTo("Synthetic alert 50");
         assertThat(first.alerts()).extracting(Alert::message).doesNotContain("Their alert");
-        assertThat(alerts.alerts(PERSON, 2).alerts()).extracting(Alert::message).containsExactly("Synthetic alert 0");
-        assertThat(alerts.alerts(PERSON, 9).page()).isEqualTo(2);
-        assertThat(alerts.alerts(PERSON, 0).page()).isEqualTo(1);
-        assertThat(alerts.unread(PERSON)).isEqualTo(51);
+        assertThat(alerts.alerts(CaseScope.system(), PERSON, 2).alerts())
+                .extracting(Alert::message)
+                .containsExactly("Synthetic alert 0");
+        assertThat(alerts.alerts(CaseScope.system(), PERSON, 9).page()).isEqualTo(2);
+        assertThat(alerts.alerts(CaseScope.system(), PERSON, 0).page()).isEqualTo(1);
+        assertThat(alerts.unread(CaseScope.system(), PERSON)).isEqualTo(51);
     }
 
     @Test
@@ -139,19 +142,19 @@ class UserAlertServiceIT {
 
         alerts.markRead(PERSON, 983_301L);
         alerts.markRead(PERSON, 983_301L);
-        assertThat(alerts.unread(PERSON)).isZero();
-        assertThat(alerts.alerts(PERSON, 1).alerts())
+        assertThat(alerts.unread(CaseScope.system(), PERSON)).isZero();
+        assertThat(alerts.alerts(CaseScope.system(), PERSON, 1).alerts())
                 .singleElement()
                 .satisfies(alert -> assertThat(alert.read()).isTrue());
 
         assertThatThrownBy(() -> alerts.markRead(PERSON, 983_302L)).isInstanceOf(AlertNotFoundException.class);
         assertThatThrownBy(() -> alerts.delete(PERSON, 983_302L)).isInstanceOf(AlertNotFoundException.class);
         assertThatThrownBy(() -> alerts.delete(PERSON, -1L)).isInstanceOf(AlertNotFoundException.class);
-        assertThat(alerts.unread(OTHER)).isEqualTo(1);
+        assertThat(alerts.unread(CaseScope.system(), OTHER)).isEqualTo(1);
 
         alerts.delete(PERSON, 983_301L);
-        assertThat(alerts.alerts(PERSON, 1).total()).isZero();
-        assertThat(alerts.alerts(OTHER, 1).total()).isEqualTo(1);
+        assertThat(alerts.alerts(CaseScope.system(), PERSON, 1).total()).isZero();
+        assertThat(alerts.alerts(CaseScope.system(), OTHER, 1).total()).isEqualTo(1);
     }
 
     private long mailCount() {
