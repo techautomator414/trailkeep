@@ -36,7 +36,7 @@
 --   CASE_REOPEN           S I        -            reopens; history, never changed (V5.1)
 --   ALERT_LEDGER          S I        -            alert idempotency; never changed, outlives purge (V6)
 --   JOB_RUN               S I U      -            each job's last success, cluster truth (V6)
---   SHEDLOCK              S I U D    -            ShedLock's lock rows (V6)
+--   SHEDLOCK              S I U      -            ShedLock's lock rows; its JDBC provider never deletes (V6)
 --   SEQ_APP_USER          SELECT     -            Oracle's sequence privilege is SELECT (NEXTVAL)
 --   SEQ_TEAM              SELECT     -
 --   SEQ_AUDIT_EVENT       SELECT     -
@@ -109,7 +109,7 @@ DECLARE
     UNION ALL SELECT 'ALERT_LEDGER', 'SELECT,INSERT', UPPER('${app_user}') FROM DUAL
     UNION ALL SELECT 'SEQ_ALERT_LEDGER', 'SELECT', UPPER('${app_user}') FROM DUAL
     UNION ALL SELECT 'JOB_RUN', 'SELECT,INSERT,UPDATE', UPPER('${app_user}') FROM DUAL
-    UNION ALL SELECT 'SHEDLOCK', 'SELECT,INSERT,UPDATE,DELETE', UPPER('${app_user}') FROM DUAL;
+    UNION ALL SELECT 'SHEDLOCK', 'SELECT,INSERT,UPDATE', UPPER('${app_user}') FROM DUAL;
   keep PLS_INTEGER;
 BEGIN
   FOR w IN wanted LOOP

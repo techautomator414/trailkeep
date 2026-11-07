@@ -38,7 +38,7 @@
 --   CASE_REOPEN           S I        -            reopens; history, never changed (V5.1)
 --   ALERT_LEDGER          S I        -            alert idempotency; never changed, outlives purge (V6)
 --   JOB_RUN               S I U      -            each job's last success, cluster truth (V6)
---   SHEDLOCK              S I U D    -            ShedLock's lock rows (V6)
+--   SHEDLOCK              S I U      -            ShedLock's lock rows; its JDBC provider never deletes (V6)
 --   SEQ_APP_USER          USAGE      -
 --   SEQ_TEAM              USAGE      -
 --   SEQ_AUDIT_EVENT       USAGE      -
@@ -106,7 +106,7 @@ GRANT SELECT, INSERT, UPDATE         ON TABLE CLOSURE_REQUEST      TO ${app_user
 GRANT SELECT, INSERT                 ON TABLE CASE_REOPEN          TO ${app_user};
 GRANT SELECT, INSERT                 ON TABLE ALERT_LEDGER         TO ${app_user};
 GRANT SELECT, INSERT, UPDATE         ON TABLE JOB_RUN              TO ${app_user};
-GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE SHEDLOCK             TO ${app_user};
+GRANT SELECT, INSERT, UPDATE         ON TABLE SHEDLOCK             TO ${app_user};
 
 -- USAGE allows nextval(), which is all Hibernate's pooled optimizer calls.
 GRANT USAGE ON SEQUENCE SEQ_APP_USER, SEQ_TEAM, SEQ_AUDIT_EVENT, SEQ_SLA_POLICY, SEQ_CASE_TYPE, SEQ_CASE_RECORD, SEQ_CASE_NUMBER,

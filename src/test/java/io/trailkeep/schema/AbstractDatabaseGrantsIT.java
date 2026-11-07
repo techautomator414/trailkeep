@@ -125,8 +125,8 @@ abstract class AbstractDatabaseGrantsIT {
             Map.entry("ALERT_LEDGER", EnumSet.of(Privilege.SELECT, Privilege.INSERT)),
             // Each job's last success, replaced on every successful run.
             Map.entry("JOB_RUN", EnumSet.of(Privilege.SELECT, Privilege.INSERT, Privilege.UPDATE)),
-            // ShedLock inserts, updates and may delete its lock rows (BUILD_PLAN §8 rule 7 allows DELETE here).
-            Map.entry("SHEDLOCK", EnumSet.allOf(Privilege.class)));
+            // ShedLock's JDBC provider inserts and updates its lock rows and never deletes one, so no DELETE.
+            Map.entry("SHEDLOCK", EnumSet.of(Privilege.SELECT, Privilege.INSERT, Privilege.UPDATE)));
 
     /** What the purge user may do on these tables: trim the outbox (V4.8); its case-data grants arrive with WP-24. */
     static final Map<String, Set<Privilege>> PURGE_USER_GRANTS =
