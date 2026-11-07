@@ -9,6 +9,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Reopen screen (WP-19 part c3): Managers and Compliance Admins see "Reopen case" on a closed case. It opens a native
+  dialog (fallback page `/cases/{number}/reopen`) with a required reason of up to 1000 characters and a visible count.
+  A missing or over-long reason is 422 with the field marked and summarized, a case that moved on is 409 with Reload,
+  and anyone the matrix denies is 403. The reopened case is Open again with a "Reopened" chip and the new SLA cycle's
+  chip, and offers Request closure again. This completes WP-19's screens (golden paths 2 to 4).
 - Reassign approver and "Pending my approval" (WP-19 part c2b): Managers and Compliance Admins see "Reassign
   approver" on a pending case's banner. It opens a native dialog (fallback page `/cases/{number}/closure/{id}/approver`)
   with the same APG combobox as Request closure, listing who the separation-of-duties rule allows for the original
