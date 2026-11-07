@@ -14,11 +14,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   - "My cases": the person's open cases by SLA due date with the SLA chip, at most ten, with "See all N of my open cases".
   - "Needs attention": its two lists are now paged by 20 with plain previous and next links instead of capped at 100. Approve and the decision link stay on each approval.
 - Aging and SLA-compliance reports as HTML (WP-22 part a).
-  - `/reports` lists them; "Reports" is in the header.
+  - "Reports" in the header leads to Aging; each report links to the other.
   - Aging (`/reports/aging`): open and pending-closure cases by team and case type, counted by days since identified (0–30, 31–60, 61–90, over 90) and by SLA state, with a total row.
   - SLA compliance (`/reports/compliance?from=&to=`): cases closed in the period (default the last 30 days, at most 366) met or breached, the share within the SLA, and the open cases at risk or overdue now, by team and case type, with totals. A bad period is a 422 with the form marked.
   - Every count is taken under the person's `CaseScope` in one grouped query per report; the pages hold counts and names only. Anyone with a team role, or a Compliance Admin, may run them (BUILD_PLAN §3.2); anyone else gets 403.
-  - Real tables with a caption, column and row headers and a `<tfoot>` total; a print stylesheet drops the header, footer and form. No charts.
+  - Real tables with a caption, column and row headers and a `<tfoot>` total; a print stylesheet drops the header, footer, links and form. No charts.
 - Reminders tick (WP-17b).
   - The job: `reminders-tick`, hourly (`app.reminders.cron`), on one replica at a time under ShedLock, in pages of 500 with one transaction each.
   - Three passes:

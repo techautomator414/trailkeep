@@ -37,9 +37,9 @@ import org.springframework.test.context.DynamicPropertySource;
 /**
  * The report pages (WP-22 part a) in a real browser after a real OIDC login as the dev realm's {@code alpha.manager1},
  * made a Manager of {@link ReportFixture}'s first team, driven from the keyboard: Tab from the brand reaches the
- * header's "Reports", Enter opens the list, Tab and Enter open Aging; the compliance form is reached by Tab and a
- * backwards period sent with Enter comes back marked. axe finds 0 violations on each, and the print view shows the
- * table without the header, the footer or the form.
+ * header's "Reports", Enter opens Aging, Tab and Enter follow its link to SLA compliance; the compliance form is
+ * reached by Tab and a backwards period sent with Enter comes back marked. axe finds 0 violations on each, and the
+ * print view shows the table without the header, the footer, the links or the form.
  */
 // "IT" is the Failsafe suffix Part B mandates for integration tests, not an abbreviation.
 @SuppressWarnings("checkstyle:AbbreviationAsWordInName")
@@ -134,15 +134,9 @@ class ReportsAccessibilityIT {
         page.locator("a.tk-brand").focus();
         tabTo("Reports", 15);
         page.keyboard().press("Enter");
-        page.waitForURL(url -> url.endsWith("/reports"));
-        assertClean("Reports");
-
-        page.locator("#main").focus();
-        tabTo("Aging", 5);
-        page.keyboard().press("Enter");
         page.waitForURL(url -> url.endsWith("/reports/aging"));
         assertClean("Aging");
-        assertThat(page.locator("table.tk-report caption").textContent()).startsWith("Open cases by age");
+        assertThat(page.locator("table.tk-report caption").textContent()).startsWith("Open and pending-closure cases");
         assertThat(page.locator("tbody th[scope='row']").allTextContents())
                 .containsExactly(ReportFixture.ALPHA_NAME, ReportFixture.ALPHA_NAME);
         assertThat(page.locator("tfoot td").allTextContents()).containsExactly("3", "2", "2", "1", "2", "2", "3", "1");
@@ -151,7 +145,14 @@ class ReportsAccessibilityIT {
         assertThat(page.isVisible("table.tk-report")).isTrue();
         assertThat(page.isVisible("header.tk-header")).isFalse();
         assertThat(page.isVisible("footer.tk-footer")).isFalse();
+        assertThat(page.isVisible(".tk-report-links")).isFalse();
         page.emulateMedia(new Page.EmulateMediaOptions().setMedia(Media.SCREEN));
+
+        page.locator("#main").focus();
+        tabTo("SLA compliance", 3);
+        page.keyboard().press("Enter");
+        page.waitForURL(url -> url.endsWith("/reports/compliance"));
+        assertClean("SLA compliance");
     }
 
     @Test
@@ -166,8 +167,8 @@ class ReportsAccessibilityIT {
         page.emulateMedia(new Page.EmulateMediaOptions().setMedia(Media.SCREEN));
 
         page.locator("#main").focus();
-        page.keyboard().press("Tab");
-        assertThat(page.evaluate("() => document.activeElement.id")).isEqualTo("tk-from");
+        tabTo("Aging", 1);
+        tabToId("tk-from", 1);
         page.fill("#tk-from", "2026-02-01");
         // A date field's month, day and year are Tab stops of their own in Chromium.
         tabToId("tk-to", 4);

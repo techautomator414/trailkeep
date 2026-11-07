@@ -25,7 +25,10 @@ import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 
-/** Builds the reports from {@link CaseReportService}'s counts; see {@link ReportService}. */
+/**
+ * Builds the reports from {@link CaseReportService}'s counts; see {@link ReportService}. The counts come ordered by
+ * team id and case type; a stable sort by team name keeps the case types in order within each team.
+ */
 @Service
 class DefaultReportService implements ReportService {
 
@@ -50,8 +53,7 @@ class DefaultReportService implements ReportService {
         Map<Long, String> teams = teams(rows.stream().map(AgingRow::teamId).toList());
         List<AgingLine> lines = rows.stream()
                 .map(row -> new AgingLine(teams.getOrDefault(row.teamId(), ""), row))
-                .sorted(Comparator.comparing(AgingLine::team)
-                        .thenComparing(line -> line.counts().caseType()))
+                .sorted(Comparator.comparing(AgingLine::team))
                 .toList();
         AgingRow total = new AgingRow(
                 0,
@@ -70,14 +72,8 @@ class DefaultReportService implements ReportService {
     @Override
     public ComplianceReport compliance(Actor actor, @Nullable String fromText, @Nullable String toText) {
         allowed(actor);
-        LocalDate to;
-        LocalDate from;
-        try {
-            to = blank(toText) ? LocalDate.ofInstant(clock.instant(), zone) : LocalDate.parse(toText);
-            from = blank(fromText) ? to.minusDays(DEFAULT_DAYS - 1) : LocalDate.parse(fromText);
-        } catch (DateTimeParseException malformed) {
-            throw new ReportException(Kind.INVALID, "dates are yyyy-mm-dd");
-        }
+        LocalDate to = day(toText, LocalDate.ofInstant(clock.instant(), zone));
+        LocalDate from = day(fromText, to.minusDays(DEFAULT_DAYS - 1));
         if (to.isBefore(from) || ChronoUnit.DAYS.between(from, to) >= MAX_DAYS) {
             throw new ReportException(Kind.INVALID, "a period runs forwards and is at most " + MAX_DAYS + " days");
         }
@@ -85,8 +81,7 @@ class DefaultReportService implements ReportService {
         Map<Long, String> teams = teams(rows.stream().map(ComplianceRow::teamId).toList());
         List<ComplianceLine> lines = rows.stream()
                 .map(row -> new ComplianceLine(teams.getOrDefault(row.teamId(), ""), row, share(row)))
-                .sorted(Comparator.comparing(ComplianceLine::team)
-                        .thenComparing(line -> line.counts().caseType()))
+                .sorted(Comparator.comparing(ComplianceLine::team))
                 .toList();
         ComplianceRow total = new ComplianceRow(
                 0,
@@ -106,8 +101,13 @@ class DefaultReportService implements ReportService {
         }
     }
 
-    private static boolean blank(@Nullable String text) {
-        return text == null || text.isBlank();
+    /** A {@code yyyy-mm-dd} date, or the given day when blank; {@code INVALID} when it does not parse. */
+    private static LocalDate day(@Nullable String text, LocalDate whenBlank) {
+        try {
+            return text == null || text.isBlank() ? whenBlank : LocalDate.parse(text);
+        } catch (DateTimeParseException malformed) {
+            throw new ReportException(Kind.INVALID, "dates are yyyy-mm-dd");
+        }
     }
 
     private Map<Long, String> teams(List<Long> ids) {

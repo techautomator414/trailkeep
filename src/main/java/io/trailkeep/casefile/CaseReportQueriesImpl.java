@@ -18,6 +18,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.BiFunction;
 
 /**
  * Criteria implementation of {@link CaseReportQueries}: one {@code GROUP BY} each over the case, its type and its SLA
@@ -41,9 +42,10 @@ class CaseReportQueriesImpl implements CaseReportQueries {
         Grouped g = new Grouped(cb);
         Expression<LocalDate> identified = g.record.<LocalDate>get("identifiedOn");
         Expression<SlaState> state = g.sla.<SlaState>get("state");
-        List<Tuple> rows = g.rows(
+        return g.rows(
                 scope,
                 g.record.get("status").in(OPEN),
+                (type, n) -> new AgingRow(n[0], type, n[2], n[3], n[4], n[5], n[6], n[7], n[8], n[9]),
                 count(cb, cb.greaterThanOrEqualTo(identified, today.minusDays(30))),
                 count(cb, cb.between(identified, today.minusDays(60), today.minusDays(31))),
                 count(cb, cb.between(identified, today.minusDays(90), today.minusDays(61))),
@@ -52,19 +54,6 @@ class CaseReportQueriesImpl implements CaseReportQueries {
                 count(cb, cb.equal(state, SlaState.AT_RISK)),
                 count(cb, cb.equal(state, SlaState.OVERDUE)),
                 count(cb, cb.equal(state, SlaState.NOT_APPLICABLE)));
-        return rows.stream()
-                .map(row -> new AgingRow(
-                        row.get(0, Long.class),
-                        row.get(1, String.class),
-                        number(row, 2),
-                        number(row, 3),
-                        number(row, 4),
-                        number(row, 5),
-                        number(row, 6),
-                        number(row, 7),
-                        number(row, 8),
-                        number(row, 9)))
-                .toList();
     }
 
     @Override
@@ -78,31 +67,28 @@ class CaseReportQueriesImpl implements CaseReportQueries {
                 cb.greaterThanOrEqualTo(closedAt, from),
                 cb.lessThan(closedAt, until));
         Predicate open = g.record.get("status").in(OPEN);
-        List<Tuple> rows = g.rows(
+        return g.rows(
                 scope,
                 cb.or(closed, open),
+                (type, n) -> new ComplianceRow(n[0], type, n[2], n[3], n[4], n[5]),
                 count(cb, cb.and(closed, cb.equal(state, SlaState.MET))),
                 count(cb, cb.and(closed, cb.equal(state, SlaState.BREACHED))),
                 count(cb, cb.and(open, cb.equal(state, SlaState.AT_RISK))),
                 count(cb, cb.and(open, cb.equal(state, SlaState.OVERDUE))));
-        return rows.stream()
-                .map(row -> new ComplianceRow(
-                        row.get(0, Long.class),
-                        row.get(1, String.class),
-                        number(row, 2),
-                        number(row, 3),
-                        number(row, 4),
-                        number(row, 5)))
-                .toList();
     }
 
     private static Expression<Integer> count(CriteriaBuilder cb, Predicate when) {
         return cb.sum(cb.<Integer>selectCase().when(when, 1).otherwise(0));
     }
 
-    private static long number(Tuple row, int column) {
-        Number value = row.get(column, Number.class);
-        return value == null ? 0 : value.longValue();
+    /** The row's numeric columns by position (the team id, then the counts); a {@code SUM} over no rows is 0. */
+    private static long[] numbers(Tuple row) {
+        long[] numbers = new long[row.getElements().size()];
+        for (int column = 0; column < numbers.length; column++) {
+            Object value = row.get(column);
+            numbers[column] = value instanceof Number number ? number.longValue() : 0;
+        }
+        return numbers;
     }
 
     /** One grouped report query: the case, its type and its SLA row, by team and type. */
@@ -122,8 +108,9 @@ class CaseReportQueriesImpl implements CaseReportQueries {
             this.sla = query.from(CaseSla.class);
         }
 
-        /** Runs the query: the team, the type's name, then the counts. */
-        List<Tuple> rows(CaseScope scope, Predicate which, Expression<?>... counts) {
+        /** Runs the query, selecting the team, the type's name, then the counts, and maps each row (name, numbers). */
+        <T> List<T> rows(
+                CaseScope scope, Predicate which, BiFunction<String, long[], T> mapper, Expression<?>... counts) {
             List<Selection<?>> columns = new ArrayList<>(List.of(record.get("teamId"), type.get("name")));
             columns.addAll(List.of(counts));
             query.select(cb.tuple(columns.toArray(Selection<?>[]::new)))
@@ -134,7 +121,9 @@ class CaseReportQueriesImpl implements CaseReportQueries {
                             which)
                     .groupBy(record.get("teamId"), type.get("name"))
                     .orderBy(cb.asc(record.get("teamId")), cb.asc(type.get("name")));
-            return entityManager.createQuery(query).getResultList();
+            return entityManager.createQuery(query).getResultList().stream()
+                    .map(row -> mapper.apply(row.get(1, String.class), numbers(row)))
+                    .toList();
         }
     }
 }

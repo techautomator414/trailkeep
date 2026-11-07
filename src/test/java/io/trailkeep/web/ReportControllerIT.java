@@ -72,12 +72,11 @@ class ReportControllerIT {
     @Test
     @WithAppUser(id = MANAGER, team = ALPHA, teamRole = TeamRole.MANAGER)
     void theAgingPageIsATableWithHeadersAndATotalRow() throws Exception {
-        assertThat(page(get("/reports"), status().isOk()))
-                .contains("<li><a href=\"/reports\">Reports</a></li>")
-                .contains("<a href=\"/reports/aging\">Aging</a>", "<a href=\"/reports/compliance\">SLA compliance</a>");
-
         assertThat(page(get("/reports/aging"), status().isOk()))
-                .contains("<table class=\"table table-sm tk-report\"><caption>Open cases by age and SLA state, ")
+                .contains("<li><a href=\"/reports/aging\">Reports</a></li>")
+                .contains("<p class=\"tk-report-links\"><a href=\"/reports/compliance\">SLA compliance</a></p>")
+                .contains("<table class=\"table table-sm tk-report\"><caption>Open and pending-closure cases on "
+                        + LocalDate.ofInstant(clock.instant(), app.timezone()) + ", by days since identified")
                 .contains("<thead><tr><th scope=\"col\">Team</th><th scope=\"col\">Case type</th>"
                         + "<th scope=\"col\">0–30 days</th><th scope=\"col\">31–60 days</th>")
                 .contains(ALPHA_ROW + "<td>Access review</td>" + cells(3, 1, 2, 1, 2, 1, 3, 1) + "</tr>")
@@ -98,10 +97,12 @@ class ReportControllerIT {
                 .contains("<label class=\"form-label\" for=\"tk-to\">To</label>")
                 .contains("<p>67% of the cases closed in the period were closed within the SLA.</p>")
                 .contains("<caption>Cases closed from " + from + " to " + to)
-                .contains(ALPHA_ROW + "<td>Access review</td>" + cells(1, 1) + "<td>50%</td>" + cells(1, 3))
-                .contains(ALPHA_ROW + "<td>Data handling</td>" + cells(1, 0) + "<td>100%</td>" + cells(1, 0))
-                .contains("<th scope=\"row\" colspan=\"2\">Total</th>" + cells(2, 1) + "<td>67%</td>" + cells(2, 3)
-                        + "</tr></tfoot>")
+                .contains("<th scope=\"col\">Closed late</th><th scope=\"col\">At risk</th>"
+                        + "<th scope=\"col\">Overdue</th><th scope=\"col\">Share within SLA</th>")
+                .contains(ALPHA_ROW + "<td>Access review</td>" + cells(1, 1, 1, 3) + "<td>50%</td></tr>")
+                .contains(ALPHA_ROW + "<td>Data handling</td>" + cells(1, 0, 1, 0) + "<td>100%</td></tr>")
+                .contains(
+                        "<th scope=\"row\" colspan=\"2\">Total</th>" + cells(2, 1, 2, 3) + "<td>67%</td></tr></tfoot>")
                 .doesNotContain("tk-period-error");
         assertThat(page(get("/reports/compliance"), status().isOk()))
                 .contains("name=\"to\" value=\"" + LocalDate.ofInstant(clock.instant(), app.timezone()) + "\"");

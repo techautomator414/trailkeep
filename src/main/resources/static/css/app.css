@@ -94,7 +94,8 @@ tr[data-tk-href] { cursor: pointer; }
 .tk-report caption { caption-side: top; color: var(--tk-ink); }
 .tk-report tfoot { border-top: 2px solid var(--tk-ink); font-weight: 600; }
 @media print {
-  .tk-header, .tk-footer, .tk-skip-link, .tk-report-form, #tk-live, .tk-dialog { display: none !important; }
+  .tk-header, .tk-footer, .tk-skip-link, .tk-report-form, .tk-report-links, #tk-live, .tk-dialog {
+    display: none !important; }
   body { display: block; color: #000; background: #fff; }
   .tk-main { padding: 0; max-width: none; }
   .table-responsive { overflow: visible; }
