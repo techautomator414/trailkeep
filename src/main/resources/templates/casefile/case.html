@@ -11,8 +11,8 @@
      (WP-16) sit under the action buttons. A pending closure's banner carries its decision actions (WP-19): Approve as
      one button and Reject or request changes for the named approver, Reassign approver for Managers; once decided,
      an open case sent back shows "Requires Changes" until the next comment and a closed case its locked closure. A
-     closed case offers Reopen to Managers (a reason dialog); once reopened it shows "Reopened" until the next closure
-     request, and its SLA chip is the new cycle's. -->
+     closed case offers Reopen to Managers (a reason dialog); once reopened it shows "Reopened" with who, when and why
+     until the next closure request, and its SLA chip is the new cycle's. -->
 <html lang="en" xmlns:th="http://www.thymeleaf.org" th:replace="~{web/layout :: page(~{::title}, ~{::main})}">
 <head><title th:text="${c.number} + ' ' + ${c.title} + ' · ' + ${@branding.name()}">Case</title></head>
 <body>
@@ -39,6 +39,15 @@
                                  and c.status.name() == 'OPEN'}">
       <span aria-hidden="true">&#x21BB;</span> <span th:text="#{tk.reopen.badge}">Reopened</span></li>
   </ul>
+  <section th:if="${lastReopen != null and lastDecision != null and lastDecision.decision.name() == 'APPROVED'
+                   and c.status.name() == 'OPEN'}" th:with="r=${lastReopen}" class="alert alert-secondary"
+           aria-labelledby="tk-reopened-title">
+    <h2 id="tk-reopened-title" class="h5" th:text="#{tk.reopen.badge}">Reopened</h2>
+    <p th:text="#{tk.reopen.by(${r.reopenedBy}, ${#temporals.format(r.reopenedAt, 'yyyy-MM-dd HH:mm')},
+                  ${r.slaCycle})}">Reopened by X on date.</p>
+    <h3 class="h6" th:text="#{tk.decision.reason.title}">Reason</h3>
+    <p class="tk-description mb-0" th:text="${r.reason}">Reason</p>
+  </section>
   <section th:if="${pendingClosure != null}" class="alert alert-info" aria-labelledby="tk-pending-title"
            th:with="p=${pendingClosure}">
     <h2 id="tk-pending-title" class="h5" th:text="#{tk.closure.pending}">Pending closure</h2>

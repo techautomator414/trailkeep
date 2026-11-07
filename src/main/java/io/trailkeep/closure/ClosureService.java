@@ -106,6 +106,26 @@ public interface ClosureService {
     Optional<DecidedClosure> lastDecision(Actor actor, String caseNumber);
 
     /**
+     * A case's latest reopen, as the case page shows it. {@code CASE_REOPEN} is the one readable record of why (the
+     * audit trail holds the reason redacted); the reason is case content, shown to whoever reads the case.
+     *
+     * @param reopenedBy who reopened it, by name
+     * @param reopenedAt when, in {@code app.timezone}, to the minute
+     * @param reason why
+     * @param slaCycle the SLA cycle it started
+     */
+    record Reopened(String reopenedBy, LocalDateTime reopenedAt, String reason, int slaCycle) {}
+
+    /**
+     * The case's latest reopen, if the actor reads the case and it was ever reopened.
+     *
+     * @param actor the actor
+     * @param caseNumber the case number as it appears in the URL
+     * @return the reopen, or empty
+     */
+    Optional<Reopened> lastReopen(Actor actor, String caseNumber);
+
+    /**
      * A request waiting for the actor's decision, for the dashboard's "Pending my approval".
      *
      * @param id the request

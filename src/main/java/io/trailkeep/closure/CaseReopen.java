@@ -75,6 +75,22 @@ class CaseReopen {
         return id;
     }
 
+    long getReopenedBy() {
+        return reopenedBy;
+    }
+
+    Instant getReopenedAt() {
+        return reopenedAt;
+    }
+
+    String getReason() {
+        return reason;
+    }
+
+    int getSlaCycle() {
+        return slaCycle;
+    }
+
     @Override
     public boolean equals(@Nullable Object other) {
         return this == other || (other instanceof CaseReopen that && id != null && Objects.equals(id, that.id));
