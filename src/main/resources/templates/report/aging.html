@@ -34,6 +34,45 @@
       </tfoot>
     </table>
   </div>
+  <!-- The lists to chase (§4.5): case numbers, titles and people only, never a description, subject or message. -->
+  <div class="table-responsive">
+    <table class="table table-sm tk-report tk-report-list">
+      <caption th:text="#{tk.report.overdue}">Overdue cases</caption>
+      <thead>
+      <tr th:with="h=${ {'case','title','owner','due','daysOverdue'} }">
+        <th scope="col" th:each="k : ${h}" th:text="#{'tk.report.col.' + ${k}}">Case</th>
+      </tr>
+      </thead>
+      <tbody>
+      <tr th:each="o : ${r.overdue}">
+        <th scope="row"><a th:href="@{/cases/{n}(n=${o.caseNumber})}" th:text="${o.caseNumber}">CASE-2026-000001</a></th>
+        <td th:text="${o.title}">Title</td><td th:text="${o.owner}">Owner</td><td th:text="${o.due}">2026-11-01</td>
+        <td th:text="${o.daysOverdue}">6</td>
+      </tr>
+      <tr th:if="${r.overdue.isEmpty()}"><td colspan="5" th:text="#{tk.report.listed.none}">None.</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p th:if="${r.overdue.size() >= listed}" th:text="#{tk.report.listed.first(${listed})}">Only the first 100.</p>
+  <div class="table-responsive">
+    <table class="table table-sm tk-report tk-report-list">
+      <caption th:text="#{tk.report.waiting}">Unanswered update requests</caption>
+      <thead>
+      <tr th:with="h=${ {'case','title','askedOf','askedBy','requestedOn','daysWaiting'} }">
+        <th scope="col" th:each="k : ${h}" th:text="#{'tk.report.col.' + ${k}}">Case</th>
+      </tr>
+      </thead>
+      <tbody>
+      <tr th:each="w : ${r.waiting}">
+        <th scope="row"><a th:href="@{/cases/{n}(n=${w.caseNumber})}" th:text="${w.caseNumber}">CASE-2026-000001</a></th>
+        <td th:text="${w.title}">Title</td><td th:text="${w.askedOf}">Asked of</td><td th:text="${w.askedBy}">Asked by</td>
+        <td th:text="${w.requestedOn}">2026-11-01</td><td th:text="${w.daysWaiting}">6</td>
+      </tr>
+      <tr th:if="${r.waiting.isEmpty()}"><td colspan="6" th:text="#{tk.report.listed.none}">None.</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p th:if="${r.waiting.size() >= listed}" th:text="#{tk.report.listed.first(${listed})}">Only the first 100.</p>
 </main>
 </body>
 </html>

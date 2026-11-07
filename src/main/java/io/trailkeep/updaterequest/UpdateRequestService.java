@@ -115,6 +115,26 @@ public interface UpdateRequestService {
     Paged<OpenRequest> openFor(Actor actor, int page);
 
     /**
+     * An open request on a case the person reads, for the aging report's list; never the message.
+     *
+     * @param caseNumber the case
+     * @param caseTitle the case's title
+     * @param askedOf who was asked, by name
+     * @param askedBy who asked, by name
+     * @param requestedAt when
+     */
+    record Unanswered(CaseNumber caseNumber, String caseTitle, String askedOf, String askedBy, Instant requestedAt) {}
+
+    /**
+     * The open requests on cases the actor reads, whoever was asked, oldest first.
+     *
+     * @param actor the actor
+     * @param limit the most to list
+     * @return the requests
+     */
+    List<Unanswered> unanswered(Actor actor, int limit);
+
+    /**
      * An open request due a reminder (BUILD_PLAN §6 "Reminders tick"); never the message.
      *
      * @param id the request

@@ -69,6 +69,7 @@ class ReportController {
     @GetMapping("/reports/aging")
     String aging(@AuthenticationPrincipal TrailkeepOidcUser principal, Model model) {
         model.addAttribute("r", reports.aging(page.actor(principal)));
+        model.addAttribute("listed", ReportService.LISTED);
         return "report/aging";
     }
 

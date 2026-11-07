@@ -37,4 +37,13 @@ interface UpdateRequestQueries {
      * @return the count
      */
     long countOpenFrom(CaseScope scope, long recipientId);
+
+    /**
+     * The open requests on cases the scope reads, whoever was asked, oldest first.
+     *
+     * @param scope the caller's scope
+     * @param limit the most to return
+     * @return the requests
+     */
+    List<UpdateRequest> findOpen(CaseScope scope, int limit);
 }

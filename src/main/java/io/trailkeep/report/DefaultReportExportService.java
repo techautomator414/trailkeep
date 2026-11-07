@@ -36,6 +36,9 @@ class DefaultReportExportService implements ReportExportService {
             "No SLA");
     private static final List<String> COMPLIANCE = List.of(
             "Team", "Case type", "Closed within SLA", "Closed late", "At risk", "Overdue", "Share within SLA (%)");
+    private static final List<String> OVERDUE = List.of("Overdue case", "Title", "Owner", "Due", "Days overdue");
+    private static final List<String> WAITING =
+            List.of("Unanswered request on", "Title", "Asked of", "Asked by", "Requested on", "Days waiting");
     private static final String TOTAL = "Total";
 
     private final ReportService reports;
@@ -62,6 +65,19 @@ class DefaultReportExportService implements ReportExportService {
         List<List<String>> lines = new ArrayList<>();
         report.lines().forEach(line -> lines.add(agingCells(line.team(), line.owner(), line.counts())));
         lines.add(agingCells(TOTAL, "", report.total()));
+        section(lines, OVERDUE, report.overdue().size());
+        report.overdue()
+                .forEach(o -> lines.add(List.of(
+                        o.caseNumber(), o.title(), o.owner(), o.due().toString(), Long.toString(o.daysOverdue()))));
+        section(lines, WAITING, report.waiting().size());
+        report.waiting()
+                .forEach(w -> lines.add(List.of(
+                        w.caseNumber(),
+                        w.title(),
+                        w.askedOf(),
+                        w.askedBy(),
+                        w.requestedOn().toString(),
+                        Long.toString(w.daysWaiting()))));
         audited(
                 actor,
                 new Exported("aging", report.asOf().toString(), report.lines().size()));
@@ -90,6 +106,15 @@ class DefaultReportExportService implements ReportExportService {
                 null,
                 "REPORT_EXPORTED",
                 audit.diff(null, exported)));
+    }
+
+    /** A list's section after the table: an empty line, a note when the list is capped, then its header. */
+    private static void section(List<List<String>> lines, List<String> header, int listed) {
+        lines.add(List.of());
+        if (listed >= ReportService.LISTED) {
+            lines.add(List.of("Only the first " + ReportService.LISTED + " are listed."));
+        }
+        lines.add(header);
     }
 
     private static List<String> agingCells(String team, String owner, AgingRow c) {

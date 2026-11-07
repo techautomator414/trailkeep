@@ -28,23 +28,58 @@ public interface ReportService {
     record AgingLine(String team, String owner, AgingRow counts) {}
 
     /**
+     * An overdue case in the aging report's list (§4.5); never its description or subject.
+     *
+     * @param caseNumber the case number
+     * @param title the title
+     * @param owner the owner's name
+     * @param due the day the SLA fell due, in {@code app.timezone}
+     * @param daysOverdue whole days since then
+     */
+    record OverdueLine(String caseNumber, String title, String owner, LocalDate due, long daysOverdue) {}
+
+    /**
+     * An unanswered update request in the aging report's list (§4.5); never its message.
+     *
+     * @param caseNumber the case number
+     * @param title the case's title
+     * @param askedOf who was asked
+     * @param askedBy who asked
+     * @param requestedOn the day it was asked, in {@code app.timezone}
+     * @param daysWaiting whole days since then
+     */
+    record WaitingLine(
+            String caseNumber, String title, String askedOf, String askedBy, LocalDate requestedOn, long daysWaiting) {}
+
+    /**
      * The aging report.
      *
      * @param asOf the day ages count to, in {@code app.timezone}
-     * @param lines by team name and case type
+     * @param lines by team name and owner
      * @param total the column totals
+     * @param overdue the overdue cases, oldest due first, at most {@link #LISTED}
+     * @param waiting the unanswered update requests, oldest first, at most {@link #LISTED}
      */
-    record AgingReport(LocalDate asOf, List<AgingLine> lines, AgingRow total) {
+    record AgingReport(
+            LocalDate asOf,
+            List<AgingLine> lines,
+            AgingRow total,
+            List<OverdueLine> overdue,
+            List<WaitingLine> waiting) {
 
         /**
-         * Copies the lines, so the record holds nothing mutable.
+         * Copies the lists, so the record holds nothing mutable.
          *
          * @param asOf the day
          * @param lines the lines
          * @param total the totals
+         * @param overdue the overdue cases
+         * @param waiting the unanswered requests
          */
         public AgingReport {
             lines = List.copyOf(lines);
+            overdue = List.copyOf(overdue);
+            waiting = List.copyOf(waiting);
         }
     }
 
@@ -113,4 +148,7 @@ public interface ReportService {
 
     /** The default compliance period, in days up to today. */
     int DEFAULT_DAYS = 30;
+
+    /** The most cases or requests the aging report lists. */
+    int LISTED = 100;
 }

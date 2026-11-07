@@ -5,9 +5,11 @@ package io.trailkeep.report;
 import io.trailkeep.casefile.CaseReportService;
 import io.trailkeep.casefile.CaseReportService.AgingRow;
 import io.trailkeep.casefile.CaseReportService.ComplianceRow;
+import io.trailkeep.casefile.CaseReportService.OverdueCase;
 import io.trailkeep.casefile.CaseService.Actor;
 import io.trailkeep.shared.DomainException.Kind;
 import io.trailkeep.shared.config.AppProperties;
+import io.trailkeep.updaterequest.UpdateRequestService;
 import io.trailkeep.user.GlobalRole;
 import io.trailkeep.user.TeamAdminService.TeamSummary;
 import io.trailkeep.user.UserDirectoryService;
@@ -34,13 +36,19 @@ import org.springframework.stereotype.Service;
 class DefaultReportService implements ReportService {
 
     private final CaseReportService counts;
+    private final UpdateRequestService requests;
     private final UserDirectoryService directory;
     private final InstantSource clock;
     private final ZoneId zone;
 
     DefaultReportService(
-            CaseReportService counts, UserDirectoryService directory, InstantSource clock, AppProperties app) {
+            CaseReportService counts,
+            UpdateRequestService requests,
+            UserDirectoryService directory,
+            InstantSource clock,
+            AppProperties app) {
         this.counts = counts;
+        this.requests = requests;
         this.directory = directory;
         this.clock = clock;
         this.zone = app.timezone();
@@ -70,7 +78,37 @@ class DefaultReportService implements ReportService {
                 sum(rows, AgingRow::atRisk),
                 sum(rows, AgingRow::overdue),
                 sum(rows, AgingRow::noSla));
-        return new AgingReport(today, lines, total);
+        return new AgingReport(today, lines, total, overdue(actor, today), waiting(actor, today));
+    }
+
+    /** The overdue cases, oldest due first, with their owners' names and how many days overdue. */
+    private List<OverdueLine> overdue(Actor actor, LocalDate today) {
+        List<OverdueCase> found = counts.overdue(actor, LISTED);
+        Map<Long, String> owners = directory.displayNames(
+                found.stream().map(OverdueCase::ownerId).distinct().toList());
+        return found.stream()
+                .map(c -> {
+                    LocalDate due = LocalDate.ofInstant(c.dueAt(), zone);
+                    String owner = owners.getOrDefault(c.ownerId(), "");
+                    return new OverdueLine(c.caseNumber(), c.title(), owner, due, ChronoUnit.DAYS.between(due, today));
+                })
+                .toList();
+    }
+
+    /** The unanswered update requests, oldest first, with how many days each has waited. */
+    private List<WaitingLine> waiting(Actor actor, LocalDate today) {
+        return requests.unanswered(actor, LISTED).stream()
+                .map(r -> {
+                    LocalDate on = LocalDate.ofInstant(r.requestedAt(), zone);
+                    return new WaitingLine(
+                            r.caseNumber().toString(),
+                            r.caseTitle(),
+                            r.askedOf(),
+                            r.askedBy(),
+                            on,
+                            ChronoUnit.DAYS.between(on, today));
+                })
+                .toList();
     }
 
     @Override

@@ -4,6 +4,7 @@ package io.trailkeep.casefile;
 
 import io.trailkeep.casefile.CaseReportService.AgingRow;
 import io.trailkeep.casefile.CaseReportService.ComplianceRow;
+import io.trailkeep.casefile.CaseReportService.OverdueCase;
 import io.trailkeep.shared.CaseStatus;
 import io.trailkeep.shared.access.CaseScope;
 import jakarta.persistence.EntityManager;
@@ -76,6 +77,28 @@ class CaseReportQueriesImpl implements CaseReportQueries {
                 count(cb, cb.and(closed, cb.equal(state, SlaState.BREACHED))),
                 count(cb, cb.and(open, cb.equal(state, SlaState.AT_RISK))),
                 count(cb, cb.and(open, cb.equal(state, SlaState.OVERDUE))));
+    }
+
+    @Override
+    public List<OverdueCase> overdue(CaseScope scope, int limit) {
+        CriteriaBuilder cb = entityManager.getCriteriaBuilder();
+        CriteriaQuery<Tuple> query = cb.createTupleQuery();
+        Root<CaseRecord> record = query.from(CaseRecord.class);
+        Root<CaseSla> sla = query.from(CaseSla.class);
+        query.select(cb.tuple(record.get("caseNumber"), record.get("title"), record.get("ownerId"), sla.get("dueAt")))
+                .where(
+                        scope.toPredicate(record, query, cb),
+                        cb.equal(sla.get("caseId"), record.get("id")),
+                        record.get("status").in(OPEN),
+                        cb.equal(sla.get("state"), SlaState.OVERDUE))
+                .orderBy(cb.asc(sla.get("dueAt")), cb.asc(record.get("id")));
+        return entityManager.createQuery(query).setMaxResults(limit).getResultList().stream()
+                .map(row -> new OverdueCase(
+                        row.get(0, String.class),
+                        row.get(1, String.class),
+                        row.get(2, Long.class),
+                        row.get(3, Instant.class)))
+                .toList();
     }
 
     private static Expression<Integer> count(CriteriaBuilder cb, Predicate when) {
