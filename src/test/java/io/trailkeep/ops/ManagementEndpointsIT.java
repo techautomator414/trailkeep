@@ -69,6 +69,10 @@ class ManagementEndpointsIT {
         assertThat(liveness.isMember("slaEvaluator")).isFalse();
         assertThat(readiness.isMember("slaEvaluator")).isFalse();
         assertThat(groups.getPrimary().isMember("slaEvaluator")).isTrue();
+        // And the reminders tick's (WP-17b).
+        assertThat(liveness.isMember("remindersTick")).isFalse();
+        assertThat(readiness.isMember("remindersTick")).isFalse();
+        assertThat(groups.getPrimary().isMember("remindersTick")).isTrue();
         assertThat(liveness.isMember("livenessState")).isTrue();
         assertThat(readiness.isMember("readinessState")).isTrue();
 
