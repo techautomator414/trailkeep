@@ -110,7 +110,8 @@ class CasePage {
     /**
      * WP-19: Request closure's choices when the matrix allows it (an open case); a pending request's banner with
      * Approve and Reject or request changes for its approver and Reassign approver for Managers; the latest decision
-     * (the "Requires Changes" badge on an open case, the locked closure fields on a closed one).
+     * (the "Requires Changes" badge on an open case, the locked closure fields on a closed one); Reopen on a closed
+     * case for Managers.
      */
     private void closure(Actor actor, String number, Model model) {
         boolean closable = cases.allows(actor, number, CaseAction.REQUEST_CLOSURE);
@@ -130,6 +131,7 @@ class CasePage {
                         ? closures.reassignChoices(actor, number, pending.id())
                         : null);
         model.addAttribute("lastDecision", closures.lastDecision(actor, number).orElse(null));
+        model.addAttribute("reopenable", cases.allows(actor, number, CaseAction.REOPEN));
     }
 
     /**

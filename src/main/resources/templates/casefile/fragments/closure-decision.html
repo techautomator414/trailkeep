@@ -4,8 +4,8 @@
      "fields" shows a request's summary and follow-ups (case content, read only). "approve" is Approve as one button.
      "decide" is Reject or request changes: a radio group and the required reason (1000 characters, counted by
      app.js). "approver" is Reassign approver (WP-19 part c2b): a native <select> of the A.2 #18 choices for the
-     original requester, which app.js turns into the ARIA APG combobox. Each refused field carries aria-invalid and
-     its message. -->
+     original requester, which app.js turns into the ARIA APG combobox. "reopen" is Reopen (WP-19 part c3): the
+     required reason, counted. Each refused field carries aria-invalid and its message. -->
 <html lang="en" xmlns:th="http://www.thymeleaf.org">
 <body>
 <th:block th:fragment="fields(summary, followUps)">
@@ -73,6 +73,27 @@
   </div>
   <div class="tk-dialog-actions">
     <button class="btn btn-primary" type="submit" th:text="#{tk.approver.send}">Reassign approver</button>
+    <a class="btn btn-outline-secondary" th:href="@{/cases/{n}(n=${number})}"
+       th:attr="data-tk-dialog-close=${dialog} ? 'true' : null"
+       th:text="${dialog} ? #{tk.request.cancel} : #{tk.request.back}">Cancel</a>
+  </div>
+</form>
+
+<form th:fragment="reopen(number, reason, invalid, dialog)" method="post"
+      th:action="@{/cases/{n}/reopen(n=${number})}">
+  <div class="mb-3">
+    <label class="form-label" for="tk-reopen-reason" th:text="#{tk.decision.reason}">Reason (required)</label>
+    <textarea class="form-control" id="tk-reopen-reason" name="reason" rows="4" required maxlength="1000"
+              th:attr="aria-invalid=${invalid},
+                       aria-describedby=${invalid} ? 'tk-reopen-reason-error tk-reopen-hint' : 'tk-reopen-hint',
+                       data-tk-count=#{tk.closure.count},data-tk-dialog-focus=${dialog} ? 'true' : null"
+              th:text="${reason}"></textarea>
+    <div th:if="${invalid}" class="invalid-feedback d-block" id="tk-reopen-reason-error"
+         th:text="#{tk.decision.error.reason}">Write a reason.</div>
+    <div class="form-text" id="tk-reopen-hint" th:text="#{tk.reopen.hint}">Up to 1000 characters.</div>
+  </div>
+  <div class="tk-dialog-actions">
+    <button class="btn btn-primary" type="submit" th:text="#{tk.reopen.send}">Reopen case</button>
     <a class="btn btn-outline-secondary" th:href="@{/cases/{n}(n=${number})}"
        th:attr="data-tk-dialog-close=${dialog} ? 'true' : null"
        th:text="${dialog} ? #{tk.request.cancel} : #{tk.request.back}">Cancel</a>
