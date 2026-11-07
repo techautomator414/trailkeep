@@ -42,4 +42,16 @@ class SlaEvaluatorTest {
         assertThat(chunks.get(1).get(0)).isEqualTo(501L);
         verify(writer).succeeded(SlaEvaluator.JOB, NOW, 1001);
     }
+
+    @Test
+    void theScheduledTickEvaluatesAtTheApplicationClock() {
+        CaseSlaService slas = mock(CaseSlaService.class);
+        SlaChunkWriter writer = mock(SlaChunkWriter.class);
+        when(slas.dueForEvaluation(NOW)).thenReturn(List.of());
+
+        new SlaEvaluator(slas, writer, InstantSource.fixed(NOW)).tick();
+
+        verify(slas).dueForEvaluation(NOW);
+        verify(writer).succeeded(SlaEvaluator.JOB, NOW, 0);
+    }
 }
