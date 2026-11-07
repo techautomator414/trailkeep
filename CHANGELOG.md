@@ -9,6 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- SLA screens once the evaluator moves states (WP-21 part c): the SLA chip on the case page and in the cases list now reads "At risk, N days left" and "Overdue N days" (BUILD_PLAN §4.3), still icon and text, never colour alone, and the History page shows the evaluator's changes with the states by name ("SLA state: On track → At risk"). The SLA filter already offered every state and is unchanged. This completes WP-21.
 - SLA alerts, metrics and health (WP-21 part b).
   - When a case turns at risk, its owner is told by mail and in-app alert (`sla-at-risk`).
   - When it turns overdue, the owner is told and so, when the SLA policy escalates to them (`ESCALATE_TO`), are the team's enabled Managers (`sla-overdue`). A disabled owner's alerts go to the Managers instead.

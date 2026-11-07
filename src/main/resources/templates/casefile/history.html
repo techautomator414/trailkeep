@@ -3,7 +3,8 @@
 <!-- The History page of a case (BUILD_PLAN §4.3): the case's audit events, newest first, 50 to a page. A plain GET
      form chooses the kind of event and plain links page through; nothing here needs a script. Each time is a <time>
      element (UTC in datetime, app.timezone as text). A field whose value is possible PHI arrives from the service as
-     "set" or "changed" only, never as a digest or a length. -->
+     "set" or "changed" only, never as a digest or a length. The SLA evaluator's "state" values read as the list's SLA
+     state labels (On track, At risk, Overdue). -->
 <html lang="en" xmlns:th="http://www.thymeleaf.org" th:replace="~{web/layout :: page(~{::title}, ~{::main})}">
 <head><title th:text="#{tk.history.heading(${h.number})} + ' · ' + ${@branding.name()}">History</title></head>
 <body>
@@ -51,12 +52,14 @@
             <li th:each="c : ${e.changes}" class="text-break"
                 th:with="label=${#messages.msgOrNull('tk.history.field.' + c.field)} ?: ${c.field},
                          mark=${c.redaction != null} ? #{'tk.history.redacted.' + ${c.redaction}} : '',
-                         blank=#{tk.history.empty}"
+                         blank=#{tk.history.empty}, sla=${c.field == 'state'},
+                         from=${sla and c.before != null} ? ${#messages.msg('tk.list.sla.' + c.before)} : ${c.before},
+                         to=${sla and c.after != null} ? ${#messages.msg('tk.list.sla.' + c.after)} : ${c.after}"
                 th:text="${c.redaction != null}
                   ? #{tk.history.value(${label},${mark})}
-                  : (${c.before == null}
-                    ? #{tk.history.value(${label},${c.after})}
-                    : #{tk.history.change(${label},${c.before},${c.after ?: blank})})">Title: Old → New</li>
+                  : (${from == null}
+                    ? #{tk.history.value(${label},${to})}
+                    : #{tk.history.change(${label},${from},${to ?: blank})})">Title: Old → New</li>
           </ul>
           <span th:if="${e.changes.isEmpty()}" class="text-muted" th:text="#{tk.history.none}">No fields recorded</span>
         </td>
