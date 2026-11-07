@@ -151,6 +151,10 @@ app:
   mail:
     enabled: true
     lease: 5m
+  # SLA evaluator (WP-21, BUILD_PLAN §6): every 15 minutes, on one replica at a time (ShedLock on the SHEDLOCK table).
+  # "-" turns it off, as the test profiles do.
+  sla:
+    evaluate-cron: "0 */15 * * * *"
 
 server:
   port: 8080

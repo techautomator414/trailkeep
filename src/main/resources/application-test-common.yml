@@ -14,6 +14,9 @@ app:
     from: Trailkeep (test) <trailkeep@example.invalid>
     # No scheduled dispatch in tests, so they stay deterministic; dispatcher tests call OutboxDispatcher.dispatch().
     dispatch-cron: "-"
+  sla:
+    # Likewise no scheduled SLA evaluation; evaluator tests call SlaEvaluator.evaluate(now).
+    evaluate-cron: "-"
   attachments:
     clamd:
       # Unreachable on purpose, like the provider endpoints below: scanner tests start their own clamd (fake or real).

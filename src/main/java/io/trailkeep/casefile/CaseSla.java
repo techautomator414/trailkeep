@@ -9,6 +9,7 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.Instant;
+import java.util.Objects;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -71,6 +72,38 @@ class CaseSla {
 
     int getCycle() {
         return cycle;
+    }
+
+    long getCaseId() {
+        return caseId;
+    }
+
+    SlaState getState() {
+        return state;
+    }
+
+    /**
+     * The state the evaluator moves this row to at {@code now}, or {@code null} to leave it: past the due time an open
+     * clock is {@code OVERDUE}, past the at-risk time an on-track one is {@code AT_RISK} (BUILD_PLAN §6).
+     *
+     * @param now the evaluation instant
+     * @return the next state, or {@code null}
+     */
+    @Nullable
+    SlaState next(Instant now) {
+        Instant due = dueAt;
+        Instant atRisk = atRiskAt;
+        if (due == null || atRisk == null || (state != SlaState.ON_TRACK && state != SlaState.AT_RISK)) {
+            return null;
+        }
+        if (due.isAfter(now)) {
+            return state == SlaState.ON_TRACK && !atRisk.isAfter(now) ? SlaState.AT_RISK : null;
+        }
+        return SlaState.OVERDUE;
+    }
+
+    Instant getDueAt() {
+        return Objects.requireNonNull(dueAt, "an SLA in a clock state has a due time");
     }
 
     /**
