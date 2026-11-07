@@ -63,9 +63,23 @@ class AlertLedger {
      * @param now when
      */
     AlertLedger(long caseId, AlertType alertType, int slaCycle, Instant now) {
+        this(caseId, alertType, slaCycle, ONCE_PER_CYCLE, now);
+    }
+
+    /**
+     * An alert raised once per period.
+     *
+     * @param caseId the case
+     * @param alertType what was raised
+     * @param slaCycle the SLA cycle it belongs to
+     * @param periodKey the period, at most 32 characters
+     * @param now when
+     */
+    AlertLedger(long caseId, AlertType alertType, int slaCycle, String periodKey, Instant now) {
         this.caseId = caseId;
         this.alertType = alertType;
         this.slaCycle = slaCycle;
+        this.periodKey = periodKey;
         this.recordedAt = now;
     }
 

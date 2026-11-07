@@ -1,0 +1,2 @@
+/*[- SPDX-License-Identifier: Apache-2.0. In-app alert of the update-reminder mail: one line, never the message. -]*/
+Reminder: [(${requester})] is still waiting for your update on [(${caseNumber})], "[(${title})]"

@@ -17,6 +17,9 @@ app:
   sla:
     # Likewise no scheduled SLA evaluation; evaluator tests call SlaEvaluator.evaluate(now).
     evaluate-cron: "-"
+  reminders:
+    # Likewise; reminder tests call RemindersTick.run(now).
+    cron: "-"
   attachments:
     clamd:
       # Unreachable on purpose, like the provider endpoints below: scanner tests start their own clamd (fake or real).

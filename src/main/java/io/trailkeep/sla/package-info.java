@@ -3,8 +3,9 @@
 /**
  * SLA module. SLA policies, the SLA evaluator and SLA state transitions, driven by case and closure events.
  *
- * <p>May call: {@code shared}, {@code audit}, {@code casefile}, {@code notification} (the SLA alerts) and
- * {@code user} (who they go to). Other modules use only the {@code *Service} interfaces
+ * <p>May call: {@code shared}, {@code audit}, {@code casefile}, {@code notification} (the SLA alerts and reminders),
+ * {@code user} (who they go to), and {@code updaterequest} and {@code closure} (what the reminders tick reminds of).
+ * Neither of those two calls {@code sla}, so the reminders tick lives here without a cycle. Other modules use only the {@code *Service} interfaces
  * and records in this package.
  */
 @NullMarked

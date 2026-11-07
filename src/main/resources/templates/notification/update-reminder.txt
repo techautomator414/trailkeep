@@ -1,0 +1,9 @@
+/*[- SPDX-License-Identifier: Apache-2.0. Plain-text part of the update-reminder mail (WP-17b, BUILD_PLAN §6): the case
+     number, title, who asked and a deep link to the comments; never the request's message, the description or the
+     subject (BUILD_PLAN §9). -]*/
+Reminder: [(${requester})] is still waiting for your update on case [(${caseNumber})], "[(${title})]".
+
+A comment from you on the case answers the request:
+[(${link})]
+
+You receive this because an update was requested from you.
