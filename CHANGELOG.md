@@ -9,6 +9,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- The latest reopen on the case page (WP-19 part c4): under the "Reopened" chip a reopened case shows "Reopened by
+  X on date. SLA cycle N runs from then." and the reason. The reason is read from `CASE_REOPEN` through a new scoped
+  Criteria query, since the audit trail holds it only redacted.
 - Reopen screen (WP-19 part c3): Managers and Compliance Admins see "Reopen case" on a closed case. It opens a native
   dialog (fallback page `/cases/{number}/reopen`) with a required reason of up to 1000 characters and a visible count.
   A missing or over-long reason is 422 with the field marked and summarized, a case that moved on is 409 with Reload,
