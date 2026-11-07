@@ -112,7 +112,7 @@ abstract class AbstractSlaEvaluatorIT {
     @Test
     void twentyCasesMoveAsExpectedAcrossThreeRunsAndARestart() {
         Map<String, List<Long>> fixture = fixture();
-        Map<Long, Integer> versions = versions();
+        final Map<Long, Integer> versions = versions();
 
         assertThat(evaluator.evaluate(T1)).isEqualTo(11);
         assertThat(states(fixture))
