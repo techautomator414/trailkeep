@@ -133,7 +133,7 @@ class DashboardAccessibilityIT {
         new SignInPage(page).signIn("alpha.analyst", KeycloakDevRealm.PASSWORD, KEYCLOAK.app(""));
         page.waitForLoadState();
         consoleProblems.clear();
-        CaseNumber atRisk = seed();
+        final CaseNumber atRisk = seed();
 
         page.navigate(KEYCLOAK.app("/"));
         assertClean("Dashboard");
@@ -166,7 +166,7 @@ class DashboardAccessibilityIT {
 
     /** The analyst's at-risk case, and 21 cases of a colleague's on which an update is asked of the analyst. */
     private CaseNumber seed() {
-        long analyst = Objects.requireNonNull(
+        final long analyst = Objects.requireNonNull(
                 jdbc.queryForObject("SELECT ID FROM APP_USER WHERE EXTERNAL_ID = ?", Long.class, ALPHA_ANALYST));
         CaseSeed seed = new CaseSeed(jdbc);
         team = seed.team();
