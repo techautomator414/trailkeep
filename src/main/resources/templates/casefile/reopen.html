@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Reopen without JavaScript and after a refused post (BUILD_PLAN §4.3, WP-19 part c3): 422 with the reason
+     summarized and linked, 409 with Reload when the case moved on meanwhile. -->
+<html lang="en" xmlns:th="http://www.thymeleaf.org" th:replace="~{web/layout :: page(~{::title}, ~{::main})}">
+<head><title th:text="#{tk.reopen.title(${number})} + ' · ' + ${@branding.name()}">Reopen</title></head>
+<body>
+<main id="main" class="container tk-main" tabindex="-1">
+  <h1 th:text="#{tk.reopen.title(${number})}">Reopen</h1>
+  <div th:if="${reopenInvalid}" class="alert alert-danger" role="alert" tabindex="-1" data-tk-error-summary
+       aria-labelledby="tk-reopen-errors">
+    <h2 id="tk-reopen-errors" class="h5" th:text="#{tk.reopen.errors}">The case was not reopened.</h2>
+    <ul><li><a class="alert-link" href="#tk-reopen-reason" th:text="#{tk.decision.error.reason}">Reason</a></li></ul>
+  </div>
+  <div th:if="${conflict}" class="alert alert-warning" role="alert" tabindex="-1" data-tk-error-summary
+       aria-labelledby="tk-reopen-conflict">
+    <h2 id="tk-reopen-conflict" class="h5" th:text="#{tk.closure.conflict}">This case changed.</h2>
+    <p><a class="btn btn-primary" th:href="@{/cases/{n}(n=${number})}" th:text="#{tk.edit.reload}">Reload</a></p>
+  </div>
+  <form th:replace="~{casefile/fragments/closure-decision :: reopen(${number}, ${reason}, ${reopenInvalid}, false)}">
+  </form>
+</main>
+</body>
+</html>

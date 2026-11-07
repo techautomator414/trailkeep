@@ -10,7 +10,9 @@
      form, because one matrix row covers both. Links to the Comments and Attachments sections and to the History page
      (WP-16) sit under the action buttons. A pending closure's banner carries its decision actions (WP-19): Approve as
      one button and Reject or request changes for the named approver, Reassign approver for Managers; once decided,
-     an open case sent back shows "Requires Changes" until the next comment and a closed case its locked closure. -->
+     an open case sent back shows "Requires Changes" until the next comment and a closed case its locked closure. A
+     closed case offers Reopen to Managers (a reason dialog); once reopened it shows "Reopened" until the next closure
+     request, and its SLA chip is the new cycle's. -->
 <html lang="en" xmlns:th="http://www.thymeleaf.org" th:replace="~{web/layout :: page(~{::title}, ~{::main})}">
 <head><title th:text="${c.number} + ' ' + ${c.title} + ' · ' + ${@branding.name()}">Case</title></head>
 <body>
@@ -33,6 +35,9 @@
       <span aria-hidden="true">!</span> <span th:text="#{tk.case.high}">High priority</span></li>
     <li class="tk-chip" th:if="${lastDecision != null and lastDecision.requiresChanges}">
       <span aria-hidden="true">&#x21BA;</span> <span th:text="#{tk.decision.badge}">Requires Changes</span></li>
+    <li class="tk-chip" th:if="${lastDecision != null and lastDecision.decision.name() == 'APPROVED'
+                                 and c.status.name() == 'OPEN'}">
+      <span aria-hidden="true">&#x21BB;</span> <span th:text="#{tk.reopen.badge}">Reopened</span></li>
   </ul>
   <section th:if="${pendingClosure != null}" class="alert alert-info" aria-labelledby="tk-pending-title"
            th:with="p=${pendingClosure}">
@@ -78,7 +83,7 @@
     <th:block th:replace="~{casefile/fragments/closure-decision :: fields(${d.summary}, ${d.followUps})}"/>
   </section>
   <p class="tk-dialog-actions" th:if="${c.editable or c.reassignable or c.restrictable or c.unrestrictable
-                                       or recipients != null or closureChoices != null}">
+                                       or recipients != null or closureChoices != null or reopenable}">
     <a th:if="${c.editable}" class="btn btn-primary" th:href="@{/cases/{n}/edit(n=${c.number})}"
        th:text="#{tk.case.edit}">Edit</a>
     <a th:if="${reassign != null}" class="btn btn-outline-primary" th:href="@{/cases/{n}/reassign(n=${c.number})}"
@@ -94,7 +99,13 @@
     <a th:if="${closureChoices != null}" class="btn btn-outline-primary"
        th:href="@{/cases/{n}/request-closure(n=${c.number})}" data-tk-dialog-open="tk-closure-dialog"
        aria-haspopup="dialog" th:text="#{tk.closure.open}">Request closure</a>
+    <a th:if="${reopenable}" class="btn btn-outline-primary" th:href="@{/cases/{n}/reopen(n=${c.number})}"
+       data-tk-dialog-open="tk-reopen-dialog" aria-haspopup="dialog" th:text="#{tk.reopen.open}">Reopen case</a>
   </p>
+  <dialog th:if="${reopenable}" id="tk-reopen-dialog" class="tk-dialog" aria-labelledby="tk-reopen-title">
+    <h2 id="tk-reopen-title" th:text="#{tk.reopen.title(${c.number})}">Reopen</h2>
+    <form th:replace="~{casefile/fragments/closure-decision :: reopen(${c.number}, '', false, true)}"></form>
+  </dialog>
   <dialog th:if="${closureChoices != null}" id="tk-closure-dialog" class="tk-dialog"
           aria-labelledby="tk-closure-title">
     <h2 id="tk-closure-title" th:text="#{tk.closure.title(${c.number})}">Request closure</h2>

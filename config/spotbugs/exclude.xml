@@ -163,6 +163,14 @@
     redirect is the fixed path /cases/ plus a parsed case number. Covered by ClosureDecisionIT,
     OracleClosureDecisionIT, ClosureApproverControllerIT and ClosureApproverAccessibilityIT.
     Approved in the security-reviewer role on #106.
+    CaseReopenController (WP-19 part c3): behind login; GET /cases/{n}/reopen and POST of the same path, the POST
+    with CSRF (403 without). CaseService.actionable decides 404 (the person's CaseScope) and 403 (REOPEN: Managers
+    and Compliance Admins, closed cases only) before any input is read. The reason must be 1 to 1000 characters (CRLF
+    as one, stripped; 422 otherwise); ClosureDecisionService.reopen re-checks the status under the case row lock (409
+    with Reload when the case moved on). The redirect is the fixed path /cases/ plus a parsed case number. The reason
+    is echoed only through th:text and never mailed. Covered by CaseReopenIT, OracleCaseReopenIT,
+    CaseReopenControllerIT and CaseReopenAccessibilityIT.
+    Approved in the security-reviewer role on #107.
     Approved in the security-reviewer role on #20. Listed by class, never by pattern alone, so each new controller
     is reviewed the same way.
   -->
@@ -187,6 +195,7 @@
       <Class name="io.trailkeep.web.ClosureController"/>
       <Class name="io.trailkeep.web.ClosureDecisionController"/>
       <Class name="io.trailkeep.web.ClosureApproverController"/>
+      <Class name="io.trailkeep.web.CaseReopenController"/>
     </Or>
   </Match>
   <!--
