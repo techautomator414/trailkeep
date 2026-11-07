@@ -2,23 +2,24 @@
   SPDX-License-Identifier: Apache-2.0
   Copyright 2026 Charlie Genova and contributors
 -->
-# Trailkeep handoff: state at Phase 3 progress
+# Trailkeep handoff: state at the end of Phase 3
 
 _Written 2026-11-04 at 0.1.0 for the team taking over; refreshed 2026-11-06, after WP-11 to WP-18 merged (Phase 2
-closed, Phase 3 in progress). Read this first, then `README.md`, then `IMPLEMENTATION_PLAN.md` Part B (standards) and Part C
+closed), and 2026-11-07, after WP-19 merged (Phase 3 closed). Read this first, then `README.md`, then `IMPLEMENTATION_PLAN.md` Part B (standards) and Part C
 (work packages). Where this file and the plans disagree, the plans win; this file only says where the build stands._
 
 ## 1. Where the project stands
 
 | Measure | Done | Total | Share |
 |---|---|---|---|
-| Work packages (IMPLEMENTATION_PLAN Part C) | 20 (WP-01 to WP-08 are 10 rows with the 03a/b and 04a/b splits, plus WP-09 to WP-18) | 33 | 61 % |
-| Work packages weighted by size (S = 1, M = 2, L = 3) | 41 | 67 | 61 % |
+| Work packages (IMPLEMENTATION_PLAN Part C) | 21 (WP-01 to WP-08 are 10 rows with the 03a/b and 04a/b splits, plus WP-09 to WP-19 without WP-17b) | 33 | 64 % |
+| Work packages weighted by size (S = 1, M = 2, L = 3) | 44 | 67 | 66 % |
 | Phase 1 pull requests (Part D) | 12 | 12 | 100 % |
-| Plan calendar (Part F) | about 11 weeks: Phase 1 (4), all 17 of Phase 2's weighted points (5) and WP-17 and WP-18 of Phase 3 | 25 weeks | about 44 % (Phase 0 discovery, 2 weeks, is not counted on either side) |
+| Plan calendar (Part F) | 12 weeks: Phase 1 (4), Phase 2 (5) and Phase 3 (3) | 25 weeks | 48 % (the 25 include Phase 0 discovery and Phase 7 go-live, 2 weeks each, neither of them build work; Phases 1 to 6 alone are 12 of 21 weeks, 57 %) |
 
-**Phase 3 is in progress.** WP-17 (email outbox, dispatcher and in-app alerts, M) and WP-18 (request update, M) are done;
-the reminders tick, WP-17b, is Phase 4 and stays open. WP-19 (closure) is in flight.
+**Phase 3 is complete.** WP-17 (email outbox, dispatcher and in-app alerts, M), WP-18 (request update, M) and WP-19
+(closure, L) are done. WP-17b (the reminders tick, S) and WP-20 (the dashboard, S) sit in Phase 3's table in Part C but
+are marked "Lands in Phase 4", and Part F's calendar counts them in Phase 4, so both stay open without holding Phase 3.
 
 **Phase 2 is complete.** WP-15 (cases list, L) is done: parts 1a, 1b, 2, 3, 4 and 5 are merged (list, sort and paging;
 filters and search; the filter drawer, chips and multi-status; saved views; the CSV export with redaction, row
@@ -26,17 +27,25 @@ selection and row click; the 50k-case performance run). Its acceptance line, p95
 PostgreSQL, is measured: 132 ms for the list and 109 ms for the two-word search (the slowest single-word search measured, 120 ms; #91,
 `docs/perf/cases-list-50k.md`), and the nightly `perf` job fails if either target is missed. WP-16 (history tab, S) is done.
 
-In plain terms: the platform is built and gated, administration works, and **cases can be worked, emailed and asked
-for updates, though not yet closed**: a person creates one on a single page, views it, edits it under optimistic locking, reassigns or restricts
+In plain terms: the platform is built and gated, administration works, and **cases can be worked, emailed, asked for
+updates, closed through the one approval gate and reopened**: a person creates one on a single page, views it, edits it under optimistic locking, reassigns or restricts
 it, comments and pins comments, attaches files (validated, virus-scanned, downloadable, with a Compliance Admin
 release for quarantined ones), finds it in a filtered, searchable, sortable list, saves a view of it, exports the
 list to CSV with subject and description redacted unless the person may see them, and reads a case's History page.
 A comment by anyone but the owner emails the case's owner and raises an in-app alert for them, read on the Alerts page
 behind a badge in the navigation; "Request update" asks a colleague for an answer by mail and alert, and a comment from that person (or
-Mark answered) resolves the request, which the dashboard's "Needs attention" shows until then. All of it goes through
-the principal-backed `CaseScope`, so an unreadable case answers 404, and reading a restricted case (its page, a
-download, its history) is itself audited as `VIEW_RESTRICTED`. There is no closure workflow or SLA evaluator yet
-(WP-19 is in flight; Phase 4). Disabling a user from `/admin/users` ends that user's sessions (#63).
+Mark answered) resolves the request, which the dashboard's "Needs attention" shows until then. Anyone who works the
+case (an Analyst, Manager or Compliance Admin of its team) requests closure with an outcome, a resolution summary and one approver whom the separation-of-duties rule allows; the
+case is then pending and cannot be edited or reassigned. Only that approver decides, from the case or from the
+dashboard's "Pending my approval": approving closes the case, finalises its SLA and locks the closure; rejecting or
+requesting changes, with a reason, sends it back to Open with a "Requires Changes" badge until the next comment. A
+Manager or Compliance Admin may reassign the approver while the request is pending, and may reopen a closed case with a reason, which
+starts the next SLA cycle; the case page then shows who reopened it, when and why. All of it goes through the
+principal-backed `CaseScope`, so an unreadable case answers 404, and reading a restricted case (its page, a download,
+its history) is itself audited as `VIEW_RESTRICTED`. What Phase 4 still has to add: the SLA evaluator and its alerts
+(a case's SLA state is set when it is created, closed and reopened, but nothing recomputes it as time passes), the
+reminders tick, the aging and SLA-compliance reports with their scheduled delivery, and the rest of the dashboard (KPI
+tiles, My cases, paging). Disabling a user from `/admin/users` ends that user's sessions (#63).
 
 0.1.0 is the `v0.1.0` tag, cut from `main` as the last step of this handoff, after #25 (CI fix for #13), #33 (the
 test port fix below) and #32 (this document) merged. Every workflow is green on that commit: `ci`, `main` (both Oracle images, image build and
@@ -78,18 +87,19 @@ when their secrets are absent, and they were absent at handoff (#30).
 | WP-16 | Case history. #83: `VIEW_RESTRICTED` is written when a restricted case is viewed, an attachment is downloaded or the history is read (closes #82). #86: `AuditTrailService.pageForCase` (paged, filterable, with the total) and the principal-scope join, so a principal's scope reaches the events of a case it may read. #87: the History page, `GET /cases/{number}/history`, with an allow-listed kind filter and structural redaction | #83, #86, #87 | `RestrictedReadAudit`, `AuditTrailService`, `AuditEventQueriesImpl`, `CaseHistoryController`, `CaseHistoryService`, `HistoryKind`, `templates/casefile/history.html`, `RestrictedViewAuditIT`, `CaseHistoryAccessibilityIT` |
 | WP-17 | Email outbox, dispatcher and in-app alerts. #94: `V4_8` `NOTIFICATION_OUTBOX`, enqueue in the caller's transaction and the two-step `SKIP LOCKED` claim (select the ids, then update them under a lease) on both vendors. #95: the dispatcher over SMTP (every minute on every web replica, batches of 50), the `comment-added` mail (to the owner when anyone else comments), outbox metrics, Mailpit in `compose.yaml`. #96: `V4_9` `USER_ALERT`, the Alerts page and an unread badge in the navigation | #94, #95, #96 | `io.trailkeep.notification` (`NotificationService`, `OutboxJdbcDao`, `OutboxDispatcher`, `OutboxMetrics`, `MailTemplates`, `MailProperties`, `UserAlertService`), `AlertController`, `templates/notification/`, `templates/web/alerts.html`, `OutboxClaimIT`, `OracleOutboxClaimIT`, `MailpitDispatchIT`, `AlertsAccessibilityIT` |
 | WP-18 | Request update. #97: `V4_10` `UPDATE_REQUEST`, the `ANSWER_UPDATE` matrix action, auto-resolve through the `CommentPosted` Modulith event, the `update-requested` mail and alert (never the message). #98: the Request update dialog with the WAI-ARIA Authoring Practices combobox for the recipient (in `app.js`), Mark answered, and the dashboard's "Needs attention" | #97, #98 | `io.trailkeep.updaterequest` (`UpdateRequestService`, `DefaultUpdateRequestService`, `UpdateRequestCommentListener`, `UpdateRequestQueriesImpl`), `CommentPosted`, `UpdateRequestController`, `templates/casefile/request-update.html`, `templates/casefile/fragments/update-request.html`, `DashboardController`, `UpdateRequestIT`, `OracleUpdateRequestIT`, `UpdateRequestAccessibilityIT` |
+| WP-19 | Closure. a, #100: `V5__closure` (`CLOSURE_REQUEST`), Request Closure with the A.2 #18 approver rule and the move to `PENDING_CLOSURE` through `CaseStatusService`. b, #102: approve, reject and request changes, and approver reassignment; each takes the case row lock, re-checks the status and the matrix on what the lock holds, and updates the request conditionally at its version. b2, #103: `V5_1__case_reopen` (`CASE_REOPEN`) and reopen, which starts the next SLA cycle (`CaseSla.restart`). c1, #104: the Request closure dialog and the pending-closure banner. c2a, #105: Approve, the Reject or request changes dialog, the "Requires Changes" badge and the locked closure of a closed case. c2b, #106: Reassign approver and the dashboard's "Pending my approval". c3, #107: the Reopen dialog and the "Reopened" chip. c4, #109: who reopened a case, when and why, read from `CASE_REOPEN` | #100, #102, #103, #104, #105, #106, #107, #109 | `io.trailkeep.closure` (`ClosureRequest`, `ClosureService`, `DefaultClosureService`, `ClosureDecisionService`, `DefaultClosureDecisionService`, `CaseReopen`, `ClosureRequestQueriesImpl`, `CaseReopenQueriesImpl`), `CaseStatusService.move`, `CaseSla.restart`, `ClosureController`, `ClosureDecisionController`, `ClosureApproverController`, `CaseReopenController`, `ClosureService.lastReopen`, `templates/casefile/fragments/closure-request.html`, `templates/casefile/fragments/closure-decision.html`, `ClosureRequestIT`, `ClosureDecisionIT`, `CaseReopenIT` and their `Oracle*` twins, `RequestClosureAccessibilityIT`, `ClosureDecisionAccessibilityIT`, `ClosureApproverAccessibilityIT`, `CaseReopenAccessibilityIT` |
 
 Schema on `main`: `V1__identity`, `V2__audit`, `V3__admin`, `V3_1__sessions`, `V4__case`, `V4_1__comment`,
 `V4_2__comment_pin`, `V4_3__attachment`, `V4_4__attachment_not_scanned`, `V4_5__search_text_lowercase` (#70),
 `V4_6__sla_check_ceilings` (#77), `V4_7__saved_view` (#78), `V4_8__notification_outbox` (#94), `V4_9__user_alert` (#96),
-`V4_10__update_request` (#97), plus the repeatable `R__grants` per vendor. WP-15 part 4, WP-16, #95 and #98 added no
-migration. `V5__closure` (WP-19, in flight) is next. A later part of a work package that needs a migration takes the next `V4_n`; the number
-is assigned in the PR that ships it.
+`V4_10__update_request` (#97), `V5__closure` (#100), `V5_1__case_reopen` (#103), plus the repeatable `R__grants` per
+vendor. WP-15 part 4, WP-16, #95, #98 and WP-19's other parts added no migration. The next migration is `V6`, WP-21's
+first; a later Phase 3 fix that needs one takes `V5_2`. The number is assigned in the PR that ships it.
 
 ### Not built yet
 
-Closure workflow (WP-19, in flight); reminders tick (WP-17b); the rest of the dashboard (WP-20; "Needs attention"
-already lists update requests); SLA evaluator and alerts (WP-21); reports (WP-22, 23); retention and purge (WP-24); System screen (WP-25); importer (WP-26, designed in
+Reminders tick (WP-17b); the rest of the dashboard (WP-20; "Needs attention" already lists update requests and the
+closure requests pending the person's approval); SLA evaluator and alerts (WP-21); reports (WP-22, 23); retention and purge (WP-24); System screen (WP-25); importer (WP-26, designed in
 `docs/design/importer.md` and ADR-0014, not started); preferences and shortcuts (WP-27); DAST, 508 conformance pass,
 performance and runbook (WP-28 to 30).
 
@@ -153,7 +163,7 @@ All are recorded where they were made; this is the index.
 |---|---|---|
 | Trivy image gate runs with `--ignore-unfixed` | #11, #12 | Owner chose to fail only on fixable HIGH/CRITICAL findings; unfixed base-image findings stay in the reports and evidence pack |
 | Semgrep excludes `python.django.security.django-no-csrf-token.django-no-csrf-token` | #19, `ci.yml` | False positive on Thymeleaf forms whose CSRF field Spring Security injects |
-| `config/spotbugs/exclude.xml` carries `SPRING_ENDPOINT` for every controller (`DashboardController`, `SessionController`, `TeamAdminController`, `UserAdminController`, `CaseConfigController`, `CaseController`, `CaseEditController`, `CaseAssignmentController`, `CaseAttachmentController`, `CaseListController`, `SavedViewController`, `CaseExportController`, `CaseHistoryController`), listed by class | #19, #20, #22, #49, #50, #59, #62, #63, #78, #84, #87 | The pattern reports no defect; each controller is reviewed and the approval recorded in the file; `spotbugs-annotations` is LGPL and off the license allow-list, so the file is the mechanism |
+| `config/spotbugs/exclude.xml` carries `SPRING_ENDPOINT` for every controller (`DashboardController`, `SessionController`, `TeamAdminController`, `UserAdminController`, `CaseConfigController`, `CaseController`, `CaseEditController`, `CaseAssignmentController`, `CaseAttachmentController`, `CaseListController`, `SavedViewController`, `CaseExportController`, `CaseHistoryController`, `AlertController`, `UpdateRequestController`, `ClosureController`, `ClosureDecisionController`, `ClosureApproverController`, `CaseReopenController`), listed by class | #19, #20, #22, #49, #50, #59, #62, #63, #78, #84, #87, #96, #98, #104, #105, #106, #107 | The pattern reports no defect; each controller is reviewed and the approval recorded in the file; `spotbugs-annotations` is LGPL and off the license allow-list, so the file is the mechanism |
 | Case configuration (SLA policies, case types, outcomes) lives in `casefile`, not `sla` | ADR-0011, #21 | Keeps the module graph acyclic; `sla` reads it through `CaseConfigService`. Supersedes BUILD_PLAN §7.4's `sla/ (SlaPolicy, …)` line |
 | App user may DELETE from `CASE_TYPE_OUTCOME` | ADR-0011, both `R__grants.sql` | Configuration, not case data; closure outcomes are stored as `VARCHAR` snapshots, not foreign keys |
 | `OIDC_SESSION` keyed by `SESSION_ID`; `SID` nullable and indexed; cleanup spares rows under one hour | ADR-0008 amendment, #23 | Spring removes registrations by client session id; a provider may omit `sid`; the registry row is written before Spring Session commits the session row |
@@ -183,6 +193,14 @@ All are recorded where they were made; this is the index.
 | `ANSWER_UPDATE` is its own action in the permission matrix | #97, `permissions/matrix.csv` | Marking someone else's request answered (Managers and Compliance Admins, on open and pending-closure cases) is a row in the matrix like every other action, not a branch in the service; the requester can always mark their own, so the service checks both |
 | One open request per case and recipient is a single-column unique key, `UPDATE_REQUEST.OPEN_KEY` | #97, `V4_10` | `OPEN_KEY` holds `"<case id>:<recipient id>"` while the request is open and is NULL once answered, so `UK_UPDATE_REQUEST_OPEN` enforces the rule on both vendors: a single-column unique key ignores NULLs on Oracle and PostgreSQL alike, which a composite key with a nullable column does not on Oracle. A second open request is a 409. A comment from the recipient resolves the request through the `CommentPosted` Modulith event |
 | From WP-19, JavaScript counts toward the 400-line cap | #98 review | `app.js` +127 and `app.css` +10 were not counted in WP-18 part b's 233 lines. From WP-19 they are counted with the Java, templates and messages |
+| Every closure transition locks, then re-checks | #102 | `CaseStatusService.move` takes the case row lock (`refresh` with `PESSIMISTIC_WRITE`), then checks the status and evaluates the matrix again on what the lock holds: 409 if the case left the expected status, 403 if the matrix now denies the action. The closure request is re-read under the same lock and changed by a conditional update `WHERE DECISION = 'PENDING' AND VERSION = :v`, so two decisions racing each other yield exactly one on both vendors |
+| Only the named approver decides; another Manager who should decide reassigns the request to themselves first | #102, #105 | The approver is chosen when closure is requested and named on the request; the decision screen and the service both refuse anyone else (403), and the case owner never decides (the matrix denies it). Reassign approver offers the rule's choices for the original requester minus the current approver, which can include the Manager reassigning |
+| Approval may carry an optional reason; reject and request changes require one (1 to 1000 characters) | #102 | The service takes a reason for every decision. The screens ask for one only when sending a request back; Approve is one button. The reason is redacted in the audit trail and never mailed |
+| A reopen's reason lives in the append-only `CASE_REOPEN` table, not only in the audit trail | #103, #109 | The audit copy is redacted by design (possible PHI), so `CASE_REOPEN` (who, when, reason, the cycle it started, the request whose approval closed the case) is the one readable record. The case page reads it through a scoped Criteria query and shows the latest reopen under the "Reopened" chip |
+| A status move without a `CASE_SLA` row is an error | #103 | Every case gets its row when it is created (or imported as `NOT_APPLICABLE`), and closing finalises it and reopening restarts it, so a missing row means a broken invariant; `CaseStatusService.move` throws rather than invent one. Test seeds that insert cases by hand insert the row too |
+| Closure actions sit on the pending banner or the case's action row; there is no "⋯ More" menu | #104, #105, #106, #107 | BUILD_PLAN §4.3 puts Reassign approver and Reopen under "⋯ More", but there is no menu component yet (Bootstrap CSS only, no Bootstrap JS). Each action is offered only where the matrix allows it, next to what it changes. A menu, if it comes, is Phase 6 polish |
+| The dashboard's "Pending my approval" shows at most 100 requests, oldest first | #106 | Enough until WP-20 builds the rest of the dashboard with paging; it is read through `CaseScope` like every other list |
+| Character counts are visual aids only | #104 | The count under a textarea ("37 of 5000 characters") is `aria-hidden`; `maxlength` and the field's hint carry the limit for assistive technology, so typing is not announced character by character. Announcing it after a pause, as GOV.UK does, needs more script than the line cap allowed |
 | Attachment scanning is `clamd` over TLS by default, or `external` | ADR-0012, ADR-0013, #55, #57 | The scan is synchronous and nothing is stored on a scanner error; `external` stores files as `NOT_SCANNED`, never `CLEAN`. Deployment configuration, so no application account can turn scanning off |
 | PR 10 (#23) exceeded 400 net production lines | #23 review | Accepted so the `V3_1__sessions` migration shipped with the code that uses it |
 
@@ -191,9 +209,10 @@ All are recorded where they were made; this is the index.
 | Issue | What |
 |---|---|
 | #30 | Phase 1 exit items: scanner secrets, real IdP login in DEV, shell ACR manual testing |
-| #92 | Owner item: the manual assistive-technology pass on the Phase 2 screens (a Phase 2 exit criterion). Still open, and it now also covers the Alerts page and the Request update dialog with its combobox (WP-17, WP-18), which pass axe and a keyboard walk but have had no screen-reader pass |
+| #92 | Owner item: the manual assistive-technology pass on the Phase 2 screens (a Phase 2 exit criterion). Still open, and it now also covers the Alerts page and the Request update dialog with its combobox (WP-17, WP-18), and the WP-19 screens (the Request closure, Reject or request changes, Reassign approver and Reopen dialogs and their fallback pages, the pending banner and the dashboard's "Pending my approval"), which pass axe and a keyboard walk but have had no screen-reader pass |
 | #24 | Spring Session license tracker (stay on 4.1.0) |
 | #67 | Bug-hunt triage of 2026-11-05 (report under `docs/bug-hunts/`, eleven suspicions). Rejected with evidence: 1, 2, 3, 5, 8, 9 (inactive-team memberships count toward the System Admin conflict, by design), 10, and the session-boundary part of 11. Fixed: 4 (local seed names compared stripped, #73), 6 (multipart headroom, #76), 7 (CHECK ceilings, #77), 11 (CRLF counted once in the description limit and surrogate pairs kept whole in the audit name, #74). Carried forward: 9's in-memory role-conflict list is replaced when WP-25 reads the durable `ROLE_CONFLICT` audit rows (latest per user, cleared by a later conflict-free `LOGIN`), and then `UserSignInService.roleConflicts()` goes away; item 1 is a note for WP-24 (a purge path that rewrites search text must handle a null description); the attachment size display shows 1,048,525 to 1,048,575 bytes as "1024.0 KB" (deferred, cosmetic) |
+| WP-24 note (from WP-19) | `CASE_REOPEN` joins the purge list of BUILD_PLAN §4.6 ("update and closure requests"): the purge job deletes it with them, and deletes it **before** `CLOSURE_REQUEST`, which its `FK_REOPEN_CLOSURE` references. The reason is case content, like the closure summary |
 
 Closed since 0.1.0: #26 (the OIDC session registry IT runs on the Oracle leg, #38), #27 (`ConstraintViolationException`
 maps to 422, #36), #28 (back-channel `logoutUri` follows the bound port, #37), #29 (local seed names the unknown
@@ -248,14 +267,17 @@ Not defects, but worth knowing:
 
 ## 7. What comes next, in plan order
 
-1. **WP-19, closure**, in flight, in three PRs: the schema (`V5__closure`) and the closure request with separation of
-   duties from Part A #18; the decisions (approve, reject), reopen and the concurrency rules; then the screens and
-   golden paths 2 to 4. It is where the approver rules get code, and from it JavaScript counts toward the 400-line
-   cap (section 5).
-2. Then Phase 4 (WP-21, the SLA evaluator and alerts; WP-17b, the reminders tick, which will use
-   `UPDATE_REQUEST.LAST_REMINDED_AT` and the outbox that WP-17 built; WP-20, the rest of the dashboard; WP-22 and
-   WP-23, reports), Phase 5 (WP-24 to 27) and Phase 6 (WP-28 to 30). WP-25 owns the role-conflict list described in
-   section 6; WP-24 owns purge.
+1. **Phase 4, SLA and aging**, in this order:
+   - **WP-21, the SLA evaluator and alerts**: the chunked evaluator over `CASE_SLA` (the closure and reopen paths
+     already finalise and restart it), ShedLock, the alert ledger and the outbox that WP-17 built. Its first migration
+     is `V6`;
+   - **WP-17b, the reminders tick**, which uses `UPDATE_REQUEST.LAST_REMINDED_AT`, pending closure requests and
+     overdue cases through the same ledger and outbox;
+   - **WP-20, the rest of the dashboard**: KPI tiles, My cases, and paging for "Needs attention" (whose "Pending my
+     approval" list is capped at 100 today);
+   - **WP-22 and WP-23, the reports**: aging and SLA compliance in HTML and CSV, then their scheduled delivery.
+2. Then Phase 5 (WP-24 to 27) and Phase 6 (WP-28 to 30). WP-25 owns the role-conflict list described in section 6;
+   WP-24 owns purge, including the `CASE_REOPEN` order noted there.
 3. Carried forward from Phase 2: the index recommendations of `docs/perf/cases-list-50k.md` wait for WP-30's 500k
    run, and rows open on click only (the case-number link is the keyboard path, #84).
 
