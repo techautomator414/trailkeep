@@ -85,9 +85,51 @@ class ReportControllerIT {
                         + "<th scope=\"col\">0–30 days</th><th scope=\"col\">31–60 days</th>")
                 .contains(ALPHA_ROW + "<td>Synthetic Report Analyst</td>" + cells(2, 2, 0, 0, 1, 2, 1, 0) + "</tr>")
                 .contains(ALPHA_ROW + "<td>Synthetic Report Manager</td>" + cells(0, 0, 2, 1, 1, 0, 1, 1) + "</tr>")
-                .contains(ALPHA_ROW + "<td>Synthetic Restricted Owner</td>" + cells(1, 0, 0, 0, 0, 0, 1, 0) + "</tr>")
-                .contains("<tfoot><tr><th scope=\"row\" colspan=\"2\">Total</th>" + cells(3, 2, 2, 1, 2, 2, 3, 1))
-                .doesNotContain("Beta Reporting Team", "Synthetic report case", "Synthetic description");
+                .contains(ALPHA_ROW + "<td>Synthetic Restricted Owner</td>" + cells(0, 1, 0, 0, 0, 0, 1, 0) + "</tr>")
+                .contains("<tfoot><tr><th scope=\"row\" colspan=\"2\">Total</th>" + cells(2, 3, 2, 1, 2, 2, 3, 1))
+                .doesNotContain("Beta Reporting Team", "Synthetic description", ReportFixture.MESSAGE);
+    }
+
+    @Test
+    @WithAppUser(id = MANAGER, team = ALPHA, teamRole = TeamRole.MANAGER)
+    void theAgingPageListsOverdueCasesAndUnansweredRequestsInTables() throws Exception {
+        LocalDate today = LocalDate.ofInstant(clock.instant(), app.timezone());
+
+        assertThat(page(get("/reports/aging"), status().isOk()))
+                .contains("<table class=\"table table-sm tk-report tk-report-list\">"
+                        + "<caption>Overdue cases, oldest due first</caption><thead><tr><th scope=\"col\">Case</th>"
+                        + "<th scope=\"col\">Title</th><th scope=\"col\">Owner</th><th scope=\"col\">Due</th>"
+                        + "<th scope=\"col\">Days overdue</th></tr></thead><tbody>" + listed(105)
+                        + "<td>Synthetic Report Manager</td><td>" + today.minusDays(61) + "</td><td>61</td></tr>")
+                .contains(listed(106) + "<td>Synthetic Restricted Owner</td><td>" + today.minusDays(5) + "</td>")
+                .contains("<caption>Unanswered update requests, oldest first</caption><thead><tr>"
+                        + "<th scope=\"col\">Case</th><th scope=\"col\">Title</th><th scope=\"col\">Asked of</th>"
+                        + "<th scope=\"col\">Asked by</th><th scope=\"col\">Requested on</th>"
+                        + "<th scope=\"col\">Days waiting</th></tr></thead><tbody>" + listed(106)
+                        + "<td>Synthetic Restricted Owner</td><td>Synthetic Report Manager</td><td>"
+                        + today.minusDays(8) + "</td><td>8</td></tr>" + listed(100))
+                .doesNotContain("Only the first", "None.", ReportFixture.MESSAGE);
+    }
+
+    @Test
+    @WithAppUser(id = ReportFixture.BETA_ANALYST, team = 984_013L, teamRole = TeamRole.MANAGER)
+    void emptyListsSayNone() throws Exception {
+        jdbc.update("INSERT INTO TEAM (ID, NAME) VALUES (?, ?)", 984_013L, "Empty Reporting Team");
+        jdbc.update("DELETE FROM APP_USER_TEAM WHERE USER_ID = ?", ReportFixture.BETA_ANALYST);
+        jdbc.update(
+                "INSERT INTO APP_USER_TEAM (USER_ID, TEAM_ID, ROLE_IN_TEAM) VALUES (?, 984013, 'MANAGER')",
+                ReportFixture.BETA_ANALYST);
+
+        assertThat(page(get("/reports/aging"), status().isOk()))
+                .contains("<tbody><tr><td colspan=\"5\">None.</td></tr></tbody>")
+                .contains("<tbody><tr><td colspan=\"6\">None.</td></tr></tbody>");
+    }
+
+    /** A listed row's first two cells for the fixture's case with this id suffix: its linked number and title. */
+    private static String listed(int suffix) {
+        String number = "RPT-2026-984" + suffix;
+        return "<tr><th scope=\"row\"><a href=\"/cases/" + number + "\">" + number
+                + "</a></th><td>Synthetic report case 984" + suffix + "</td>";
     }
 
     @Test
@@ -148,7 +190,8 @@ class ReportControllerIT {
         assertThat(aging.getContentAsString(StandardCharsets.UTF_8))
                 .startsWith("﻿\"Team\",\"Owner\",\"0-30 days\"")
                 .contains("\"Alpha Reporting Team\",\"Synthetic Report Manager\",\"0\",\"0\",\"2\",\"1\",")
-                .endsWith("\"Total\",\"\",\"3\",\"2\",\"2\",\"1\",\"2\",\"2\",\"3\",\"1\"\r\n");
+                .contains("\"Total\",\"\",\"2\",\"3\",\"2\",\"1\",\"2\",\"2\",\"3\",\"1\"\r\n\r\n\"Overdue case\",")
+                .contains("\r\n\"Unanswered request on\",\"Title\",\"Asked of\",");
         MockHttpServletResponse compliance =
                 csv(get("/reports/compliance.csv").param("from", from).param("to", to));
         assertThat(compliance.getHeader(HttpHeaders.CONTENT_DISPOSITION))

@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.microsoft.playwright.Browser;
 import com.microsoft.playwright.Download;
+import com.microsoft.playwright.Locator;
 import com.microsoft.playwright.Page;
 import com.microsoft.playwright.Playwright;
 import com.microsoft.playwright.PlaywrightException;
@@ -41,10 +42,11 @@ import org.springframework.test.context.DynamicPropertySource;
 /**
  * The report pages (WP-22 part a) in a real browser after a real OIDC login as the dev realm's {@code alpha.manager1},
  * made a Manager of {@link ReportFixture}'s first team, driven from the keyboard: Tab from the brand reaches the
- * header's "Reports", Enter opens Aging, Tab and Enter on "Export CSV" download its CSV (part b: the file's name and
- * cells checked), Tab and Enter follow its link to SLA compliance; the compliance form is
- * reached by Tab and a backwards period sent with Enter comes back marked. axe finds 0 violations on each, and the
- * print view shows the table without the header, the footer, the links or the form.
+ * header's "Reports", Enter opens Aging (with part c's tables of overdue cases and unanswered update requests, in
+ * their order and without any request's message), Tab and Enter on "Export CSV" download its CSV (part b: the file's
+ * name and cells checked), Tab and Enter follow its link to SLA compliance; the compliance form is reached by Tab
+ * and a backwards period sent with Enter comes back marked. axe finds 0 violations on each, and the print view shows
+ * the tables without the header, the footer, the links or the form.
  */
 // "IT" is the Failsafe suffix Part B mandates for integration tests, not an abbreviation.
 @SuppressWarnings("checkstyle:AbbreviationAsWordInName")
@@ -122,6 +124,8 @@ class ReportsAccessibilityIT {
         page.context().close();
         // Test-only cleanup of the committed fixture, as the schema owner.
         String teams = " IN (" + ReportFixture.ALPHA + ", " + ReportFixture.BETA + ")";
+        jdbc.update(
+                "DELETE FROM UPDATE_REQUEST WHERE CASE_ID IN (SELECT ID FROM CASE_RECORD WHERE TEAM_ID" + teams + ")");
         jdbc.update("DELETE FROM CASE_SLA WHERE CASE_ID IN (SELECT ID FROM CASE_RECORD WHERE TEAM_ID" + teams + ")");
         jdbc.update("DELETE FROM CASE_RECORD WHERE TEAM_ID" + teams);
         jdbc.update("DELETE FROM APP_USER_TEAM WHERE TEAM_ID" + teams);
@@ -141,16 +145,31 @@ class ReportsAccessibilityIT {
         page.keyboard().press("Enter");
         page.waitForURL(url -> url.endsWith("/reports/aging"));
         assertClean("Aging");
-        assertThat(page.locator("table.tk-report caption").textContent()).startsWith("Open and pending-closure cases");
-        assertThat(page.locator("tbody th[scope='row']").allTextContents())
+        Locator counts = page.locator("table.tk-report").first();
+        assertThat(counts.locator("caption").textContent()).startsWith("Open and pending-closure cases");
+        assertThat(counts.locator("tbody th[scope='row']").allTextContents())
                 .containsOnly(ReportFixture.ALPHA_NAME)
                 .hasSize(3);
-        assertThat(page.locator("tbody td:first-of-type").allTextContents())
+        assertThat(counts.locator("tbody td:first-of-type").allTextContents())
                 .containsExactly("Synthetic Report Analyst", "Synthetic Report Manager", "Synthetic Restricted Owner");
-        assertThat(page.locator("tfoot td").allTextContents()).containsExactly("3", "2", "2", "1", "2", "2", "3", "1");
+        assertThat(page.locator("tfoot td").allTextContents()).containsExactly("2", "3", "2", "1", "2", "2", "3", "1");
+        assertThat(page.locator("table.tk-report-list caption").allTextContents())
+                .containsExactly("Overdue cases, oldest due first", "Unanswered update requests, oldest first");
+        assertThat(page.locator("table.tk-report-list")
+                        .first()
+                        .locator("tbody th[scope='row']")
+                        .allTextContents())
+                .containsExactly("RPT-2026-984105", "RPT-2026-984106", "RPT-2026-984102");
+        assertThat(page.locator("table.tk-report-list")
+                        .last()
+                        .locator("tbody th[scope='row']")
+                        .allTextContents())
+                .containsExactly("RPT-2026-984106", "RPT-2026-984100");
+        assertThat(page.textContent("main")).doesNotContain(ReportFixture.MESSAGE);
 
         page.emulateMedia(new Page.EmulateMediaOptions().setMedia(Media.PRINT));
-        assertThat(page.isVisible("table.tk-report")).isTrue();
+        assertThat(counts.isVisible()).isTrue();
+        assertThat(page.locator("table.tk-report-list").last().isVisible()).isTrue();
         assertThat(page.isVisible("header.tk-header")).isFalse();
         assertThat(page.isVisible("footer.tk-footer")).isFalse();
         assertThat(page.isVisible(".tk-report-links")).isFalse();
@@ -163,8 +182,10 @@ class ReportsAccessibilityIT {
         assertThat(download.suggestedFilename()).isEqualTo("aging-" + LocalDate.now(ZoneOffset.UTC) + ".csv");
         assertThat(Files.readString(download.path(), StandardCharsets.UTF_8))
                 .startsWith("﻿\"Team\",\"Owner\",")
-                .contains("\"Alpha Reporting Team\",\"Synthetic Restricted Owner\",\"1\",")
-                .endsWith("\"Total\",\"\",\"3\",\"2\",\"2\",\"1\",\"2\",\"2\",\"3\",\"1\"\r\n");
+                .contains("\"Alpha Reporting Team\",\"Synthetic Restricted Owner\",\"0\",\"1\",")
+                .contains("\"Total\",\"\",\"2\",\"3\",\"2\",\"1\",\"2\",\"2\",\"3\",\"1\"\r\n\r\n\"Overdue case\",")
+                .endsWith("\"Synthetic report case 984100\",\"Synthetic Report Analyst\",\"Synthetic Report Manager\","
+                        + "\"" + LocalDate.now(ZoneOffset.UTC).minusDays(3) + "\",\"3\"\r\n");
 
         page.locator("#main").focus();
         tabTo("SLA compliance", 3);

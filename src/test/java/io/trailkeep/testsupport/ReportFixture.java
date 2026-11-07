@@ -25,7 +25,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
  *   OPEN       owner MANAGER, today − 61   NOT_APPLICABLE  aging 61–90 (edge)
  *   OPEN       owner MANAGER, today − 90   ON_TRACK        aging 61–90 (edge)
  *   OPEN       owner MANAGER, today − 91   OVERDUE         aging over 90 (edge)
- *   OPEN       RESTRICTED, owner OTHER_OWNER, today − 5, OVERDUE: a Manager reads it, the Analyst does not
+ *   OPEN       RESTRICTED, owner OTHER_OWNER, today − 35, OVERDUE: a Manager reads it, the Analyst does not
  *   CLOSED     at the period's first instant           MET       counted
  *   CLOSED     at 23:00 on the period's last day       BREACHED  counted
  *   CLOSED     one second before the period            MET       not counted
@@ -41,6 +41,12 @@ import org.springframework.jdbc.core.JdbcTemplate;
  *   OPEN       identified today − 45   OVERDUE         aging 31–60
  *   PENDING    identified today − 95   AT_RISK         aging over 90
  * </pre>
+ *
+ * <p>Every SLA falls due 30 days after the matter was identified, so the overdue cases are 61, 5 and 1 days overdue in
+ * team ALPHA (owners MANAGER, OTHER_OWNER, ANALYST) and 15 in BETA. The update requests, all asked by MANAGER, are:
+ * open on ALPHA's newest case, asked of ANALYST three days ago; open on the restricted case, asked of OTHER_OWNER
+ * eight days ago; answered on ALPHA's second case (never listed); open on BETA's first case, asked of BETA_ANALYST
+ * yesterday. Their message is {@link #MESSAGE}, which no report may show.
  */
 public final class ReportFixture {
 
@@ -55,10 +61,15 @@ public final class ReportFixture {
     public static final String BETA_NAME = "Beta Reporting Team";
     public static final String ACCESS = "Access review";
     public static final String HANDLING = "Data handling";
+
+    /** The update requests' message: a report may show none of it. */
+    public static final String MESSAGE = "Synthetic request message no report shows";
+
     private static final long ACCESS_ID = 984_021L;
     private static final long HANDLING_ID = 984_022L;
     private static final long POLICY = 984_031L;
     private static final long FIRST_CASE = 984_100L;
+    private static final long FIRST_REQUEST = 984_200L;
     private static final String OPEN = "OPEN";
     private static final String PENDING = "PENDING_CLOSURE";
     private static final String CLOSED = "CLOSED";
@@ -114,7 +125,7 @@ public final class ReportFixture {
         open(ALPHA, ACCESS_ID, MANAGER, OPEN, 61, "NOT_APPLICABLE");
         open(ALPHA, ACCESS_ID, MANAGER, OPEN, 90, "ON_TRACK");
         open(ALPHA, ACCESS_ID, MANAGER, OPEN, 91, "OVERDUE");
-        kase(ALPHA, ACCESS_ID, OTHER_OWNER, "RESTRICTED", OPEN, today.minusDays(5), "OVERDUE", null);
+        kase(ALPHA, ACCESS_ID, OTHER_OWNER, "RESTRICTED", OPEN, today.minusDays(35), "OVERDUE", null);
         closed(ALPHA, ACCESS_ID, ANALYST, CLOSED, first, "MET");
         closed(ALPHA, ACCESS_ID, ANALYST, CLOSED, after.minusSeconds(3600), "BREACHED");
         closed(ALPHA, ACCESS_ID, ANALYST, CLOSED, first.minusSeconds(1), "MET");
@@ -127,6 +138,10 @@ public final class ReportFixture {
         closed(BETA, ACCESS_ID, BETA_ANALYST, CLOSED, inside.plusSeconds(60), "BREACHED");
         open(BETA, ACCESS_ID, BETA_ANALYST, OPEN, 45, "OVERDUE");
         open(BETA, ACCESS_ID, BETA_ANALYST, PENDING, 95, "AT_RISK");
+        request(FIRST_CASE, ANALYST, 3, false);
+        request(FIRST_CASE + 6, OTHER_OWNER, 8, false);
+        request(FIRST_CASE + 1, ANALYST, 20, true);
+        request(FIRST_CASE + 14, BETA_ANALYST, 1, false);
     }
 
     /** The users, the teams and who is what in them; {@link #SYSTEM_ADMIN} holds only that global role. */
@@ -143,6 +158,29 @@ public final class ReportFixture {
         member(ANALYST, ALPHA, "ANALYST");
         member(OTHER_OWNER, ALPHA, "ANALYST");
         member(BETA_ANALYST, BETA, "ANALYST");
+    }
+
+    /** An update request MANAGER asked of someone {@code daysAgo} days ago at 10:00, open or answered the next day. */
+    private void request(long caseId, long askedOf, int daysAgo, boolean answered) {
+        long id = FIRST_REQUEST + caseId - FIRST_CASE;
+        Instant at = today.minusDays(daysAgo).atTime(10, 0).atZone(zone).toInstant();
+        jdbc.update(
+                "INSERT INTO UPDATE_REQUEST (ID, CASE_ID, REQUESTED_BY, REQUESTED_FROM, MESSAGE, REQUESTED_AT,"
+                        + " OPEN_KEY) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                id,
+                caseId,
+                MANAGER,
+                askedOf,
+                MESSAGE,
+                Timestamp.from(at),
+                caseId + ":" + askedOf);
+        if (answered) {
+            jdbc.update(
+                    "UPDATE UPDATE_REQUEST SET ANSWERED_AT = ?, ANSWERED_BY = ?, OPEN_KEY = NULL WHERE ID = ?",
+                    Timestamp.from(at.plusSeconds(86_400)),
+                    askedOf,
+                    id);
+        }
     }
 
     private void member(long user, long team, String role) {
