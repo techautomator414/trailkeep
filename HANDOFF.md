@@ -2,24 +2,29 @@
   SPDX-License-Identifier: Apache-2.0
   Copyright 2026 Charlie Genova and contributors
 -->
-# Trailkeep handoff: state at the end of Phase 3
+# Trailkeep handoff: state at the end of Phase 4
 
 _Written 2026-11-04 at 0.1.0 for the team taking over; refreshed 2026-11-06, after WP-11 to WP-18 merged (Phase 2
-closed), and 2026-11-07, after WP-19 merged (Phase 3 closed). Read this first, then `README.md`, then `IMPLEMENTATION_PLAN.md` Part B (standards) and Part C
+closed), 2026-11-07, after WP-19 merged (Phase 3 closed), and 2026-11-08, after WP-23 merged (Phase 4 closed). Read this first, then `README.md`, then `IMPLEMENTATION_PLAN.md` Part B (standards) and Part C
 (work packages). Where this file and the plans disagree, the plans win; this file only says where the build stands._
 
 ## 1. Where the project stands
 
 | Measure | Done | Total | Share |
 |---|---|---|---|
-| Work packages (IMPLEMENTATION_PLAN Part C) | 21 (WP-01 to WP-08 are 10 rows with the 03a/b and 04a/b splits, plus WP-09 to WP-19 without WP-17b) | 33 | 64 % |
-| Work packages weighted by size (S = 1, M = 2, L = 3) | 44 | 67 | 66 % |
+| Work packages (IMPLEMENTATION_PLAN Part C) | 26 (WP-01 to WP-08 are 10 rows with the 03a/b and 04a/b splits, plus WP-09 to WP-23 with WP-17b) | 33 | 79 % |
+| Work packages weighted by size (S = 1, M = 2, L = 3) | 53 (44 at the end of Phase 3, plus WP-21 L, WP-22 M, WP-23 M, WP-17b S and WP-20 S) | 67 | 79 % |
 | Phase 1 pull requests (Part D) | 12 | 12 | 100 % |
-| Plan calendar (Part F) | 12 weeks: Phase 1 (4), Phase 2 (5) and Phase 3 (3) | 25 weeks | 48 % (the 25 include Phase 0 discovery and Phase 7 go-live, 2 weeks each, neither of them build work; Phases 1 to 6 alone are 12 of 21 weeks, 57 %) |
+| Plan calendar (Part F) | 15 weeks: Phase 1 (4), Phase 2 (5), Phase 3 (3) and Phase 4 (3) | 25 weeks | 60 % (the 25 include Phase 0 discovery and Phase 7 go-live, 2 weeks each, neither of them build work; Phases 1 to 6 alone are 15 of 21 weeks, 71 %) |
+
+**Phase 4 is complete.** WP-21 (SLA evaluator and alerts, L; #111, #112, #113), WP-17b (the reminders tick, S;
+#114), WP-20 (the dashboard, S; #115), WP-22 (aging and SLA-compliance reports, M; #116, #118, #119) and WP-23
+(scheduled report delivery, M; #120, #121, #123) are done. Part F counts WP-17b and WP-20 in Phase 4, which is where
+they landed.
 
 **Phase 3 is complete.** WP-17 (email outbox, dispatcher and in-app alerts, M), WP-18 (request update, M) and WP-19
 (closure, L) are done. WP-17b (the reminders tick, S) and WP-20 (the dashboard, S) sit in Phase 3's table in Part C but
-are marked "Lands in Phase 4", and Part F's calendar counts them in Phase 4, so both stay open without holding Phase 3.
+are marked "Lands in Phase 4", and Part F's calendar counts them in Phase 4, where they are now done.
 
 **Phase 2 is complete.** WP-15 (cases list, L) is done: parts 1a, 1b, 2, 3, 4 and 5 are merged (list, sort and paging;
 filters and search; the filter drawer, chips and multi-status; saved views; the CSV export with redaction, row
@@ -42,10 +47,25 @@ requesting changes, with a reason, sends it back to Open with a "Requires Change
 Manager or Compliance Admin may reassign the approver while the request is pending, and may reopen a closed case with a reason, which
 starts the next SLA cycle; the case page then shows who reopened it, when and why. All of it goes through the
 principal-backed `CaseScope`, so an unreadable case answers 404, and reading a restricted case (its page, a download,
-its history) is itself audited as `VIEW_RESTRICTED`. What Phase 4 still has to add: the SLA evaluator and its alerts
-(a case's SLA state is set when it is created, closed and reopened, but nothing recomputes it as time passes), the
-reminders tick, the aging and SLA-compliance reports with their scheduled delivery, and the rest of the dashboard (KPI
-tiles, My cases, paging). Disabling a user from `/admin/users` ends that user's sessions (#63).
+its history) is itself audited as `VIEW_RESTRICTED`. Disabling a user from `/admin/users` ends that user's sessions
+(#63).
+
+Phase 4 makes the clock run on its own. **SLA states now move as time passes**: every 15 minutes the evaluator moves
+open and pending cases to At risk and Overdue (one replica at a time, in chunks, never touching the case row), and the
+owner (and the team's Managers when the owner is disabled or an overdue case's policy escalates to them) get one alert
+and mail per case, state and cycle; the case's SLA chip, the cases list's SLA filter and the History page follow. An
+hourly **reminders tick** nudges the recipients of unanswered update requests and the approvers of pending closures, and repeats the overdue
+alert every policy period, each **once per period** through the same alert ledger. **The dashboard** has KPI tiles (my
+open cases, at risk, overdue, pending my approval, update requests for me), My cases, and paged lists under "Needs
+attention". **Reports**: the aging report (open cases by team and owner, by age band and SLA state, with the overdue
+cases and unanswered update requests to chase) and the SLA-compliance report (cases closed in a period by team and
+case type, with the share within the SLA), each as accessible, printable HTML and as an audited CSV. **The aging
+report is delivered weekly per team**: an hourly job stores each due team's report as a run and tells the team's
+Managers and every Compliance Admin by mail and alert, linking to the run; the runs have their own pages and CSV
+download, and Compliance Admins set each team's day and hour at `/admin/report-schedules`.
+
+What Phase 5 adds: retention, archiving, legal hold and the purge `CronJob` (WP-24), the System screen with job,
+outbox and scanner status (WP-25), the generic importer (WP-26), and preferences, shortcuts and i18n (WP-27).
 
 0.1.0 is the `v0.1.0` tag, cut from `main` as the last step of this handoff, after #25 (CI fix for #13), #33 (the
 test port fix below) and #32 (this document) merged. Every workflow is green on that commit: `ci`, `main` (both Oracle images, image build and
@@ -88,18 +108,23 @@ when their secrets are absent, and they were absent at handoff (#30).
 | WP-17 | Email outbox, dispatcher and in-app alerts. #94: `V4_8` `NOTIFICATION_OUTBOX`, enqueue in the caller's transaction and the two-step `SKIP LOCKED` claim (select the ids, then update them under a lease) on both vendors. #95: the dispatcher over SMTP (every minute on every web replica, batches of 50), the `comment-added` mail (to the owner when anyone else comments), outbox metrics, Mailpit in `compose.yaml`. #96: `V4_9` `USER_ALERT`, the Alerts page and an unread badge in the navigation | #94, #95, #96 | `io.trailkeep.notification` (`NotificationService`, `OutboxJdbcDao`, `OutboxDispatcher`, `OutboxMetrics`, `MailTemplates`, `MailProperties`, `UserAlertService`), `AlertController`, `templates/notification/`, `templates/web/alerts.html`, `OutboxClaimIT`, `OracleOutboxClaimIT`, `MailpitDispatchIT`, `AlertsAccessibilityIT` |
 | WP-18 | Request update. #97: `V4_10` `UPDATE_REQUEST`, the `ANSWER_UPDATE` matrix action, auto-resolve through the `CommentPosted` Modulith event, the `update-requested` mail and alert (never the message). #98: the Request update dialog with the WAI-ARIA Authoring Practices combobox for the recipient (in `app.js`), Mark answered, and the dashboard's "Needs attention" | #97, #98 | `io.trailkeep.updaterequest` (`UpdateRequestService`, `DefaultUpdateRequestService`, `UpdateRequestCommentListener`, `UpdateRequestQueriesImpl`), `CommentPosted`, `UpdateRequestController`, `templates/casefile/request-update.html`, `templates/casefile/fragments/update-request.html`, `DashboardController`, `UpdateRequestIT`, `OracleUpdateRequestIT`, `UpdateRequestAccessibilityIT` |
 | WP-19 | Closure. a, #100: `V5__closure` (`CLOSURE_REQUEST`), Request Closure with the A.2 #18 approver rule and the move to `PENDING_CLOSURE` through `CaseStatusService`. b, #102: approve, reject and request changes, and approver reassignment; each takes the case row lock, re-checks the status and the matrix on what the lock holds, and updates the request conditionally at its version. b2, #103: `V5_1__case_reopen` (`CASE_REOPEN`) and reopen, which starts the next SLA cycle (`CaseSla.restart`). c1, #104: the Request closure dialog and the pending-closure banner. c2a, #105: Approve, the Reject or request changes dialog, the "Requires Changes" badge and the locked closure of a closed case. c2b, #106: Reassign approver and the dashboard's "Pending my approval". c3, #107: the Reopen dialog and the "Reopened" chip. c4, #109: who reopened a case, when and why, read from `CASE_REOPEN` | #100, #102, #103, #104, #105, #106, #107, #109 | `io.trailkeep.closure` (`ClosureRequest`, `ClosureService`, `DefaultClosureService`, `ClosureDecisionService`, `DefaultClosureDecisionService`, `CaseReopen`, `ClosureRequestQueriesImpl`, `CaseReopenQueriesImpl`), `CaseStatusService.move`, `CaseSla.restart`, `ClosureController`, `ClosureDecisionController`, `ClosureApproverController`, `CaseReopenController`, `ClosureService.lastReopen`, `templates/casefile/fragments/closure-request.html`, `templates/casefile/fragments/closure-decision.html`, `ClosureRequestIT`, `ClosureDecisionIT`, `CaseReopenIT` and their `Oracle*` twins, `RequestClosureAccessibilityIT`, `ClosureDecisionAccessibilityIT`, `ClosureApproverAccessibilityIT`, `CaseReopenAccessibilityIT` |
+| WP-21 | SLA evaluator and alerts. a, #111: `V6__sla_alerts` (`ALERT_LEDGER` with its unique key, `JOB_RUN`), the evaluator every 15 minutes under ShedLock, candidates by `(SLA_STATE, AT_RISK_AT)` and `(SLA_STATE, SLA_DUE_AT)`, id-ordered chunks of 500 in one transaction each, a JPQL row lock and bulk transitions, `SLA_STATE_CHANGED` history. b, #112: `sla-at-risk` and `sla-overdue` mail and alert once per case, type and cycle through the ledger, metrics, the cluster-level health indicator. c, #113: the SLA chip, the cases list's SLA filter and the History label once states move | #111, #112, #113 | `io.trailkeep.sla` (`SlaEvaluator`, `SlaChunkWriter`, `AlertLedger`, `AlertType`, `JobRun`, `JobRuns`, `JobHealth`, `SlaEvaluatorHealthIndicator`, `SlaMetrics`), `CaseSlaService`, `DefaultCaseSlaService`, `SchedulerLockConfig`, `AbstractSlaEvaluatorIT` and its Oracle twin |
+| WP-17b | Reminders tick, hourly under ShedLock in pages of 500: update-request reminders (`app.reminders.update-request-days`), pending-closure reminders (`app.reminders.closure-days`) and overdue repeats every `OVERDUE_REMINDER_DAYS`, each once per period through the ledger | #114 | `RemindersTick`, `ReminderWriter`, `RemindersTickHealthIndicator`, `UpdateRequestQueriesImpl`, `ClosureRequestQueriesImpl`, `templates/notification/` (`update-reminder`, `closure-reminder`, `sla-overdue-repeat`) |
+| WP-20 | Dashboard: KPI tiles (each a count in text and a link), My cases (ten, by SLA due date), "Needs attention" paged by 20 with `Paged<T>`; and the CI fix that stops each test class's Keycloak container before the next one starts (c54f2b5) | #115 | `DashboardController`, `templates/web/dashboard.html`, `shared.Paged`, `KeycloakDevRealm.start`, `DashboardAccessibilityIT` |
+| WP-22 | Reports. a, #116: aging (team and owner, age bands and SLA states, a total row) and SLA compliance (team and case type, a period of up to 366 days) as accessible HTML with a print stylesheet, counted in one grouped Criteria query each under `CaseScope`. b, #118: the same as CSV through `shared.csv.CsvFormat`, audited `REPORT_EXPORTED`. c, #119: the aging report's overdue cases and unanswered update requests (at most 100 each) | #116, #118, #119 | `io.trailkeep.report` (`ReportService`, `DefaultReportService`, `ReportExportService`, `DefaultReportExportService`), `CaseReportService`, `CaseReportQueriesImpl`, `ReportController`, `templates/report/`, `AbstractReportIT` and its Oracle twin, `ReportsAccessibilityIT` |
+| WP-23 | Scheduled report delivery. a, #120: `V7__report_delivery` (`REPORT_SCHEDULE`, `REPORT_RUN`, the outbox's `REPORT_RUN_ID` foreign key), the hourly `report-delivery` job that stores each due team's aging report (the page's own fragment and the export's own CSV, read as a Manager of that team) and sends `report-ready` to the team's enabled Managers and every enabled Compliance Admin, `app.reports.admins-only` for the first cycle, its health indicator. b1, #121: `/reports/runs`, `/reports/runs/{id}` (the stored HTML through `StoredReportSanitizer`) and the audited `/reports/runs/{id}.csv`. b2, #123 (reviewed and approved as #122, which closed when its stacked base was deleted): the schedule admin at `/admin/report-schedules` | #120, #121, #123 | `ReportDeliveryTick`, `ReportDeliveryWriter`, `ReportHtml`, `ReportSchedule`, `ReportRun`, `ReportDeliveryHealthIndicator`, `ReportRunService`, `ReportScheduleService` and their `Default*` implementations, `shared.html.StoredReportSanitizer`, `ReportRunController`, `ReportScheduleController`, `NotificationService.notifyOfReport`, `AbstractReportDeliveryIT`, `AbstractReportRunIT`, `AbstractReportScheduleIT` and their Oracle twins, `ReportRunsAccessibilityIT`, `ReportSchedulesAccessibilityIT` |
 
 Schema on `main`: `V1__identity`, `V2__audit`, `V3__admin`, `V3_1__sessions`, `V4__case`, `V4_1__comment`,
 `V4_2__comment_pin`, `V4_3__attachment`, `V4_4__attachment_not_scanned`, `V4_5__search_text_lowercase` (#70),
 `V4_6__sla_check_ceilings` (#77), `V4_7__saved_view` (#78), `V4_8__notification_outbox` (#94), `V4_9__user_alert` (#96),
-`V4_10__update_request` (#97), `V5__closure` (#100), `V5_1__case_reopen` (#103), plus the repeatable `R__grants` per
-vendor. WP-15 part 4, WP-16, #95, #98 and WP-19's other parts added no migration. The next migration is `V6`, WP-21's
-first; a later Phase 3 fix that needs one takes `V5_2`. The number is assigned in the PR that ships it.
+`V4_10__update_request` (#97), `V5__closure` (#100), `V5_1__case_reopen` (#103), `V6__sla_alerts` (#111),
+`V7__report_delivery` (#120), plus the repeatable `R__grants` per vendor. WP-15 part 4, WP-16, #95, #98, WP-19's
+other parts and every Phase 4 PR except #111 and #120 added no migration. The next migration is `V8`, WP-24's first; a
+later Phase 4 fix that needs one takes `V7_1`. The number is assigned in the PR that ships it.
 
 ### Not built yet
 
-Reminders tick (WP-17b); the rest of the dashboard (WP-20; "Needs attention" already lists update requests and the
-closure requests pending the person's approval); SLA evaluator and alerts (WP-21); reports (WP-22, 23); retention and purge (WP-24); System screen (WP-25); importer (WP-26, designed in
+Retention, archive, legal hold and purge (WP-24); System screen (WP-25); importer (WP-26, designed in
 `docs/design/importer.md` and ADR-0014, not started); preferences and shortcuts (WP-27); DAST, 508 conformance pass,
 performance and runbook (WP-28 to 30).
 
@@ -118,8 +143,8 @@ docker compose up -d                                   # PostgreSQL 16, Keycloak
 ```
 
 Sign in at `http://localhost:8080` with a dev-realm user (`deploy/local/keycloak/README.md`; password
-`dev-password`). `system.admin` reaches `/admin/teams`; `compliance.admin` reaches `/admin/sla-policies` and
-`/admin/case-types`. The `local` profile seeds two SLA policies, three case types, the teams Alpha and Beta and the
+`dev-password`). `system.admin` reaches `/admin/teams`; `compliance.admin` reaches `/admin/sla-policies`,
+`/admin/case-types` and `/admin/report-schedules`. The `local` profile seeds two SLA policies, three case types, the teams Alpha and Beta and the
 dev-realm users' team roles on start-up (`app.seed` in `application-local.yml`; #29), so `alpha.analyst` can create
 a case at `/cases/new` and work it from `/cases`. Further memberships are granted at `/admin/teams`.
 
@@ -163,7 +188,7 @@ All are recorded where they were made; this is the index.
 |---|---|---|
 | Trivy image gate runs with `--ignore-unfixed` | #11, #12 | Owner chose to fail only on fixable HIGH/CRITICAL findings; unfixed base-image findings stay in the reports and evidence pack |
 | Semgrep excludes `python.django.security.django-no-csrf-token.django-no-csrf-token` | #19, `ci.yml` | False positive on Thymeleaf forms whose CSRF field Spring Security injects |
-| `config/spotbugs/exclude.xml` carries `SPRING_ENDPOINT` for every controller (`DashboardController`, `SessionController`, `TeamAdminController`, `UserAdminController`, `CaseConfigController`, `CaseController`, `CaseEditController`, `CaseAssignmentController`, `CaseAttachmentController`, `CaseListController`, `SavedViewController`, `CaseExportController`, `CaseHistoryController`, `AlertController`, `UpdateRequestController`, `ClosureController`, `ClosureDecisionController`, `ClosureApproverController`, `CaseReopenController`), listed by class | #19, #20, #22, #49, #50, #59, #62, #63, #78, #84, #87, #96, #98, #104, #105, #106, #107 | The pattern reports no defect; each controller is reviewed and the approval recorded in the file; `spotbugs-annotations` is LGPL and off the license allow-list, so the file is the mechanism |
+| `config/spotbugs/exclude.xml` carries `SPRING_ENDPOINT` for every controller (`DashboardController`, `SessionController`, `TeamAdminController`, `UserAdminController`, `CaseConfigController`, `CaseController`, `CaseEditController`, `CaseAssignmentController`, `CaseAttachmentController`, `CaseListController`, `SavedViewController`, `CaseExportController`, `CaseHistoryController`, `AlertController`, `UpdateRequestController`, `ClosureController`, `ClosureDecisionController`, `ClosureApproverController`, `CaseReopenController`, `ReportController`, `ReportRunController`, `ReportScheduleController`), listed by class | #19, #20, #22, #49, #50, #59, #62, #63, #78, #84, #87, #96, #98, #104, #105, #106, #107, #116, #118, #121, #122 | The pattern reports no defect; each controller is reviewed and the approval recorded in the file; `spotbugs-annotations` is LGPL and off the license allow-list, so the file is the mechanism |
 | Case configuration (SLA policies, case types, outcomes) lives in `casefile`, not `sla` | ADR-0011, #21 | Keeps the module graph acyclic; `sla` reads it through `CaseConfigService`. Supersedes BUILD_PLAN §7.4's `sla/ (SlaPolicy, …)` line |
 | App user may DELETE from `CASE_TYPE_OUTCOME` | ADR-0011, both `R__grants.sql` | Configuration, not case data; closure outcomes are stored as `VARCHAR` snapshots, not foreign keys |
 | `OIDC_SESSION` keyed by `SESSION_ID`; `SID` nullable and indexed; cleanup spares rows under one hour | ADR-0008 amendment, #23 | Spring removes registrations by client session id; a provider may omit `sid`; the registry row is written before Spring Session commits the session row |
@@ -203,16 +228,28 @@ All are recorded where they were made; this is the index.
 | Character counts are visual aids only | #104 | The count under a textarea ("37 of 5000 characters") is `aria-hidden`; `maxlength` and the field's hint carry the limit for assistive technology, so typing is not announced character by character. Announcing it after a pause, as GOV.UK does, needs more script than the line cap allowed |
 | Attachment scanning is `clamd` over TLS by default, or `external` | ADR-0012, ADR-0013, #55, #57 | The scan is synchronous and nothing is stored on a scanner error; `external` stores files as `NOT_SCANNED`, never `CLEAN`. Deployment configuration, so no application account can turn scanning off |
 | PR 10 (#23) exceeded 400 net production lines | #23 review | Accepted so the `V3_1__sessions` migration shipped with the code that uses it |
+| The SLA evaluator's queries are JPQL in `casefile`, not a `*JdbcDao` | #111 | Everything it needs is expressible in JPA: the candidate query, a `PESSIMISTIC_WRITE` lock over an id list with no row limit (the form Oracle can lock) and bulk `UPDATE CaseSla … WHERE caseId IN :ids AND state = :from`. `CaseSla` is `casefile`'s entity, so the queries sit behind `CaseSlaService` and `sla` drives them |
+| `ALERT_LEDGER.PERIOD_KEY` has three shapes: `CYCLE` for the at-risk and overdue alerts, `<request id>:<yyyy-MM-dd>` for the two request reminders, `P<n>` for overdue repeats | #111, #114 | The unique key `(CASE_ID, ALERT_TYPE, SLA_CYCLE, PERIOD_KEY)` makes each alert once per its period. A case can have several open update requests, so a bare day would collide; repeat `n` is `floor(days overdue / OVERDUE_REMINDER_DAYS)` from 1 (0 is the breach itself) |
+| A disabled owner's SLA alerts go to the team's enabled Managers | #112 | The schema makes an ownerless case impossible, so the plan's "no owner" case is read as a disabled owner; with an active owner, the Managers are told as well only of an overdue case whose policy escalates to `OWNER_AND_MANAGERS` (`SlaChunkWriter.recipients`) |
+| Each job's health indicator reads its `JOB_RUN` row and stays outside the probe groups | #112, #114, #120 | Cluster truth: the replica that did not win the ShedLock lock must not be restarted for it. `slaEvaluator`, `remindersTick` and `reportDelivery` are UP within their grace, DOWN after it, UNKNOWN before the first run; `JobRuns` and `JobHealth` are public in `sla` so `report` reuses them |
+| Readers and Analysts may run the reports, for what they read | #116, BUILD_PLAN §3.2 | §3.2's role table gives "Run reports / export" to every team role for its own team and to Compliance Admins for all; counts are taken under `CaseScope`, so restricted cases count only for those who may read them. Only someone with neither (a System Admin alone) gets 403. The matrix has no REPORT action; the check is on roles |
+| Aging is grouped by team and owner, SLA compliance by team and case type | #116 | BUILD_PLAN §4.5 for aging ("grouped by team and owner"); compliance by team and case type, settled in #116's review (§4.5 says "by type/team"). Each total row carries the overall figures, the share within the SLA included |
+| Report delivery keeps no ledger: the run, its mails and alerts and the schedule's new `NEXT_RUN_AT` commit in one transaction | #120 | The job runs under ShedLock and re-checks `ENABLED` and `NEXT_RUN_AT` inside the transaction, so a delivered schedule is no longer due and a crash leaves nothing behind; the schedule's `VERSION` turns a concurrent admin edit into a retried failure (and the admin's save into a 409), never a double send |
+| A schedule's next run is the next weekday and hour after the run, not "plus a week" | #120 | Exactly a week when on time, but never a time already past after an outage, so there is no burst of catch-up mails. Schedules are hour-only (`RUN_HOUR`), since the tick is hourly |
+| A stored run's HTML reaches a page only through `StoredReportSanitizer` into `SafeHtml` | #121 | `REPORT_RUN.HTML` is application output read back from a table, so it is treated as untrusted: an OWASP policy allows only the report's table elements, `a p div span`, `scope colspan class` with plain values, and `href` to `/cases/{number}`. Re-rendering from data was rejected: a run stores HTML and CSV, not the report's numbers, and should show what was sent. `shared.html` now has two `SafeHtml` producers |
+| A run is read by role: an enabled Manager of its team or a Compliance Admin; anyone else, and any malformed or unknown id, gets 404 | #121 | Runs are not case-rooted, so access is decided from the per-request `UserPermissions`, which grants what a Manager's `CaseScope` would over the team's cases; 404 keeps run ids from being probed (ADR-0005 style). Each download is audited `REPORT_RUN_DOWNLOADED` |
+| Test Keycloak containers are stopped between test classes | #115, c54f2b5 | Each `KeycloakDevRealm.start()` left its container (about 0.9 GB) running until the JVM exited; two dozen of them exhausted the 16 GB CI runner, which then died with "received a shutdown signal" at the same test every time. `start()` now stops the previous class's realm. One shared container per JVM is #117 |
 
 ## 6. Known gaps and follow-ups (all tracked)
 
 | Issue | What |
 |---|---|
 | #30 | Phase 1 exit items: scanner secrets, real IdP login in DEV, shell ACR manual testing |
-| #92 | Owner item: the manual assistive-technology pass on the Phase 2 screens (a Phase 2 exit criterion). Still open, and it now also covers the Alerts page and the Request update dialog with its combobox (WP-17, WP-18), and the WP-19 screens (the Request closure, Reject or request changes, Reassign approver and Reopen dialogs and their fallback pages, the pending banner and the dashboard's "Pending my approval"), which pass axe and a keyboard walk but have had no screen-reader pass |
+| #92 | Owner item: the manual assistive-technology pass on the Phase 2 screens (a Phase 2 exit criterion). Still open, and it now also covers the Alerts page and the Request update dialog with its combobox (WP-17, WP-18), the WP-19 screens (the Request closure, Reject or request changes, Reassign approver and Reopen dialogs and their fallback pages, the pending banner and the dashboard's "Pending my approval"), and the WP-20 to WP-23 screens (the dashboard's tiles, My cases and paged lists, the Aging and SLA compliance reports and their print view, the scheduled report runs and the report schedules), which pass axe and a keyboard walk but have had no screen-reader pass |
 | #24 | Spring Session license tracker (stay on 4.1.0) |
 | #67 | Bug-hunt triage of 2026-11-05 (report under `docs/bug-hunts/`, eleven suspicions). Rejected with evidence: 1, 2, 3, 5, 8, 9 (inactive-team memberships count toward the System Admin conflict, by design), 10, and the session-boundary part of 11. Fixed: 4 (local seed names compared stripped, #73), 6 (multipart headroom, #76), 7 (CHECK ceilings, #77), 11 (CRLF counted once in the description limit and surrogate pairs kept whole in the audit name, #74). Carried forward: 9's in-memory role-conflict list is replaced when WP-25 reads the durable `ROLE_CONFLICT` audit rows (latest per user, cleared by a later conflict-free `LOGIN`), and then `UserSignInService.roleConflicts()` goes away; item 1 is a note for WP-24 (a purge path that rewrites search text must handle a null description); the attachment size display shows 1,048,525 to 1,048,575 bytes as "1024.0 KB" (deferred, cosmetic) |
-| WP-24 note (from WP-19) | `CASE_REOPEN` joins the purge list of BUILD_PLAN §4.6 ("update and closure requests"): the purge job deletes it with them, and deletes it **before** `CLOSURE_REQUEST`, which its `FK_REOPEN_CLOSURE` references. The reason is case content, like the closure summary |
+| WP-24 notes (from WP-19, WP-22 and WP-23) | `CASE_REOPEN` joins the purge list of BUILD_PLAN §4.6 ("update and closure requests"): the purge job deletes it with them, and deletes it **before** `CLOSURE_REQUEST`, which its `FK_REOPEN_CLOSURE` references; the reason is case content, like the closure summary. The outbox now references `REPORT_RUN` (`FK_OUTBOX_REPORT_RUN`), so outbox rows naming a run are deleted or detached **before** any run is deleted. `REPORT_RUN` holds case numbers and titles, so it needs a retention rule of its own (the purge user has no grant on it today). The compliance report counts `CLOSED` cases only, not `ARCHIVED` ones (#116) |
+| #117 | One shared Keycloak container per test JVM (about 5.5 minutes off CI); deferred to Phase 6 |
 
 Closed since 0.1.0: #26 (the OIDC session registry IT runs on the Oracle leg, #38), #27 (`ConstraintViolationException`
 maps to 422, #36), #28 (back-channel `logoutUri` follows the bound port, #37), #29 (local seed names the unknown
@@ -267,17 +304,19 @@ Not defects, but worth knowing:
 
 ## 7. What comes next, in plan order
 
-1. **Phase 4, SLA and aging**, in this order:
-   - **WP-21, the SLA evaluator and alerts**: the chunked evaluator over `CASE_SLA` (the closure and reopen paths
-     already finalise and restart it), ShedLock, the alert ledger and the outbox that WP-17 built. Its first migration
-     is `V6`;
-   - **WP-17b, the reminders tick**, which uses `UPDATE_REQUEST.LAST_REMINDED_AT`, pending closure requests and
-     overdue cases through the same ledger and outbox;
-   - **WP-20, the rest of the dashboard**: KPI tiles, My cases, and paging for "Needs attention" (whose "Pending my
-     approval" list is capped at 100 today);
-   - **WP-22 and WP-23, the reports**: aging and SLA compliance in HTML and CSV, then their scheduled delivery.
-2. Then Phase 5 (WP-24 to 27) and Phase 6 (WP-28 to 30). WP-25 owns the role-conflict list described in section 6;
-   WP-24 owns purge, including the `CASE_REOPEN` order noted there.
+1. **Phase 5, admin, retention, importer and polish**, in this order:
+   - **WP-24, retention, archive, legal hold and the purge `CronJob`**: the archive job, `ARCHIVED` behaviour, legal
+     hold, `PURGE_AFTER`, the `purge` profile with its own credential and the `PURGED_AT` tombstone, with the purge
+     order of section 6. Its first migration is `V8`;
+   - **WP-26, the generic importer** (designed in `docs/design/importer.md` and ADR-0014): staging tables, YAML
+     mapping, idempotent by `LEGACY_REF`, attachments through the synchronous scan, the reconciliation report;
+   - **WP-25, the System screen and operational alerts**, after WP-26, whose last import run it shows: job last runs
+     from `JOB_RUN` (the three Phase 4 jobs already write it), outbox backlog and failures, clamd status, the durable
+     role-conflict list of section 6, Prometheus rules;
+   - **WP-27, preferences, shortcuts and i18n**, which depends only on WP-05 and can run beside the others.
+2. Then Phase 6 (WP-28 to 30: DAST, the Section 508 conformance pass with the named tester, performance at 500k and
+   the runbook). WP-25 owns the role-conflict list described in section 6; WP-24 owns purge, including the orders
+   noted there.
 3. Carried forward from Phase 2: the index recommendations of `docs/perf/cases-list-50k.md` wait for WP-30's 500k
    run, and rows open on click only (the case-number link is the keyboard path, #84).
 
