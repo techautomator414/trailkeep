@@ -57,6 +57,7 @@ class DefaultCaseListService implements CaseListService {
 
     @Override
     public long count(Actor actor, CaseFilter filter) {
+        ArchivedCases.check(actor.permissions(), filter);
         return cases.count(
                 scopes.forUser(actor.permissions()),
                 filter.forOwner(actor.permissions().userId()));
@@ -64,6 +65,7 @@ class DefaultCaseListService implements CaseListService {
 
     @Override
     public CaseList list(Actor actor, CaseListQuery requested) {
+        ArchivedCases.check(actor.permissions(), requested.filter());
         CaseScope scope = scopes.forUser(actor.permissions());
         CaseFilter filter = requested.filter().forOwner(actor.permissions().userId());
         long total = cases.count(scope, filter);
@@ -100,7 +102,8 @@ class DefaultCaseListService implements CaseListService {
                 types,
                 byName(teams),
                 byName(owners),
-                scopes.readsOthersRestricted(actor.permissions()));
+                scopes.readsOthersRestricted(actor.permissions()),
+                ArchivedCases.offered(actor.permissions()));
     }
 
     private static Set<Long> ids(List<CaseListRow.TeamOwner> pairs, ToLongFunction<CaseListRow.TeamOwner> id) {

@@ -172,6 +172,14 @@ app:
     delivery-cron: "0 23 * * * *"
     admins-only: false
     health-grace: 2h
+  # Retention (WP-24, BUILD_PLAN §4.6): the hourly archive job, on one replica at a time, archives closed cases whose
+  # case type's RETENTION_YEARS have passed since they closed (unless on legal hold); purge-grace is how long an
+  # archived case is kept before the purge job may tombstone it (PURGE_AFTER). health-grace as for the reminders tick.
+  # "-" turns the job off, as the test profiles do.
+  retention:
+    archive-cron: "0 37 * * * *"
+    purge-grace: 30d
+    health-grace: 2h
 
 server:
   port: 8080
