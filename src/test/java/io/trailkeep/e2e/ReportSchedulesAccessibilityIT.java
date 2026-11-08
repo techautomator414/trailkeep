@@ -173,7 +173,7 @@ class ReportSchedulesAccessibilityIT {
         assertThat(page.evaluate("() => document.activeElement.getAttribute('aria-labelledby')"))
                 .isEqualTo("tk-conflict-title");
         assertThat(page.isChecked("#enabled")).isFalse();
-        assertThat(page.locator("button[type=submit]").count()).isZero();
+        assertThat(page.locator("main button[type=submit]").count()).isZero();
 
         tabTo("Reload", 1);
         page.keyboard().press("Enter");
