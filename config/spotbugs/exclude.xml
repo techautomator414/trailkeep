@@ -206,7 +206,7 @@
     a lost update. Each save is audited as REPORT_SCHEDULE_CHANGED, old to new. The redirect is the fixed path
     /admin/report-schedules; team names are echoed through th:text. Covered by ReportScheduleIT,
     OracleReportScheduleIT, ReportScheduleControllerIT and ReportSchedulesAccessibilityIT.
-    Needs security-reviewer approval.
+    Approved in the security-reviewer role on #122.
     Approved in the security-reviewer role on #20. Listed by class, never by pattern alone, so each new controller
     is reviewed the same way.
   -->
