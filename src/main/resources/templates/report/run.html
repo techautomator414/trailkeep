@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- One scheduled report run (WP-23 part b) as it was sent: its stored HTML, sanitized by StoredReportSanitizer and
+     written only through tk:safe; its CSV is the stored file. app.css prints it like the aging page. -->
+<html lang="en" xmlns:th="http://www.thymeleaf.org" th:replace="~{web/layout :: page(~{::title}, ~{::main})}">
+<head><title th:text="#{tk.run.title(${v.run.team}, ${v.run.asOf})} + ' · ' + ${@branding.name()}">Aging</title></head>
+<body>
+<main id="main" class="container tk-main" tabindex="-1">
+  <h1 th:text="#{tk.run.title(${v.run.team}, ${v.run.asOf})}">Aging for Team as of 2026-11-02</h1>
+  <p class="tk-report-links"><a th:href="@{/reports/runs}" th:text="#{tk.runs.all}">All scheduled reports</a>
+    <a class="ms-3" th:href="@{/reports/runs/{id}.csv(id=${v.run.id})}" th:text="#{tk.export.csv}">Export CSV</a></p>
+  <p th:text="#{tk.run.intro}">The report as it was sent; Aging as of today is under Reports.</p>
+  <div tk:safe="${v.html}">The report</div>
+</main>
+</body>
+</html>

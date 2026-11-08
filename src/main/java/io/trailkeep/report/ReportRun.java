@@ -96,6 +96,10 @@ class ReportRun {
         return asOf;
     }
 
+    int getLineCount() {
+        return lineCount;
+    }
+
     String getHtml() {
         return html;
     }

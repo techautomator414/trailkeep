@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- The scheduled report runs (WP-23 part b) the person may read, newest first, 20 to a page with plain previous and
+     next links; each row links to the run as it was sent and to its CSV, whose link names the run it downloads. -->
+<html lang="en" xmlns:th="http://www.thymeleaf.org" th:replace="~{web/layout :: page(~{::title}, ~{::main})}">
+<head><title th:text="#{tk.runs.title} + ' · ' + ${@branding.name()}">Scheduled reports</title></head>
+<body>
+<main id="main" class="container tk-main" tabindex="-1">
+  <h1 th:text="#{tk.runs.title}">Scheduled reports</h1>
+  <p class="tk-report-links"><a th:href="@{/reports/aging}" th:text="#{tk.runs.today}">Aging as of today</a></p>
+  <p th:if="${runs.total == 0}" th:text="#{tk.runs.none}">No scheduled report has been sent to you yet.</p>
+  <p th:if="${runs.pages > 1}" th:text="#{tk.list.page(${runs.page},${runs.pages})}">Page 1 of 2.</p>
+  <div th:unless="${runs.total == 0}" class="table-responsive">
+    <table class="table">
+      <caption th:text="#{tk.runs.caption}">Scheduled aging reports, newest first</caption>
+      <thead>
+      <tr>
+        <th scope="col" th:text="#{tk.runs.report}">Report</th>
+        <th scope="col" th:text="#{tk.case.team}">Team</th>
+        <th scope="col" th:text="#{tk.runs.lines}">Lines</th>
+        <th scope="col" th:text="#{tk.runs.csv}">CSV</th>
+      </tr>
+      </thead>
+      <tbody>
+      <tr th:each="r : ${runs.rows}">
+        <th scope="row"><a th:href="@{/reports/runs/{id}(id=${r.id})}" th:text="#{tk.runs.name(${r.asOf})}">Aging
+          as of 2026-11-02</a></th>
+        <td th:text="${r.team}">Team</td>
+        <td th:text="${r.lines}">3</td>
+        <td><a th:href="@{/reports/runs/{id}.csv(id=${r.id})}"><span th:text="#{tk.runs.download}">Download
+          CSV</span><span class="visually-hidden" th:text="#{tk.runs.download.of(${r.team}, ${r.asOf})}">: Team,
+          2026-11-02</span></a></td>
+      </tr>
+      </tbody>
+    </table>
+  </div>
+  <nav th:if="${runs.pages > 1}" th:aria-label="#{tk.list.pages}">
+    <ul class="pagination">
+      <li class="page-item" th:if="${runs.page > 1}">
+        <a class="page-link" rel="prev" th:href="@{/reports/runs(page=${runs.page - 1})}" th:text="#{tk.list.previous}">
+          Previous page</a></li>
+      <li class="page-item" th:if="${runs.page < runs.pages}">
+        <a class="page-link" rel="next" th:href="@{/reports/runs(page=${runs.page + 1})}" th:text="#{tk.list.next}">
+          Next page</a></li>
+    </ul>
+  </nav>
+</main>
+</body>
+</html>

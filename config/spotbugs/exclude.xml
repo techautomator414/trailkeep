@@ -185,6 +185,17 @@
     letters, nosniff and private, no-store; each export audited as REPORT_EXPORTED, a refused one not. Covered by
     ReportIT, OracleReportIT, ReportControllerIT and ReportsAccessibilityIT.
     Approved in the security-reviewer role on #118.
+    ReportRunController (WP-23 part b1): behind login; GET /reports/runs, /reports/runs/{id} and
+    /reports/runs/{id}.csv, read only but for the download's REPORT_RUN_DOWNLOADED audit row. ReportRunService answers
+    404 to anyone who is neither an enabled Manager of the run's team nor an enabled Compliance Admin, rebuilding
+    permissions from the database per request, and to a malformed or unknown id (digits only, parsed after a pattern
+    match), so ids cannot be probed; the list holds only the runs the person reads, and its page is parsed to a number
+    and clamped. The stored HTML is read back from REPORT_RUN and passed through StoredReportSanitizer (OWASP
+    allow-list: table elements, a p div span, scope colspan class, href only /cases/ plus a case number) into
+    SafeHtml, written only through tk:safe; team names are echoed through th:text. The download carries the stored
+    CSV (written by CsvFormat when the run was made) as an attachment named from the run's id and day, nosniff and
+    private, no-store. Covered by StoredReportSanitizerTest, ReportRunIT, ReportRunControllerIT and
+    ReportRunsAccessibilityIT. Needs security-reviewer approval.
     Approved in the security-reviewer role on #20. Listed by class, never by pattern alone, so each new controller
     is reviewed the same way.
   -->
@@ -211,6 +222,7 @@
       <Class name="io.trailkeep.web.ClosureApproverController"/>
       <Class name="io.trailkeep.web.CaseReopenController"/>
       <Class name="io.trailkeep.web.ReportController"/>
+      <Class name="io.trailkeep.web.ReportRunController"/>
     </Or>
   </Match>
   <!--

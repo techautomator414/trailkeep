@@ -2,9 +2,11 @@
 // Copyright 2026 Charlie Genova and contributors
 package io.trailkeep.web;
 
+import io.trailkeep.casefile.CaseService.Actor;
 import io.trailkeep.report.ReportException;
 import io.trailkeep.report.ReportExportService;
 import io.trailkeep.report.ReportExportService.Csv;
+import io.trailkeep.report.ReportRunService;
 import io.trailkeep.report.ReportService;
 import io.trailkeep.security.TrailkeepOidcUser;
 import io.trailkeep.shared.DomainException.Kind;
@@ -28,18 +30,21 @@ import org.springframework.web.bind.annotation.RequestParam;
  * else) and checks the period: a bad one is a 422 with the form marked. Plain GETs that change nothing.
  * {@code /reports/aging.csv} and {@code /reports/compliance.csv?from=&to=} (part b) are the same reports as CSV
  * attachments, never cached or sniffed, from {@link ReportExportService}, which audits each; there a bad period is
- * the plain 422 page, as the pages only link to periods they have accepted.
+ * the plain 422 page, as the pages only link to periods they have accepted. The aging page links to the scheduled
+ * runs ({@link ReportRunController}) for those who read them.
  */
 @Controller
 class ReportController {
 
     private final ReportService reports;
     private final ReportExportService exports;
+    private final ReportRunService runs;
     private final CasePage page;
 
-    ReportController(ReportService reports, ReportExportService exports, CasePage page) {
+    ReportController(ReportService reports, ReportExportService exports, ReportRunService runs, CasePage page) {
         this.reports = reports;
         this.exports = exports;
+        this.runs = runs;
         this.page = page;
     }
 
@@ -56,8 +61,11 @@ class ReportController {
         return attachment(exports.compliance(page.actor(principal), from, to));
     }
 
-    /** The file as an attachment; its name is dates, letters and dashes, so it needs no encoding. */
-    private static ResponseEntity<String> attachment(Csv csv) {
+    /**
+     * The file as an attachment, never cached or sniffed; its name is dates, digits, letters and dashes, so it needs no
+     * encoding. Also the stored runs' download ({@link ReportRunController}).
+     */
+    static ResponseEntity<String> attachment(Csv csv) {
         return ResponseEntity.ok()
                 .contentType(new MediaType("text", "csv", StandardCharsets.UTF_8))
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + csv.fileName() + "\"")
@@ -68,7 +76,9 @@ class ReportController {
 
     @GetMapping("/reports/aging")
     String aging(@AuthenticationPrincipal TrailkeepOidcUser principal, Model model) {
-        model.addAttribute("r", reports.aging(page.actor(principal)));
+        Actor actor = page.actor(principal);
+        model.addAttribute("r", reports.aging(actor));
+        model.addAttribute("readsRuns", runs.readsRuns(actor));
         model.addAttribute("listed", ReportService.LISTED);
         return "report/aging";
     }
