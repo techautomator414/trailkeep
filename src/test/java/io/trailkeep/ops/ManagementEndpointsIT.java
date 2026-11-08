@@ -73,6 +73,10 @@ class ManagementEndpointsIT {
         assertThat(liveness.isMember("remindersTick")).isFalse();
         assertThat(readiness.isMember("remindersTick")).isFalse();
         assertThat(groups.getPrimary().isMember("remindersTick")).isTrue();
+        // And the archive job's (WP-24).
+        assertThat(liveness.isMember("archive")).isFalse();
+        assertThat(readiness.isMember("archive")).isFalse();
+        assertThat(groups.getPrimary().isMember("archive")).isTrue();
         assertThat(liveness.isMember("livenessState")).isTrue();
         assertThat(readiness.isMember("readinessState")).isTrue();
 

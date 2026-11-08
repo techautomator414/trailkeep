@@ -35,6 +35,9 @@ class CaseListPage {
     private static final Map<String, CaseSort> COLUMNS =
             Arrays.stream(CaseSort.values()).collect(Collectors.toUnmodifiableMap(Enum::name, Function.identity()));
 
+    /** The statuses offered to someone who may not list archived cases (WP-24). */
+    private static final CaseStatus[] WORKING = {CaseStatus.OPEN, CaseStatus.PENDING_CLOSURE, CaseStatus.CLOSED};
+
     /** The message key prefix that names a chip's value, per criterion whose values are enum constants. */
     private static final Map<String, String> VALUE_KEYS = Map.of(
             "status", "tk.case.status.",
@@ -74,7 +77,7 @@ class CaseListPage {
         model.addAttribute("list", list);
         model.addAttribute("chips", chips(query, list));
         model.addAttribute("columns", COLUMNS);
-        model.addAttribute("statuses", CaseStatus.values());
+        model.addAttribute("statuses", list.offersArchived() ? CaseStatus.values() : WORKING);
         model.addAttribute("slaStates", SlaState.values());
         model.addAttribute("priorities", CasePriority.values());
         model.addAttribute("sensitivities", Sensitivity.values());

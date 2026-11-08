@@ -25,9 +25,10 @@ import org.jspecify.annotations.Nullable;
  * ids, not associations, so loading a case never drags in a graph. SLA state and search text live in the side
  * tables {@link CaseSla} and {@link CaseSearch}, never here, so jobs writing them never conflict with an editor.
  *
- * <p>Columns for archive, purge, legal hold and import ({@code ARCHIVED_AT}, {@code PURGE_AFTER}, {@code
- * PURGED_AT}, {@code LEGAL_HOLD*}, {@code LEGACY_REF}, {@code LAST_REJECTED_AT}) are mapped by the work packages that
- * write them; until then the database defaults apply.
+ * <p>{@code ARCHIVED_AT}, {@code PURGE_AFTER} and {@code LEGAL_HOLD} are mapped read-only for the archive job's queries
+ * (WP-24), which write them in bulk. The other columns for purge, legal hold details and import ({@code PURGED_AT},
+ * {@code LEGAL_HOLD_*}, {@code LEGACY_REF}, {@code LAST_REJECTED_AT}) are mapped by the work packages that write them;
+ * until then the database defaults apply.
  */
 @Entity
 @Table(name = "CASE_RECORD")
@@ -82,6 +83,18 @@ class CaseRecord {
 
     @Column(name = "CLOSED_AT")
     private @Nullable Instant closedAt;
+
+    /** Set by the archive job's bulk update only (WP-24), never through this entity. */
+    @Column(name = "ARCHIVED_AT", insertable = false, updatable = false)
+    private @Nullable Instant archivedAt;
+
+    /** Set with {@link #archivedAt}: when the purge job may tombstone the case. */
+    @Column(name = "PURGE_AFTER", insertable = false, updatable = false)
+    private @Nullable Instant purgeAfter;
+
+    /** Set and lifted by a Compliance Admin (WP-24 part b); a held case is neither archived nor purged. */
+    @Column(name = "LEGAL_HOLD", nullable = false, insertable = false, updatable = false)
+    private boolean legalHold;
 
     @Version
     @Column(name = "VERSION", nullable = false)

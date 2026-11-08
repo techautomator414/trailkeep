@@ -111,6 +111,7 @@ class DefaultCaseExportService implements CaseExportService {
     @Transactional
     public Prepared export(Actor actor, CaseListQuery requested, boolean details) {
         UserPermissions user = actor.permissions();
+        ArchivedCases.check(user, requested.filter());
         CaseScope scope = scopes.forUser(user);
         CaseListQuery query = new CaseListQuery(
                 requested.filter().forOwner(user.userId()), requested.sort(), requested.descending(), 1);

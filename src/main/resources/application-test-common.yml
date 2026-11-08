@@ -23,6 +23,9 @@ app:
   reports:
     # Likewise; delivery tests call ReportDeliveryTick.run(now).
     delivery-cron: "-"
+  retention:
+    # Likewise; archive tests call ArchiveJob.run(now).
+    archive-cron: "-"
   attachments:
     clamd:
       # Unreachable on purpose, like the provider endpoints below: scanner tests start their own clamd (fake or real).

@@ -22,6 +22,8 @@ import java.util.List;
  * @param owners the owners of the cases the person reads, by name
  * @param offersSensitivity whether the filters offer sensitivity: only to someone who reads other people's
  *     restricted cases ({@link CaseScopeService#readsOthersRestricted})
+ * @param offersArchived whether the status filter offers Archived: only to a Manager of some team or a Compliance
+ *     Admin (WP-24)
  */
 public record CaseList(
         List<Row> rows,
@@ -31,7 +33,8 @@ public record CaseList(
         List<Choice> caseTypes,
         List<Choice> teams,
         List<Choice> owners,
-        boolean offersSensitivity) {
+        boolean offersSensitivity,
+        boolean offersArchived) {
 
     /** Copies the lists. */
     public CaseList {

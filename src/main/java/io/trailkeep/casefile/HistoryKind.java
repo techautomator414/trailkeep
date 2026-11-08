@@ -17,7 +17,7 @@ public enum HistoryKind {
     COMMENTS,
     /** Attachments added and released from quarantine. */
     ATTACHMENTS,
-    /** State changes: marked restricted or standard, and the SLA evaluator's transitions (WP-21). */
+    /** State changes: marked restricted or standard, the SLA evaluator's transitions (WP-21) and archiving (WP-24). */
     STATE,
     /** Reads of a restricted case. */
     VIEWS;
@@ -33,7 +33,7 @@ public enum HistoryKind {
             case FIELDS -> Set.of("CASE_CREATED", "CASE_UPDATED", "CASE_REASSIGNED");
             case COMMENTS -> Set.of("COMMENT_ADDED", "COMMENT_PINNED", "COMMENT_UNPINNED");
             case ATTACHMENTS -> Set.of("ATTACHMENT_ADDED", "ATTACHMENT_RELEASED");
-            case STATE -> Set.of("CASE_RESTRICTED", "CASE_UNRESTRICTED", "SLA_STATE_CHANGED");
+            case STATE -> Set.of("CASE_RESTRICTED", "CASE_UNRESTRICTED", "SLA_STATE_CHANGED", "CASE_ARCHIVED");
             case VIEWS -> Set.of(RestrictedReadAudit.ACTION);
         };
     }
