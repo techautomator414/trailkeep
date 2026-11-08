@@ -44,13 +44,13 @@ class ReportScheduleController {
     /**
      * The form as posted; the selects offer only valid values, so anything else is a 422.
      *
-     * @param enabled the checkbox
+     * @param enabled the checkbox, absent when unticked
      * @param weekday the day
      * @param hour the hour
      * @param version the version the form was loaded with, kept as sent
      */
     record ScheduleForm(
-            boolean enabled,
+            @Nullable Boolean enabled,
             @NotNull DayOfWeek weekday,
             @NotNull @Min(0) @Max(23) Integer hour,
             @Nullable String version) {}
@@ -76,7 +76,7 @@ class ReportScheduleController {
     String edit(@AuthenticationPrincipal TrailkeepOidcUser principal, @PathVariable String team, Model model) {
         Schedule schedule = schedules.schedule(page.actor(principal), id(team));
         ScheduleForm values = new ScheduleForm(
-                schedule.scheduled() ? schedule.enabled() : true,
+                !schedule.scheduled() || schedule.enabled(),
                 schedule.weekday(),
                 schedule.hour(),
                 Integer.toString(schedule.version()));
@@ -97,7 +97,7 @@ class ReportScheduleController {
             response.setStatus(HttpStatus.UNPROCESSABLE_CONTENT.value());
             return form(schedule, form, true, false, model);
         }
-        ScheduleChange change = new ScheduleChange(form.enabled(), form.weekday(), form.hour());
+        ScheduleChange change = new ScheduleChange(Boolean.TRUE.equals(form.enabled()), form.weekday(), form.hour());
         try {
             schedules.save(actor, schedule.teamId(), version(form.version()), change);
         } catch (ReportException refused) {

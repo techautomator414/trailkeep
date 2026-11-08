@@ -131,6 +131,12 @@ class ReportScheduleControllerIT {
         mvc.perform(save("/admin/report-schedules/" + OLD_TEAM, "true", "SUNDAY", "23", "3")
                         .with(csrf()))
                 .andExpect(redirectedUrl("/admin/report-schedules"));
+        mvc.perform(post("/admin/report-schedules/" + OLD_TEAM)
+                        .param("weekday", "SUNDAY")
+                        .param("hour", "23")
+                        .param("version", "4")
+                        .with(csrf()))
+                .andExpect(redirectedUrl("/admin/report-schedules"));
         entityManager.flush();
 
         Map<String, Object> created = schedule(NEW_TEAM);
@@ -139,12 +145,13 @@ class ReportScheduleControllerIT {
         assertThat(created.get("ENABLED")).isEqualTo(true);
         Map<String, Object> changed = schedule(OLD_TEAM);
         assertThat(number(changed, "RUN_WEEKDAY")).isEqualTo(7);
-        assertThat(number(changed, "VERSION")).isEqualTo(4);
+        assertThat(number(changed, "VERSION")).isEqualTo(5);
+        assertThat(changed.get("ENABLED")).as("unticked").isEqualTo(false);
         assertThat(jdbc.queryForObject(
                         "SELECT COUNT(*) FROM AUDIT_EVENT WHERE ACTION = 'REPORT_SCHEDULE_CHANGED' AND ACTOR_ID = ?",
                         Long.class,
                         ADMIN))
-                .isEqualTo(2L);
+                .isEqualTo(3L);
         assertThat(page(get("/admin/report-schedules"), status().isOk()))
                 .contains("Aardvark Schedule Team</a></th><td>Enabled</td><td>Thursdays at 08:00</td><td>20");
     }
