@@ -47,7 +47,7 @@ class StoredReportSanitizerTest {
     }
 
     @Test
-    void aHandEditedRunRowLosesItsScriptHandlersStylesAndForeignLinks() {
+    void handEditedRunRowsLoseTheirScriptsHandlersStylesAndForeignLinks() {
         String edited = "<table><tbody><tr>"
                 + "<td onerror=\"alert(1)\" style=\"color:red\">cell<script>alert(2)</script></td>"
                 + "<td><img src=\"x\" onerror=\"alert(3)\">image</td>"
