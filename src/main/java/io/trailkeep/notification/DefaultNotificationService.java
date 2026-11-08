@@ -50,6 +50,22 @@ class DefaultNotificationService implements NotificationService {
     @Transactional(propagation = Propagation.MANDATORY)
     public boolean notifyUser(
             long userId, String templateId, Map<String, ?> model, @Nullable Long caseId, String path) {
+        return tell(userId, templateId, model, caseId, null, path);
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public boolean notifyOfReport(long userId, String templateId, Map<String, ?> model, long reportRunId, String path) {
+        return tell(userId, templateId, model, null, reportRunId, path);
+    }
+
+    private boolean tell(
+            long userId,
+            String templateId,
+            Map<String, ?> model,
+            @Nullable Long caseId,
+            @Nullable Long reportRunId,
+            String path) {
         if (!path.startsWith("/") || path.startsWith("//") || path.indexOf('\\') >= 0) {
             throw new IllegalArgumentException("a deep link is an absolute path on this application");
         }
@@ -67,19 +83,28 @@ class DefaultNotificationService implements NotificationService {
             LOG.info("User {} has no mail address; no mail queued", userId);
             return false;
         }
-        enqueue(address.get(), templateId, withLink, caseId);
+        queue(address.get(), templateId, withLink, caseId, reportRunId);
         return true;
     }
 
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
     public long enqueue(String recipient, String templateId, Map<String, ?> model, @Nullable Long caseId) {
+        return queue(recipient, templateId, model, caseId, null);
+    }
+
+    private long queue(
+            String recipient,
+            String templateId,
+            Map<String, ?> model,
+            @Nullable Long caseId,
+            @Nullable Long reportRunId) {
         String address = recipient.strip();
         if (address.isEmpty() || address.length() > MAX_RECIPIENT || address.indexOf('@') < 1) {
             throw new IllegalArgumentException("not a recipient address");
         }
         NotificationOutbox row = new NotificationOutbox(
-                address, templateId, templates.render(templateId, model), caseId, clock.instant());
+                address, templateId, templates.render(templateId, model), caseId, reportRunId, clock.instant());
         entityManager.persist(row);
         long id = Objects.requireNonNull(row.getId());
         // Never the address, the template's model or the bodies (Part B "Logging").

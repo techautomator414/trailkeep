@@ -62,6 +62,19 @@ class DefaultReportExportService implements ReportExportService {
     @Transactional
     public Csv aging(Actor actor) {
         AgingReport report = reports.aging(actor);
+        audited(
+                actor,
+                new Exported("aging", report.asOf().toString(), report.lines().size()));
+        return new Csv("aging-" + report.asOf() + ".csv", agingCsv(report));
+    }
+
+    /**
+     * The aging report's CSV: what an export downloads and what a scheduled run stores.
+     *
+     * @param report the report
+     * @return the file's content, a byte order mark first
+     */
+    static String agingCsv(AgingReport report) {
         List<List<String>> lines = new ArrayList<>();
         report.lines().forEach(line -> lines.add(agingCells(line.team(), line.owner(), line.counts())));
         lines.add(agingCells(TOTAL, "", report.total()));
@@ -78,10 +91,7 @@ class DefaultReportExportService implements ReportExportService {
                         w.askedBy(),
                         w.requestedOn().toString(),
                         Long.toString(w.daysWaiting()))));
-        audited(
-                actor,
-                new Exported("aging", report.asOf().toString(), report.lines().size()));
-        return csv("aging-" + report.asOf() + ".csv", AGING, lines);
+        return content(AGING, lines);
     }
 
     @Override
@@ -93,7 +103,7 @@ class DefaultReportExportService implements ReportExportService {
         lines.add(complianceCells(TOTAL, report.total(), report.withinSla()));
         String period = report.from() + "-to-" + report.to();
         audited(actor, new Exported("compliance", period, report.lines().size()));
-        return csv("sla-compliance-" + period + ".csv", COMPLIANCE, lines);
+        return new Csv("sla-compliance-" + period + ".csv", content(COMPLIANCE, lines));
     }
 
     private void audited(Actor actor, Exported exported) {
@@ -143,9 +153,9 @@ class DefaultReportExportService implements ReportExportService {
         return cells;
     }
 
-    private static Csv csv(String fileName, List<String> header, List<List<String>> lines) {
+    private static String content(List<String> header, List<List<String>> lines) {
         StringBuilder content = new StringBuilder(CsvFormat.BOM).append(CsvFormat.line(header));
         lines.forEach(line -> content.append(CsvFormat.line(line)));
-        return new Csv(fileName, content.toString());
+        return content.toString();
     }
 }
