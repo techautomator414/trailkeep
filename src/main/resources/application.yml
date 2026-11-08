@@ -180,6 +180,9 @@ app:
     archive-cron: "0 37 * * * *"
     purge-grace: 30d
     health-grace: 2h
+    # The purge job (profile purge, WP-24 part c) also deletes report runs older than this, and first the mail that
+    # names them: a run holds case numbers and titles, and its mail links to it.
+    report-runs: 400d
 
 server:
   port: 8080

@@ -15,6 +15,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Test;
@@ -137,9 +139,16 @@ abstract class AbstractDatabaseGrantsIT {
             // A hold placed or lifted is history: written once, never changed or deleted, kept by purge (V8).
             Map.entry("LEGAL_HOLD_EVENT", EnumSet.of(Privilege.SELECT, Privilege.INSERT)));
 
-    /** What the purge user may do on these tables: trim the outbox (V4.8); its case-data grants arrive with WP-24. */
-    static final Map<String, Set<Privilege>> PURGE_USER_GRANTS =
-            Map.of("NOTIFICATION_OUTBOX", EnumSet.of(Privilege.SELECT, Privilege.DELETE));
+    /** The purge user (WP-24 part c): deletes purged case content and old runs, reads the rows it tombstones. */
+    static final Map<String, Set<Privilege>> PURGE_USER_GRANTS = Stream.of(
+                    ("NOTIFICATION_OUTBOX CASE_COMMENT_PIN UPDATE_REQUEST CASE_COMMENT CASE_ATTACHMENT_CHUNK"
+                                    + " CASE_ATTACHMENT CASE_SEARCH CASE_REOPEN CLOSURE_REQUEST REPORT_RUN CASE_RECORD")
+                            .split(" "))
+            .collect(Collectors.toUnmodifiableMap(
+                    Function.identity(),
+                    table -> "CASE_RECORD".equals(table)
+                            ? EnumSet.of(Privilege.SELECT)
+                            : EnumSet.of(Privilege.SELECT, Privilege.DELETE)));
 
     static final List<String> SEQUENCES = List.of(
             "SEQ_APP_USER",
@@ -305,6 +314,21 @@ abstract class AbstractDatabaseGrantsIT {
         assertThat(run(appUser, "DELETE FROM " + chunks)).isEqualTo(Outcome.DENIED);
         assertThat(run(purgeUser, "UPDATE " + attachments + " SET RELEASED_REASON = NULL WHERE 1 = 0"))
                 .isEqualTo(Outcome.DENIED);
+    }
+
+    /** A tombstone (WP-24 part c): four columns and the row lock, nothing else; the matrix covers DELETE. */
+    @Test
+    void thePurgeUserMayChangeACaseOnlyIntoATombstone() throws SQLException {
+        String cases = users.ownerSchema() + ".CASE_RECORD";
+        List<String> columns = List.of(
+                "DESCRIPTION", "SUBJECT_TEXT", "PURGED_AT", "VERSION", "TITLE", "STATUS", "LEGAL_HOLD", "PURGE_AFTER");
+        for (int i = 0; i < columns.size(); i++) {
+            assertThat(run(purgeUser, "UPDATE " + cases + " SET " + columns.get(i) + " = NULL WHERE 1 = 0"))
+                    .as(columns.get(i))
+                    .isEqualTo(i < 4 ? Outcome.ALLOWED : Outcome.DENIED);
+        }
+        assertThat(run(purgeUser, "SELECT ID FROM " + cases + " WHERE 1 = 0 FOR UPDATE"))
+                .isEqualTo(Outcome.ALLOWED);
     }
 
     @Test

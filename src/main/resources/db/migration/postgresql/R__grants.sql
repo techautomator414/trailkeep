@@ -20,27 +20,27 @@
 --   SLA_POLICY            S I U      -            edited, never deleted (V3)
 --   CASE_TYPE             S I U      -            deactivated, never deleted (V3)
 --   CASE_TYPE_OUTCOME     S I U D    -            configuration; an outcome list is replaced as a whole (V3)
---   CASE_RECORD           S I U      -            never deleted by the app; purge grants come with WP-24 (V4)
+--   CASE_RECORD           S I U      S (U)        never deleted; purge tombstones it: UPDATE of 4 columns (V4)
 --   CASE_SLA              S I U      -            job-owned side table (V4)
---   CASE_SEARCH           S I U      -            search text side table (V4)
---   CASE_COMMENT          S I        -            insert-only; a correction is a new comment (V4.1)
---   CASE_COMMENT_PIN      S I   D    -            pins; unpinning deletes the row (V4.2)
---   CASE_ATTACHMENT       S I (U)    -            UPDATE of the four release columns only (V4.3)
---   CASE_ATTACHMENT_CHUNK S I        -            content is never changed (V4.3)
+--   CASE_SEARCH           S I U      S D          search text side table; purged (V4)
+--   CASE_COMMENT          S I        S D          insert-only; a correction is a new comment; purged (V4.1)
+--   CASE_COMMENT_PIN      S I   D    S D          pins; unpinning deletes the row; purged (V4.2)
+--   CASE_ATTACHMENT       S I (U)    S D          UPDATE of the four release columns only; purged (V4.3)
+--   CASE_ATTACHMENT_CHUNK S I        S D          content is never changed; purged (V4.3)
 --   SPRING_SESSION        S I U D    -            Spring Session JDBC (V3.1)
 --   SPRING_SESSION_ATTRIBUTES S I U D -
 --   OIDC_SESSION          S I U D    -            back-channel logout registry (V3.1)
 --   SAVED_VIEW            S I   D    -            a person's saved views; saved and deleted, never changed (V4.7)
 --   NOTIFICATION_OUTBOX   S I U      S D          mail outbox; the purge user trims sent rows (V4.8)
 --   USER_ALERT            S I U D    -            in-app alerts; marked read and deleted by their person (V4.9)
---   UPDATE_REQUEST        S I U      -            update requests; answered, never deleted (V4.10)
---   CLOSURE_REQUEST       S I U      -            closure requests; decided, never deleted (V5)
---   CASE_REOPEN           S I        -            reopens; history, never changed (V5.1)
+--   UPDATE_REQUEST        S I U      S D          update requests; answered; purged (V4.10)
+--   CLOSURE_REQUEST       S I U      S D          closure requests; decided; purged (V5)
+--   CASE_REOPEN           S I        S D          reopens; history, never changed; purged (V5.1)
 --   ALERT_LEDGER          S I        -            alert idempotency; never changed, outlives purge (V6)
 --   JOB_RUN               S I U      -            each job's last success, cluster truth (V6)
 --   SHEDLOCK              S I U      -            ShedLock's lock rows; its JDBC provider never deletes (V6)
 --   REPORT_SCHEDULE       S I U      -            report schedules; disabled, never deleted (V7)
---   REPORT_RUN            S I        -            rendered report runs; history, never changed (V7)
+--   REPORT_RUN            S I        S D          report runs; never changed; purged after report-runs (V7)
 --   LEGAL_HOLD_EVENT      S I        -            holds placed and lifted; history, kept by purge (V8)
 --   SEQ_APP_USER          USAGE      -
 --   SEQ_TEAM              USAGE      -
@@ -108,6 +108,13 @@ GRANT SELECT, INSERT, DELETE         ON TABLE SAVED_VIEW           TO ${app_user
 GRANT SELECT, INSERT, UPDATE         ON TABLE NOTIFICATION_OUTBOX  TO ${app_user};
 -- Trimming sent mail is the purge job's; DELETE ... WHERE needs SELECT on the columns it filters by.
 GRANT SELECT, DELETE                 ON TABLE NOTIFICATION_OUTBOX  TO ${purge_user};
+-- The retention purge (WP-24 part c, io.trailkeep.retention.PurgeJdbcDao): it deletes a purged case's content and old
+-- report runs, and turns the case row into a tombstone, changing only those four columns. SELECT FOR UPDATE needs
+-- UPDATE on a column, which the column grant gives.
+GRANT SELECT, DELETE ON TABLE CASE_COMMENT_PIN, UPDATE_REQUEST, CASE_COMMENT, CASE_ATTACHMENT_CHUNK, CASE_ATTACHMENT,
+  CASE_SEARCH, CASE_REOPEN, CLOSURE_REQUEST, REPORT_RUN TO ${purge_user};
+GRANT SELECT ON TABLE CASE_RECORD TO ${purge_user};
+GRANT UPDATE (DESCRIPTION, SUBJECT_TEXT, PURGED_AT, VERSION) ON TABLE CASE_RECORD TO ${purge_user};
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE USER_ALERT           TO ${app_user};
 GRANT SELECT, INSERT, UPDATE         ON TABLE UPDATE_REQUEST       TO ${app_user};
 GRANT SELECT, INSERT, UPDATE         ON TABLE CLOSURE_REQUEST      TO ${app_user};

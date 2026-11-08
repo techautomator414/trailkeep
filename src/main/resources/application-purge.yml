@@ -1,6 +1,14 @@
 # SPDX-License-Identifier: Apache-2.0
 # Copyright 2026 Charlie Genova and contributors
-# Batch profile, combined with prod (SPRING_PROFILES_ACTIVE=prod,purge). No web server, no web schedulers.
+# Batch profile, combined with prod (SPRING_PROFILES_ACTIVE=prod,purge). No web server, no web schedulers: the
+# retention purge (WP-24 part c, io.trailkeep.retention.PurgeRunner) runs once and the process ends. It connects as
+# TRAILKEEP_PURGE, which may run only the purge's statements (R__grants.sql), so it neither migrates the schema (the
+# web pods' release does) nor lets Hibernate validate it (the purge user sees only the tables it purges).
 spring:
   main:
     web-application-type: none
+  flyway:
+    enabled: false
+  jpa:
+    hibernate:
+      ddl-auto: none

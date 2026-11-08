@@ -18,27 +18,27 @@
 --   APP_USER_TEAM         S I U D    -            membership and role changes
 --   APP_USER_GLOBAL_ROLE  S I   D    -            re-synced from identity-provider claims at login
 --   AUDIT_EVENT           S I        -            append-only; audit outlives purge (V2)
---   CASE_RECORD           S I U      -            never deleted by the app; purge grants come with WP-24 (V4)
+--   CASE_RECORD           S I U      S (U)        never deleted; purge tombstones it: UPDATE of 4 columns (V4)
 --   CASE_SLA              S I U      -            job-owned side table (V4)
---   CASE_SEARCH           S I U      -            search text side table (V4)
---   CASE_COMMENT          S I        -            insert-only; a correction is a new comment (V4.1)
---   CASE_COMMENT_PIN      S I   D    -            pins; unpinning deletes the row (V4.2)
---   CASE_ATTACHMENT       S I (U)    -            UPDATE of the four release columns only (V4.3)
---   CASE_ATTACHMENT_CHUNK S I        -            content is never changed (V4.3)
+--   CASE_SEARCH           S I U      S D          search text side table; purged (V4)
+--   CASE_COMMENT          S I        S D          insert-only; a correction is a new comment; purged (V4.1)
+--   CASE_COMMENT_PIN      S I   D    S D          pins; unpinning deletes the row; purged (V4.2)
+--   CASE_ATTACHMENT       S I (U)    S D          UPDATE of the four release columns only; purged (V4.3)
+--   CASE_ATTACHMENT_CHUNK S I        S D          content is never changed; purged (V4.3)
 --   SPRING_SESSION        S I U D    -            Spring Session JDBC (V3.1)
 --   SPRING_SESSION_ATTRIBUTES S I U D -
 --   OIDC_SESSION          S I U D    -            back-channel logout registry (V3.1)
 --   SAVED_VIEW            S I   D    -            a person's saved views; saved and deleted, never changed (V4.7)
 --   NOTIFICATION_OUTBOX   S I U      S D          mail outbox; the purge user trims sent rows (V4.8)
 --   USER_ALERT            S I U D    -            in-app alerts; marked read and deleted by their person (V4.9)
---   UPDATE_REQUEST        S I U      -            update requests; answered, never deleted (V4.10)
---   CLOSURE_REQUEST       S I U      -            closure requests; decided, never deleted (V5)
---   CASE_REOPEN           S I        -            reopens; history, never changed (V5.1)
+--   UPDATE_REQUEST        S I U      S D          update requests; answered; purged (V4.10)
+--   CLOSURE_REQUEST       S I U      S D          closure requests; decided; purged (V5)
+--   CASE_REOPEN           S I        S D          reopens; history, never changed; purged (V5.1)
 --   ALERT_LEDGER          S I        -            alert idempotency; never changed, outlives purge (V6)
 --   JOB_RUN               S I U      -            each job's last success, cluster truth (V6)
 --   SHEDLOCK              S I U      -            ShedLock's lock rows; its JDBC provider never deletes (V6)
 --   REPORT_SCHEDULE       S I U      -            report schedules; disabled, never deleted (V7)
---   REPORT_RUN            S I        -            rendered report runs; history, never changed (V7)
+--   REPORT_RUN            S I        S D          report runs; never changed; purged after report-runs (V7)
 --   LEGAL_HOLD_EVENT      S I        -            holds placed and lifted; history, kept by purge (V8)
 --   SEQ_APP_USER          SELECT     -            Oracle's sequence privilege is SELECT (NEXTVAL)
 --   SEQ_TEAM              SELECT     -
@@ -121,7 +121,17 @@ DECLARE
     UNION ALL SELECT 'REPORT_RUN', 'SELECT,INSERT', UPPER('${app_user}') FROM DUAL
     UNION ALL SELECT 'SEQ_REPORT_RUN', 'SELECT', UPPER('${app_user}') FROM DUAL
     UNION ALL SELECT 'LEGAL_HOLD_EVENT', 'SELECT,INSERT', UPPER('${app_user}') FROM DUAL
-    UNION ALL SELECT 'SEQ_LEGAL_HOLD_EVENT', 'SELECT', UPPER('${app_user}') FROM DUAL;
+    UNION ALL SELECT 'SEQ_LEGAL_HOLD_EVENT', 'SELECT', UPPER('${app_user}') FROM DUAL
+    UNION ALL SELECT 'CASE_COMMENT_PIN', 'SELECT,DELETE', UPPER('${purge_user}') FROM DUAL
+    UNION ALL SELECT 'UPDATE_REQUEST', 'SELECT,DELETE', UPPER('${purge_user}') FROM DUAL
+    UNION ALL SELECT 'CASE_COMMENT', 'SELECT,DELETE', UPPER('${purge_user}') FROM DUAL
+    UNION ALL SELECT 'CASE_ATTACHMENT_CHUNK', 'SELECT,DELETE', UPPER('${purge_user}') FROM DUAL
+    UNION ALL SELECT 'CASE_ATTACHMENT', 'SELECT,DELETE', UPPER('${purge_user}') FROM DUAL
+    UNION ALL SELECT 'CASE_SEARCH', 'SELECT,DELETE', UPPER('${purge_user}') FROM DUAL
+    UNION ALL SELECT 'CASE_REOPEN', 'SELECT,DELETE', UPPER('${purge_user}') FROM DUAL
+    UNION ALL SELECT 'CLOSURE_REQUEST', 'SELECT,DELETE', UPPER('${purge_user}') FROM DUAL
+    UNION ALL SELECT 'REPORT_RUN', 'SELECT,DELETE', UPPER('${purge_user}') FROM DUAL
+    UNION ALL SELECT 'CASE_RECORD', 'SELECT', UPPER('${purge_user}') FROM DUAL;
   keep PLS_INTEGER;
 BEGIN
   FOR w IN wanted LOOP
@@ -150,5 +160,8 @@ BEGIN
   -- USER_TAB_PRIVS, so the loop above neither sees nor revokes this grant; it is granted last regardless.
   EXECUTE IMMEDIATE 'GRANT UPDATE (SCAN_STATUS, RELEASED_BY, RELEASED_AT, RELEASED_REASON) ON CASE_ATTACHMENT TO '
     || UPPER('${app_user}');
+  -- The retention purge (WP-24 part c) turns a case row into a tombstone and changes nothing else on it.
+  EXECUTE IMMEDIATE 'GRANT UPDATE (DESCRIPTION, SUBJECT_TEXT, PURGED_AT, VERSION) ON CASE_RECORD TO '
+    || UPPER('${purge_user}');
 END;
 /
