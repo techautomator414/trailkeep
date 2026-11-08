@@ -207,6 +207,15 @@
     /admin/report-schedules; team names are echoed through th:text. Covered by ReportScheduleIT,
     OracleReportScheduleIT, ReportScheduleControllerIT and ReportSchedulesAccessibilityIT.
     Approved in the security-reviewer role on #122.
+    LegalHoldController (WP-24 part b): behind login; GET /cases/{n}/legal-hold and POST of the same path, the POST
+    with CSRF (403 without). CaseService.actionable decides 404 (the person's CaseScope) and 403 (LEGAL_HOLD:
+    Compliance Admins only, in any status) before any input is read; the posted hold flag says which change is asked
+    for, so a stale form is a 409 with Reload, never a toggle the other way. LegalHoldService re-checks under the case
+    row lock, takes a reason of 1 to 500 characters (CRLF as one, stripped; 422 otherwise), stores it in
+    LEGAL_HOLD_REASON, shows it only to Compliance Admins, and audits LEGAL_HOLD_PLACED or LEGAL_HOLD_LIFTED with the
+    reason redacted. The redirect is the fixed path /cases/ plus a parsed case number; the reason is echoed only
+    through th:text. Covered by LegalHoldIT, OracleLegalHoldIT, LegalHoldControllerIT and LegalHoldAccessibilityIT.
+    Approved in the security-reviewer role on #126.
     Approved in the security-reviewer role on #20. Listed by class, never by pattern alone, so each new controller
     is reviewed the same way.
   -->
@@ -235,6 +244,7 @@
       <Class name="io.trailkeep.web.ReportController"/>
       <Class name="io.trailkeep.web.ReportRunController"/>
       <Class name="io.trailkeep.web.ReportScheduleController"/>
+      <Class name="io.trailkeep.web.LegalHoldController"/>
     </Or>
   </Match>
   <!--

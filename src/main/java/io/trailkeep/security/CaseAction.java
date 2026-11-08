@@ -35,5 +35,7 @@ public enum CaseAction {
     /** Reassign the owner or the team. */
     REASSIGN,
     /** Release a quarantined attachment. */
-    RELEASE_QUARANTINE
+    RELEASE_QUARANTINE,
+    /** Place or lift a legal hold, which stops archiving and purging (WP-24 part b). */
+    LEGAL_HOLD
 }

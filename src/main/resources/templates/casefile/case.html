@@ -38,7 +38,16 @@
     <li class="tk-chip" th:if="${lastDecision != null and lastDecision.decision.name() == 'APPROVED'
                                  and c.status.name() == 'OPEN'}">
       <span aria-hidden="true">&#x21BB;</span> <span th:text="#{tk.reopen.badge}">Reopened</span></li>
+    <li class="tk-chip" th:if="${legalHold != null}">
+      <span aria-hidden="true">&#x2696;</span> <span th:text="#{tk.hold.badge}">Legal hold</span></li>
   </ul>
+  <section th:if="${legalHold != null and holdable}" class="alert alert-secondary" aria-labelledby="tk-hold-title">
+    <h2 id="tk-hold-title" class="h5" th:text="#{tk.hold.badge}">Legal hold</h2>
+    <p th:text="#{tk.hold.by(${legalHold.heldBy}, ${#temporals.format(legalHold.heldAt, 'yyyy-MM-dd HH:mm')})}">On
+      legal hold since date.</p>
+    <h3 class="h6" th:text="#{tk.decision.reason.title}">Reason</h3>
+    <p class="tk-description mb-0" th:text="${legalHold.reason}">Reason</p>
+  </section>
   <section th:if="${lastReopen != null and lastDecision != null and lastDecision.decision.name() == 'APPROVED'
                    and c.status.name() == 'OPEN'}" th:with="r=${lastReopen}" class="alert alert-secondary"
            aria-labelledby="tk-reopened-title">
@@ -92,7 +101,8 @@
     <th:block th:replace="~{casefile/fragments/closure-decision :: fields(${d.summary}, ${d.followUps})}"/>
   </section>
   <p class="tk-dialog-actions" th:if="${c.editable or c.reassignable or c.restrictable or c.unrestrictable
-                                       or recipients != null or closureChoices != null or reopenable}">
+                                       or recipients != null or closureChoices != null or reopenable
+                                       or holdable}">
     <a th:if="${c.editable}" class="btn btn-primary" th:href="@{/cases/{n}/edit(n=${c.number})}"
        th:text="#{tk.case.edit}">Edit</a>
     <a th:if="${reassign != null}" class="btn btn-outline-primary" th:href="@{/cases/{n}/reassign(n=${c.number})}"
@@ -110,7 +120,16 @@
        aria-haspopup="dialog" th:text="#{tk.closure.open}">Request closure</a>
     <a th:if="${reopenable}" class="btn btn-outline-primary" th:href="@{/cases/{n}/reopen(n=${c.number})}"
        data-tk-dialog-open="tk-reopen-dialog" aria-haspopup="dialog" th:text="#{tk.reopen.open}">Reopen case</a>
+    <a th:if="${holdable}" class="btn btn-outline-primary" th:href="@{/cases/{n}/legal-hold(n=${c.number})}"
+       data-tk-dialog-open="tk-hold-dialog" aria-haspopup="dialog"
+       th:text="${legalHold == null} ? #{tk.hold.place} : #{tk.hold.lift}">Place legal hold</a>
   </p>
+  <dialog th:if="${holdable}" id="tk-hold-dialog" class="tk-dialog" aria-labelledby="tk-hold-dialog-title">
+    <h2 id="tk-hold-dialog-title" th:text="${legalHold == null} ? #{tk.hold.title.place(${c.number})}
+        : #{tk.hold.title.lift(${c.number})}">Place a legal hold</h2>
+    <form th:replace="~{casefile/fragments/legal-hold :: form(${c.number}, ${legalHold == null}, '', false, true)}">
+    </form>
+  </dialog>
   <dialog th:if="${reopenable}" id="tk-reopen-dialog" class="tk-dialog" aria-labelledby="tk-reopen-title">
     <h2 id="tk-reopen-title" th:text="#{tk.reopen.title(${c.number})}">Reopen</h2>
     <form th:replace="~{casefile/fragments/closure-decision :: reopen(${c.number}, '', false, true)}"></form>
