@@ -128,7 +128,7 @@ class LegalHoldAccessibilityIT {
         }
         // Test-only cleanup as the schema owner; the application user has no DELETE grant on AUDIT_EVENT.
         String ofTeam = " WHERE CASE_ID IN (SELECT ID FROM CASE_RECORD WHERE TEAM_ID = ?)";
-        for (String table : new String[] {"AUDIT_EVENT", "CASE_SEARCH", "CASE_SLA"}) {
+        for (String table : new String[] {"LEGAL_HOLD_EVENT", "AUDIT_EVENT", "CASE_SEARCH", "CASE_SLA"}) {
             jdbc.update("DELETE FROM " + table + ofTeam, team);
         }
         jdbc.update("DELETE FROM CASE_RECORD WHERE TEAM_ID = ?", team);

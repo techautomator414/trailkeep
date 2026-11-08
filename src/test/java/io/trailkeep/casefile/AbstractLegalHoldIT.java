@@ -4,6 +4,7 @@ package io.trailkeep.casefile;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.tuple;
 
 import io.trailkeep.casefile.CaseService.Actor;
 import io.trailkeep.casefile.LegalHoldService.LegalHold;
@@ -36,8 +37,10 @@ import org.springframework.transaction.annotation.Transactional;
  * Legal hold, once per vendor (WP-24 part b): a Compliance Admin places a hold with a reason, which is stored with who
  * and when, shown only to Compliance Admins, audited with the reason redacted, and keeps the archive job off the case;
  * lifting it clears all of that, is audited, lets the case be archived again, and gives an archived case at least the
- * purge grace before it may be purged. A Manager is {@code FORBIDDEN}, an unknown case {@code NOT_FOUND}, a blank or
- * over-long reason {@code INVALID}, and placing a hold twice or lifting none {@code CONFLICT}, with nothing audited.
+ * purge grace before it may be purged. Each change is an append-only {@code LEGAL_HOLD_EVENT} (V8), read back as the
+ * history Compliance Admins see, newest first. A Manager is {@code FORBIDDEN}, an unknown case {@code NOT_FOUND}, a
+ * blank or over-long reason {@code INVALID}, and placing a hold twice or lifting none {@code CONFLICT}, with nothing
+ * audited.
  */
 // "IT" is the Failsafe suffix Part B mandates for integration tests, not an abbreviation.
 @SuppressWarnings("checkstyle:AbbreviationAsWordInName")
@@ -123,6 +126,19 @@ abstract class AbstractLegalHoldIT {
                 .hasSize(1)
                 .allSatisfy(
                         json -> assertThat(json).contains("\"legalHold\":false").doesNotContain("settled"));
+
+        // The readable history (V8): newest first, with who, when and why, for Compliance Admins only.
+        assertThat(holds.history(actor(admin), number))
+                .extracting(LegalHoldService.HoldChange::placed, LegalHoldService.HoldChange::reason)
+                .containsExactly(tuple(false, "Synthetic matter settled"), tuple(true, REASON));
+        assertThat(holds.history(actor(admin), number).getLast().by()).isEqualTo("Seed User " + admin);
+        assertThat(holds.history(actor(manager), number)).isEmpty();
+        assertThat(jdbc.queryForList(
+                        "SELECT ACTION FROM LEGAL_HOLD_EVENT WHERE CASE_ID = ? AND CHANGED_BY = ? ORDER BY ID",
+                        String.class,
+                        caseId,
+                        admin))
+                .containsExactly("PLACED", "LIFTED");
     }
 
     @Test
@@ -148,6 +164,11 @@ abstract class AbstractLegalHoldIT {
         assertThat(purgeAfter)
                 .isBetween(before.plus(Duration.ofDays(30)), clock.instant().plus(Duration.ofDays(30)));
         assertThat(row().get("STATUS")).isEqualTo("ARCHIVED");
+        assertThat(jdbc.queryForObject(
+                        "SELECT PURGE_AFTER FROM LEGAL_HOLD_EVENT WHERE CASE_ID = ? AND ACTION = 'LIFTED'",
+                        Timestamp.class,
+                        caseId))
+                .isEqualTo(Timestamp.from(purgeAfter));
     }
 
     @Test
@@ -163,6 +184,8 @@ abstract class AbstractLegalHoldIT {
         flushAndClear();
         assertThat(audits("LEGAL_HOLD_PLACED")).hasSize(1);
         assertThat(audits("LEGAL_HOLD_LIFTED")).isEmpty();
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM LEGAL_HOLD_EVENT WHERE CASE_ID = ?", Long.class, caseId))
+                .isEqualTo(1L);
         assertThat(directory.permissionsOf(admin).has(GlobalRole.COMPLIANCE_ADMIN))
                 .isTrue();
     }

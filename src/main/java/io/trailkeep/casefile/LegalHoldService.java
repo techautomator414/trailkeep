@@ -12,11 +12,11 @@ import java.util.Optional;
  * one on a case with a reason and lifts it with a reason, each recorded as an append-only {@code LEGAL_HOLD_EVENT}
  * (part b2) in the same transaction, which the purge job keeps. A held case is not archived ({@link
  * CaseRetentionService} skips it) and not purged. Lifting the hold of an archived case keeps it at least the purge
- * grace longer, so a case is never purged the moment its hold ends. Both are audited ({@code LEGAL_HOLD_PLACED}, {@code LEGAL_HOLD_LIFTED})
- * with the reason redacted, as every free-text reason is. Refusals follow ADR-0005: {@code NOT_FOUND} through the
- * person's {@code CaseScope}, {@code FORBIDDEN} without {@code LEGAL_HOLD} (Compliance Admins, any status), then
- * {@code INVALID} for a blank or over-long reason and {@code CONFLICT} when the case is already in the state asked for
- * (someone else got there first).
+ * grace longer, so a case is never purged the moment its hold ends. Both are audited ({@code LEGAL_HOLD_PLACED},
+ * {@code LEGAL_HOLD_LIFTED}) with the reason redacted, as every free-text reason is. Refusals follow ADR-0005:
+ * {@code NOT_FOUND} through the person's {@code CaseScope}, {@code FORBIDDEN} without {@code LEGAL_HOLD} (Compliance
+ * Admins, any status), then {@code INVALID} for a blank or over-long reason and {@code CONFLICT} when the case is
+ * already in the state asked for (someone else got there first).
  */
 public interface LegalHoldService {
 

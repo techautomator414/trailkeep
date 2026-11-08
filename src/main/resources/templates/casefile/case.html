@@ -51,7 +51,7 @@
   <section th:unless="${holdHistory.isEmpty()}" aria-labelledby="tk-hold-history-title">
     <h2 id="tk-hold-history-title" class="h5" th:text="#{tk.hold.history}">Legal hold history</h2>
     <ul class="list-unstyled">
-      <li th:each="h : ${holdHistory}" class="mb-2"><span th:text="#{${h.placed} ? 'tk.hold.history.placed'
+      <li th:each="h : ${holdHistory}" class="mb-2"><span th:text="#{${h.placed ? 'tk.hold.history.placed'
           : 'tk.hold.history.lifted'}(${h.by}, ${#temporals.format(h.at, 'yyyy-MM-dd HH:mm')})}">Placed by X on
           date</span>: <span class="tk-description" th:text="${h.reason}">Reason</span></li>
     </ul>
