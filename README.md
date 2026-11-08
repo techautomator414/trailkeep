@@ -9,7 +9,7 @@ nothing about it. Each case has an owner, a type, an SLA clock, comments, attach
 approval moment: closure. The system emails people before deadlines pass, sends an automated aging report,
 and keeps an evidence-grade history.
 
-> **Status: Phase 3 complete, after the 0.1.0 walking skeleton and a complete Phase 2.** Phase 1 of
+> **Status: Phase 4 complete, after the 0.1.0 walking skeleton and complete Phases 2 and 3.** Phase 1 of
 > `IMPLEMENTATION_PLAN.md` is merged (build and scanning gates, two-vendor schema tooling, identity, OIDC login and
 > shared sessions, audit, web shell, container and deploy base), with team and case-configuration administration
 > (WP-09, WP-10). Phase 2 is merged: case create, view, edit, reassign and restrict, comments, attachments with virus
@@ -17,8 +17,12 @@ and keeps an evidence-grade history.
 > the case History page with audited reads of restricted cases (WP-11 to WP-16). Phase 3 adds the email outbox with
 > its dispatcher, in-app alerts, Request update, and closure: a case is closed through one approval gate with
 > separation of duties, can be sent back with "Requires Changes", and can be reopened with a reason, which starts its
-> next SLA cycle (WP-17 to WP-19). The reminders tick (WP-17b) lands in Phase 4. About two thirds of the planned work
-> packages are done. **There is no SLA evaluator, reminder or report yet**: those are Phase 4.
+> next SLA cycle (WP-17 to WP-19). Phase 4 makes the clock run: SLA states move to At risk and Overdue on their own,
+> with one alert per state and cycle; reminders for unanswered requests, pending closures and overdue cases go out once
+> per period; the dashboard has KPI tiles and paged lists; the aging and SLA-compliance reports come as HTML and CSV;
+> and the aging report is delivered weekly to each team's Managers and the Compliance Admins (WP-21, WP-17b, WP-20,
+> WP-22, WP-23). About four fifths of the planned work packages are done. **There is no retention, purge, importer or
+> System screen yet**: those are Phase 5.
 > Read [`HANDOFF.md`](HANDOFF.md) for exactly what exists, what does not, and what comes next.
 
 ## What it does
@@ -50,7 +54,7 @@ container. No JavaScript build toolchain, no JSON API in v1, no Lombok.
 | [`SECURITY.md`](SECURITY.md) | How to report a vulnerability |
 | [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md) | Contributor Covenant 2.1 |
 | [`CLAUDE.md`](CLAUDE.md) | Working agreement for AI coding sessions (much of this code is written with AI assistance; every PR passes the same gates regardless of author) |
-| [`HANDOFF.md`](HANDOFF.md) | Where the build stands (refreshed after WP-19, Phase 3 complete; written at 0.1.0): what is merged, what is not, decisions taken, open issues, and the next work package |
+| [`HANDOFF.md`](HANDOFF.md) | Where the build stands (refreshed after WP-23, Phase 4 complete; written at 0.1.0): what is merged, what is not, decisions taken, open issues, and the next work package |
 | [`CHANGELOG.md`](CHANGELOG.md) | What each release and each merged pull request changed |
 | [`adr/`](adr/README.md) | Architecture decision records, including the ones that superseded a line of the plans |
 
