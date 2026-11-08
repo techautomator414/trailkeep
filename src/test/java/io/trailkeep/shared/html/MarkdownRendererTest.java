@@ -273,7 +273,7 @@ class MarkdownRendererTest {
         });
     }
 
-    private static List<String> payloads() {
+    static List<String> payloads() {
         try (InputStream in = Objects.requireNonNull(
                 MarkdownRendererTest.class.getResourceAsStream("/xss/corpus.txt"), "xss/corpus.txt")) {
             return new String(in.readAllBytes(), StandardCharsets.UTF_8)
