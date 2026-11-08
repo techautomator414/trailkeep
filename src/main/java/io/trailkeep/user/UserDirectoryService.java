@@ -66,6 +66,13 @@ public interface UserDirectoryService {
     Optional<TeamAdminService.TeamSummary> team(long teamId);
 
     /**
+     * Every team, active or not, by name, for screens that list them all (the report schedules).
+     *
+     * @return the teams
+     */
+    List<TeamAdminService.TeamSummary> allTeams();
+
+    /**
      * Display names of several users in one lookup, for lists.
      *
      * @param userIds the users' ids

@@ -2,7 +2,9 @@
 // Copyright 2026 Charlie Genova and contributors
 package io.trailkeep.web;
 
+import io.trailkeep.casefile.CaseService.Actor;
 import io.trailkeep.report.ReportRunService;
+import io.trailkeep.report.ReportScheduleService;
 import io.trailkeep.security.TrailkeepOidcUser;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -18,16 +20,19 @@ import org.springframework.web.bind.annotation.RequestParam;
  * sanitized and written through {@code tk:safe}; {@code /reports/runs/{id}.csv} downloads its stored CSV as an
  * attachment, never cached or sniffed, and audited. {@link ReportRunService} decides who reads what: anyone but an
  * enabled Manager of the run's team or a Compliance Admin gets 404, as does a malformed or unknown id. Plain GETs; the
- * only write is the download's audit row.
+ * only write is the download's audit row. The list links Compliance Admins to the report schedules
+ * ({@link ReportScheduleController}).
  */
 @Controller
 class ReportRunController {
 
     private final ReportRunService runs;
+    private final ReportScheduleService schedules;
     private final CasePage page;
 
-    ReportRunController(ReportRunService runs, CasePage page) {
+    ReportRunController(ReportRunService runs, ReportScheduleService schedules, CasePage page) {
         this.runs = runs;
+        this.schedules = schedules;
         this.page = page;
     }
 
@@ -36,7 +41,9 @@ class ReportRunController {
             @AuthenticationPrincipal TrailkeepOidcUser principal,
             @RequestParam(defaultValue = "1") String page,
             Model model) {
-        model.addAttribute("runs", runs.runs(this.page.actor(principal), number(page)));
+        Actor actor = this.page.actor(principal);
+        model.addAttribute("runs", runs.runs(actor, number(page)));
+        model.addAttribute("administers", schedules.administers(actor));
         return "report/runs";
     }
 

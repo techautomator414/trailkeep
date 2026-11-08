@@ -89,6 +89,14 @@ class DefaultUserDirectory implements UserDirectoryService {
     }
 
     @Override
+    public List<TeamAdminService.TeamSummary> allTeams() {
+        return teams.findAllByOrderByNameAsc().stream()
+                .map(team -> new TeamAdminService.TeamSummary(
+                        Objects.requireNonNull(team.getId()), team.getName(), team.isActive()))
+                .toList();
+    }
+
+    @Override
     public Map<Long, String> displayNames(Collection<Long> userIds) {
         return userIds.isEmpty()
                 ? Map.of()

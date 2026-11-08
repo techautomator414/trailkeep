@@ -69,6 +69,11 @@ class CasePermissionServiceTest {
         }
 
         @Override
+        public List<TeamAdminService.TeamSummary> allTeams() {
+            return List.of();
+        }
+
+        @Override
         public Map<Long, TeamAdminService.TeamSummary> teams(Collection<Long> teamIds) {
             return Map.of();
         }
