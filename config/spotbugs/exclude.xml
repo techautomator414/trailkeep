@@ -196,6 +196,17 @@
     CSV (written by CsvFormat when the run was made) as an attachment named from the run's id and day, nosniff and
     private, no-store. Covered by StoredReportSanitizerTest, ReportRunIT, ReportRunControllerIT and
     ReportRunsAccessibilityIT. Approved in the security-reviewer role on #121.
+    ReportScheduleController (WP-23 part b2): behind login; GET /admin/report-schedules and GET and POST
+    /admin/report-schedules/{team}, the POST with CSRF (403 without). ReportScheduleService refuses (403) anyone but
+    a Compliance Admin, rebuilding permissions from the database per request, and answers 404 for an unknown team
+    (the id parsed leniently to -1) before any input is read. The form binds to a record: the day to the DayOfWeek
+    enum, the hour to 0 to 23 (anything else is a 422 with the form marked), the version parsed leniently (anything
+    unreadable is stale); the service re-checks the hour and saves only at the version the form was loaded with,
+    flushing inside its transaction so a concurrent save, a delivery or a second first save is a 409 with Reload, never
+    a lost update. Each save is audited as REPORT_SCHEDULE_CHANGED, old to new. The redirect is the fixed path
+    /admin/report-schedules; team names are echoed through th:text. Covered by ReportScheduleIT,
+    OracleReportScheduleIT, ReportScheduleControllerIT and ReportSchedulesAccessibilityIT.
+    Approved in the security-reviewer role on #122.
     Approved in the security-reviewer role on #20. Listed by class, never by pattern alone, so each new controller
     is reviewed the same way.
   -->
@@ -223,6 +234,7 @@
       <Class name="io.trailkeep.web.CaseReopenController"/>
       <Class name="io.trailkeep.web.ReportController"/>
       <Class name="io.trailkeep.web.ReportRunController"/>
+      <Class name="io.trailkeep.web.ReportScheduleController"/>
     </Or>
   </Match>
   <!--

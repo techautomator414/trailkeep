@@ -85,6 +85,23 @@ class ReportSchedule {
         this.nextRunAt = next(at, zone);
     }
 
+    /**
+     * An admin's change (WP-23 part b2): the new values, and the next run recomputed from {@code now} by the same rule
+     * as {@link #ran}.
+     *
+     * @param enabled whether the report goes out
+     * @param weekday the day it goes out
+     * @param hour the hour it goes out, 0 to 23
+     * @param now the current instant
+     * @param zone {@code app.timezone}
+     */
+    void change(boolean enabled, DayOfWeek weekday, int hour, Instant now, ZoneId zone) {
+        this.enabled = enabled;
+        this.runWeekday = weekday.getValue();
+        this.runHour = hour;
+        this.nextRunAt = next(now, zone);
+    }
+
     /** The first instant after {@code after} that is this schedule's weekday and hour in {@code zone}. */
     private Instant next(Instant after, ZoneId zone) {
         LocalDateTime local = LocalDateTime.ofInstant(after, zone);
@@ -113,6 +130,18 @@ class ReportSchedule {
 
     Instant getNextRunAt() {
         return nextRunAt;
+    }
+
+    DayOfWeek getWeekday() {
+        return DayOfWeek.of(runWeekday);
+    }
+
+    int getHour() {
+        return runHour;
+    }
+
+    int getVersion() {
+        return version;
     }
 
     @Nullable
