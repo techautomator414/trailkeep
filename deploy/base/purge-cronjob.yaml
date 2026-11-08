@@ -1,8 +1,10 @@
 # SPDX-License-Identifier: Apache-2.0
 # Copyright 2026 Charlie Genova and contributors
 # Retention purge (BUILD_PLAN §9 "Separation of duties", §16): same image, purge profile, no web server, and its
-# own credential (Secret trailkeep-purge) that the web Deployment never mounts. Shipped suspended: the purge job
-# itself arrives with the retention work package; an overlay sets suspend: false and the schedule.
+# own credential (Secret trailkeep-purge) that the web Deployment never mounts. Each run (WP-24 part c,
+# io.trailkeep.retention.PurgeRunner) tombstones the archived cases past PURGE_AFTER and not on legal hold, deletes the
+# report runs older than app.retention.report-runs, logs counts only and exits. Shipped suspended: an overlay sets
+# suspend: false once the organization has decided its retention (deploy/README.md, "Purge schedule").
 apiVersion: batch/v1
 kind: CronJob
 metadata:

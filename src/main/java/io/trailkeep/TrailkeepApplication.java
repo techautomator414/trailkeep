@@ -5,6 +5,7 @@ package io.trailkeep;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
+import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.modulith.Modulithic;
 
 /** Entry point for the Trailkeep application. */
@@ -19,6 +20,12 @@ public class TrailkeepApplication {
      * @param args command-line arguments passed to Spring Boot
      */
     public static void main(String[] args) {
-        SpringApplication.run(TrailkeepApplication.class, args);
+        ConfigurableApplicationContext context = SpringApplication.run(TrailkeepApplication.class, args);
+        // The purge batch (WP-24 part c) has done its work once start-up returns; it ends there, with the context's
+        // exit
+        // code, whatever pooled threads the context holds.
+        if (context.getEnvironment().matchesProfiles("purge")) {
+            System.exit(SpringApplication.exit(context));
+        }
     }
 }

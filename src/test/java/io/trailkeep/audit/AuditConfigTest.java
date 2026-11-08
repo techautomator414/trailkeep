@@ -24,6 +24,14 @@ class AuditConfigTest {
     }
 
     @Test
+    void thePurgeBatchProfileAuditsNothingAndNeedsNoKey() {
+        MockEnvironment purge = new MockEnvironment();
+        purge.setActiveProfiles("prod", "purge", "postgresql");
+
+        assertThat(AuditConfig.hmac(new AuditProperties(null), purge).hex("x")).hasSize(64);
+    }
+
+    @Test
     void otherProfilesFallBackToRandomPerProcessKey() {
         MockEnvironment local = new MockEnvironment();
         local.setActiveProfiles("local");
