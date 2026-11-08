@@ -8,6 +8,7 @@ import io.trailkeep.casefile.CaseCommentService.CommentView;
 import io.trailkeep.casefile.CaseService;
 import io.trailkeep.casefile.CaseService.Actor;
 import io.trailkeep.casefile.CaseView;
+import io.trailkeep.casefile.LegalHoldService;
 import io.trailkeep.closure.ClosureService;
 import io.trailkeep.closure.ClosureService.PendingClosure;
 import io.trailkeep.document.CaseAttachmentService;
@@ -35,6 +36,7 @@ class CasePage {
     private final UpdateRequestService requests;
     private final ClosureService closures;
     private final UserDirectoryService directory;
+    private final LegalHoldService holds;
 
     CasePage(
             CaseService cases,
@@ -43,7 +45,8 @@ class CasePage {
             CaseAttachmentService attachments,
             UpdateRequestService requests,
             ClosureService closures,
-            UserDirectoryService directory) {
+            UserDirectoryService directory,
+            LegalHoldService holds) {
         this.cases = cases;
         this.assignments = assignments;
         this.comments = comments;
@@ -51,6 +54,7 @@ class CasePage {
         this.requests = requests;
         this.closures = closures;
         this.directory = directory;
+        this.holds = holds;
     }
 
     /**
@@ -133,6 +137,10 @@ class CasePage {
         model.addAttribute("lastDecision", closures.lastDecision(actor, number).orElse(null));
         model.addAttribute("reopenable", cases.allows(actor, number, CaseAction.REOPEN));
         model.addAttribute("lastReopen", closures.lastReopen(actor, number).orElse(null));
+        // WP-24 part b: the hold's chip for everyone who reads the case; who, when, why and the action for those who
+        // may place or lift it.
+        model.addAttribute("legalHold", holds.current(actor, number).orElse(null));
+        model.addAttribute("holdable", cases.allows(actor, number, CaseAction.LEGAL_HOLD));
     }
 
     /**

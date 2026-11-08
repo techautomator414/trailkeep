@@ -51,7 +51,11 @@ enum CaseNotice {
     /** A pending request's approver changed. */
     APPROVER_REASSIGNED,
     /** A closed case reopened; the next SLA cycle runs. */
-    REOPENED;
+    REOPENED,
+    /** A legal hold placed on the case (WP-24). */
+    HOLD_PLACED,
+    /** A legal hold lifted. */
+    HOLD_LIFTED;
 
     private static final String ATTRIBUTE = "tk.caseNotice";
 

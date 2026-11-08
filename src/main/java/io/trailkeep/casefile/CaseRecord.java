@@ -15,6 +15,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.SequenceGenerator;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import org.hibernate.Length;
@@ -25,10 +26,10 @@ import org.jspecify.annotations.Nullable;
  * ids, not associations, so loading a case never drags in a graph. SLA state and search text live in the side
  * tables {@link CaseSla} and {@link CaseSearch}, never here, so jobs writing them never conflict with an editor.
  *
- * <p>{@code ARCHIVED_AT}, {@code PURGE_AFTER} and {@code LEGAL_HOLD} are mapped read-only for the archive job's queries
- * (WP-24), which write them in bulk. The other columns for purge, legal hold details and import ({@code PURGED_AT},
- * {@code LEGAL_HOLD_*}, {@code LEGACY_REF}, {@code LAST_REJECTED_AT}) are mapped by the work packages that write them;
- * until then the database defaults apply.
+ * <p>{@code ARCHIVED_AT} is written only by the archive job's bulk update, which also sets {@code PURGE_AFTER}
+ * (WP-24); a legal hold ({@code LEGAL_HOLD*}, part b) is placed and lifted through this entity. The columns for purge
+ * and import ({@code PURGED_AT}, {@code LEGACY_REF}, {@code LAST_REJECTED_AT}) are mapped by the work packages that
+ * write them; until then the database defaults apply.
  */
 @Entity
 @Table(name = "CASE_RECORD")
@@ -88,13 +89,23 @@ class CaseRecord {
     @Column(name = "ARCHIVED_AT", insertable = false, updatable = false)
     private @Nullable Instant archivedAt;
 
-    /** Set with {@link #archivedAt}: when the purge job may tombstone the case. */
-    @Column(name = "PURGE_AFTER", insertable = false, updatable = false)
+    /** Set with {@link #archivedAt}: when the purge job may tombstone the case; pushed back when a hold is lifted. */
+    @Column(name = "PURGE_AFTER", insertable = false)
     private @Nullable Instant purgeAfter;
 
-    /** Set and lifted by a Compliance Admin (WP-24 part b); a held case is neither archived nor purged. */
-    @Column(name = "LEGAL_HOLD", nullable = false, insertable = false, updatable = false)
+    /** Placed and lifted by a Compliance Admin (WP-24 part b); a held case is neither archived nor purged. */
+    @Column(name = "LEGAL_HOLD", nullable = false, insertable = false)
     private boolean legalHold;
+
+    @Column(name = "LEGAL_HOLD_BY", insertable = false)
+    private @Nullable Long legalHoldBy;
+
+    @Column(name = "LEGAL_HOLD_AT", insertable = false)
+    private @Nullable Instant legalHoldAt;
+
+    /** Why the case is held, as the Compliance Admin wrote it; possible PHI, so redacted in the audit trail. */
+    @Column(name = "LEGAL_HOLD_REASON", insertable = false, length = 500)
+    private @Nullable String legalHoldReason;
 
     @Version
     @Column(name = "VERSION", nullable = false)
@@ -204,6 +215,60 @@ class CaseRecord {
         this.closedAt = to == CaseStatus.CLOSED ? now : null;
         this.updatedAt = now;
         this.updatedBy = actorId;
+    }
+
+    /**
+     * Places a legal hold ({@link LegalHoldService}, already checked).
+     *
+     * @param actorId who places it
+     * @param now when
+     * @param reason why
+     */
+    void hold(long actorId, Instant now, String reason) {
+        this.legalHold = true;
+        this.legalHoldBy = actorId;
+        this.legalHoldAt = now;
+        this.legalHoldReason = reason;
+        this.updatedAt = now;
+        this.updatedBy = actorId;
+    }
+
+    /**
+     * Lifts the legal hold; an archived case is then kept at least {@code grace} longer before it may be purged.
+     *
+     * @param actorId who lifts it
+     * @param now when
+     * @param grace the purge grace
+     */
+    void release(long actorId, Instant now, Duration grace) {
+        this.legalHold = false;
+        this.legalHoldBy = null;
+        this.legalHoldAt = null;
+        this.legalHoldReason = null;
+        if (purgeAfter != null && purgeAfter.isBefore(now.plus(grace))) {
+            this.purgeAfter = now.plus(grace);
+        }
+        this.updatedAt = now;
+        this.updatedBy = actorId;
+    }
+
+    boolean isLegalHold() {
+        return legalHold;
+    }
+
+    @Nullable
+    Long getLegalHoldBy() {
+        return legalHoldBy;
+    }
+
+    @Nullable
+    Instant getLegalHoldAt() {
+        return legalHoldAt;
+    }
+
+    @Nullable
+    String getLegalHoldReason() {
+        return legalHoldReason;
     }
 
     Sensitivity getSensitivity() {

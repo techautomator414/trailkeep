@@ -130,6 +130,9 @@ class PermissionMatrixTest {
         if (c.action() == VIEW || c.action() == DOWNLOAD_ATTACHMENT) {
             return true;
         }
+        if (c.action() == CaseAction.LEGAL_HOLD) {
+            return c.role() == MatrixRole.COMPLIANCE_ADMIN;
+        }
         return works(c.role()) && c.status() != ARCHIVED && mutation(c);
     }
 

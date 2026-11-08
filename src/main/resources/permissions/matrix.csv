@@ -18,6 +18,8 @@ ANALYST|MANAGER|COMPLIANCE_ADMIN,*,*,*,CREATE,ALLOW
 READER,*,RESTRICTED,*,*,DENY
 ANALYST,NOT_OWNER,RESTRICTED,*,*,DENY
 *,*,*,*,VIEW|DOWNLOAD_ATTACHMENT,ALLOW
+# Legal hold (§3.2, §4.6): Compliance Admins, in any status, an archived case included (it stops the purge).
+COMPLIANCE_ADMIN,*,*,*,LEGAL_HOLD,ALLOW
 # Readers only read; archived cases are read-only for everyone.
 READER,*,*,*,*,DENY
 *,*,*,ARCHIVED,*,DENY

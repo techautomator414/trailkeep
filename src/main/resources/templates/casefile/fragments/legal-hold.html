@@ -1,0 +1,25 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- The legal hold form (WP-24 part b), in the case page's dialog and on its own page: the change it asks for is a
+     hidden field, so a stale form never toggles the hold the other way. -->
+<form th:fragment="form(number, hold, reason, invalid, dialog)" method="post"
+      th:action="@{/cases/{n}/legal-hold(n=${number})}" xmlns:th="http://www.thymeleaf.org">
+  <input type="hidden" name="hold" th:value="${hold}">
+  <div class="mb-3">
+    <label class="form-label" for="tk-hold-reason" th:text="#{tk.hold.reason}">Reason (required)</label>
+    <textarea class="form-control" id="tk-hold-reason" name="reason" rows="4" required maxlength="500"
+              th:attr="aria-invalid=${invalid},
+                       aria-describedby=${invalid} ? 'tk-hold-reason-error tk-hold-hint' : 'tk-hold-hint',
+                       data-tk-count=#{tk.closure.count},data-tk-dialog-focus=${dialog} ? 'true' : null"
+              th:text="${reason}"></textarea>
+    <div th:if="${invalid}" class="invalid-feedback d-block" id="tk-hold-reason-error"
+         th:text="#{tk.hold.error.reason}">Write a reason.</div>
+    <div class="form-text" id="tk-hold-hint" th:text="#{tk.hold.hint}">Up to 500 characters.</div>
+  </div>
+  <div class="tk-dialog-actions">
+    <button class="btn btn-primary" type="submit" th:text="${hold} ? #{tk.hold.place} : #{tk.hold.lift}">Place legal
+      hold</button>
+    <a class="btn btn-outline-secondary" th:href="@{/cases/{n}(n=${number})}"
+       th:attr="data-tk-dialog-close=${dialog} ? 'true' : null"
+       th:text="${dialog} ? #{tk.request.cancel} : #{tk.request.back}">Cancel</a>
+  </div>
+</form>
