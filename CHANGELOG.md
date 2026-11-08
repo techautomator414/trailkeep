@@ -9,6 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- The scheduled report runs (WP-23 part b1), where the `report-ready` mail and alert lead: `/reports/runs` lists the runs the person receives, newest first, 20 to a page, each with its team, line count and a "Download CSV" link named for the run; `/reports/runs/{id}` shows a run as it was sent; `/reports/runs/{id}.csv` downloads its stored CSV as an attachment (`nosniff`, `private, no-store`), audited as `REPORT_RUN_DOWNLOADED`. Only an enabled Manager of the run's team or a Compliance Admin reads a run; anyone else, and any malformed or unknown id, gets 404. The stored HTML is never written unchecked: `shared.html.StoredReportSanitizer` (the OWASP sanitizer with a report-table policy: table elements, `a p div span`, `scope colspan class`, and `href` only to `/cases/{number}`) turns it into `SafeHtml` for `tk:safe`. The aging page links to the runs for those who read them.
 - Dashboard (WP-20, BUILD_PLAN §4.1), everything through the person's `CaseScope`.
   - Five KPI tiles, each a count in text and a link: My open cases, At risk and Overdue (each opening the cases list so filtered), Pending my approval and Update requests for me (each leading to its list below).
   - "My cases": the person's open cases by SLA due date with the SLA chip, at most ten, with "See all N of my open cases".
