@@ -133,7 +133,9 @@ abstract class AbstractDatabaseGrantsIT {
             // A schedule is edited and disabled, never deleted.
             Map.entry("REPORT_SCHEDULE", EnumSet.of(Privilege.SELECT, Privilege.INSERT, Privilege.UPDATE)),
             // A run is what was sent: written once, never changed or deleted by the app.
-            Map.entry("REPORT_RUN", EnumSet.of(Privilege.SELECT, Privilege.INSERT)));
+            Map.entry("REPORT_RUN", EnumSet.of(Privilege.SELECT, Privilege.INSERT)),
+            // A hold placed or lifted is history: written once, never changed or deleted, kept by purge (V8).
+            Map.entry("LEGAL_HOLD_EVENT", EnumSet.of(Privilege.SELECT, Privilege.INSERT)));
 
     /** What the purge user may do on these tables: trim the outbox (V4.8); its case-data grants arrive with WP-24. */
     static final Map<String, Set<Privilege>> PURGE_USER_GRANTS =
@@ -157,7 +159,8 @@ abstract class AbstractDatabaseGrantsIT {
             "SEQ_CASE_REOPEN",
             "SEQ_ALERT_LEDGER",
             "SEQ_REPORT_SCHEDULE",
-            "SEQ_REPORT_RUN");
+            "SEQ_REPORT_RUN",
+            "SEQ_LEGAL_HOLD_EVENT");
 
     /**
      * One open connection per grantee for the whole class. Opening a connection per probe (about 100 in a burst, each

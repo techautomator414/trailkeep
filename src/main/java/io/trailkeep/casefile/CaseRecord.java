@@ -257,6 +257,11 @@ class CaseRecord {
     }
 
     @Nullable
+    Instant getPurgeAfter() {
+        return purgeAfter;
+    }
+
+    @Nullable
     Long getLegalHoldBy() {
         return legalHoldBy;
     }

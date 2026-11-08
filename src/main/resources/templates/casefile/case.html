@@ -48,6 +48,14 @@
     <h3 class="h6" th:text="#{tk.decision.reason.title}">Reason</h3>
     <p class="tk-description mb-0" th:text="${legalHold.reason}">Reason</p>
   </section>
+  <section th:unless="${holdHistory.isEmpty()}" aria-labelledby="tk-hold-history-title">
+    <h2 id="tk-hold-history-title" class="h5" th:text="#{tk.hold.history}">Legal hold history</h2>
+    <ul class="list-unstyled">
+      <li th:each="h : ${holdHistory}" class="mb-2"><span th:text="#{${h.placed} ? 'tk.hold.history.placed'
+          : 'tk.hold.history.lifted'}(${h.by}, ${#temporals.format(h.at, 'yyyy-MM-dd HH:mm')})}">Placed by X on
+          date</span>: <span class="tk-description" th:text="${h.reason}">Reason</span></li>
+    </ul>
+  </section>
   <section th:if="${lastReopen != null and lastDecision != null and lastDecision.decision.name() == 'APPROVED'
                    and c.status.name() == 'OPEN'}" th:with="r=${lastReopen}" class="alert alert-secondary"
            aria-labelledby="tk-reopened-title">

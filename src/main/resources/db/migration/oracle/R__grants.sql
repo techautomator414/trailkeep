@@ -39,6 +39,7 @@
 --   SHEDLOCK              S I U      -            ShedLock's lock rows; its JDBC provider never deletes (V6)
 --   REPORT_SCHEDULE       S I U      -            report schedules; disabled, never deleted (V7)
 --   REPORT_RUN            S I        -            rendered report runs; history, never changed (V7)
+--   LEGAL_HOLD_EVENT      S I        -            holds placed and lifted; history, kept by purge (V8)
 --   SEQ_APP_USER          SELECT     -            Oracle's sequence privilege is SELECT (NEXTVAL)
 --   SEQ_TEAM              SELECT     -
 --   SEQ_AUDIT_EVENT       SELECT     -
@@ -60,6 +61,7 @@
 --   SEQ_ALERT_LEDGER      SELECT     -
 --   SEQ_REPORT_SCHEDULE   SELECT     -
 --   SEQ_REPORT_RUN        SELECT     -
+--   SEQ_LEGAL_HOLD_EVENT  SELECT     -
 --
 -- Later migrations add their rows to the cursor below. Fixed rules for them: the app user has no UPDATE or DELETE
 -- on CASE_COMMENT, CASE_ATTACHMENT_CHUNK, AUDIT_EVENT and ALERT_LEDGER, and no DELETE on CASE_ATTACHMENT; it may DELETE only from CASE_COMMENT_PIN, SAVED_VIEW, USER_ALERT,
@@ -117,7 +119,9 @@ DECLARE
     UNION ALL SELECT 'REPORT_SCHEDULE', 'SELECT,INSERT,UPDATE', UPPER('${app_user}') FROM DUAL
     UNION ALL SELECT 'SEQ_REPORT_SCHEDULE', 'SELECT', UPPER('${app_user}') FROM DUAL
     UNION ALL SELECT 'REPORT_RUN', 'SELECT,INSERT', UPPER('${app_user}') FROM DUAL
-    UNION ALL SELECT 'SEQ_REPORT_RUN', 'SELECT', UPPER('${app_user}') FROM DUAL;
+    UNION ALL SELECT 'SEQ_REPORT_RUN', 'SELECT', UPPER('${app_user}') FROM DUAL
+    UNION ALL SELECT 'LEGAL_HOLD_EVENT', 'SELECT,INSERT', UPPER('${app_user}') FROM DUAL
+    UNION ALL SELECT 'SEQ_LEGAL_HOLD_EVENT', 'SELECT', UPPER('${app_user}') FROM DUAL;
   keep PLS_INTEGER;
 BEGIN
   FOR w IN wanted LOOP

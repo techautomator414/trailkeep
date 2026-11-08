@@ -137,10 +137,11 @@ class CasePage {
         model.addAttribute("lastDecision", closures.lastDecision(actor, number).orElse(null));
         model.addAttribute("reopenable", cases.allows(actor, number, CaseAction.REOPEN));
         model.addAttribute("lastReopen", closures.lastReopen(actor, number).orElse(null));
-        // WP-24 part b: the hold's chip for everyone who reads the case; who, when, why and the action for those who
-        // may place or lift it.
+        // WP-24 part b: the hold's chip for everyone who reads the case; who, when, why, the action and the history of
+        // holds placed and lifted for those who may place or lift them.
         model.addAttribute("legalHold", holds.current(actor, number).orElse(null));
         model.addAttribute("holdable", cases.allows(actor, number, CaseAction.LEGAL_HOLD));
+        model.addAttribute("holdHistory", holds.history(actor, number));
     }
 
     /**
