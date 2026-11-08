@@ -17,6 +17,8 @@ import jakarta.persistence.LockModeType;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.InstantSource;
+import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import org.springframework.beans.factory.annotation.Value;
@@ -31,6 +33,9 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @Transactional
 class DefaultLegalHoldService implements LegalHoldService {
+
+    private static final String HISTORY =
+            "SELECT e FROM LegalHoldEvent e WHERE e.caseId = :caseId ORDER BY e.changedAt DESC, e.id DESC";
 
     private final CaseLoader loader;
     private final CasePermissionService permissions;
@@ -82,6 +87,29 @@ class DefaultLegalHoldService implements LegalHoldService {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public List<HoldChange> history(Actor actor, String caseNumber) {
+        UserPermissions user = actor.permissions();
+        CaseRecord record = loader.load(user, caseNumber, CaseAction.VIEW);
+        if (!permissions.isAllowed(user, CaseLoader.facts(record), CaseAction.LEGAL_HOLD)) {
+            return List.of();
+        }
+        List<LegalHoldEvent> events = entityManager
+                .createQuery(HISTORY, LegalHoldEvent.class)
+                .setParameter("caseId", record.getId())
+                .getResultList();
+        Map<Long, String> names = directory.displayNames(
+                events.stream().map(LegalHoldEvent::getChangedBy).distinct().toList());
+        return events.stream()
+                .map(event -> new HoldChange(
+                        event.getAction() == LegalHoldEvent.Action.PLACED,
+                        names.getOrDefault(event.getChangedBy(), ""),
+                        event.getChangedAt(),
+                        event.getReason()))
+                .toList();
+    }
+
+    @Override
     public void change(Actor actor, String caseNumber, boolean hold, String reason) {
         UserPermissions user = actor.permissions();
         CaseRecord record = loader.load(user, caseNumber, CaseAction.LEGAL_HOLD);
@@ -100,6 +128,13 @@ class DefaultLegalHoldService implements LegalHoldService {
             record.release(user.userId(), now, grace);
         }
         long caseId = Objects.requireNonNull(record.getId());
+        entityManager.persist(new LegalHoldEvent(
+                caseId,
+                hold ? LegalHoldEvent.Action.PLACED : LegalHoldEvent.Action.LIFTED,
+                user.userId(),
+                now,
+                text,
+                record.getPurgeAfter()));
         audit.record(new AuditEntry(
                 user.userId(),
                 actor.displayName(),

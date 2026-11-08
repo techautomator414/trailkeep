@@ -340,6 +340,16 @@ abstract class AbstractVendorSchemaIT {
                 .containsExactly("REPORT_SCHEDULE.LAST_RUN_AT");
     }
 
+    @Test
+    void legalHoldEventsAreMigratedWithTheirEntity() {
+        assertThat(Arrays.stream(flyway.info().applied()).map(MigrationInfo::getScript))
+                .contains("V8__legal_hold_events.sql");
+        assertThat(SchemaMetadataDiff.expectedColumns(entityManagerFactory))
+                .containsEntry("LEGAL_HOLD_EVENT.REASON", column("LEGAL_HOLD_EVENT", "REASON", false, 500L))
+                .containsKeys("LEGAL_HOLD_EVENT.CASE_ID", "LEGAL_HOLD_EVENT.CHANGED_BY", "LEGAL_HOLD_EVENT.CHANGED_AT");
+        assertThat(nullableColumns(Set.of("LEGAL_HOLD_EVENT"))).containsExactly("LEGAL_HOLD_EVENT.PURGE_AFTER");
+    }
+
     private static SchemaMetadataDiff.ExpectedColumn column(
             String table, String column, boolean nullable, @Nullable Long length) {
         return new SchemaMetadataDiff.ExpectedColumn(table, column, nullable, length);

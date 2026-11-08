@@ -131,7 +131,12 @@ class LegalHoldControllerIT {
 
         mvc.perform(place(false, "Synthetic matter settled").with(csrf())).andExpect(redirectedUrl("/cases/" + number));
         flushAndClear();
-        assertThat(page(get("/cases/" + number), status().isOk())).doesNotContain(REASON, "tk-hold-title", "&#x2696;");
+        assertThat(page(get("/cases/" + number), status().isOk()))
+                .doesNotContain("tk-hold-title", "&#x2696;")
+                .contains("<h2 id=\"tk-hold-history-title\" class=\"h5\">Legal hold history</h2>")
+                .contains("<li class=\"mb-2\"><span>Lifted by Synthetic Hold User " + ADMIN + " on ")
+                .contains("</span>: <span class=\"tk-description\">Synthetic matter settled</span></li>")
+                .contains("<span>Placed by Synthetic Hold User " + ADMIN + " on ", REASON);
     }
 
     @Test
@@ -170,7 +175,7 @@ class LegalHoldControllerIT {
         flushAndClear();
         assertThat(page(get("/cases/" + number), status().isOk()))
                 .contains("<span>Legal hold</span>")
-                .doesNotContain(REASON, "tk-hold-title", hold);
+                .doesNotContain(REASON, "tk-hold-title", "tk-hold-history-title", hold);
         mvc.perform(get(hold)).andExpect(status().isForbidden());
         mvc.perform(place(false, "Synthetic reason").with(csrf())).andExpect(status().isForbidden());
     }
