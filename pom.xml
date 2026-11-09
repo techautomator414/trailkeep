@@ -218,11 +218,11 @@
     <dependency>
       <!-- Compile-time only, never shipped: tika-core's package-info classes carry bnd's @Version, and without the
            annotation type javac warns "Cannot find annotation method 'value()'", which -Werror makes an error.
-           4.3.1 declares Apache-2.0 and EPL-2.0 as separate licenses; later releases declare the single string
+           7.4.0 declares Apache-2.0 and EPL-2.0 as separate licenses; later releases declare the single string
            "(Apache-2.0 OR EPL-2.0)", which the third-party licence check does not recognise. -->
       <groupId>biz.aQute.bnd</groupId>
       <artifactId>biz.aQute.bnd.annotation</artifactId>
-      <version>4.3.1</version>
+      <version>7.4.0</version>
       <scope>provided</scope>
     </dependency>
     <dependency>
