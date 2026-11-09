@@ -71,7 +71,7 @@
     <owasp-java-html-sanitizer.version>20261103.2</owasp-java-html-sanitizer.version>
     <!-- Upload type detection (WP-14, BUILD_PLAN 11.1): the core jar only, never the parser bundle. The 3.x line,
          because tika-core 4.x pulls in commonmark extensions a magic-byte detector does not need. -->
-    <tika.version>3.3.3</tika.version>
+    <tika.version>4.2.0</tika.version>
     <!-- Scheduled-job locks (WP-21, BUILD_PLAN 6 and 7.3): the JDBC provider over the SHEDLOCK table, database time.
          The 7.x line is the one built against Spring Framework 7. -->
     <shedlock.version>7.10.1</shedlock.version>
