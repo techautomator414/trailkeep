@@ -206,6 +206,7 @@ class DefaultCaseService implements CaseService {
                 LocalDate.ofInstant(record.getOpenedAt(), zone),
                 record.getSubjectText(),
                 record.getDescription(),
+                record.getPurgedAt() == null ? null : LocalDate.ofInstant(record.getPurgedAt(), zone),
                 CaseView.Sla.of(row.slaState(), row.slaDueAt(), LocalDate.ofInstant(clock.instant(), zone), zone),
                 record.getVersion(),
                 allowed(actor, record, CaseAction.EDIT),

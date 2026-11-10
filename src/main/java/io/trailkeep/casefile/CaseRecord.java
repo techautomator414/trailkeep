@@ -27,9 +27,9 @@ import org.jspecify.annotations.Nullable;
  * tables {@link CaseSla} and {@link CaseSearch}, never here, so jobs writing them never conflict with an editor.
  *
  * <p>{@code ARCHIVED_AT} is written only by the archive job's bulk update, which also sets {@code PURGE_AFTER}
- * (WP-24); a legal hold ({@code LEGAL_HOLD*}, part b) is placed and lifted through this entity. The columns for purge
- * and import ({@code PURGED_AT}, {@code LEGACY_REF}, {@code LAST_REJECTED_AT}) are mapped by the work packages that
- * write them; until then the database defaults apply.
+ * (WP-24); a legal hold ({@code LEGAL_HOLD*}, part b) is placed and lifted through this entity; {@code PURGED_AT} is
+ * read only, written by the purge job (part c). The columns for import ({@code LEGACY_REF}, {@code LAST_REJECTED_AT})
+ * are mapped by the work packages that write them; until then the database defaults apply.
  */
 @Entity
 @Table(name = "CASE_RECORD")
@@ -92,6 +92,10 @@ class CaseRecord {
     /** Set with {@link #archivedAt}: when the purge job may tombstone the case; pushed back when a hold is lifted. */
     @Column(name = "PURGE_AFTER", insertable = false)
     private @Nullable Instant purgeAfter;
+
+    /** Set only by the purge job (WP-24 part c), as the purge user: the case is a tombstone from then on. */
+    @Column(name = "PURGED_AT", insertable = false, updatable = false)
+    private @Nullable Instant purgedAt;
 
     /** Placed and lifted by a Compliance Admin (WP-24 part b); a held case is neither archived nor purged. */
     @Column(name = "LEGAL_HOLD", nullable = false, insertable = false)
@@ -259,6 +263,11 @@ class CaseRecord {
     @Nullable
     Instant getPurgeAfter() {
         return purgeAfter;
+    }
+
+    @Nullable
+    Instant getPurgedAt() {
+        return purgedAt;
     }
 
     @Nullable

@@ -27,6 +27,7 @@ import org.jspecify.annotations.Nullable;
  * @param openedOn the day the case was opened
  * @param subjectText who or what is involved, if given
  * @param description the description; {@code null} only once purged
+ * @param purgedOn the day the purge job removed the case's content (WP-24 part c), or {@code null} if it has not
  * @param sla where the case stands against its SLA
  * @param version the version a change from the page is made against
  * @param editable whether the viewer may edit it, so the page offers Edit
@@ -50,6 +51,7 @@ public record CaseView(
         LocalDate openedOn,
         @Nullable String subjectText,
         @Nullable String description,
+        @Nullable LocalDate purgedOn,
         Sla sla,
         int version,
         boolean editable,
