@@ -319,6 +319,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- The wording of all 11 mails (subject, in-app alert, text and HTML body) moved out of `templates/notification/*` into
+  `messages.properties` (`tk.mail.<id>.*`, 91 keys), read through the application's `MessageSource` (WP-27 part b).
+  The text is the same (`MailTemplatesTest` renders every mail and compares it with what the templates produced);
+  the HTML body is now one paragraph per message with each value in a `<span>` and HTML-escaped. The closure
+  decision's verb is a message key (`tk.mail.closure-decided.verb.<DECISION>`) instead of an English word chosen in Java.
 - `perf/k6/cases-smoke.js` now requires `PASSWORD` from the environment, with no default, and stops at once with a
   message if it is unset (`BASE_URL` and `USERNAME` keep their defaults); `docs/perf/cases-list-50k.md` says how to run
   it against the local stack and points at `deploy/local/keycloak/README.md` for the dev realm's password.

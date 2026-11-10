@@ -1,2 +1,2 @@
 /*[- SPDX-License-Identifier: Apache-2.0. Subject of the mail to a case's owner when someone else comments. -]*/
-New comment on [(${caseNumber})]
+[(#{tk.mail.comment-added.subject(${caseNumber})})]

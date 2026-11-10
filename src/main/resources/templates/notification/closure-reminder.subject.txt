@@ -1,2 +1,2 @@
 /*[- SPDX-License-Identifier: Apache-2.0. Subject of the reminder to the approver of a pending closure request. -]*/
-Reminder: closure of [(${caseNumber})] awaits your decision
+[(#{tk.mail.closure-reminder.subject(${caseNumber})})]

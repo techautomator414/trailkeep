@@ -1,0 +1,154 @@
+#### case-reopened
+--subject--
+CASE-2026-000042 was reopened
+--text--
+Synthetic Reopener reopened case CASE-2026-000042, "Synthetic title". Its SLA starts a new cycle today.
+
+Open the case to read why:
+https://example.invalid/cases/x
+
+You receive this because you own the case or requested its closure.
+--html--
+CASE-2026-000042 was reopened Synthetic Reopener reopened case CASE-2026-000042, “Synthetic title”. Its SLA starts a new cycle today. Open CASE-2026-000042 to read why You receive this because you own the case or requested its closure.
+--alert--
+Synthetic Reopener reopened case CASE-2026-000042, "Synthetic title"
+#### closure-decided
+--subject--
+Closure approved on CASE-2026-000042
+--text--
+Synthetic Decider approved the request to close case CASE-2026-000042, "Synthetic title".
+
+Open the case to read the decision:
+https://example.invalid/cases/x
+
+You receive this because you requested the closure or own the case.
+--html--
+Closure approved on CASE-2026-000042 Synthetic Decider approved the request to close case CASE-2026-000042, “Synthetic title”. Open CASE-2026-000042 to read the decision You receive this because you requested the closure or own the case.
+--alert--
+Synthetic Decider approved the request to close CASE-2026-000042, "Synthetic title"
+#### closure-reminder
+--subject--
+Reminder: closure of CASE-2026-000042 awaits your decision
+--text--
+Reminder: Synthetic Requester is still waiting for your decision on closing case CASE-2026-000042, "Synthetic title", with the outcome "Resolved".
+
+Open the case to read the resolution summary and decide:
+https://example.invalid/cases/x
+
+You receive this because you are the approver.
+--html--
+Reminder: closure of CASE-2026-000042 Reminder: Synthetic Requester is still waiting for your decision on closing case CASE-2026-000042, “Synthetic title”, with the outcome “Resolved”. Open CASE-2026-000042 to decide You receive this because you are the approver.
+--alert--
+Reminder: Synthetic Requester is still waiting for your decision on closing CASE-2026-000042, "Synthetic title"
+#### closure-requested
+--subject--
+Closure requested on CASE-2026-000042
+--text--
+Synthetic Requester asked you to approve closing case CASE-2026-000042, "Synthetic title", with the outcome "Resolved".
+
+Open the case to read the resolution summary and decide:
+https://example.invalid/cases/x
+
+You receive this because you were chosen as the approver.
+--html--
+Closure requested on CASE-2026-000042 Synthetic Requester asked you to approve closing case CASE-2026-000042, “Synthetic title”, with the outcome “Resolved”. Open CASE-2026-000042 to read the summary and decide You receive this because you were chosen as the approver.
+--alert--
+Synthetic Requester asked you to approve closing CASE-2026-000042, "Synthetic title"
+#### comment-added
+--subject--
+New comment on CASE-2026-000042
+--text--
+Synthetic Commenter commented on case CASE-2026-000042, "Synthetic title".
+
+Open the case to read the comment:
+https://example.invalid/cases/x
+
+You receive this because you own the case.
+--html--
+New comment on CASE-2026-000042 Synthetic Commenter commented on case CASE-2026-000042, “Synthetic title”. Open CASE-2026-000042 to read the comment You receive this because you own the case.
+--alert--
+Synthetic Commenter commented on CASE-2026-000042, "Synthetic title"
+#### report-ready
+--subject--
+Aging report for Synthetic Team, 2026-11-09
+--text--
+The weekly aging report for Synthetic Team as of 2026-11-09 is ready.
+
+Open it, or download it as CSV, here:
+https://example.invalid/cases/x
+
+You receive this because you are a Manager of the team or a Compliance Admin.
+--html--
+Aging report for Synthetic Team The weekly aging report for Synthetic Team as of 2026-11-09 is ready. Open the aging report for Synthetic Team You receive this because you are a Manager of the team or a Compliance Admin.
+--alert--
+The aging report for Synthetic Team as of 2026-11-09 is ready
+#### sla-at-risk
+--subject--
+At risk: CASE-2026-000042 is due on 2026-11-12
+--text--
+Case CASE-2026-000042, "Synthetic title", is at risk of missing its SLA: it is due on 2026-11-12.
+
+Open the case:
+https://example.invalid/cases/x
+
+You receive this because you own the case.
+--html--
+At risk: CASE-2026-000042 Case CASE-2026-000042, “Synthetic title”, is at risk of missing its SLA: it is due on 2026-11-12. Open CASE-2026-000042 You receive this because you own the case.
+--alert--
+CASE-2026-000042, "Synthetic title", is at risk: it is due on 2026-11-12
+#### sla-overdue
+--subject--
+Overdue: CASE-2026-000042 was due on 2026-11-12
+--text--
+Case CASE-2026-000042, "Synthetic title", is overdue: it was due on 2026-11-12.
+
+Open the case:
+https://example.invalid/cases/x
+
+You receive this because you own the case or manage its team.
+--html--
+Overdue: CASE-2026-000042 Case CASE-2026-000042, “Synthetic title”, is overdue: it was due on 2026-11-12. Open CASE-2026-000042 You receive this because you own the case or manage its team.
+--alert--
+CASE-2026-000042, "Synthetic title", is overdue: it was due on 2026-11-12
+#### sla-overdue-repeat
+--subject--
+Still overdue: CASE-2026-000042, 3 days past 2026-11-12
+--text--
+Case CASE-2026-000042, "Synthetic title", is still overdue: it was due on 2026-11-12, 3 days ago.
+
+Open the case:
+https://example.invalid/cases/x
+
+You receive this because you own the case or manage its team.
+--html--
+Still overdue: CASE-2026-000042 Case CASE-2026-000042, “Synthetic title”, is still overdue: it was due on 2026-11-12, 3 days ago. Open CASE-2026-000042 You receive this because you own the case or manage its team.
+--alert--
+CASE-2026-000042, "Synthetic title", is still overdue: 3 days past its due date, 2026-11-12
+#### update-reminder
+--subject--
+Reminder: an update is still requested on CASE-2026-000042
+--text--
+Reminder: Synthetic Requester is still waiting for your update on case CASE-2026-000042, "Synthetic title".
+
+A comment from you on the case answers the request:
+https://example.invalid/cases/x
+
+You receive this because an update was requested from you.
+--html--
+Reminder: update requested on CASE-2026-000042 Reminder: Synthetic Requester is still waiting for your update on case CASE-2026-000042, “Synthetic title”. Answer with a comment on CASE-2026-000042 You receive this because an update was requested from you.
+--alert--
+Reminder: Synthetic Requester is still waiting for your update on CASE-2026-000042, "Synthetic title"
+#### update-requested
+--subject--
+Update requested on CASE-2026-000042
+--text--
+Synthetic Requester asked you for an update on case CASE-2026-000042, "Synthetic title".
+
+Open the case to read the request and answer it with a comment:
+https://example.invalid/cases/x
+
+You receive this because an update was requested from you.
+--html--
+Update requested on CASE-2026-000042 Synthetic Requester asked you for an update on case CASE-2026-000042, “Synthetic title”. Open CASE-2026-000042 to read the request and answer it You receive this because an update was requested from you.
+--alert--
+Synthetic Requester asked you for an update on CASE-2026-000042, "Synthetic title"

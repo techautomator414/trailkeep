@@ -1,9 +1,9 @@
 /*[- SPDX-License-Identifier: Apache-2.0. Plain-text part of the closure-requested mail. It carries the case number,
      title, requester, outcome and a deep link, never the resolution summary, the follow-up actions, the description
      or the subject (BUILD_PLAN §9). -]*/
-[(${requester})] asked you to approve closing case [(${caseNumber})], "[(${title})]", with the outcome "[(${outcome})]".
+[(#{tk.mail.closure-requested.text.line(${requester},${caseNumber},${title},${outcome})})]
 
-Open the case to read the resolution summary and decide:
+[(#{tk.mail.closure-requested.text.prompt})]
 [(${link})]
 
-You receive this because you were chosen as the approver.
+[(#{tk.mail.closure-requested.footer})]

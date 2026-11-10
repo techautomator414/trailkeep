@@ -1,2 +1,2 @@
 /*[- SPDX-License-Identifier: Apache-2.0. Subject of the mail to a person an update is requested from. -]*/
-Update requested on [(${caseNumber})]
+[(#{tk.mail.update-requested.subject(${caseNumber})})]

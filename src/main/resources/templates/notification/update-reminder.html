@@ -4,12 +4,11 @@
 <html lang="en" xmlns:th="http://www.thymeleaf.org">
 <head>
 <meta charset="UTF-8">
-<title th:text="|Reminder: update requested on ${caseNumber}|">Reminder</title>
+<title th:text="#{tk.mail.update-reminder.html.title(${caseNumber})}">Reminder</title>
 </head>
 <body>
-<p>Reminder: <span th:text="${requester}">Someone</span> is still waiting for your update on case
-  <span th:text="${caseNumber}">CASE</span>, &ldquo;<span th:text="${title}">title</span>&rdquo;.</p>
-<p><a th:href="${link}" th:text="|Answer with a comment on ${caseNumber}|">Open the case</a></p>
-<p>You receive this because an update was requested from you.</p>
+<p th:utext="#{tk.mail.update-reminder.html.line(${#strings.escapeXml(requester)},${#strings.escapeXml(caseNumber)},${#strings.escapeXml(title)})}">tk.mail.update-reminder.html.line</p>
+<p><a th:href="${link}" th:text="#{tk.mail.update-reminder.html.link(${caseNumber})}">Open the case</a></p>
+<p th:text="#{tk.mail.update-reminder.footer}">tk.mail.update-reminder.footer</p>
 </body>
 </html>

@@ -1,8 +1,8 @@
 /*[- SPDX-License-Identifier: Apache-2.0. Plain-text part of the comment-added mail. It carries the case number,
      title, commenter and a deep link, never the comment, description or subject text (BUILD_PLAN §4.7, §9). -]*/
-[(${commenter})] commented on case [(${caseNumber})], "[(${title})]".
+[(#{tk.mail.comment-added.text.line(${commenter},${caseNumber},${title})})]
 
-Open the case to read the comment:
+[(#{tk.mail.comment-added.text.prompt})]
 [(${link})]
 
-You receive this because you own the case.
+[(#{tk.mail.comment-added.footer})]

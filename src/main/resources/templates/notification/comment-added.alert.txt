@@ -1,2 +1,2 @@
 /*[- SPDX-License-Identifier: Apache-2.0. In-app alert of the comment-added mail: one line, never the comment text. -]*/
-[(${commenter})] commented on [(${caseNumber})], "[(${title})]"
+[(#{tk.mail.comment-added.alert(${commenter},${caseNumber},${title})})]

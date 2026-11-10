@@ -1,2 +1,2 @@
 /*[- SPDX-License-Identifier: Apache-2.0. Subject of the scheduled aging report's mail (WP-23, BUILD_PLAN §6). -]*/
-Aging report for [(${team})], [(${asOf})]
+[(#{tk.mail.report-ready.subject(${team},${asOf})})]

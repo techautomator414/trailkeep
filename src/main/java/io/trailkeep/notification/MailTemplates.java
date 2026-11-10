@@ -3,8 +3,10 @@
 package io.trailkeep.notification;
 
 import java.util.HashMap;
+import java.util.Locale;
 import java.util.Map;
 import java.util.regex.Pattern;
+import org.springframework.context.MessageSource;
 import org.springframework.stereotype.Component;
 import org.thymeleaf.context.Context;
 import org.thymeleaf.spring6.SpringTemplateEngine;
@@ -15,8 +17,9 @@ import org.thymeleaf.templateresolver.ClassLoaderTemplateResolver;
  * Renders a mail from its three templates under {@code templates/notification/} (BUILD_PLAN §7.4): {@code
  * <id>.subject.txt} and {@code <id>.txt} in Thymeleaf's text mode, {@code <id>.html} in HTML mode, all with the same
  * model. A template id is a stable lower-case name such as {@code comment-added}; anything else is refused before it
- * can name a path. The engine is the application's own kind (Spring EL) but separate from the page engine, so mail
- * templates never resolve page fragments and pages never resolve mail templates.
+ * can name a path. All wording comes from {@code messages.properties} ({@code tk.mail.<id>.*}), through the same
+ * message source as the pages. The engine is the application's own kind (Spring EL) but separate from the page
+ * engine, so mail templates never resolve page fragments and pages never resolve mail templates.
  */
 @Component
 class MailTemplates {
@@ -26,8 +29,16 @@ class MailTemplates {
 
     private static final int MAX_SUBJECT = 200;
 
-    private final SpringTemplateEngine text = engine(TemplateMode.TEXT, ".txt");
-    private final SpringTemplateEngine html = engine(TemplateMode.HTML, ".html");
+    /** The mail's language: {@code messages.properties} is the only bundle so far, so every locale reads it. */
+    private static final Locale LOCALE = Locale.ENGLISH;
+
+    private final SpringTemplateEngine text;
+    private final SpringTemplateEngine html;
+
+    MailTemplates(MessageSource messages) {
+        this.text = engine(TemplateMode.TEXT, ".txt", messages);
+        this.html = engine(TemplateMode.HTML, ".html", messages);
+    }
 
     /**
      * Renders one mail.
@@ -41,7 +52,7 @@ class MailTemplates {
         if (!ID.matcher(templateId).matches()) {
             throw new IllegalArgumentException("not a mail template id");
         }
-        Context context = new Context();
+        Context context = new Context(LOCALE);
         context.setVariables(new HashMap<String, Object>(model));
         String subject = text.process(templateId + ".subject", context).strip();
         if (subject.isEmpty()
@@ -67,7 +78,7 @@ class MailTemplates {
         if (!ID.matcher(templateId).matches()) {
             throw new IllegalArgumentException("not a mail template id");
         }
-        Context context = new Context();
+        Context context = new Context(LOCALE);
         context.setVariables(new HashMap<String, Object>(model));
         String message = text.process(templateId + ".alert", context).strip().replaceAll("\\s+", " ");
         if (message.isEmpty()) {
@@ -81,7 +92,7 @@ class MailTemplates {
         return message.substring(0, Character.isLowSurrogate(message.charAt(cut)) ? cut - 1 : cut) + "…";
     }
 
-    private static SpringTemplateEngine engine(TemplateMode mode, String suffix) {
+    private static SpringTemplateEngine engine(TemplateMode mode, String suffix, MessageSource messages) {
         ClassLoaderTemplateResolver resolver = new ClassLoaderTemplateResolver();
         resolver.setPrefix("templates/notification/");
         resolver.setSuffix(suffix);
@@ -90,6 +101,7 @@ class MailTemplates {
         resolver.setCheckExistence(true);
         SpringTemplateEngine engine = new SpringTemplateEngine();
         engine.setTemplateResolver(resolver);
+        engine.setTemplateEngineMessageSource(messages);
         return engine;
     }
 }

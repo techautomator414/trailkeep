@@ -4,12 +4,11 @@
 <html lang="en" xmlns:th="http://www.thymeleaf.org">
 <head>
 <meta charset="UTF-8">
-<title th:text="|Still overdue: ${caseNumber}|">Still overdue</title>
+<title th:text="#{tk.mail.sla-overdue-repeat.html.title(${caseNumber})}">Still overdue</title>
 </head>
 <body>
-<p>Case <span th:text="${caseNumber}">CASE</span>, &ldquo;<span th:text="${title}">title</span>&rdquo;, is still
-  overdue: it was due on <span th:text="${due}">date</span>, <span th:text="${days}">7</span> days ago.</p>
-<p><a th:href="${link}" th:text="|Open ${caseNumber}|">Open the case</a></p>
-<p>You receive this because you own the case or manage its team.</p>
+<p th:utext="#{tk.mail.sla-overdue-repeat.html.line(${#strings.escapeXml(caseNumber)},${#strings.escapeXml(title)},${#strings.escapeXml(due)},${#strings.escapeXml(days)})}">tk.mail.sla-overdue-repeat.html.line</p>
+<p><a th:href="${link}" th:text="#{tk.mail.sla-overdue-repeat.html.link(${caseNumber})}">Open the case</a></p>
+<p th:text="#{tk.mail.sla-overdue-repeat.footer}">tk.mail.sla-overdue-repeat.footer</p>
 </body>
 </html>

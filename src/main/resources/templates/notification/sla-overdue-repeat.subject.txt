@@ -1,2 +1,2 @@
 /*[- SPDX-License-Identifier: Apache-2.0. Subject of the repeated reminder while a case stays overdue. -]*/
-Still overdue: [(${caseNumber})], [(${days})] days past [(${due})]
+[(#{tk.mail.sla-overdue-repeat.subject(${caseNumber},${days},${due})})]

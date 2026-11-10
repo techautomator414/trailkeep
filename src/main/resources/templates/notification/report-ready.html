@@ -4,12 +4,11 @@
 <html lang="en" xmlns:th="http://www.thymeleaf.org">
 <head>
 <meta charset="UTF-8">
-<title th:text="|Aging report for ${team}|">Aging report</title>
+<title th:text="#{tk.mail.report-ready.html.title(${team})}">Aging report</title>
 </head>
 <body>
-<p>The weekly aging report for <span th:text="${team}">Team</span> as of <span th:text="${asOf}">2026-11-09</span>
-  is ready.</p>
-<p><a th:href="${link}" th:text="|Open the aging report for ${team}|">Open the report</a></p>
-<p>You receive this because you are a Manager of the team or a Compliance Admin.</p>
+<p th:utext="#{tk.mail.report-ready.html.line(${#strings.escapeXml(team)},${#strings.escapeXml(asOf)})}">tk.mail.report-ready.html.line</p>
+<p><a th:href="${link}" th:text="#{tk.mail.report-ready.html.link(${team})}">Open the report</a></p>
+<p th:text="#{tk.mail.report-ready.footer}">tk.mail.report-ready.footer</p>
 </body>
 </html>

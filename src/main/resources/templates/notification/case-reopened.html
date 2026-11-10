@@ -4,12 +4,11 @@
 <html lang="en" xmlns:th="http://www.thymeleaf.org">
 <head>
 <meta charset="UTF-8">
-<title th:text="|${caseNumber} was reopened|">Case reopened</title>
+<title th:text="#{tk.mail.case-reopened.html.title(${caseNumber})}">Case reopened</title>
 </head>
 <body>
-<p><span th:text="${reopener}">Someone</span> reopened case <span th:text="${caseNumber}">CASE</span>,
-  &ldquo;<span th:text="${title}">title</span>&rdquo;. Its SLA starts a new cycle today.</p>
-<p><a th:href="${link}" th:text="|Open ${caseNumber} to read why|">Open the case</a></p>
-<p>You receive this because you own the case or requested its closure.</p>
+<p th:utext="#{tk.mail.case-reopened.html.line(${#strings.escapeXml(reopener)},${#strings.escapeXml(caseNumber)},${#strings.escapeXml(title)})}">tk.mail.case-reopened.html.line</p>
+<p><a th:href="${link}" th:text="#{tk.mail.case-reopened.html.link(${caseNumber})}">Open the case</a></p>
+<p th:text="#{tk.mail.case-reopened.footer}">tk.mail.case-reopened.footer</p>
 </body>
 </html>

@@ -1,2 +1,2 @@
 /*[- SPDX-License-Identifier: Apache-2.0. In-app alert of the update-requested mail: one line, never the message. -]*/
-[(${requester})] asked you for an update on [(${caseNumber})], "[(${title})]"
+[(#{tk.mail.update-requested.alert(${requester},${caseNumber},${title})})]

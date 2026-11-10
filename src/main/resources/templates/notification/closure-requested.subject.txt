@@ -1,2 +1,2 @@
 /*[- SPDX-License-Identifier: Apache-2.0. Subject of the mail to the approver of a closure request. -]*/
-Closure requested on [(${caseNumber})]
+[(#{tk.mail.closure-requested.subject(${caseNumber})})]
