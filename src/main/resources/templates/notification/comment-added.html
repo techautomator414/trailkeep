@@ -7,7 +7,7 @@
 <title th:text="#{tk.mail.comment-added.html.title(${caseNumber})}">New comment</title>
 </head>
 <body>
-<p th:utext="#{tk.mail.comment-added.html.line(${#strings.escapeXml(commenter)},${#strings.escapeXml(caseNumber)},${#strings.escapeXml(title)})}">tk.mail.comment-added.html.line</p>
+<p th:text="#{tk.mail.comment-added.html.line(${commenter},${caseNumber},${title})}">tk.mail.comment-added.html.line</p>
 <p><a th:href="${link}" th:text="#{tk.mail.comment-added.html.link(${caseNumber})}">Open the case</a></p>
 <p th:text="#{tk.mail.comment-added.footer}">tk.mail.comment-added.footer</p>
 </body>

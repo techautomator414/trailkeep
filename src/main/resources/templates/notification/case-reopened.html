@@ -7,7 +7,7 @@
 <title th:text="#{tk.mail.case-reopened.html.title(${caseNumber})}">Case reopened</title>
 </head>
 <body>
-<p th:utext="#{tk.mail.case-reopened.html.line(${#strings.escapeXml(reopener)},${#strings.escapeXml(caseNumber)},${#strings.escapeXml(title)})}">tk.mail.case-reopened.html.line</p>
+<p th:text="#{tk.mail.case-reopened.html.line(${reopener},${caseNumber},${title})}">tk.mail.case-reopened.html.line</p>
 <p><a th:href="${link}" th:text="#{tk.mail.case-reopened.html.link(${caseNumber})}">Open the case</a></p>
 <p th:text="#{tk.mail.case-reopened.footer}">tk.mail.case-reopened.footer</p>
 </body>

@@ -7,7 +7,7 @@
 <title th:text="#{tk.mail.sla-overdue-repeat.html.title(${caseNumber})}">Still overdue</title>
 </head>
 <body>
-<p th:utext="#{tk.mail.sla-overdue-repeat.html.line(${#strings.escapeXml(caseNumber)},${#strings.escapeXml(title)},${#strings.escapeXml(due)},${#strings.escapeXml(days)})}">tk.mail.sla-overdue-repeat.html.line</p>
+<p th:text="#{tk.mail.sla-overdue-repeat.html.line(${caseNumber},${title},${due},${days})}">tk.mail.sla-overdue-repeat.html.line</p>
 <p><a th:href="${link}" th:text="#{tk.mail.sla-overdue-repeat.html.link(${caseNumber})}">Open the case</a></p>
 <p th:text="#{tk.mail.sla-overdue-repeat.footer}">tk.mail.sla-overdue-repeat.footer</p>
 </body>

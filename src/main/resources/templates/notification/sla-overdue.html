@@ -7,7 +7,7 @@
 <title th:text="#{tk.mail.sla-overdue.html.title(${caseNumber})}">Overdue</title>
 </head>
 <body>
-<p th:utext="#{tk.mail.sla-overdue.html.line(${#strings.escapeXml(caseNumber)},${#strings.escapeXml(title)},${#strings.escapeXml(due)})}">tk.mail.sla-overdue.html.line</p>
+<p th:text="#{tk.mail.sla-overdue.html.line(${caseNumber},${title},${due})}">tk.mail.sla-overdue.html.line</p>
 <p><a th:href="${link}" th:text="#{tk.mail.sla-overdue.html.link(${caseNumber})}">Open the case</a></p>
 <p th:text="#{tk.mail.sla-overdue.footer}">tk.mail.sla-overdue.footer</p>
 </body>

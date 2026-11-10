@@ -7,7 +7,7 @@
 <title th:text="#{tk.mail.update-reminder.html.title(${caseNumber})}">Reminder</title>
 </head>
 <body>
-<p th:utext="#{tk.mail.update-reminder.html.line(${#strings.escapeXml(requester)},${#strings.escapeXml(caseNumber)},${#strings.escapeXml(title)})}">tk.mail.update-reminder.html.line</p>
+<p th:text="#{tk.mail.update-reminder.html.line(${requester},${caseNumber},${title})}">tk.mail.update-reminder.html.line</p>
 <p><a th:href="${link}" th:text="#{tk.mail.update-reminder.html.link(${caseNumber})}">Open the case</a></p>
 <p th:text="#{tk.mail.update-reminder.footer}">tk.mail.update-reminder.footer</p>
 </body>

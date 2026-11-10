@@ -7,7 +7,7 @@
 <title th:text="#{tk.mail.sla-at-risk.html.title(${caseNumber})}">At risk</title>
 </head>
 <body>
-<p th:utext="#{tk.mail.sla-at-risk.html.line(${#strings.escapeXml(caseNumber)},${#strings.escapeXml(title)},${#strings.escapeXml(due)})}">tk.mail.sla-at-risk.html.line</p>
+<p th:text="#{tk.mail.sla-at-risk.html.line(${caseNumber},${title},${due})}">tk.mail.sla-at-risk.html.line</p>
 <p><a th:href="${link}" th:text="#{tk.mail.sla-at-risk.html.link(${caseNumber})}">Open the case</a></p>
 <p th:text="#{tk.mail.sla-at-risk.footer}">tk.mail.sla-at-risk.footer</p>
 </body>

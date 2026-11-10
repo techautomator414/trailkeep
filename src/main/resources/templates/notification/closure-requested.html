@@ -7,7 +7,7 @@
 <title th:text="#{tk.mail.closure-requested.html.title(${caseNumber})}">Closure requested</title>
 </head>
 <body>
-<p th:utext="#{tk.mail.closure-requested.html.line(${#strings.escapeXml(requester)},${#strings.escapeXml(caseNumber)},${#strings.escapeXml(title)},${#strings.escapeXml(outcome)})}">tk.mail.closure-requested.html.line</p>
+<p th:text="#{tk.mail.closure-requested.html.line(${requester},${caseNumber},${title},${outcome})}">tk.mail.closure-requested.html.line</p>
 <p><a th:href="${link}" th:text="#{tk.mail.closure-requested.html.link(${caseNumber})}">Open the case</a></p>
 <p th:text="#{tk.mail.closure-requested.footer}">tk.mail.closure-requested.footer</p>
 </body>

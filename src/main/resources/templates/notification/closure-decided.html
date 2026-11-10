@@ -7,7 +7,7 @@
 <title th:text="#{tk.mail.closure-decided.html.title(#{${verbKey}},${caseNumber})}">Closure decided</title>
 </head>
 <body>
-<p th:utext="#{tk.mail.closure-decided.html.line(${#strings.escapeXml(decider)},${#strings.escapeXml(#messages.msg(verbKey))},${#strings.escapeXml(caseNumber)},${#strings.escapeXml(title)})}">tk.mail.closure-decided.html.line</p>
+<p th:text="#{tk.mail.closure-decided.html.line(${decider},#{${verbKey}},${caseNumber},${title})}">tk.mail.closure-decided.html.line</p>
 <p><a th:href="${link}" th:text="#{tk.mail.closure-decided.html.link(${caseNumber})}">Open the case</a></p>
 <p th:text="#{tk.mail.closure-decided.footer}">tk.mail.closure-decided.footer</p>
 </body>
