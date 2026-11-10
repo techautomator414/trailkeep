@@ -132,7 +132,8 @@ class DefaultTeamAdmin implements TeamAdminService {
     public void assignRole(Actor actor, long teamId, long userId, TeamRole role) {
         requireSystemAdmin(actor);
         Team team = findTeam(teamId);
-        if (users.findById(userId).isEmpty()) {
+        // The import principals (ADR-0015) never hold a role.
+        if (users.findById(userId).filter(user -> !user.isPrincipal()).isEmpty()) {
             throw new TeamAdminException(Kind.NOT_FOUND, "no such user");
         }
         UserPermissions target = directory.permissionsOf(userId);

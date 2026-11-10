@@ -76,6 +76,15 @@ class AppUser {
         return email;
     }
 
+    /**
+     * Whether this is one of the seeded principals that act for the importer (ADR-0015), not a person.
+     *
+     * @return true for a reserved external id
+     */
+    boolean isPrincipal() {
+        return externalId.startsWith(ImportPeopleService.PRINCIPAL_PREFIX);
+    }
+
     boolean isDisabled() {
         return disabled;
     }
