@@ -40,6 +40,7 @@
 --   REPORT_SCHEDULE       S I U      -            report schedules; disabled, never deleted (V7)
 --   REPORT_RUN            S I        S D          report runs; never changed; purged after report-runs (V7)
 --   LEGAL_HOLD_EVENT      S I        -            holds placed and lifted; history, kept by purge (V8)
+--   USER_PREFERENCE       S I U      -            a person's preferences; changed, never deleted (V9)
 --   SEQ_APP_USER          SELECT     -            Oracle's sequence privilege is SELECT (NEXTVAL)
 --   SEQ_TEAM              SELECT     -
 --   SEQ_AUDIT_EVENT       SELECT     SELECT       the purge's CASE_PURGED rows
@@ -122,6 +123,7 @@ DECLARE
     UNION ALL SELECT 'SEQ_REPORT_RUN', 'SELECT', UPPER('${app_user}') FROM DUAL
     UNION ALL SELECT 'LEGAL_HOLD_EVENT', 'SELECT,INSERT', UPPER('${app_user}') FROM DUAL
     UNION ALL SELECT 'SEQ_LEGAL_HOLD_EVENT', 'SELECT', UPPER('${app_user}') FROM DUAL
+    UNION ALL SELECT 'USER_PREFERENCE', 'SELECT,INSERT,UPDATE', UPPER('${app_user}') FROM DUAL
     UNION ALL SELECT 'CASE_COMMENT_PIN', 'SELECT,DELETE', UPPER('${purge_user}') FROM DUAL
     UNION ALL SELECT 'UPDATE_REQUEST', 'SELECT,DELETE', UPPER('${purge_user}') FROM DUAL
     UNION ALL SELECT 'CASE_COMMENT', 'SELECT,DELETE', UPPER('${purge_user}') FROM DUAL

@@ -20,8 +20,10 @@
   <script defer th:src="@{/vendor/htmx/htmx.min.js}" th:attr="nonce=${cspNonce}"></script>
   <script defer th:src="@{/js/app.js}" th:attr="nonce=${cspNonce}"></script>
 </head>
-<body th:with="idleSeconds=${@sessionTimeouts.idleSeconds()}" th:data-tk-session-seconds="${idleSeconds}"
-      th:attr="data-tk-error-text=#{tk.problem.5xx.text},data-tk-extended-text=#{tk.session.extended}">
+<body th:with="idleSeconds=${@sessionTimeouts.idleSeconds()},shortcuts=${@preferenceNav.shortcuts()}"
+      th:data-tk-session-seconds="${idleSeconds}"
+      th:attr="data-tk-error-text=#{tk.problem.5xx.text},data-tk-extended-text=#{tk.session.extended}"
+      th:data-tk-shortcuts="${shortcuts} ? 'on' : 'off'">
 <a class="tk-skip-link" href="#main" th:text="#{tk.skip}">Skip to main content</a>
 <header class="tk-header">
   <div class="container tk-header-inner">
@@ -45,6 +47,7 @@
             th:text="#{tk.nav.alerts}">Alerts</span> <span th:if="${unread > 0}" class="badge text-bg-light"
             th:text="${unread}">3</span></a></li>
         <li><a th:href="@{/reports/aging}" th:text="#{tk.nav.reports}">Reports</a></li>
+        <li><a th:href="@{/preferences}" th:text="#{tk.nav.preferences}">Preferences</a></li>
       </ul>
     </nav>
     <!-- htmx posts the sign-out so the provider's end-session URL comes back as HX-Redirect: a form redirect to

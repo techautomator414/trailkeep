@@ -56,12 +56,7 @@ abstract class AbstractDatabaseGrantsIT {
         DENIED
     }
 
-    /**
-     * Identity (V1), audit (V2), admin (V3), case (V4), comment (V4.1), pin (V4.2), attachment (V4.3), saved view
-     * (V4.7), outbox (V4.8), alert (V4.9), update request (V4.10), closure (V5), reopen (V5.1), SLA job (V6) and
-     * report delivery (V7)
-     * tables, and the column each probe touches: the first key column.
-     */
+    /** The tables of V1 to V9 and the column each probe touches: the first key column. */
     static final Map<String, String> TABLES = Map.ofEntries(
             Map.entry("APP_USER", "ID"),
             Map.entry("TEAM", "ID"),
@@ -91,7 +86,8 @@ abstract class AbstractDatabaseGrantsIT {
             Map.entry("JOB_RUN", "JOB_NAME"),
             Map.entry("SHEDLOCK", "NAME"),
             Map.entry("REPORT_SCHEDULE", "ID"),
-            Map.entry("REPORT_RUN", "ID"));
+            Map.entry("REPORT_RUN", "ID"),
+            Map.entry("USER_PREFERENCE", "USER_ID"));
 
     /** What the runtime user may do; anything absent is denied. */
     static final Map<String, Set<Privilege>> APP_USER_GRANTS = Map.ofEntries(
@@ -137,7 +133,8 @@ abstract class AbstractDatabaseGrantsIT {
             // A run is what was sent: written once, never changed or deleted by the app.
             Map.entry("REPORT_RUN", EnumSet.of(Privilege.SELECT, Privilege.INSERT)),
             // A hold placed or lifted is history: written once, never changed or deleted, kept by purge (V8).
-            Map.entry("LEGAL_HOLD_EVENT", EnumSet.of(Privilege.SELECT, Privilege.INSERT)));
+            Map.entry("LEGAL_HOLD_EVENT", EnumSet.of(Privilege.SELECT, Privilege.INSERT)),
+            Map.entry("USER_PREFERENCE", EnumSet.of(Privilege.SELECT, Privilege.INSERT, Privilege.UPDATE)));
 
     /** The purge user (WP-24 part c): deletes purged content and old runs, audits each tombstone, records its run. */
     static final Map<String, Set<Privilege>> PURGE_USER_GRANTS = Stream.of(

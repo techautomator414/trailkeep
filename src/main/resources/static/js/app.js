@@ -358,7 +358,57 @@
     });
   }
 
+  /**
+   * Single-key shortcuts (BUILD_PLAN §3.1, §10.1; WCAG 2.1.4): "/" goes to the search box and "N" starts a new case.
+   * They act only when the person's preference is on (body[data-tk-shortcuts="on"], from the server), never with
+   * Ctrl, Alt or Meta held, never while typing in an input, textarea, select or editable element, and never while a
+   * dialog is open. Off is the same as absent: the keys do nothing and no listener is added.
+   */
+  function wireShortcuts() {
+    const body = document.body;
+    const FLAG = 'tk-focus-search';
+    const search = function () { return document.getElementById('tk-q'); };
+    /** The application's root path (context path included), from the brand link, which is always @{/}. */
+    const root = function () { return document.querySelector('.tk-brand').getAttribute('href'); };
+    if (window.sessionStorage.getItem(FLAG)) {
+      window.sessionStorage.removeItem(FLAG);
+      if (body.getAttribute('data-tk-shortcuts') === 'on' && search()) {
+        search().focus();
+      }
+    }
+    if (body.getAttribute('data-tk-shortcuts') !== 'on') {
+      return;
+    }
+    document.addEventListener('keydown', function (event) {
+      if (event.defaultPrevented || event.isComposing || event.repeat
+          || event.ctrlKey || event.altKey || event.metaKey) {
+        return;
+      }
+      const target = event.target;
+      if (target instanceof Element && (target.closest('input, textarea, select, [contenteditable]')
+          || target.closest('dialog'))) {
+        return;
+      }
+      if (document.querySelector('dialog[open]')) {
+        return;
+      }
+      if (event.key === '/') {
+        event.preventDefault();
+        if (search()) {
+          search().focus();
+        } else {
+          window.sessionStorage.setItem(FLAG, '1');
+          window.location.assign(root() + 'cases');
+        }
+      } else if (event.key === 'n' || event.key === 'N') {
+        event.preventDefault();
+        window.location.assign(root() + 'cases/new');
+      }
+    });
+  }
+
   document.addEventListener('DOMContentLoaded', function () {
+    wireShortcuts();
     wireCounters();
     wireComboboxes();
     wireForms();
