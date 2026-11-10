@@ -45,8 +45,10 @@ need a recorded answer:
 Option 3.
 
 - **The rows.** `V11__import_principals` inserts two `APP_USER` rows:
-  - **Ids:** fixed and negative, `-1` "Trailkeep import" and `-2` "Legacy approval (imported)". `SEQ_APP_USER` starts at
-    1, so it can never issue them.
+  - **Ids:** fixed and negative, `-1001` "Trailkeep import" and `-1002` "Legacy approval (imported)", named once as
+    `ImportPeopleService.IMPORTER_ID` and `LEGACY_APPROVAL_ID`. `SEQ_APP_USER` starts at 1, so it can never issue them.
+  - **Outside any sentinel:** several controllers read a malformed id parameter as `-1`, which is safe only while no
+    row has that id. The principals keep clear of it, so a malformed value can never be mistaken for a principal.
   - **State:** `DISABLED`, with no team and no global role.
   - **External ids:** reserved, under `urn:trailkeep:principal:`. They are not subjects any identity provider issues.
   - **Email:** `.invalid` addresses (RFC 2606), so no mail can reach them.
@@ -55,7 +57,7 @@ Option 3.
 - **Kept that way.** `user`'s admin services treat a principal as an unknown user. The user list leaves the principals
   out. Enabling or disabling one answers 404, and so does giving one a team role.
 - **Found by name, not by number.** `ImportPeopleService.principals()` looks both up by external id. No other code
-  hard-codes `-1` or `-2`.
+  hard-codes their ids.
 
 ### Consequences
 
@@ -78,3 +80,6 @@ Option 3.
 - enabling or disabling one, and giving one a team role, answers not found;
 - signing in with a principal's subject is refused and changes nothing;
 - people lookups never return a principal.
+
+`ClosureControllerIT` and `UpdateRequestControllerIT` check that the `-1` sentinel and both principals' ids are still
+refused with 422 as a closure approver and as an update-request recipient.

@@ -16,6 +16,16 @@ public interface ImportPeopleService {
     String PRINCIPAL_PREFIX = "urn:trailkeep:principal:";
 
     /**
+     * The "Trailkeep import" principal's id, fixed by {@code V11__import_principals}: negative, so {@code SEQ_APP_USER}
+     * never issues it, and outside every sentinel the code uses (the web layer reads a malformed id as {@code -1}).
+     * Code finds it through {@link #principals()}; the constant is for the migration's tests.
+     */
+    long IMPORTER_ID = -1001;
+
+    /** The "Legacy approval (imported)" principal's id, fixed like {@link #IMPORTER_ID}. */
+    long LEGACY_APPROVAL_ID = -1002;
+
+    /**
      * The principals' user ids.
      *
      * @param importer "Trailkeep import": creator, owner of unmatched closed cases, uploader, closure requester, holder

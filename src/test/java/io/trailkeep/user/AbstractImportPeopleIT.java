@@ -2,6 +2,8 @@
 // Copyright 2026 Charlie Genova and contributors
 package io.trailkeep.user;
 
+import static io.trailkeep.user.ImportPeopleService.IMPORTER_ID;
+import static io.trailkeep.user.ImportPeopleService.LEGACY_APPROVAL_ID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -62,10 +64,10 @@ abstract class AbstractImportPeopleIT {
     void thePrincipalsAreSeededDisabledWithoutAnyRole() {
         ImportPrincipals principals = people.principals();
 
-        assertThat(principals).isEqualTo(new ImportPrincipals(-1, -2));
-        assertThat(directory.displayName(-1)).contains("Trailkeep import");
-        assertThat(directory.displayName(-2)).contains("Legacy approval (imported)");
-        for (long id : Set.of(-1L, -2L)) {
+        assertThat(principals).isEqualTo(new ImportPrincipals(IMPORTER_ID, LEGACY_APPROVAL_ID));
+        assertThat(directory.displayName(IMPORTER_ID)).contains("Trailkeep import");
+        assertThat(directory.displayName(LEGACY_APPROVAL_ID)).contains("Legacy approval (imported)");
+        for (long id : Set.of(IMPORTER_ID, LEGACY_APPROVAL_ID)) {
             assertThat(directory.permissionsOf(id).disabled())
                     .as("disabled %d", id)
                     .isTrue();
@@ -81,12 +83,13 @@ abstract class AbstractImportPeopleIT {
 
         assertThat(userAdmin.users(systemAdmin))
                 .extracting(UserAdminService.UserRow::userId)
-                .doesNotContain(-1L, -2L);
-        assertThatThrownBy(() -> userAdmin.enable(systemAdmin, -1)).satisfies(kind(Kind.NOT_FOUND));
-        assertThatThrownBy(() -> userAdmin.disable(systemAdmin, -2)).satisfies(kind(Kind.NOT_FOUND));
-        assertThatThrownBy(() -> teamAdmin.assignRole(systemAdmin, team, -1, TeamRole.MANAGER))
+                .doesNotContain(IMPORTER_ID, LEGACY_APPROVAL_ID);
+        assertThatThrownBy(() -> userAdmin.enable(systemAdmin, IMPORTER_ID)).satisfies(kind(Kind.NOT_FOUND));
+        assertThatThrownBy(() -> userAdmin.disable(systemAdmin, LEGACY_APPROVAL_ID))
                 .satisfies(kind(Kind.NOT_FOUND));
-        assertThat(directory.permissionsOf(-1).disabled()).isTrue();
+        assertThatThrownBy(() -> teamAdmin.assignRole(systemAdmin, team, IMPORTER_ID, TeamRole.MANAGER))
+                .satisfies(kind(Kind.NOT_FOUND));
+        assertThat(directory.permissionsOf(IMPORTER_ID).disabled()).isTrue();
     }
 
     @Test
@@ -96,8 +99,8 @@ abstract class AbstractImportPeopleIT {
                         ImportPeopleService.PRINCIPAL_PREFIX + "import", "Someone Else", "someone@example.invalid"),
                 Set.of(GlobalRole.COMPLIANCE_ADMIN));
 
-        assertThat(outcome).isEqualTo(new SignInOutcome.Disabled(-1));
-        assertThat(directory.displayName(-1)).contains("Trailkeep import");
+        assertThat(outcome).isEqualTo(new SignInOutcome.Disabled(IMPORTER_ID));
+        assertThat(directory.displayName(IMPORTER_ID)).contains("Trailkeep import");
         assertThat(rolesOfPrincipals()).isZero();
     }
 
@@ -137,9 +140,15 @@ abstract class AbstractImportPeopleIT {
     /** Global and team roles held by any principal, read from the tables (permissions drop a disabled user's roles). */
     private int rolesOfPrincipals() {
         Integer global = jdbc.queryForObject(
-                "SELECT COUNT(*) FROM APP_USER_GLOBAL_ROLE WHERE USER_ID IN (-1, -2)", Integer.class);
-        Integer team =
-                jdbc.queryForObject("SELECT COUNT(*) FROM APP_USER_TEAM WHERE USER_ID IN (-1, -2)", Integer.class);
+                "SELECT COUNT(*) FROM APP_USER_GLOBAL_ROLE WHERE USER_ID IN (?, ?)",
+                Integer.class,
+                IMPORTER_ID,
+                LEGACY_APPROVAL_ID);
+        Integer team = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM APP_USER_TEAM WHERE USER_ID IN (?, ?)",
+                Integer.class,
+                IMPORTER_ID,
+                LEGACY_APPROVAL_ID);
         return (global == null ? 0 : global) + (team == null ? 0 : team);
     }
 
