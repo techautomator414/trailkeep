@@ -28,6 +28,8 @@ import org.jspecify.annotations.Nullable;
  * @param subjectText who or what is involved, if given
  * @param description the description; {@code null} only once purged
  * @param purgedOn the day the purge job removed the case's content (WP-24 part c), or {@code null} if it has not
+ * @param legacyNumber the number an imported case had in its legacy tracker (WP-26), or {@code null}
+ * @param legacyOwnerName the legacy owner's name when an imported case's owner matched no user, or {@code null}
  * @param sla where the case stands against its SLA
  * @param version the version a change from the page is made against
  * @param editable whether the viewer may edit it, so the page offers Edit
@@ -52,6 +54,8 @@ public record CaseView(
         @Nullable String subjectText,
         @Nullable String description,
         @Nullable LocalDate purgedOn,
+        @Nullable String legacyNumber,
+        @Nullable String legacyOwnerName,
         Sla sla,
         int version,
         boolean editable,

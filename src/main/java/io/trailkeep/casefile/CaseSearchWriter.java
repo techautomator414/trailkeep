@@ -14,8 +14,9 @@ import org.springframework.stereotype.Component;
  * Keeps {@code CASE_SEARCH} in step with a case, in the writer's transaction (BUILD_PLAN §8 rule 4, ADR-0006). A
  * comment appends atomically; an edit rebuilds the text from title, description and every comment after taking the
  * row lock ({@code SELECT … FOR UPDATE}). The comments are read after the lock is held, so a comment that committed
- * while the edit waited is in the rebuilt text, and one still being written appends to it afterwards. Subject is
- * never included.
+ * while the edit waited is in the rebuilt text, and one still being written appends to it afterwards. An imported
+ * case's legacy number is part of the text too, so it is still found by it after an edit (WP-26, design §7.1 R5).
+ * Subject is never included.
  */
 @Component
 @CaseAccessPath
@@ -61,7 +62,11 @@ class CaseSearchWriter {
     void rebuild(UserPermissions user, CaseRecord record, Instant now) {
         long caseId = Objects.requireNonNull(record.getId());
         CaseSearch search = entityManager.find(CaseSearch.class, caseId, LockModeType.PESSIMISTIC_WRITE);
-        StringBuilder text = new StringBuilder(record.getTitle()).append('\n').append(record.getDescription());
+        StringBuilder text = new StringBuilder(record.getTitle());
+        if (record.getLegacyNumber() != null) {
+            text.append('\n').append(record.getLegacyNumber());
+        }
+        text.append('\n').append(record.getDescription());
         for (CaseComment comment : comments.findForCase(scopes.forUser(user), record.getCaseNumber())) {
             text.append('\n').append(comment.getBody());
         }

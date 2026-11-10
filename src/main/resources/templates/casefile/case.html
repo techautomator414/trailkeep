@@ -174,10 +174,16 @@
   <h2 th:text="#{tk.case.overview}">Overview</h2>
   <dl class="tk-facts">
     <dt th:text="#{tk.case.owner}">Owner</dt><dd th:text="${c.ownerName}">Owner</dd>
+    <th:block th:if="${c.legacyOwnerName != null}">
+    <dt th:text="#{tk.case.legacyOwner}">Legacy owner</dt><dd th:text="${c.legacyOwnerName}">Legacy owner</dd>
+    </th:block>
     <dt th:text="#{tk.case.team}">Team</dt><dd th:text="${c.teamName}">Team</dd>
     <dt th:text="#{tk.case.type}">Case type</dt><dd th:text="${c.caseTypeName}">Type</dd>
     <dt th:text="#{tk.case.identified}">Identified on</dt><dd th:text="${c.identifiedOn}">2026-11-01</dd>
     <dt th:text="#{tk.case.opened}">Opened on</dt><dd th:text="${c.openedOn}">2026-11-04</dd>
+    <th:block th:if="${c.legacyNumber != null}">
+    <dt th:text="#{tk.case.legacyNumber}">Legacy number</dt><dd th:text="${c.legacyNumber}">Legacy number</dd>
+    </th:block>
     <dt th:text="#{tk.case.due}">Due on</dt>
     <dd th:text="${c.sla.dueOn} ?: #{tk.case.due.none}">2026-12-04</dd>
     <th:block th:if="${c.purgedOn == null}">
