@@ -67,7 +67,7 @@
     <!-- Comment Markdown (WP-13, BUILD_PLAN 7.2). The sanitizer is the first release carrying every fix published
          up to 2026-11-03, including GHSA-47x2-9gq9-jg3m (denial of service via repeated allowed attributes), which
          applies to every policy; the later advisories concern SVG, srcset and ping, which the policy never allows. -->
-    <commonmark.version>0.31.0</commonmark.version>
+    <commonmark.version>0.32.0</commonmark.version>
     <owasp-java-html-sanitizer.version>20261103.2</owasp-java-html-sanitizer.version>
     <!-- Upload type detection (WP-14, BUILD_PLAN 11.1): the core jar only, never the parser bundle. The 3.x line,
          because tika-core 4.x pulls in commonmark extensions a magic-byte detector does not need. -->
