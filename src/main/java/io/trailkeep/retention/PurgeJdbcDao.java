@@ -15,6 +15,7 @@ import java.util.Objects;
 import java.util.StringJoiner;
 import org.hibernate.engine.spi.SessionFactoryImplementor;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
+import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -67,7 +68,7 @@ class PurgeJdbcDao {
 
     private final NamedParameterJdbcTemplate jdbc;
     private final TransactionTemplate transactions;
-    private final String nextAuditId;
+    private final EntityManagerFactory entityManagerFactory;
 
     PurgeJdbcDao(
             NamedParameterJdbcTemplate jdbc,
@@ -75,13 +76,19 @@ class PurgeJdbcDao {
             EntityManagerFactory entityManagerFactory) {
         this.jdbc = jdbc;
         this.transactions = transactions;
-        // The audit sequence's next value, in the configured dialect's syntax (as CaseNumberJdbcDao does).
-        this.nextAuditId = entityManagerFactory
+        this.entityManagerFactory = entityManagerFactory;
+    }
+
+    /** The audit sequence's next value, in the dialect's syntax, as {@code CaseNumberJdbcDao} reads its own. */
+    private long nextAuditId() {
+        String nextValue = entityManagerFactory
                 .unwrap(SessionFactoryImplementor.class)
                 .getJdbcServices()
                 .getDialect()
                 .getSequenceSupport()
                 .getSequenceNextValString("SEQ_AUDIT_EVENT");
+        return Objects.requireNonNull(
+                JdbcClient.create(jdbc).sql(nextValue).query(Long.class).single());
     }
 
     private static Map<String, String> counts() {
@@ -169,18 +176,9 @@ class PurgeJdbcDao {
     private void audit(long caseId, Map<String, Map<Long, Long>> removed, Instant now) {
         StringJoiner json = new StringJoiner(",", "{", "}");
         removed.forEach((name, perCase) -> json.add("\"" + name + "\":" + perCase.getOrDefault(caseId, 0L)));
-        Long id = jdbc.getJdbcTemplate().queryForObject(nextAuditId, Long.class);
         jdbc.update(
                 AUDIT,
-                Map.of(
-                        "id",
-                        Objects.requireNonNull(id),
-                        "at",
-                        Timestamp.from(now),
-                        "caseId",
-                        caseId,
-                        "json",
-                        json.toString()));
+                Map.of("id", nextAuditId(), "at", Timestamp.from(now), "caseId", caseId, "json", json.toString()));
     }
 
     /**
