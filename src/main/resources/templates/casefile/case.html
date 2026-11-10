@@ -180,11 +180,17 @@
     <dt th:text="#{tk.case.opened}">Opened on</dt><dd th:text="${c.openedOn}">2026-11-04</dd>
     <dt th:text="#{tk.case.due}">Due on</dt>
     <dd th:text="${c.sla.dueOn} ?: #{tk.case.due.none}">2026-12-04</dd>
+    <th:block th:if="${c.purgedOn == null}">
     <dt th:text="#{tk.case.subject}">Subject / involved parties</dt>
     <dd th:text="${c.subjectText} ?: #{tk.case.subject.none}">None given</dd>
+    </th:block>
   </dl>
+  <p th:if="${c.purgedOn != null}" class="alert alert-secondary" th:text="#{tk.case.purged(${c.purgedOn})}">Content
+    removed under the retention policy.</p>
+  <th:block th:if="${c.purgedOn == null}">
   <h3 th:text="#{tk.case.description}">Description</h3>
   <p class="tk-description" th:text="${c.description}">Description</p>
+  </th:block>
   <th:block th:unless="${#lists.isEmpty(requests)}">
     <h2 id="update-requests" th:text="#{tk.request.open.title}">Awaiting an update</h2>
     <ul class="list-unstyled" aria-labelledby="update-requests">

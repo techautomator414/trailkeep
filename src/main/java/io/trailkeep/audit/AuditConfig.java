@@ -8,7 +8,10 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.env.Environment;
 
-/** Wires the redaction key: required in {@code prod}, a random per-process key elsewhere. */
+/**
+ * Wires the redaction key: required in {@code prod} (except in the {@code purge} batch profile, which audits nothing),
+ * a random per-process key elsewhere.
+ */
 @Configuration(proxyBeanMethods = false)
 class AuditConfig {
 
@@ -24,7 +27,9 @@ class AuditConfig {
         if (key != null && !key.isBlank()) {
             return AuditHmac.fromBase64(key);
         }
-        if (environment.matchesProfiles("prod")) {
+        // The purge job (profile purge) writes no audit row and has no INSERT grant on AUDIT_EVENT, so its pod is not
+        // given the key; every process that audits is.
+        if (environment.matchesProfiles("prod & !purge")) {
             throw new IllegalStateException("app.audit.hmac-key is required in the prod profile");
         }
         LOG.warn("app.audit.hmac-key is not set; using a random per-process key. Redacted audit values will not be"

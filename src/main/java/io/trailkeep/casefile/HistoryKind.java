@@ -42,7 +42,8 @@ public enum HistoryKind {
                         "SLA_STATE_CHANGED",
                         "CASE_ARCHIVED",
                         "LEGAL_HOLD_PLACED",
-                        "LEGAL_HOLD_LIFTED");
+                        "LEGAL_HOLD_LIFTED",
+                        "CASE_PURGED");
             case VIEWS -> Set.of(RestrictedReadAudit.ACTION);
         };
     }

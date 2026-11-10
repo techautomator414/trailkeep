@@ -1,6 +1,24 @@
 # SPDX-License-Identifier: Apache-2.0
 # Copyright 2026 Charlie Genova and contributors
-# Batch profile, combined with prod (SPRING_PROFILES_ACTIVE=prod,purge). No web server, no web schedulers.
+# Batch profile, combined with prod (SPRING_PROFILES_ACTIVE=prod,purge). No web server, no web schedulers: the
+# retention purge (WP-24 part c, io.trailkeep.retention.PurgeRunner) runs once and the process ends. It connects as
+# TRAILKEEP_PURGE, which may run only the purge's statements (R__grants.sql), so it neither migrates the schema (the
+# web pods' release does) nor lets Hibernate validate it (the purge user sees only the tables it purges).
 spring:
   main:
     web-application-type: none
+  # Nobody signs in to the purge: no OIDC client is registered, so its pod needs neither the client's secret nor a
+  # route to the identity provider.
+  autoconfigure:
+    exclude: org.springframework.boot.security.oauth2.client.autoconfigure.OAuth2ClientAutoConfiguration
+  flyway:
+    enabled: false
+  jpa:
+    hibernate:
+      ddl-auto: none
+  # Spring Modulith's hourly and daily "moments" events: nothing in the purge listens, and they were the one thing that
+  # started a scheduler here (the web jobs' @EnableScheduling lives in the servlet-only SessionConfig), so with them off
+  # no job of the web application can run under the purge credential.
+  modulith:
+    moments:
+      enabled: false

@@ -41,12 +41,12 @@ kube-linter lint deploy/
    | Secret | Mounted by | Keys (added by the work packages that need them) |
    |---|---|---|
    | `trailkeep-web` | web `Deployment`, importer `Job` | `spring.datasource.username`, `spring.datasource.password`, OIDC client secret, SMTP password, `app.audit.hmac-key` (Base64, ≥ 32 random bytes; the `prod` profile refuses to start without it) |
-   | `trailkeep-purge` | purge `CronJob` only | the `TRAILKEEP_PURGE` database credential |
+   | `trailkeep-purge` | purge `CronJob` only | `spring.datasource.username`, `spring.datasource.password`: the `TRAILKEEP_PURGE` credential. Nothing else: the purge registers no OIDC client and writes no audit row, so it needs neither the client secret nor `app.audit.hmac-key` |
    | `clamav-tls` | ClamAV `Deployment` (TLS sidecar) only | `tls.crt`, `tls.key`: the sidecar's server certificate, naming the host in `APP_ATTACHMENTS_CLAMD_HOST` (the `clamav` Service by default); for example a cert-manager `Certificate` with `secretName: clamav-tls` (ADR-0012) |
    | `clamav-ca` | web `Deployment`, importer `Job`, purge `CronJob` | `ca.crt` only: the CA that issued `clamav-tls`, loaded as the `clamd` SSL bundle; never the key |
 
 5. **Scanning mode.** See below; the default needs nothing.
-6. **Purge schedule.** Set `suspend: false` on `trailkeep-purge` once retention is enabled.
+6. **Purge schedule.** Set `suspend: false` on `trailkeep-purge` once retention is enabled. Each run tombstones the archived cases whose `PURGE_AFTER` has passed and that are not on legal hold (comments, attachments, search text, update and closure requests and their mail deleted; description and subject cleared; audit trail, alert ledger and legal hold history kept), deletes report runs older than `APP_RETENTION_REPORT_RUNS` (default 400 days) with the mail that names them, logs counts only and exits.
 
 ## Scanning mode
 
