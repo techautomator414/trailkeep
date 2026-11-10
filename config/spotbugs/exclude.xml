@@ -220,8 +220,8 @@
     without). The person is the signed-in principal and is never read from the request: the only input is the
     shortcuts checkbox, a presence flag, and the page's own redirect is the fixed path /preferences?saved. Saving
     writes the person's own USER_PREFERENCE row and audits PREFERENCES_CHANGED with the old and new value; a value the
-    person already has writes nothing. Covered by PreferencesControllerIT and ShortcutsAccessibilityIT. Needs
-    security-reviewer approval.
+    person already has writes nothing. Covered by PreferencesControllerIT and ShortcutsAccessibilityIT. Approved in
+    the security-reviewer role on #132.
     Approved in the security-reviewer role on #20. Listed by class, never by pattern alone, so each new controller
     is reviewed the same way.
   -->
