@@ -10,6 +10,7 @@ import io.trailkeep.casefile.CaseService.Actor;
 import io.trailkeep.security.CaseAction;
 import io.trailkeep.security.CasePermissionService;
 import io.trailkeep.shared.DomainException.Kind;
+import io.trailkeep.shared.config.AppProperties;
 import io.trailkeep.user.UserDirectoryService;
 import io.trailkeep.user.UserPermissions;
 import jakarta.persistence.EntityManager;
@@ -17,6 +18,8 @@ import jakarta.persistence.LockModeType;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.InstantSource;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -44,6 +47,7 @@ class DefaultLegalHoldService implements LegalHoldService {
     private final EntityManager entityManager;
     private final InstantSource clock;
     private final Duration grace;
+    private final ZoneId zone;
 
     DefaultLegalHoldService(
             CaseLoader loader,
@@ -52,7 +56,8 @@ class DefaultLegalHoldService implements LegalHoldService {
             AuditRecorder audit,
             EntityManager entityManager,
             InstantSource clock,
-            @Value("${app.retention.purge-grace:P30D}") Duration grace) {
+            @Value("${app.retention.purge-grace:P30D}") Duration grace,
+            AppProperties app) {
         this.loader = loader;
         this.permissions = permissions;
         this.directory = directory;
@@ -60,6 +65,7 @@ class DefaultLegalHoldService implements LegalHoldService {
         this.entityManager = entityManager;
         this.clock = clock;
         this.grace = grace;
+        this.zone = app.timezone();
     }
 
     /**
@@ -82,7 +88,7 @@ class DefaultLegalHoldService implements LegalHoldService {
         boolean sees = permissions.isAllowed(user, CaseLoader.facts(record), CaseAction.LEGAL_HOLD);
         return Optional.of(new LegalHold(
                 directory.displayName(heldBy).orElse(""),
-                Objects.requireNonNullElse(record.getLegalHoldAt(), Instant.EPOCH),
+                LocalDateTime.ofInstant(Objects.requireNonNullElse(record.getLegalHoldAt(), Instant.EPOCH), zone),
                 sees ? Objects.requireNonNullElse(record.getLegalHoldReason(), "") : ""));
     }
 
@@ -104,7 +110,7 @@ class DefaultLegalHoldService implements LegalHoldService {
                 .map(event -> new HoldChange(
                         event.getAction() == LegalHoldEvent.Action.PLACED,
                         names.getOrDefault(event.getChangedBy(), ""),
-                        event.getChangedAt(),
+                        LocalDateTime.ofInstant(event.getChangedAt(), zone),
                         event.getReason()))
                 .toList();
     }
