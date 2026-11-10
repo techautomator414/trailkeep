@@ -23,11 +23,16 @@ import io.trailkeep.user.TeamRole;
 import io.trailkeep.user.UserPermissions;
 import jakarta.persistence.EntityManager;
 import jakarta.servlet.http.Cookie;
+import java.sql.Timestamp;
+import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.TimeZone;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -137,6 +142,32 @@ class LegalHoldControllerIT {
                 .contains("<li class=\"mb-2\"><span>Lifted by Synthetic Hold User " + ADMIN + " on ")
                 .contains("</span>: <span class=\"tk-description\">Synthetic matter settled</span></li>")
                 .contains("<span>Placed by Synthetic Hold User " + ADMIN + " on ", REASON);
+    }
+
+    /** The times on the case page are in {@code app.timezone} (UTC here), whatever the JVM's own zone is. */
+    @Test
+    @WithAppUser(id = ADMIN, globalRole = GlobalRole.COMPLIANCE_ADMIN)
+    void holdTimesAreShownInTheApplicationZoneNotTheJvmZone() throws Exception {
+        TimeZone jvmZone = TimeZone.getDefault();
+        TimeZone.setDefault(TimeZone.getTimeZone("Pacific/Kiritimati"));
+        try {
+            mvc.perform(place(true, REASON).with(csrf())).andExpect(redirectedUrl("/cases/" + number));
+            flushAndClear();
+            Instant placedAt = Objects.requireNonNull(jdbc.queryForObject(
+                            "SELECT LEGAL_HOLD_AT FROM CASE_RECORD WHERE CASE_NUMBER = ?",
+                            Timestamp.class,
+                            number.toString()))
+                    .toInstant();
+            DateTimeFormatter minute = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
+            String inApplicationZone = minute.format(placedAt.atZone(ZoneOffset.UTC));
+            String inJvmZone = minute.format(placedAt.atZone(ZoneId.of("Pacific/Kiritimati")));
+            assertThat(inApplicationZone).isNotEqualTo(inJvmZone);
+            assertThat(page(get("/cases/" + number), status().isOk()))
+                    .contains("Synthetic Hold User " + ADMIN + " on " + inApplicationZone)
+                    .doesNotContain(inJvmZone);
+        } finally {
+            TimeZone.setDefault(jvmZone);
+        }
     }
 
     @Test

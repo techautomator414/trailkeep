@@ -344,6 +344,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- The legal hold's time and its history's times on the case page were rendered in the JVM's time zone instead of
+  `app.timezone` (the two `Instant`s of `LegalHoldService` went straight to `#temporals.format`). They are now
+  `LocalDateTime`s in `app.timezone`, like every other time on the page; a test sets a different JVM zone and checks the
+  page. No other `Instant` reaches a template as text (the `time` elements' `datetime` attribute is UTC on purpose).
 - The Alerts page and the navigation's unread badge no longer show an alert about a case the person can no longer read
   (the case became restricted to others, or the person left its team); an alert about no case stays, and the page and
   the badge count the same alerts (issue #101). `UserAlertService.alerts` and `unread` take the person's `CaseScope`,

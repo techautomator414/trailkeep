@@ -3,7 +3,7 @@
 package io.trailkeep.casefile;
 
 import io.trailkeep.casefile.CaseService.Actor;
-import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -27,20 +27,20 @@ public interface LegalHoldService {
      * A case's legal hold.
      *
      * @param heldBy who placed it
-     * @param heldAt when
+     * @param heldAt when, in {@code app.timezone}
      * @param reason why
      */
-    record LegalHold(String heldBy, Instant heldAt, String reason) {}
+    record LegalHold(String heldBy, LocalDateTime heldAt, String reason) {}
 
     /**
      * One hold placed or lifted, from {@code LEGAL_HOLD_EVENT} (V8).
      *
      * @param placed {@code true} if the hold was placed, {@code false} if it was lifted
      * @param by who
-     * @param at when
+     * @param at when, in {@code app.timezone}
      * @param reason why
      */
-    record HoldChange(boolean placed, String by, Instant at, String reason) {}
+    record HoldChange(boolean placed, String by, LocalDateTime at, String reason) {}
 
     /**
      * The case's holds placed and lifted, newest first, for someone who may place or lift holds; empty for anyone

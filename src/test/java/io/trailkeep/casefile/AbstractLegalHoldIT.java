@@ -22,6 +22,7 @@ import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.InstantSource;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -107,7 +108,7 @@ abstract class AbstractLegalHoldIT {
         assertThat(row.get("LEGAL_HOLD_REASON")).isEqualTo(REASON);
         LegalHold seen = holds.current(actor(admin), number).orElseThrow();
         assertThat(seen.reason()).isEqualTo(REASON);
-        assertThat(seen.heldAt()).isAfterOrEqualTo(before.minusMillis(1));
+        assertThat(seen.heldAt().toInstant(ZoneOffset.UTC)).isAfterOrEqualTo(before.minusMillis(1));
         assertThat(holds.current(actor(manager), number).orElseThrow().reason()).isEmpty();
         assertThat(retention.dueForArchive(clock.instant())).doesNotContain(caseId);
         assertThat(audits("LEGAL_HOLD_PLACED"))
