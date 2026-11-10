@@ -12,6 +12,17 @@ updates:
       default-days: 7
     commit-message:
       prefix: build
+    # Two deliberate pins, each explained next to its version in pom.xml and declined as a PR; without these rules
+    # Dependabot proposes the same bump again.
+    ignore:
+      # Upload type detection stays on tika-core 3.x: 4.x breaks MimeTypes.detect and pulls in commonmark extensions a
+      # magic-byte detector does not need (pom.xml `tika.version`; declined in #130).
+      - dependency-name: "org.apache.tika:tika-core"
+        versions: [">= 4"]
+      # Compile-only annotation jar kept at 4.3.1: later releases declare their licence as "(Apache-2.0 OR EPL-2.0)",
+      # which the third-party licence check cannot read (pom.xml, `biz.aQute.bnd.annotation`; declined in #131).
+      - dependency-name: "biz.aQute.bnd:biz.aQute.bnd.annotation"
+        versions: [">= 5"]
     groups:
       spring-boot:
         patterns:
