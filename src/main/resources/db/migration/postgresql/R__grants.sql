@@ -16,7 +16,7 @@
 --   TEAM                  S I U      -            teams are deactivated, never deleted
 --   APP_USER_TEAM         S I U D    -            membership and role changes
 --   APP_USER_GLOBAL_ROLE  S I   D    -            re-synced from identity-provider claims at login
---   AUDIT_EVENT           S I        -            append-only; audit outlives purge (V2)
+--   AUDIT_EVENT           S I        I            append-only; outlives purge, which audits each tombstone (V2)
 --   SLA_POLICY            S I U      -            edited, never deleted (V3)
 --   CASE_TYPE             S I U      -            deactivated, never deleted (V3)
 --   CASE_TYPE_OUTCOME     S I U D    -            configuration; an outcome list is replaced as a whole (V3)
@@ -37,14 +37,14 @@
 --   CLOSURE_REQUEST       S I U      S D          closure requests; decided; purged (V5)
 --   CASE_REOPEN           S I        S D          reopens; history, never changed; purged (V5.1)
 --   ALERT_LEDGER          S I        -            alert idempotency; never changed, outlives purge (V6)
---   JOB_RUN               S I U      -            each job's last success, cluster truth (V6)
+--   JOB_RUN               S I U      S I U        each job's last success, cluster truth; purge's too (V6)
 --   SHEDLOCK              S I U      -            ShedLock's lock rows; its JDBC provider never deletes (V6)
 --   REPORT_SCHEDULE       S I U      -            report schedules; disabled, never deleted (V7)
 --   REPORT_RUN            S I        S D          report runs; never changed; purged after report-runs (V7)
 --   LEGAL_HOLD_EVENT      S I        -            holds placed and lifted; history, kept by purge (V8)
 --   SEQ_APP_USER          USAGE      -
 --   SEQ_TEAM              USAGE      -
---   SEQ_AUDIT_EVENT       USAGE      -
+--   SEQ_AUDIT_EVENT       USAGE      USAGE        the purge's CASE_PURGED rows
 --   SEQ_SLA_POLICY        USAGE      -
 --   SEQ_CASE_TYPE         USAGE      -
 --   SEQ_CASE_RECORD       USAGE      -
@@ -115,6 +115,10 @@ GRANT SELECT, DELETE ON TABLE CASE_COMMENT_PIN, UPDATE_REQUEST, CASE_COMMENT, CA
   CASE_SEARCH, CASE_REOPEN, CLOSURE_REQUEST, REPORT_RUN TO ${purge_user};
 GRANT SELECT ON TABLE CASE_RECORD TO ${purge_user};
 GRANT UPDATE (DESCRIPTION, SUBJECT_TEXT, PURGED_AT, VERSION) ON TABLE CASE_RECORD TO ${purge_user};
+-- It audits each tombstone (CASE_PURGED, ids from SEQ_AUDIT_EVENT) and records its run in JOB_RUN.
+GRANT INSERT                         ON TABLE AUDIT_EVENT          TO ${purge_user};
+GRANT SELECT, INSERT, UPDATE         ON TABLE JOB_RUN              TO ${purge_user};
+GRANT USAGE ON SEQUENCE SEQ_AUDIT_EVENT TO ${purge_user};
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE USER_ALERT           TO ${app_user};
 GRANT SELECT, INSERT, UPDATE         ON TABLE UPDATE_REQUEST       TO ${app_user};
 GRANT SELECT, INSERT, UPDATE         ON TABLE CLOSURE_REQUEST      TO ${app_user};

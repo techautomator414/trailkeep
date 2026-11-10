@@ -17,7 +17,7 @@
 --   TEAM                  S I U      -            teams are deactivated, never deleted
 --   APP_USER_TEAM         S I U D    -            membership and role changes
 --   APP_USER_GLOBAL_ROLE  S I   D    -            re-synced from identity-provider claims at login
---   AUDIT_EVENT           S I        -            append-only; audit outlives purge (V2)
+--   AUDIT_EVENT           S I        I            append-only; outlives purge, which audits each tombstone (V2)
 --   CASE_RECORD           S I U      S (U)        never deleted; purge tombstones it: UPDATE of 4 columns (V4)
 --   CASE_SLA              S I U      -            job-owned side table (V4)
 --   CASE_SEARCH           S I U      S D          search text side table; purged (V4)
@@ -35,14 +35,14 @@
 --   CLOSURE_REQUEST       S I U      S D          closure requests; decided; purged (V5)
 --   CASE_REOPEN           S I        S D          reopens; history, never changed; purged (V5.1)
 --   ALERT_LEDGER          S I        -            alert idempotency; never changed, outlives purge (V6)
---   JOB_RUN               S I U      -            each job's last success, cluster truth (V6)
+--   JOB_RUN               S I U      S I U        each job's last success, cluster truth; purge's too (V6)
 --   SHEDLOCK              S I U      -            ShedLock's lock rows; its JDBC provider never deletes (V6)
 --   REPORT_SCHEDULE       S I U      -            report schedules; disabled, never deleted (V7)
 --   REPORT_RUN            S I        S D          report runs; never changed; purged after report-runs (V7)
 --   LEGAL_HOLD_EVENT      S I        -            holds placed and lifted; history, kept by purge (V8)
 --   SEQ_APP_USER          SELECT     -            Oracle's sequence privilege is SELECT (NEXTVAL)
 --   SEQ_TEAM              SELECT     -
---   SEQ_AUDIT_EVENT       SELECT     -
+--   SEQ_AUDIT_EVENT       SELECT     SELECT       the purge's CASE_PURGED rows
 --   SLA_POLICY            S I U      -            edited, never deleted (V3)
 --   CASE_TYPE             S I U      -            deactivated, never deleted (V3)
 --   CASE_TYPE_OUTCOME     S I U D    -            configuration; an outcome list is replaced as a whole (V3)
@@ -131,7 +131,10 @@ DECLARE
     UNION ALL SELECT 'CASE_REOPEN', 'SELECT,DELETE', UPPER('${purge_user}') FROM DUAL
     UNION ALL SELECT 'CLOSURE_REQUEST', 'SELECT,DELETE', UPPER('${purge_user}') FROM DUAL
     UNION ALL SELECT 'REPORT_RUN', 'SELECT,DELETE', UPPER('${purge_user}') FROM DUAL
-    UNION ALL SELECT 'CASE_RECORD', 'SELECT', UPPER('${purge_user}') FROM DUAL;
+    UNION ALL SELECT 'CASE_RECORD', 'SELECT', UPPER('${purge_user}') FROM DUAL
+    UNION ALL SELECT 'AUDIT_EVENT', 'INSERT', UPPER('${purge_user}') FROM DUAL
+    UNION ALL SELECT 'SEQ_AUDIT_EVENT', 'SELECT', UPPER('${purge_user}') FROM DUAL
+    UNION ALL SELECT 'JOB_RUN', 'SELECT,INSERT,UPDATE', UPPER('${purge_user}') FROM DUAL;
   keep PLS_INTEGER;
 BEGIN
   FOR w IN wanted LOOP

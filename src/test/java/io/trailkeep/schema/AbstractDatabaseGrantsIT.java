@@ -139,16 +139,18 @@ abstract class AbstractDatabaseGrantsIT {
             // A hold placed or lifted is history: written once, never changed or deleted, kept by purge (V8).
             Map.entry("LEGAL_HOLD_EVENT", EnumSet.of(Privilege.SELECT, Privilege.INSERT)));
 
-    /** The purge user (WP-24 part c): deletes purged case content and old runs, reads the rows it tombstones. */
+    /** The purge user (WP-24 part c): deletes purged content and old runs, audits each tombstone, records its run. */
     static final Map<String, Set<Privilege>> PURGE_USER_GRANTS = Stream.of(
                     ("NOTIFICATION_OUTBOX CASE_COMMENT_PIN UPDATE_REQUEST CASE_COMMENT CASE_ATTACHMENT_CHUNK"
-                                    + " CASE_ATTACHMENT CASE_SEARCH CASE_REOPEN CLOSURE_REQUEST REPORT_RUN CASE_RECORD")
+                                    + " CASE_ATTACHMENT CASE_SEARCH CASE_REOPEN CLOSURE_REQUEST REPORT_RUN CASE_RECORD"
+                                    + " AUDIT_EVENT JOB_RUN")
                             .split(" "))
-            .collect(Collectors.toUnmodifiableMap(
-                    Function.identity(),
-                    table -> "CASE_RECORD".equals(table)
-                            ? EnumSet.of(Privilege.SELECT)
-                            : EnumSet.of(Privilege.SELECT, Privilege.DELETE)));
+            .collect(Collectors.toUnmodifiableMap(Function.identity(), table -> switch (table) {
+                case "CASE_RECORD" -> EnumSet.of(Privilege.SELECT);
+                case "AUDIT_EVENT" -> EnumSet.of(Privilege.INSERT);
+                case "JOB_RUN" -> EnumSet.of(Privilege.SELECT, Privilege.INSERT, Privilege.UPDATE);
+                default -> EnumSet.of(Privilege.SELECT, Privilege.DELETE);
+            }));
 
     static final List<String> SEQUENCES = List.of(
             "SEQ_APP_USER",
@@ -260,11 +262,11 @@ abstract class AbstractDatabaseGrantsIT {
     }
 
     @Test
-    void thePurgeUserMayNotDrawFromTheIdentitySequences() throws SQLException {
+    void thePurgeUserMayDrawOnlyFromTheAuditSequence() throws SQLException {
         for (String sequence : SEQUENCES) {
             assertThat(run(purgeUser, nextValue(users.ownerSchema() + "." + sequence)))
                     .as(sequence)
-                    .isEqualTo(Outcome.DENIED);
+                    .isEqualTo("SEQ_AUDIT_EVENT".equals(sequence) ? Outcome.ALLOWED : Outcome.DENIED);
         }
     }
 

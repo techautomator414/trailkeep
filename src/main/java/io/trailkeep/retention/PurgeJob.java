@@ -4,6 +4,7 @@ package io.trailkeep.retention;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.time.InstantSource;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
@@ -16,8 +17,8 @@ import org.springframework.stereotype.Component;
  * The purge (BUILD_PLAN §4.6, WP-24 part c): tombstones every archived case whose {@code PURGE_AFTER} has passed and
  * that is not on legal hold, in id-ordered chunks of {@link #CHUNK} with one transaction each ({@link PurgeJdbcDao}),
  * then deletes the report runs older than {@code app.retention.report-runs} and the mail naming them. It runs once per
- * start of the {@code purge} profile ({@link PurgeRunner}), never in the web application. It logs counts only: no case
- * number, title or id.
+ * start of the {@code purge} profile ({@link PurgeRunner}), never in the web application, and records a fully
+ * successful run in {@code JOB_RUN}. It logs counts only: no case number, title or id.
  */
 @Component
 class PurgeJob {
@@ -25,13 +26,19 @@ class PurgeJob {
     /** Cases purged per transaction. */
     static final int CHUNK = 100;
 
+    /** The job's name: its {@code JOB_RUN} row. */
+    static final String JOB = "purge";
+
     private static final Logger LOG = LoggerFactory.getLogger(PurgeJob.class);
 
     private final PurgeJdbcDao purge;
+    private final InstantSource clock;
     private final Duration reportRuns;
 
-    PurgeJob(PurgeJdbcDao purge, @Value("${app.retention.report-runs:P400D}") Duration reportRuns) {
+    PurgeJob(
+            PurgeJdbcDao purge, InstantSource clock, @Value("${app.retention.report-runs:P400D}") Duration reportRuns) {
         this.purge = purge;
+        this.clock = clock;
         this.reportRuns = reportRuns;
     }
 
@@ -50,6 +57,7 @@ class PurgeJob {
                     .forEach((name, count) -> totals.merge(name, count, Integer::sum));
         }
         totals.put("reportRuns", purge.trimReportRuns(now.minus(reportRuns)));
+        purge.recordRun(clock.instant(), totals.getOrDefault("cases", 0));
         LOG.info("Purge: {}", totals);
         return totals;
     }
