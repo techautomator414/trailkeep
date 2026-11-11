@@ -33,7 +33,7 @@ public enum HistoryKind {
         return switch (this) {
             case ALL -> Set.of();
             case FIELDS -> Set.of("CASE_CREATED", "CASE_IMPORTED", "CASE_UPDATED", "CASE_REASSIGNED");
-            case COMMENTS -> Set.of("COMMENT_ADDED", "COMMENT_PINNED", "COMMENT_UNPINNED");
+            case COMMENTS -> Set.of("COMMENT_ADDED", "COMMENT_IMPORTED", "COMMENT_PINNED", "COMMENT_UNPINNED");
             case ATTACHMENTS -> Set.of("ATTACHMENT_ADDED", "ATTACHMENT_RELEASED");
             case STATE ->
                 Set.of(

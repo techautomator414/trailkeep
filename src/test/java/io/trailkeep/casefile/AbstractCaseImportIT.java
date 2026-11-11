@@ -7,6 +7,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.trailkeep.casefile.CaseImportService.ImportRun;
 import io.trailkeep.casefile.CaseImportService.ImportedCase;
+import io.trailkeep.casefile.CaseImportService.ImportedComment;
 import io.trailkeep.shared.CaseNumber;
 import io.trailkeep.shared.CaseStatus;
 import io.trailkeep.shared.DomainException.Kind;
@@ -197,6 +198,71 @@ abstract class AbstractCaseImportIT {
         assertThat(String.valueOf(event.get("NEW_VALUES_JSON")))
                 .contains("\"runId\":77", "\"approverId\":88", "LEG-2019-0042")
                 .doesNotContain("Synthetic legacy description", "Synthetic legacy subject");
+    }
+
+    @Test
+    void importedCommentKeepsLegacyTimeAndAuthor() {
+        CaseNumber number = imports.importCase(RUN, closed(analyst, caseType));
+        Instant written = Instant.parse("2019-04-02T10:15:00Z");
+
+        long unmatched = imports.importComment(
+                RUN, new ImportedComment(number, "Synthetic legacy note", null, "Synthetic Legacy Author", written));
+        final long matched = imports.importComment(
+                RUN, new ImportedComment(number, "Synthetic matched note", analyst, "Seed User " + analyst, written));
+
+        entityManager.flush();
+        Map<String, Object> row = jdbc.queryForMap(
+                "SELECT AUTHOR_ID, AUTHOR_NAME_SNAPSHOT, BODY FROM CASE_COMMENT WHERE ID = ?", unmatched);
+        assertThat(row)
+                .containsEntry("AUTHOR_ID", null)
+                .containsEntry("AUTHOR_NAME_SNAPSHOT", "Synthetic Legacy Author")
+                .containsEntry("BODY", "Synthetic legacy note");
+        assertThat(jdbc.queryForObject("SELECT CREATED_AT FROM CASE_COMMENT WHERE ID = ?", Timestamp.class, unmatched))
+                .isEqualTo(Timestamp.from(written));
+        assertThat(id(jdbc.queryForObject("SELECT AUTHOR_ID FROM CASE_COMMENT WHERE ID = ?", Long.class, matched)))
+                .isEqualTo(analyst);
+        assertThat(searchText(number)).contains("synthetic legacy note", "synthetic matched note");
+        assertThat(String.valueOf(jdbc.queryForObject(
+                        "SELECT NEW_VALUES_JSON FROM AUDIT_EVENT WHERE ENTITY_ID = ? AND ACTION = 'COMMENT_IMPORTED'"
+                                + " AND ORIGIN = 'IMPORT'",
+                        String.class,
+                        unmatched)))
+                .contains("\"runId\":77", "Synthetic Legacy Author")
+                .doesNotContain("Synthetic legacy note");
+    }
+
+    /** A description over 20 000 characters continues, escaped by the importer, in a first comment (§6.2). */
+    @Test
+    void descriptionOverflowContinuesInAnEscapedFirstComment() {
+        CaseNumber number = imports.importCase(RUN, open(analyst, null));
+        String escapedTail = "\\*the rest of a long description\\* 1\\. as typed";
+
+        long comment = imports.importComment(
+                RUN,
+                new ImportedComment(number, escapedTail, ImportPeopleService.IMPORTER_ID, "Trailkeep import", OPENED));
+
+        entityManager.flush();
+        assertThat(jdbc.queryForObject("SELECT BODY FROM CASE_COMMENT WHERE ID = ?", String.class, comment))
+                .isEqualTo(escapedTail);
+    }
+
+    @Test
+    void importedCommentsKeepTheCommentRules() {
+        CaseNumber number = imports.importCase(RUN, open(analyst, null));
+        CaseNumber unknown = new CaseNumber(number.prefix(), number.year(), 9_999_999L);
+
+        for (ImportedComment refused : new ImportedComment[] {
+            new ImportedComment(number, " ", null, "Synthetic Legacy Author", OPENED),
+            new ImportedComment(number, "x".repeat(CaseComment.MAX_BODY + 1), null, "Synthetic Legacy Author", OPENED),
+            new ImportedComment(number, "Synthetic note", null, " ", OPENED),
+            new ImportedComment(
+                    number, "Synthetic note", null, "Synthetic", Instant.now().plusSeconds(86_400))
+        }) {
+            assertThatThrownBy(() -> imports.importComment(RUN, refused)).satisfies(kind(Kind.INVALID));
+        }
+        assertThatThrownBy(() -> imports.importComment(
+                        RUN, new ImportedComment(unknown, "Synthetic note", null, "Synthetic", OPENED)))
+                .satisfies(kind(Kind.NOT_FOUND));
     }
 
     private ImportedCase open(long owner, @Nullable String ownerSnapshot) {

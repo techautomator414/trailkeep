@@ -57,6 +57,34 @@ public interface CaseImportService {
     record ImportRun(long runId, long approverId) {}
 
     /**
+     * One legacy comment (design §7.2), its body already formatted by the importer: plain and HTML text
+     * Markdown-escaped, Markdown as written. A description longer than 20 000 characters continues in the case's first
+     * imported comment, written at the case's opening time by the import principal, so its overflow arrives here
+     * escaped like any plain comment (§6.2).
+     *
+     * @param caseNumber the imported case
+     * @param body the comment, 1 to 20 000 characters
+     * @param authorId the matched author, or {@code null} for an unmatched one
+     * @param authorName the author's name as the legacy system recorded it, or the matched person's
+     * @param writtenAt when it was written in the legacy system
+     */
+    record ImportedComment(
+            CaseNumber caseNumber, String body, @Nullable Long authorId, String authorName, Instant writtenAt) {}
+
+    /**
+     * Adds an imported comment with its legacy time and author snapshot (R6 6, {@code
+     * importedCommentKeepsLegacyTimeAndAuthor}), appends it to the search text and audits it, in the caller's
+     * transaction. Nobody is notified: imported history is not news.
+     *
+     * @param run the run
+     * @param comment the comment
+     * @return the comment's id
+     * @throws CaseException {@code INVALID} for a blank or over-long body or a future time; {@code NOT_FOUND} for an
+     *     unknown case
+     */
+    long importComment(ImportRun run, ImportedComment comment);
+
+    /**
      * Creates the case with its SLA row and search text, and audits it, in the caller's transaction.
      *
      * @param run the run

@@ -11,6 +11,8 @@ import io.trailkeep.shared.CaseNumber;
 import io.trailkeep.shared.CaseStatus;
 import io.trailkeep.shared.DomainException.Kind;
 import io.trailkeep.shared.Sensitivity;
+import io.trailkeep.shared.access.CaseAccessPath;
+import io.trailkeep.shared.access.CaseScope;
 import io.trailkeep.shared.config.AppProperties;
 import io.trailkeep.user.ImportPeopleService;
 import io.trailkeep.user.TeamAdminService.TeamSummary;
@@ -28,7 +30,17 @@ import org.springframework.transaction.annotation.Transactional;
 /** {@link CaseImportService}: the case, its SLA row, its search row and its audit event, in one transaction. */
 @Service
 @Transactional
+@CaseAccessPath
 class DefaultCaseImportService implements CaseImportService {
+
+    /** The audit snapshot of an imported comment: the body redacted as for any comment, the run in the details. */
+    record ImportedCommentSnapshot(
+            @Redacted String body,
+            @Nullable Long authorId,
+            String authorName,
+            Instant writtenAt,
+            long runId,
+            long approverId) {}
 
     /**
      * The audit snapshot of an imported case: flat, with subject and description redacted as for any case, and the
@@ -52,6 +64,11 @@ class DefaultCaseImportService implements CaseImportService {
             long runId,
             long approverId) {}
 
+    /** {@code CASE_COMMENT.AUTHOR_NAME_SNAPSHOT}; the importer shortens longer legacy names with an issue. */
+    private static final int MAX_AUTHOR_NAME = 200;
+
+    private final CaseRecordRepository cases;
+    private final CaseSearchJdbcDao search;
     private final CaseTypeRepository caseTypes;
     private final SlaPolicyRepository policies;
     private final CaseNumberJdbcDao numbers;
@@ -65,6 +82,8 @@ class DefaultCaseImportService implements CaseImportService {
     private final String prefix;
 
     DefaultCaseImportService(
+            CaseRecordRepository cases,
+            CaseSearchJdbcDao search,
             CaseTypeRepository caseTypes,
             SlaPolicyRepository policies,
             CaseNumberJdbcDao numbers,
@@ -76,6 +95,8 @@ class DefaultCaseImportService implements CaseImportService {
             InstantSource clock,
             AppProperties app,
             CaseProperties properties) {
+        this.cases = cases;
+        this.search = search;
         this.caseTypes = caseTypes;
         this.policies = policies;
         this.numbers = numbers;
@@ -128,6 +149,49 @@ class DefaultCaseImportService implements CaseImportService {
                 "CASE_IMPORTED",
                 audit.diff(null, snapshot(run, imported))));
         return number;
+    }
+
+    @Override
+    public long importComment(ImportRun run, ImportedComment comment) {
+        Instant now = clock.instant();
+        String body = comment.body().replace("\r\n", "\n");
+        if (body.isBlank()
+                || body.length() > CaseComment.MAX_BODY
+                || comment.authorName().isBlank()
+                || comment.authorName().length() > MAX_AUTHOR_NAME
+                || comment.writtenAt().isAfter(now)) {
+            throw invalid("a comment is 1 to 20000 characters, has an author name and was written in the past");
+        }
+        CaseRecord record = cases.findOne(CaseScope.system(), comment.caseNumber())
+                .orElseThrow(() -> new CaseException(Kind.NOT_FOUND, "case not found"));
+        long caseId = Objects.requireNonNull(record.getId(), "persisted");
+        CaseComment imported =
+                CaseComment.of(caseId, body, comment.authorId(), comment.authorName(), comment.writtenAt());
+        entityManager.persist(imported);
+        entityManager.flush();
+        if (!search.append(caseId, "\n" + body, now)) {
+            throw new IllegalStateException("an imported case has its search row from its import");
+        }
+        long commentId = Objects.requireNonNull(imported.getId(), "persisted");
+        long principal = people.principals().importer();
+        audit.record(new AuditEntry(
+                principal,
+                directory.displayName(principal).orElse("Trailkeep import"),
+                AuditOrigin.IMPORT,
+                caseId,
+                "COMMENT",
+                commentId,
+                "COMMENT_IMPORTED",
+                audit.diff(
+                        null,
+                        new ImportedCommentSnapshot(
+                                body,
+                                comment.authorId(),
+                                comment.authorName(),
+                                comment.writtenAt(),
+                                run.runId(),
+                                run.approverId()))));
+        return commentId;
     }
 
     /** Only {@code OPEN} or {@code CLOSED}, with dates in order and none in the future; true for {@code CLOSED}. */
