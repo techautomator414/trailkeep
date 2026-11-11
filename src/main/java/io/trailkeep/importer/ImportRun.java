@@ -197,6 +197,18 @@ class ImportRun {
         this.updatedAt = at;
     }
 
+    /**
+     * Records a mapping file that failed {@code validate-mapping}: whatever passed before no longer stands, so the run
+     * is back to {@code REQUESTED} with no mapping hash.
+     *
+     * @param at when
+     */
+    void mappingRejected(Instant at) {
+        this.status = Status.REQUESTED;
+        this.mappingHash = null;
+        this.updatedAt = at;
+    }
+
     @Override
     public boolean equals(@Nullable Object other) {
         return this == other || (other instanceof ImportRun that && id != null && id.equals(that.id));

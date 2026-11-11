@@ -137,20 +137,26 @@ abstract class AbstractImporterProfileIT {
     }
 
     /**
-     * {@code validate-mapping} as the import user (WP-26 part b): a mapping with a problem records it as a FATAL issue
-     * and fails the Job; the corrected mapping replaces that issue and moves the run to {@code VALIDATED} with the
-     * file's SHA-256, proving the import user's grants on both tables.
+     * {@code validate-mapping} as the import user (WP-26 part b): a sound mapping validates the run with the file's
+     * SHA-256; a broken one records a FATAL issue, fails the Job and puts the run back to {@code REQUESTED} with no
+     * hash; the corrected file replaces the issue and validates the run again. This proves the import user's grants on
+     * both tables.
      */
     @Test
-    void validateMappingRecordsProblemsAsIssuesAndASoundMappingValidatesTheRun(@TempDir Path directory)
+    void validateMappingValidatesASoundMappingAndRevokesThatWhenTheFileBreaks(@TempDir Path directory)
             throws Exception {
         long run = runs.save(new ImportRun(ImportRun.Kind.IMPORT, "legacy1", new CaseSeed(jdbc).user(), NOW))
                 .getId();
         String example =
                 new ClassPathResource("importer/example-mapping.yaml").getContentAsString(StandardCharsets.UTF_8);
         Path mapping = directory.resolve("mapping.yaml");
-        Files.writeString(mapping, example.replace("FROM dbo.notes", "FROM ${import.source.schema}.notes"));
+        String hash = HexFormat.of()
+                .formatHex(MessageDigest.getInstance("SHA-256").digest(example.getBytes(StandardCharsets.UTF_8)));
+        Files.writeString(mapping, example);
+        validateMapping(run, mapping).close();
+        assertThat(statusAndHash(run)).containsExactly("VALIDATED", hash);
 
+        Files.writeString(mapping, example.replace("FROM dbo.notes", "FROM ${import.source.schema}.notes"));
         assertThatThrownBy(() -> validateMapping(run, mapping))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessage("The mapping has 1 problems; run " + run + " lists them as issues");
@@ -158,24 +164,21 @@ abstract class AbstractImporterProfileIT {
                         "SELECT SEVERITY, CODE FROM IMPORT_ISSUE WHERE RUN_ID = ? AND STAGE = 'VALIDATE'", run))
                 .singleElement()
                 .satisfies(row -> assertThat(row.values()).containsExactly("FATAL", "PLACEHOLDER_NOT_ALLOWED"));
-        assertThat(jdbc.queryForObject("SELECT STATUS FROM IMPORT_RUN WHERE ID = ?", String.class, run))
-                .isEqualTo("REQUESTED");
+        assertThat(statusAndHash(run)).as("the earlier pass no longer stands").containsExactly("REQUESTED", null);
 
         Files.writeString(mapping, example);
         validateMapping(run, mapping).close();
-
         assertThat(jdbc.queryForObject(
                         "SELECT COUNT(*) FROM IMPORT_ISSUE WHERE RUN_ID = ? AND STAGE = 'VALIDATE'",
                         Integer.class,
                         run))
                 .isZero();
-        assertThat(jdbc.queryForMap("SELECT STATUS, MAPPING_HASH FROM IMPORT_RUN WHERE ID = ?", run)
-                        .values())
-                .containsExactly(
-                        "VALIDATED",
-                        HexFormat.of()
-                                .formatHex(MessageDigest.getInstance("SHA-256")
-                                        .digest(example.getBytes(StandardCharsets.UTF_8))));
+        assertThat(statusAndHash(run)).containsExactly("VALIDATED", hash);
+    }
+
+    private List<@Nullable Object> statusAndHash(long run) {
+        return new ArrayList<>(jdbc.queryForMap("SELECT STATUS, MAPPING_HASH FROM IMPORT_RUN WHERE ID = ?", run)
+                .values());
     }
 
     private ConfigurableApplicationContext validateMapping(long run, Path mapping) throws SQLException {
