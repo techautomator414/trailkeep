@@ -8,7 +8,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 import io.trailkeep.testsupport.PostgresTestcontainersConfiguration;
 import io.trailkeep.testsupport.RequiresDocker;
 import java.net.http.HttpResponse;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Objects;
+import java.util.Set;
+import java.util.TreeSet;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -94,6 +100,45 @@ class ManagementEndpointsIT {
 
         assertThat(response.statusCode()).isEqualTo(200);
         assertThat(response.body()).contains("jvm_memory_used_bytes");
+    }
+
+    /**
+     * The alerting rules in {@code deploy/components/prometheus-rules} (WP-25) name only metrics the application or
+     * its HikariCP pool serves, so a renamed gauge cannot leave a rule silently matching nothing; and every alert
+     * carries a severity, a summary and a runbook link into {@code deploy/README.md}.
+     */
+    @Test
+    void everyMetricTheAlertingRulesNameIsServedAndEveryAlertHasARunbook() throws Exception {
+        String rules = Files.readString(Path.of("deploy/components/prometheus-rules/prometheus-rules.yaml"));
+        String scrape = get(managementPort, "/actuator/prometheus").body();
+        Set<String> names = new TreeSet<>();
+        Matcher metric = Pattern.compile("\\b(?:trailkeep|hikaricp)_[a-z_]+").matcher(rules);
+        while (metric.find()) {
+            names.add(metric.group());
+        }
+        assertThat(names).hasSizeGreaterThanOrEqualTo(7).contains("hikaricp_connections_pending");
+        assertThat(names).allSatisfy(name -> assertThat(scrape).as(name).containsPattern("(?m)^" + name + "[{ ]"));
+
+        int alerts = rules.split("- alert: ", -1).length - 1;
+        assertThat(alerts).isGreaterThanOrEqualTo(8);
+        assertThat(rules.split("severity: ", -1).length - 1).isEqualTo(alerts);
+        assertThat(rules.split("summary: ", -1).length - 1).isEqualTo(alerts);
+        Matcher runbook = Pattern.compile("runbook_url: \"[^\"]*/deploy/README\\.md#([a-z-]+)\"")
+                .matcher(rules);
+        String readme = Files.readString(Path.of("deploy/README.md"));
+        int links = 0;
+        while (runbook.find()) {
+            links++;
+            String anchor = runbook.group(1);
+            assertThat(readme.lines()
+                            .map(line -> line.toLowerCase(java.util.Locale.ROOT)
+                                    .replaceAll("[^a-z0-9 -]", "")
+                                    .strip()
+                                    .replace(' ', '-')))
+                    .as("deploy/README.md heading for #" + anchor)
+                    .contains(anchor);
+        }
+        assertThat(links).isEqualTo(alerts);
     }
 
     @ParameterizedTest

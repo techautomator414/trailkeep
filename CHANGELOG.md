@@ -10,6 +10,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Added
 
 - Import runs and the import user (WP-26 part a, docs/design/importer.md §2.1, §3, §5). `V10__import_runs`: `IMPORT_RUN` (kind `IMPORT` or `RELINK`, source id, status, requester and approver, acknowledged warning classes, mapping hash, source fingerprint, the scanning mode recorded at the dry run, row counts, staging expiry), `IMPORT_ISSUE` (stage, entity, severity, code, a number and the keyed hash of the canonical key, never a value) and `IMPORT_RUN_SUMMARY` (metric, dimension, number), with their entities. A fourth database user, `TRAILKEEP_IMPORT` (`app.db.import-user`, `APP_DB_IMPORT_USER`; it must exist, and stays locked where nothing is imported), is the grantee of the importer's writes: S I D on issues and summaries, S I on runs with UPDATE of the status, hash, mode, count and expiry columns only, and SELECT alone on every other table and sequence an entity maps, so Hibernate `validate` sees the whole model. The runtime user may request a run and UPDATE only its sign-off columns, and reads issues and summaries. The `importer` profile (`prod,importer`) starts no web server and no scheduler, registers no OIDC client, does not migrate, validates as the import user, runs the one `--import.command` it is given and exits; `status --import.run=<id>` logs the run's kind, status, sign-off, scanning mode, counts, issues per severity and whether its staging has expired. Only that profile maps the staging entities (`io.trailkeep.importer.staging`, from 26j); the web application filters them out. Local databases created before this need `docker compose down -v` once, for the new `trailkeep_import` role.
+- Operational alerts (WP-25 part c): `deploy/components/prometheus-rules/`, an optional Kustomize component with a
+  `PrometheusRule` (Prometheus Operator): each scheduled job late past its health indicator's grace (SLA evaluator,
+  reminders, report delivery, archive; the minimum age across replicas, since all read `JOB_RUN`), mail not being
+  sent (only retries for 15 minutes), a mail backlog over 500 for 30 minutes, mail failed for good, and the database
+  pool exhausted (requests waiting for a HikariCP connection for 5 minutes). Every alert has
+  a severity, a summary and a `runbook_url` into the new "Alerts" section of `deploy/README.md`.
+  `ManagementEndpointsIT` checks that every metric a rule names is served on `/actuator/prometheus` and that every
+  alert has its annotations and a matching README heading.
+
 - Preferences and single-key shortcuts (WP-27 part a, BUILD_PLAN §3.1, §10.1). `V9__user_preference`: one
   `USER_PREFERENCE` row per person, created when they first save `/preferences` (a person with no row has the
   defaults), with the shortcuts switch on by default. The page is linked as "Preferences" in the navigation; saving
