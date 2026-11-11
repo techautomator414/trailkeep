@@ -1,6 +1,20 @@
 # SPDX-License-Identifier: Apache-2.0
 # Copyright 2026 Charlie Genova and contributors
-# Batch profile, combined with prod (SPRING_PROFILES_ACTIVE=prod,importer). No web server, no web schedulers.
+# Batch profile, combined with prod (SPRING_PROFILES_ACTIVE=prod,importer). No web server, no web schedulers: the
+# importer Job (WP-26, io.trailkeep.importer.ImportCommandRunner) runs the one --import.command it was given and the
+# process ends. It connects as TRAILKEEP_IMPORT (docs/design/importer.md §5), which cannot change the schema, so it
+# does not migrate (the web pods' release does). Hibernate still validates: the import user may read every mapped
+# table, and this profile alone maps the staging entities (io.trailkeep.importer.StagingEntityFilter).
 spring:
   main:
     web-application-type: none
+  # Nobody signs in to the importer: run requests and sign-offs are made on the authenticated Import runs screen, so
+  # the Job registers no OIDC client and needs neither its secret nor a route to the identity provider.
+  autoconfigure:
+    exclude: org.springframework.boot.security.oauth2.client.autoconfigure.OAuth2ClientAutoConfiguration
+  flyway:
+    enabled: false
+  # As for the purge profile: the "moments" events would start a scheduler, and no web job may run as the import user.
+  modulith:
+    moments:
+      enabled: false

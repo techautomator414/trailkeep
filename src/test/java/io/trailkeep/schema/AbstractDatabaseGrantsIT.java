@@ -2,21 +2,25 @@
 // Copyright 2026 Charlie Genova and contributors
 package io.trailkeep.schema;
 
+import static io.trailkeep.schema.GrantsMatrix.APP_USER_GRANTS;
+import static io.trailkeep.schema.GrantsMatrix.IMPORTER_SEQUENCES;
+import static io.trailkeep.schema.GrantsMatrix.IMPORT_USER_GRANTS;
+import static io.trailkeep.schema.GrantsMatrix.PURGE_USER_GRANTS;
+import static io.trailkeep.schema.GrantsMatrix.SEQUENCES;
+import static io.trailkeep.schema.GrantsMatrix.TABLES;
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.trailkeep.schema.GrantsMatrix.Privilege;
 import io.trailkeep.testsupport.RequiresDocker;
 import io.trailkeep.testsupport.TestDatabaseUsers;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
-import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Test;
@@ -27,14 +31,12 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
 
 /**
- * Proves the vendor {@code R__grants.sql} matrix by logging in as the runtime user and the purge user (created by
- * the test-only {@link TestDatabaseUsers}) and executing one statement per table, privilege and user. A denied
- * statement must fail with the vendor's privilege error; an allowed one must get past the privilege check. Every
- * probe is a no-op on data: {@code WHERE 1 = 0}, or an INSERT of NULL into a NOT NULL key column, which only a
- * granted user can reach (the privilege check precedes the constraint check on both vendors).
- *
- * <p>The matrix below is the specification; when a migration adds a table, add its row here and in both vendor
- * grant files.
+ * Proves the vendor {@code R__grants.sql} matrix ({@link GrantsMatrix}) by logging in as the runtime user, the purge
+ * user and the import user (created by the test-only {@link TestDatabaseUsers}) and executing one statement per
+ * table, privilege and user. A denied statement must fail with the vendor's privilege error; an allowed one must get
+ * past the privilege check. Every probe is a no-op on data: {@code WHERE 1 = 0}, or an INSERT of NULL into a NOT
+ * NULL key column, which only a granted user can reach (the privilege check precedes the constraint check on both
+ * vendors).
  */
 // "IT" is the Failsafe suffix Part B mandates for integration tests, not an abbreviation.
 @SuppressWarnings("checkstyle:AbbreviationAsWordInName")
@@ -42,133 +44,11 @@ import org.springframework.boot.test.context.SpringBootTest;
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE)
 abstract class AbstractDatabaseGrantsIT {
 
-    /** The DML privileges the matrix covers. */
-    enum Privilege {
-        SELECT,
-        INSERT,
-        UPDATE,
-        DELETE
-    }
-
     /** The outcome of one probe. */
     enum Outcome {
         ALLOWED,
         DENIED
     }
-
-    /** The tables of V1 to V9 and the column each probe touches: the first key column. */
-    static final Map<String, String> TABLES = Map.ofEntries(
-            Map.entry("APP_USER", "ID"),
-            Map.entry("TEAM", "ID"),
-            Map.entry("APP_USER_TEAM", "USER_ID"),
-            Map.entry("APP_USER_GLOBAL_ROLE", "USER_ID"),
-            Map.entry("AUDIT_EVENT", "ID"),
-            Map.entry("SLA_POLICY", "ID"),
-            Map.entry("CASE_TYPE", "ID"),
-            Map.entry("CASE_TYPE_OUTCOME", "CASE_TYPE_ID"),
-            Map.entry("CASE_RECORD", "ID"),
-            Map.entry("CASE_SLA", "CASE_ID"),
-            Map.entry("CASE_SEARCH", "CASE_ID"),
-            Map.entry("CASE_COMMENT", "ID"),
-            Map.entry("CASE_COMMENT_PIN", "COMMENT_ID"),
-            Map.entry("CASE_ATTACHMENT", "ID"),
-            Map.entry("CASE_ATTACHMENT_CHUNK", "ATTACHMENT_ID"),
-            Map.entry("SPRING_SESSION", "PRIMARY_ID"),
-            Map.entry("SPRING_SESSION_ATTRIBUTES", "SESSION_PRIMARY_ID"),
-            Map.entry("OIDC_SESSION", "SESSION_ID"),
-            Map.entry("SAVED_VIEW", "ID"),
-            Map.entry("NOTIFICATION_OUTBOX", "ID"),
-            Map.entry("USER_ALERT", "ID"),
-            Map.entry("UPDATE_REQUEST", "ID"),
-            Map.entry("CLOSURE_REQUEST", "ID"),
-            Map.entry("CASE_REOPEN", "ID"),
-            Map.entry("ALERT_LEDGER", "ID"),
-            Map.entry("JOB_RUN", "JOB_NAME"),
-            Map.entry("SHEDLOCK", "NAME"),
-            Map.entry("REPORT_SCHEDULE", "ID"),
-            Map.entry("REPORT_RUN", "ID"),
-            Map.entry("USER_PREFERENCE", "USER_ID"));
-
-    /** What the runtime user may do; anything absent is denied. */
-    static final Map<String, Set<Privilege>> APP_USER_GRANTS = Map.ofEntries(
-            Map.entry("APP_USER", EnumSet.of(Privilege.SELECT, Privilege.INSERT, Privilege.UPDATE)),
-            Map.entry("TEAM", EnumSet.of(Privilege.SELECT, Privilege.INSERT, Privilege.UPDATE)),
-            Map.entry("APP_USER_TEAM", EnumSet.allOf(Privilege.class)),
-            Map.entry("APP_USER_GLOBAL_ROLE", EnumSet.of(Privilege.SELECT, Privilege.INSERT, Privilege.DELETE)),
-            Map.entry("AUDIT_EVENT", EnumSet.of(Privilege.SELECT, Privilege.INSERT)),
-            Map.entry("SLA_POLICY", EnumSet.of(Privilege.SELECT, Privilege.INSERT, Privilege.UPDATE)),
-            Map.entry("CASE_TYPE", EnumSet.of(Privilege.SELECT, Privilege.INSERT, Privilege.UPDATE)),
-            Map.entry("CASE_TYPE_OUTCOME", EnumSet.allOf(Privilege.class)),
-            Map.entry("CASE_RECORD", EnumSet.of(Privilege.SELECT, Privilege.INSERT, Privilege.UPDATE)),
-            Map.entry("CASE_SLA", EnumSet.of(Privilege.SELECT, Privilege.INSERT, Privilege.UPDATE)),
-            Map.entry("CASE_SEARCH", EnumSet.of(Privilege.SELECT, Privilege.INSERT, Privilege.UPDATE)),
-            Map.entry("CASE_COMMENT", EnumSet.of(Privilege.SELECT, Privilege.INSERT)),
-            Map.entry("CASE_COMMENT_PIN", EnumSet.of(Privilege.SELECT, Privilege.INSERT, Privilege.DELETE)),
-            // UPDATE of the release columns only; see theRuntimeUserMayChangeAnAttachmentOnlyByReleasingIt.
-            Map.entry("CASE_ATTACHMENT", EnumSet.of(Privilege.SELECT, Privilege.INSERT)),
-            Map.entry("CASE_ATTACHMENT_CHUNK", EnumSet.of(Privilege.SELECT, Privilege.INSERT)),
-            Map.entry("SPRING_SESSION", EnumSet.allOf(Privilege.class)),
-            Map.entry("SPRING_SESSION_ATTRIBUTES", EnumSet.allOf(Privilege.class)),
-            Map.entry("OIDC_SESSION", EnumSet.allOf(Privilege.class)),
-            // A person deletes their own views; a view is never changed, so no UPDATE.
-            Map.entry("SAVED_VIEW", EnumSet.of(Privilege.SELECT, Privilege.INSERT, Privilege.DELETE)),
-            // Mail is sent and its status changed, never deleted by the app: trimming sent rows is the purge user's.
-            Map.entry("NOTIFICATION_OUTBOX", EnumSet.of(Privilege.SELECT, Privilege.INSERT, Privilege.UPDATE)),
-            // A person marks their alerts read and deletes them (BUILD_PLAN §8 rule 7 allows DELETE here).
-            Map.entry("USER_ALERT", EnumSet.allOf(Privilege.class)),
-            // A request is answered, never deleted: it is case history.
-            Map.entry("UPDATE_REQUEST", EnumSet.of(Privilege.SELECT, Privilege.INSERT, Privilege.UPDATE)),
-            // A closure request is decided, never deleted: it is case history.
-            Map.entry("CLOSURE_REQUEST", EnumSet.of(Privilege.SELECT, Privilege.INSERT, Privilege.UPDATE)),
-            // A reopen is history: written once, never changed or deleted by the app.
-            Map.entry("CASE_REOPEN", EnumSet.of(Privilege.SELECT, Privilege.INSERT)),
-            // An alert once raised is history: never changed or deleted by the app (BUILD_PLAN §8 rule 7).
-            Map.entry("ALERT_LEDGER", EnumSet.of(Privilege.SELECT, Privilege.INSERT)),
-            // Each job's last success, replaced on every successful run.
-            Map.entry("JOB_RUN", EnumSet.of(Privilege.SELECT, Privilege.INSERT, Privilege.UPDATE)),
-            // ShedLock's JDBC provider inserts and updates its lock rows and never deletes one, so no DELETE.
-            Map.entry("SHEDLOCK", EnumSet.of(Privilege.SELECT, Privilege.INSERT, Privilege.UPDATE)),
-            // A schedule is edited and disabled, never deleted.
-            Map.entry("REPORT_SCHEDULE", EnumSet.of(Privilege.SELECT, Privilege.INSERT, Privilege.UPDATE)),
-            // A run is what was sent: written once, never changed or deleted by the app.
-            Map.entry("REPORT_RUN", EnumSet.of(Privilege.SELECT, Privilege.INSERT)),
-            // A hold placed or lifted is history: written once, never changed or deleted, kept by purge (V8).
-            Map.entry("LEGAL_HOLD_EVENT", EnumSet.of(Privilege.SELECT, Privilege.INSERT)),
-            Map.entry("USER_PREFERENCE", EnumSet.of(Privilege.SELECT, Privilege.INSERT, Privilege.UPDATE)));
-
-    /** The purge user (WP-24 part c): deletes purged content and old runs, audits each tombstone, records its run. */
-    static final Map<String, Set<Privilege>> PURGE_USER_GRANTS = Stream.of(
-                    ("NOTIFICATION_OUTBOX CASE_COMMENT_PIN UPDATE_REQUEST CASE_COMMENT CASE_ATTACHMENT_CHUNK"
-                                    + " CASE_ATTACHMENT CASE_SEARCH CASE_REOPEN CLOSURE_REQUEST REPORT_RUN CASE_RECORD"
-                                    + " AUDIT_EVENT JOB_RUN")
-                            .split(" "))
-            .collect(Collectors.toUnmodifiableMap(Function.identity(), table -> switch (table) {
-                case "CASE_RECORD" -> EnumSet.of(Privilege.SELECT);
-                case "AUDIT_EVENT" -> EnumSet.of(Privilege.INSERT);
-                case "JOB_RUN" -> EnumSet.of(Privilege.SELECT, Privilege.INSERT, Privilege.UPDATE);
-                default -> EnumSet.of(Privilege.SELECT, Privilege.DELETE);
-            }));
-
-    static final List<String> SEQUENCES = List.of(
-            "SEQ_APP_USER",
-            "SEQ_TEAM",
-            "SEQ_AUDIT_EVENT",
-            "SEQ_SLA_POLICY",
-            "SEQ_CASE_TYPE",
-            "SEQ_CASE_RECORD",
-            "SEQ_CASE_NUMBER",
-            "SEQ_CASE_COMMENT",
-            "SEQ_CASE_ATTACHMENT",
-            "SEQ_SAVED_VIEW",
-            "SEQ_NOTIFICATION_OUTBOX",
-            "SEQ_USER_ALERT",
-            "SEQ_UPDATE_REQUEST",
-            "SEQ_CLOSURE_REQUEST",
-            "SEQ_CASE_REOPEN",
-            "SEQ_ALERT_LEDGER",
-            "SEQ_REPORT_SCHEDULE",
-            "SEQ_REPORT_RUN",
-            "SEQ_LEGAL_HOLD_EVENT");
 
     /**
      * One open connection per grantee for the whole class. Opening a connection per probe (about 100 in a burst, each
@@ -186,6 +66,9 @@ abstract class AbstractDatabaseGrantsIT {
     @Value("${app.db.purge-user}")
     private String purgeUser = "";
 
+    @Value("${app.db.import-user}")
+    private String importUser = "";
+
     /** One probe: who, which table, which privilege, and what the matrix says. */
     record Probe(String grantee, String table, Privilege privilege, Outcome expected) {
         @Override
@@ -200,6 +83,7 @@ abstract class AbstractDatabaseGrantsIT {
             for (Privilege privilege : Privilege.values()) {
                 probes.add(probe("app", table, privilege, APP_USER_GRANTS));
                 probes.add(probe("purge", table, privilege, PURGE_USER_GRANTS));
+                probes.add(probe("import", table, privilege, IMPORT_USER_GRANTS));
             }
         }
         return probes.stream();
@@ -234,6 +118,14 @@ abstract class AbstractDatabaseGrantsIT {
      */
     abstract String nextValue(String qualifiedSequence);
 
+    /**
+     * Whether the privilege that lets Hibernate validate see a sequence also draws from it: Oracle's only sequence
+     * privilege, SELECT, is NEXTVAL; PostgreSQL's SELECT is not (USAGE is).
+     *
+     * @return true on Oracle
+     */
+    abstract boolean seeingASequenceDrawsFromIt();
+
     @ParameterizedTest(name = "{0}")
     @MethodSource("matrix")
     void eachTablePrivilegeIsGrantedExactlyAsTheMatrixSays(Probe probe) throws SQLException {
@@ -250,20 +142,72 @@ abstract class AbstractDatabaseGrantsIT {
     }
 
     @Test
-    void theRuntimeUserMayDrawFromTheIdentitySequences() throws SQLException {
+    void theRuntimeUserMayDrawFromTheIdentitySequencesAndOnlySeeTheImporterOnes() throws SQLException {
         for (String sequence : SEQUENCES) {
-            assertThat(run(appUser, nextValue(users.ownerSchema() + "." + sequence)))
-                    .as(sequence)
-                    .isEqualTo(Outcome.ALLOWED);
+            assertThat(draw(appUser, sequence)).as(sequence).isEqualTo(Outcome.ALLOWED);
+        }
+        for (String sequence : IMPORTER_SEQUENCES) {
+            assertThat(draw(appUser, sequence)).as(sequence).isEqualTo(drawnBySeeing());
         }
     }
 
     @Test
     void thePurgeUserMayDrawOnlyFromTheAuditSequence() throws SQLException {
-        for (String sequence : SEQUENCES) {
-            assertThat(run(purgeUser, nextValue(users.ownerSchema() + "." + sequence)))
+        for (String sequence :
+                Stream.concat(SEQUENCES.stream(), IMPORTER_SEQUENCES.stream()).toList()) {
+            assertThat(draw(purgeUser, sequence))
                     .as(sequence)
                     .isEqualTo("SEQ_AUDIT_EVENT".equals(sequence) ? Outcome.ALLOWED : Outcome.DENIED);
+        }
+    }
+
+    /**
+     * The import user draws from the importer's sequences and may see every other one an entity maps, for validate;
+     * the case number sequence, which no entity maps, it cannot even see.
+     */
+    @Test
+    void theImportUserMayDrawFromTheImporterSequencesAndOnlySeeTheOthers() throws SQLException {
+        for (String sequence :
+                Stream.concat(SEQUENCES.stream(), IMPORTER_SEQUENCES.stream()).toList()) {
+            Outcome expected = sequence.startsWith("SEQ_IMPORT_")
+                    ? Outcome.ALLOWED
+                    : "SEQ_CASE_NUMBER".equals(sequence) ? Outcome.DENIED : drawnBySeeing();
+            assertThat(draw(importUser, sequence)).as(sequence).isEqualTo(expected);
+        }
+    }
+
+    /**
+     * An import run has two writers, each confined to its own columns: the Import runs screen signs it off, the
+     * importer Job moves it on. Neither can write the other's columns or the run's identity.
+     */
+    @Test
+    void anImportRunIsSignedOffOnlyByTheRuntimeUserAndMovedOnOnlyByTheImportUser() throws SQLException {
+        String runs = users.ownerSchema() + ".IMPORT_RUN";
+        List<String> signOff = List.of("APPROVED_BY", "APPROVED_AT", "ACKNOWLEDGED_WARNINGS");
+        List<String> progress = List.of(
+                "STATUS",
+                "MAPPING_HASH",
+                "SOURCE_FINGERPRINT",
+                "SCAN_MODE",
+                "ROWS_STAGED",
+                "ROWS_LOADED",
+                "STAGING_EXPIRES_AT",
+                "STAGING_PURGED_AT");
+        for (String column : signOff) {
+            assertThat(update(appUser, runs, column)).as("app " + column).isEqualTo(Outcome.ALLOWED);
+            assertThat(update(importUser, runs, column)).as("import " + column).isEqualTo(Outcome.DENIED);
+        }
+        for (String column : progress) {
+            assertThat(update(appUser, runs, column)).as("app " + column).isEqualTo(Outcome.DENIED);
+            assertThat(update(importUser, runs, column)).as("import " + column).isEqualTo(Outcome.ALLOWED);
+        }
+        for (String column : List.of("UPDATED_AT", "VERSION")) {
+            assertThat(update(appUser, runs, column)).as("app " + column).isEqualTo(Outcome.ALLOWED);
+            assertThat(update(importUser, runs, column)).as("import " + column).isEqualTo(Outcome.ALLOWED);
+        }
+        for (String column : List.of("KIND", "SOURCE_ID", "REQUESTED_BY", "REQUESTED_AT")) {
+            assertThat(update(appUser, runs, column)).as("app " + column).isEqualTo(Outcome.DENIED);
+            assertThat(update(importUser, runs, column)).as("import " + column).isEqualTo(Outcome.DENIED);
         }
     }
 
@@ -273,16 +217,18 @@ abstract class AbstractDatabaseGrantsIT {
      * is refused by the privilege check before any row is read.
      */
     @Test
-    void theRuntimeUserCanNeitherChangeNorRemoveAComment() throws SQLException {
+    void neitherTheRuntimeNorTheImportUserCanChangeOrRemoveAComment() throws SQLException {
         String comments = users.ownerSchema() + ".CASE_COMMENT";
 
-        assertThat(run(appUser, "UPDATE " + comments + " SET BODY = 'rewritten'"))
-                .isEqualTo(Outcome.DENIED);
-        assertThat(run(appUser, "UPDATE " + comments + " SET AUTHOR_NAME_SNAPSHOT = 'someone else'"))
-                .isEqualTo(Outcome.DENIED);
-        assertThat(run(appUser, "DELETE FROM " + comments)).isEqualTo(Outcome.DENIED);
-        assertThat(run(appUser, "TRUNCATE TABLE " + comments)).isEqualTo(Outcome.DENIED);
-        assertThat(run(appUser, "SELECT COUNT(*) FROM " + comments)).isEqualTo(Outcome.ALLOWED);
+        for (String user : List.of(appUser, importUser)) {
+            assertThat(run(user, "UPDATE " + comments + " SET BODY = 'rewritten'"))
+                    .isEqualTo(Outcome.DENIED);
+            assertThat(run(user, "UPDATE " + comments + " SET AUTHOR_NAME_SNAPSHOT = 'someone else'"))
+                    .isEqualTo(Outcome.DENIED);
+            assertThat(run(user, "DELETE FROM " + comments)).isEqualTo(Outcome.DENIED);
+            assertThat(run(user, "TRUNCATE TABLE " + comments)).isEqualTo(Outcome.DENIED);
+            assertThat(run(user, "SELECT COUNT(*) FROM " + comments)).isEqualTo(Outcome.ALLOWED);
+        }
     }
 
     /**
@@ -331,18 +277,38 @@ abstract class AbstractDatabaseGrantsIT {
     }
 
     @Test
-    void theRuntimeUserCannotChangeTheSchema() throws SQLException {
+    void neitherTheRuntimeUserNorTheImportUserCanChangeTheSchema() throws SQLException {
         String schema = users.ownerSchema();
 
-        assertThat(run(appUser, "CREATE TABLE " + schema + ".GRANT_PROBE (ID INTEGER)"))
-                .isEqualTo(Outcome.DENIED);
-        assertThat(run(appUser, "DROP TABLE " + schema + ".APP_USER")).isEqualTo(Outcome.DENIED);
-        assertThat(run(appUser, "ALTER TABLE " + schema + ".TEAM ADD PROBE INTEGER"))
-                .isEqualTo(Outcome.DENIED);
+        for (String user : List.of(appUser, importUser)) {
+            assertThat(run(user, "CREATE TABLE " + schema + ".GRANT_PROBE (ID INTEGER)"))
+                    .as(user)
+                    .isEqualTo(Outcome.DENIED);
+            assertThat(run(user, "DROP TABLE " + schema + ".APP_USER")).as(user).isEqualTo(Outcome.DENIED);
+            assertThat(run(user, "ALTER TABLE " + schema + ".TEAM ADD PROBE INTEGER"))
+                    .as(user)
+                    .isEqualTo(Outcome.DENIED);
+        }
     }
 
     private String grantee(String who) {
-        return "app".equals(who) ? appUser : purgeUser;
+        return switch (who) {
+            case "app" -> appUser;
+            case "purge" -> purgeUser;
+            default -> importUser;
+        };
+    }
+
+    private Outcome drawnBySeeing() {
+        return seeingASequenceDrawsFromIt() ? Outcome.ALLOWED : Outcome.DENIED;
+    }
+
+    private Outcome draw(String user, String sequence) throws SQLException {
+        return run(user, nextValue(users.ownerSchema() + "." + sequence));
+    }
+
+    private Outcome update(String user, String table, String column) throws SQLException {
+        return run(user, "UPDATE " + table + " SET " + column + " = NULL WHERE 1 = 0");
     }
 
     /** Closes the shared grantee connections once every probe of the class has run. */

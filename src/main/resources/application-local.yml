@@ -64,6 +64,7 @@ app:
     # Roles created by deploy/local/postgres/01-roles.sql. Locally the app still connects as the owner.
     app-user: trailkeep_app
     purge-user: trailkeep_purge
+    import-user: trailkeep_import
   security:
     oidc:
       client-id: trailkeep

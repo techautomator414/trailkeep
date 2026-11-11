@@ -34,4 +34,9 @@ class PostgresDatabaseGrantsIT extends AbstractDatabaseGrantsIT {
     String nextValue(String qualifiedSequence) {
         return "SELECT nextval('" + qualifiedSequence + "')";
     }
+
+    @Override
+    boolean seeingASequenceDrawsFromIt() {
+        return false;
+    }
 }

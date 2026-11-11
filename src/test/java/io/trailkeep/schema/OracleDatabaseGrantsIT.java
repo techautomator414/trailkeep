@@ -47,4 +47,9 @@ class OracleDatabaseGrantsIT extends AbstractDatabaseGrantsIT {
     String nextValue(String qualifiedSequence) {
         return "SELECT " + qualifiedSequence + ".NEXTVAL FROM DUAL";
     }
+
+    @Override
+    boolean seeingASequenceDrawsFromIt() {
+        return true;
+    }
 }

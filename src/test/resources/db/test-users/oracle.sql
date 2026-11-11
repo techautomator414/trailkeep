@@ -16,4 +16,5 @@ DECLARE
 BEGIN
   ensure_user('${app_user}');
   ensure_user('${purge_user}');
+  ensure_user('${import_user}');
 END;

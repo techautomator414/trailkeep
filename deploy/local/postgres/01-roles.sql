@@ -5,3 +5,4 @@
 -- connects as the owner. Run `docker compose down -v` once if your volume predates this file.
 CREATE ROLE trailkeep_app NOLOGIN;
 CREATE ROLE trailkeep_purge NOLOGIN;
+CREATE ROLE trailkeep_import NOLOGIN;

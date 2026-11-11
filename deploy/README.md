@@ -31,8 +31,9 @@ kube-linter lint deploy/
    --certificate-oidc-issuer https://token.actions.githubusercontent.com`.
 2. **`APP_PROXY_PATTERN`** in `trailkeep-config`: a regular expression for the router's pod addresses. Only these
    peers may set `X-Forwarded-For`/`X-Forwarded-Proto`. The app does not start without it.
-   **`APP_DB_APP_USER`** and **`APP_DB_PURGE_USER`**: the existing database users that the vendor `R__grants.sql`
-   grants to (runtime and retention purge). The app does not start without them.
+   **`APP_DB_APP_USER`**, **`APP_DB_PURGE_USER`** and **`APP_DB_IMPORT_USER`**: the existing database users that the
+   vendor `R__grants.sql` grants to (runtime, retention purge and importer Job). The app does not start without them.
+   The import user may stay locked until an import is run.
 3. **NetworkPolicy targets** in `trailkeep-egress`: database, identity provider, SMTP relay and clamd. The base uses
    RFC 5737 documentation addresses.
 4. **Secrets.** Create them from the platform's secret store; the manifests only reference them. Each key is a file
@@ -41,7 +42,7 @@ kube-linter lint deploy/
    | Secret | Mounted by | Keys (added by the work packages that need them) |
    |---|---|---|
    | `trailkeep-web` | web `Deployment`, importer `Job` | `spring.datasource.username`, `spring.datasource.password`, OIDC client secret, SMTP password, `app.audit.hmac-key` (Base64, ≥ 32 random bytes; the `prod` profile refuses to start without it) |
-   | `trailkeep-purge` | purge `CronJob` only | `spring.datasource.username`, `spring.datasource.password`: the `TRAILKEEP_PURGE` credential. Nothing else: the purge registers no OIDC client and writes no audit row, so it needs neither the client secret nor `app.audit.hmac-key` |
+   | `trailkeep-purge` | purge `CronJob` only | `spring.datasource.username`, `spring.datasource.password`: the `TRAILKEEP_PURGE` credential. Nothing else: the purge registers no OIDC client, and its `CASE_PURGED` audit rows hold counts only, so it needs neither the client secret nor `app.audit.hmac-key` |
    | `clamav-tls` | ClamAV `Deployment` (TLS sidecar) only | `tls.crt`, `tls.key`: the sidecar's server certificate, naming the host in `APP_ATTACHMENTS_CLAMD_HOST` (the `clamav` Service by default); for example a cert-manager `Certificate` with `secretName: clamav-tls` (ADR-0012) |
    | `clamav-ca` | web `Deployment`, importer `Job`, purge `CronJob` | `ca.crt` only: the CA that issued `clamav-tls`, loaded as the `clamd` SSL bundle; never the key |
 

@@ -11,5 +11,8 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '${purge_user}') THEN
     CREATE ROLE ${purge_user} NOLOGIN;
   END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '${import_user}') THEN
+    CREATE ROLE ${import_user} NOLOGIN;
+  END IF;
 END
 $$

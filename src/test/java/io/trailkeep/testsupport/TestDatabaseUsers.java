@@ -24,9 +24,10 @@ import org.springframework.core.io.ClassPathResource;
 /**
  * Test-only grantees for the vendor {@code R__grants.sql}. As a Flyway callback it runs
  * {@code db/test-users/{vendor}.sql} before every migrate, as the container's administrator, so the roles named by
- * {@code app.db.app-user} and {@code app.db.purge-user} exist when the grants run; the roles cannot log in. For
- * {@code DatabaseGrantsIT}, {@link #login(String)} gives one of them a fresh random password and connects as it, so
- * no credential is ever written down.
+ * {@code app.db.app-user}, {@code app.db.purge-user} and {@code app.db.import-user} exist when the grants run; the
+ * roles cannot log in. For {@code DatabaseGrantsIT}, {@link #login(String)} gives one of them a fresh random password
+ * and connects as it, and {@link #newPassword(String)} gives one to a test that starts an application as it, so no
+ * credential is ever written down.
  *
  * <p>Administrator: on PostgreSQL the container user (a superuser, also the schema owner); on Oracle {@code SYSTEM},
  * whose password the Testcontainers Oracle modules set to the container user's password.
@@ -39,6 +40,7 @@ public final class TestDatabaseUsers implements Callback {
     private final JdbcConnectionDetails connection;
     private final String appUser;
     private final String purgeUser;
+    private final String importUser;
 
     /**
      * Creates the callback.
@@ -47,18 +49,24 @@ public final class TestDatabaseUsers implements Callback {
      * @param connection the container's connection details
      * @param appUser {@code app.db.app-user}
      * @param purgeUser {@code app.db.purge-user}
+     * @param importUser {@code app.db.import-user}
      */
     public TestDatabaseUsers(
-            DatabaseVendor vendor, JdbcConnectionDetails connection, String appUser, String purgeUser) {
+            DatabaseVendor vendor,
+            JdbcConnectionDetails connection,
+            String appUser,
+            String purgeUser,
+            String importUser) {
         this.vendor = vendor;
         this.connection = connection;
         this.appUser = appUser;
         this.purgeUser = purgeUser;
+        this.importUser = importUser;
     }
 
     @Override
     public boolean supports(Event event, Context context) {
-        return event == Event.BEFORE_MIGRATE;
+        return event == Event.BEFORE_MIGRATE || event == Event.AFTER_MIGRATE;
     }
 
     @Override
@@ -68,11 +76,30 @@ public final class TestDatabaseUsers implements Callback {
 
     @Override
     public void handle(Event event, Context context) {
+        if (event == Event.AFTER_MIGRATE) {
+            readableProbe(context.getConnection());
+            return;
+        }
         try (Connection admin = adminConnection();
                 Statement statement = admin.createStatement()) {
             statement.execute(script());
         } catch (SQLException e) {
             throw new IllegalStateException("Cannot create the test database users", e);
+        }
+    }
+
+    /**
+     * Lets the users whose applications validate the schema read the test-only {@code LINT_PROBE}, which the test
+     * classpath's {@code LintProbe} entity maps: on Oracle, Hibernate {@code validate} sees only granted tables. Done
+     * after every migrate, as the owner, because the Oracle {@code R__grants.sql} revokes what its matrix does not
+     * list.
+     */
+    private void readableProbe(Connection owner) {
+        try (Statement statement = owner.createStatement()) {
+            // Test-only DDL on the test-only table; the grantees are the configured names, not input.
+            statement.execute("GRANT SELECT ON LINT_PROBE TO " + appUser + ", " + importUser);
+        } catch (SQLException e) {
+            throw new IllegalStateException("Cannot grant the test probe table", e);
         }
     }
 
@@ -96,25 +123,45 @@ public final class TestDatabaseUsers implements Callback {
     /**
      * Sets a fresh random password for {@code user} and connects as it.
      *
-     * @param user {@code app.db.app-user} or {@code app.db.purge-user}
+     * @param user one of the three configured grantees
      * @return a connection authenticated as that user; the caller closes it
      * @throws SQLException if the password cannot be set or the login fails
      */
     public Connection login(String user) throws SQLException {
-        if (!user.equals(appUser) && !user.equals(purgeUser)) {
+        return DriverManager.getConnection(connection.getJdbcUrl(), user, newPassword(user));
+    }
+
+    /**
+     * Sets a fresh random password for {@code user}, which may then log in.
+     *
+     * @param user one of the three configured grantees
+     * @return the password, for this test run only
+     * @throws SQLException if the password cannot be set
+     */
+    public String newPassword(String user) throws SQLException {
+        if (!user.equals(appUser) && !user.equals(purgeUser) && !user.equals(importUser)) {
             throw new IllegalArgumentException("Not a test grantee: " + user);
         }
         String password = "Tk" + HexFormat.of().formatHex(RANDOM.generateSeed(12));
         try (Connection admin = adminConnection();
                 Statement statement = admin.createStatement()) {
-            // Test-only DDL. The user name is one of the two configured grantees (checked above); the password is
+            // Test-only DDL. The user name is one of the configured grantees (checked above); the password is
             // hex from SecureRandom, so neither can carry SQL.
             statement.execute(
                     vendor == DatabaseVendor.ORACLE
                             ? "ALTER USER " + user + " IDENTIFIED BY \"" + password + "\" ACCOUNT UNLOCK"
                             : "ALTER ROLE " + user + " LOGIN PASSWORD '" + password + "'");
         }
-        return DriverManager.getConnection(connection.getJdbcUrl(), user, password);
+        return password;
+    }
+
+    /**
+     * The container's JDBC URL, for a test that starts an application as one of the grantees.
+     *
+     * @return the URL
+     */
+    public String jdbcUrl() {
+        return connection.getJdbcUrl();
     }
 
     private Connection adminConnection() throws SQLException {
@@ -134,6 +181,7 @@ public final class TestDatabaseUsers implements Callback {
                     .collect(Collectors.joining("\n"))
                     .replace("${app_user}", appUser)
                     .replace("${purge_user}", purgeUser)
+                    .replace("${import_user}", importUser)
                     .strip();
         } catch (IOException e) {
             throw new UncheckedIOException(e);

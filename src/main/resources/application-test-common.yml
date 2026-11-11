@@ -37,6 +37,7 @@ app:
   db:
     app-user: trailkeep_app
     purge-user: trailkeep_purge
+    import-user: trailkeep_import
   security:
     oidc:
       client-id: trailkeep

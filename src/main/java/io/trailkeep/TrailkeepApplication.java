@@ -21,10 +21,9 @@ public class TrailkeepApplication {
      */
     public static void main(String[] args) {
         ConfigurableApplicationContext context = SpringApplication.run(TrailkeepApplication.class, args);
-        // The purge batch (WP-24 part c) has done its work once start-up returns; it ends there, with the context's
-        // exit
-        // code, whatever pooled threads the context holds.
-        if (context.getEnvironment().matchesProfiles("purge")) {
+        // The purge batch (WP-24 part c) and the importer Job (WP-26) have done their work once start-up returns; they
+        // end there, with the context's exit code, whatever pooled threads the context holds.
+        if (context.getEnvironment().matchesProfiles("purge | importer")) {
             System.exit(SpringApplication.exit(context));
         }
     }

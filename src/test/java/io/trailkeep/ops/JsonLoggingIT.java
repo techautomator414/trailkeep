@@ -41,6 +41,7 @@ import tools.jackson.databind.json.JsonMapper;
             // prod requires the R__grants.sql grantees (no defaults); TestDatabaseUsers creates these.
             "app.db.app-user=trailkeep_app",
             "app.db.purge-user=trailkeep_purge",
+            "app.db.import-user=trailkeep_import",
             // prod requires the scanner's host and TLS bundle too (ADR-0012); nothing here uploads, so an unreachable
             // host and the JDK's public CA store will do.
             "app.attachments.clamd.host=127.0.0.1",
