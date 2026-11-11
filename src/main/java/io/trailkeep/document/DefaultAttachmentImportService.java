@@ -22,7 +22,6 @@ import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.time.InstantSource;
 import java.util.HexFormat;
-import java.util.Locale;
 import java.util.Objects;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
@@ -78,7 +77,7 @@ class DefaultAttachmentImportService implements AttachmentImportService {
         // Legacy names may carry a client path, Windows or not; only the last segment is a name. It never forms a path.
         String name = fileName.substring(Math.max(fileName.lastIndexOf('/'), fileName.lastIndexOf('\\')) + 1);
         ScannedUpload upload = intake.receive(name, file, maxBytes);
-        if (expectedSha256 != null && !expectedSha256.toLowerCase(Locale.ROOT).equals(upload.sha256())) {
+        if (expectedSha256 != null && !sameHash(expectedSha256, upload.sha256())) {
             throw new AttachmentRejectedException(Reason.HASH_MISMATCH, "content differs from the source's SHA-256");
         }
         return new Prepared(upload, name);
@@ -104,7 +103,7 @@ class DefaultAttachmentImportService implements AttachmentImportService {
         entityManager.persist(attachment);
         entityManager.flush();
         long id = Objects.requireNonNull(attachment.getId(), "persisted");
-        if (!upload.sha256().equals(writeChunks(id, upload.file()))) {
+        if (!sameHash(upload.sha256(), writeChunks(id, upload.file()))) {
             throw new AttachmentRejectedException(Reason.HASH_MISMATCH, "file changed between its scan and its store");
         }
         long principal = people.principals().importer();
@@ -130,6 +129,16 @@ class DefaultAttachmentImportService implements AttachmentImportService {
                                 placement.uploaderNameSnapshot(),
                                 placement.runId()))));
         return id;
+    }
+
+    /** Two hex SHA-256 values, in either case, compared in constant time; a malformed one matches nothing. */
+    private static boolean sameHash(String expected, String actual) {
+        try {
+            return MessageDigest.isEqual(
+                    HexFormat.of().parseHex(expected), HexFormat.of().parseHex(actual));
+        } catch (IllegalArgumentException malformed) {
+            return false;
+        }
     }
 
     /** Writes the chunks from the file, hashing what is written; the hash, in hex. */
