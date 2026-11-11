@@ -58,6 +58,36 @@ class CaseSla {
     }
 
     /**
+     * The row of an imported closed case (design §7.1): no SLA applies, so no due or at-risk time.
+     *
+     * @param caseId the case
+     * @return the row
+     */
+    static CaseSla notApplicable(long caseId) {
+        CaseSla sla = new CaseSla();
+        sla.caseId = caseId;
+        sla.state = SlaState.NOT_APPLICABLE;
+        return sla;
+    }
+
+    /**
+     * The row of an imported open case (design §7.1): the clock from its original dates, in the state it is in at
+     * load, so the first aging report is honest.
+     *
+     * @param caseId the case
+     * @param clock the at-risk and due instants from the one anchor rule
+     * @param now the load instant
+     * @return the row
+     */
+    static CaseSla importedOpen(long caseId, SlaClock clock, Instant now) {
+        CaseSla sla = new CaseSla(caseId, clock.atRiskAt(), clock.dueAt());
+        for (SlaState next = sla.next(now); next != null; next = sla.next(now)) {
+            sla.state = next;
+        }
+        return sla;
+    }
+
+    /**
      * Finalises the state at closure (BUILD_PLAN §6 "Closure"): {@code MET} on or before the due time,
      * {@code BREACHED} after it; a case without an SLA keeps {@code NOT_APPLICABLE}.
      *

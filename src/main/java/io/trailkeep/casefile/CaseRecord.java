@@ -169,6 +169,17 @@ class CaseRecord {
         this.updatedBy = actorId;
     }
 
+    // An imported case (WP-26 part e, CaseImportService): legacy dates, status and identity, created by the principal.
+    CaseRecord(CaseNumber number, CaseImportService.ImportedCase imported, long principalId, Instant now) {
+        this(number, imported.fields(), principalId, now);
+        this.status = imported.status();
+        this.openedAt = imported.openedAt();
+        this.closedAt = imported.closedAt();
+        this.legacyRef = imported.legacyRef();
+        this.legacyNumber = imported.legacyNumber();
+        this.ownerNameSnapshot = imported.ownerNameSnapshot();
+    }
+
     @Nullable
     Long getId() {
         return id;
@@ -281,11 +292,6 @@ class CaseRecord {
     @Nullable
     Instant getPurgedAt() {
         return purgedAt;
-    }
-
-    @Nullable
-    String getLegacyRef() {
-        return legacyRef;
     }
 
     @Nullable

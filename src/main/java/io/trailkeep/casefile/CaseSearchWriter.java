@@ -62,11 +62,7 @@ class CaseSearchWriter {
     void rebuild(UserPermissions user, CaseRecord record, Instant now) {
         long caseId = Objects.requireNonNull(record.getId());
         final CaseSearch search = entityManager.find(CaseSearch.class, caseId, LockModeType.PESSIMISTIC_WRITE);
-        StringBuilder text = new StringBuilder(record.getTitle());
-        if (record.getLegacyNumber() != null) {
-            text.append('\n').append(record.getLegacyNumber());
-        }
-        text.append('\n').append(record.getDescription());
+        StringBuilder text = caseText(record);
         for (CaseComment comment : comments.findForCase(scopes.forUser(user), record.getCaseNumber())) {
             text.append('\n').append(comment.getBody());
         }
@@ -75,5 +71,20 @@ class CaseSearchWriter {
         } else {
             search.rebuild(text.toString(), now);
         }
+    }
+
+    /**
+     * The case's own part of its search text: title, the legacy number of an imported case, and description; the
+     * comments follow it.
+     *
+     * @param record the case
+     * @return the text, ready for comments to be appended
+     */
+    static StringBuilder caseText(CaseRecord record) {
+        StringBuilder text = new StringBuilder(record.getTitle());
+        if (record.getLegacyNumber() != null) {
+            text.append('\n').append(record.getLegacyNumber());
+        }
+        return text.append('\n').append(record.getDescription());
     }
 }
