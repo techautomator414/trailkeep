@@ -416,6 +416,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Security
 
+- The runtime image applies Red Hat's published errata on top of its pinned UBI 9 base (`microdnf upgrade` in the
+  Containerfile's runtime stage, as root, then back to UID 185). The `openjdk-21-runtime:latest` base still carried
+  util-linux 2.37.4-25.el9 (CVE-2026-53613, HIGH, fixed in 2.37.4-28.el9_9, in libblkid, libmount, libsmartcols and
+  libuuid), which turned the `main` image scan red; a fixable OS CVE no longer waits for a rebuilt base image. The
+  Trivy gate (fixable HIGH and CRITICAL) is unchanged.
 - CI's Semgrep lockfile resolves the Dependabot alerts for `mcp` (1.30.0) and `opentelemetry-api` (1.45.2, with the rest
   of the opentelemetry family): every Semgrep release up to 1.184.0 pins `mcp==1.29.0` and `opentelemetry-api<1.38`, so
   `.github/requirements/semgrep-overrides.in` lifts those pins when the lockfile is compiled (the job installs with
