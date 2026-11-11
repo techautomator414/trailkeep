@@ -12,10 +12,12 @@ data:
   # peers may set X-Forwarded-For / X-Forwarded-Proto. The application refuses to start if it is empty.
   APP_PROXY_PATTERN: 10\.128\.\d+\.\d+
   # PLACEHOLDER: the database users R__grants.sql grants to (BUILD_PLAN section 8 rule 7). The migration grants the
-  # runtime privileges to APP_DB_APP_USER and the case-data deletions to APP_DB_PURGE_USER; both must already exist.
-  # The application refuses to start if either is empty.
+  # runtime privileges to APP_DB_APP_USER, the case-data deletions to APP_DB_PURGE_USER and the importer's staging
+  # and writes to APP_DB_IMPORT_USER (docs/design/importer.md §5); all three must already exist, and the import user
+  # stays locked where nothing is imported. The application refuses to start if any is empty.
   APP_DB_APP_USER: TRAILKEEP_APP
   APP_DB_PURGE_USER: TRAILKEEP_PURGE
+  APP_DB_IMPORT_USER: TRAILKEEP_IMPORT
   # Who scans uploads for malware (ADR-0013). clamd (the default): every upload is scanned by the ClamAV below before
   # it is stored, fail-closed. external: the organization scans upstream (gateway, ICAP proxy) or at the endpoints;
   # Trailkeep stores files as NOT_SCANNED, never as clean, and needs neither the two clamd entries below nor

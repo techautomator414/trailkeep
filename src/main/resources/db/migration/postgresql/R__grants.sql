@@ -8,6 +8,7 @@
 --
 --   ${app_user}    the runtime user of every replica
 --   ${purge_user}  the retention CronJob; owns every deletion of case data
+--   ${import_user} the importer Job (docs/design/importer.md §5); owns staging, and may read every mapped table
 --
 -- Matrix (S = SELECT, I = INSERT, U = UPDATE, D = DELETE):
 --
@@ -43,6 +44,9 @@
 --   REPORT_RUN            S I        S D          report runs; never changed; purged after report-runs (V7)
 --   LEGAL_HOLD_EVENT      S I        -            holds placed and lifted; history, kept by purge (V8)
 --   USER_PREFERENCE       S I U      -            a person's preferences; changed, never deleted (V9)
+--   IMPORT_RUN            S I (U)    -            run requests; UPDATE of the sign-off columns only (V10)
+--   IMPORT_ISSUE          S          -            codes, numbers and keyed hashes, for the screen (V10)
+--   IMPORT_RUN_SUMMARY    S          -            the sign-off screen's aggregates (V10)
 --   SEQ_APP_USER          USAGE      -
 --   SEQ_TEAM              USAGE      -
 --   SEQ_AUDIT_EVENT       USAGE      USAGE        the purge's CASE_PURGED rows
@@ -62,30 +66,36 @@
 --   SEQ_REPORT_SCHEDULE   USAGE      -
 --   SEQ_REPORT_RUN        USAGE      -
 --   SEQ_LEGAL_HOLD_EVENT  USAGE      -
+--   SEQ_IMPORT_RUN        USAGE      -
+--   SEQ_IMPORT_ISSUE      SELECT     -            no nextval: SELECT only lets Hibernate validate see it
+--   SEQ_IMPORT_RUN_SUMMARY SELECT    -
+--
+-- The import user: S I D on IMPORT_ISSUE and IMPORT_RUN_SUMMARY; S I on IMPORT_RUN with UPDATE of the status, hash,
+-- scanning-mode, count and staging-expiry columns, never the sign-off; USAGE on SEQ_IMPORT_*. On every other table
+-- and sequence an entity maps it has SELECT only, so its Hibernate validate sees the whole model (on Oracle the
+-- dictionary lists only objects a user holds a privilege on, design §2.1 R3). Staging and the import writes come
+-- with the importer PRs that use them (design §12).
 --
 -- Later migrations add their tables here. Fixed rules for them: the app user has no UPDATE or DELETE on
 -- CASE_COMMENT, CASE_ATTACHMENT_CHUNK, AUDIT_EVENT and ALERT_LEDGER, and no DELETE on CASE_ATTACHMENT; it may DELETE only from CASE_COMMENT_PIN, SAVED_VIEW, USER_ALERT,
--- SPRING_SESSION*, OIDC_SESSION, SHEDLOCK and importer staging tables, besides the membership tables and
--- CASE_TYPE_OUTCOME (configuration, not case data) above.
+-- SPRING_SESSION*, OIDC_SESSION and SHEDLOCK, besides the membership tables and CASE_TYPE_OUTCOME (configuration, not
+-- case data) above. Importer staging belongs to the import user, never to the app user; the import user has no
+-- UPDATE or DELETE on those four insert-only tables either.
 -- DatabaseGrantsIT asserts this matrix by executing each statement as each user.
 
 GRANT USAGE ON SCHEMA ${flyway:defaultSchema} TO ${app_user};
 GRANT USAGE ON SCHEMA ${flyway:defaultSchema} TO ${purge_user};
+GRANT USAGE ON SCHEMA ${flyway:defaultSchema} TO ${import_user};
 
 REVOKE ALL ON TABLE APP_USER, TEAM, APP_USER_TEAM, APP_USER_GLOBAL_ROLE, AUDIT_EVENT,
   SLA_POLICY, CASE_TYPE, CASE_TYPE_OUTCOME, SPRING_SESSION, SPRING_SESSION_ATTRIBUTES, OIDC_SESSION,
   CASE_RECORD, CASE_SLA, CASE_SEARCH, CASE_COMMENT, CASE_COMMENT_PIN, CASE_ATTACHMENT, CASE_ATTACHMENT_CHUNK, SAVED_VIEW, NOTIFICATION_OUTBOX, USER_ALERT, UPDATE_REQUEST, CLOSURE_REQUEST, CASE_REOPEN,
-  ALERT_LEDGER, JOB_RUN, SHEDLOCK, REPORT_SCHEDULE, REPORT_RUN, LEGAL_HOLD_EVENT, USER_PREFERENCE FROM ${app_user};
-REVOKE ALL ON TABLE APP_USER, TEAM, APP_USER_TEAM, APP_USER_GLOBAL_ROLE, AUDIT_EVENT,
-  SLA_POLICY, CASE_TYPE, CASE_TYPE_OUTCOME, SPRING_SESSION, SPRING_SESSION_ATTRIBUTES, OIDC_SESSION,
-  CASE_RECORD, CASE_SLA, CASE_SEARCH, CASE_COMMENT, CASE_COMMENT_PIN, CASE_ATTACHMENT, CASE_ATTACHMENT_CHUNK, SAVED_VIEW, NOTIFICATION_OUTBOX, USER_ALERT, UPDATE_REQUEST, CLOSURE_REQUEST, CASE_REOPEN,
-  ALERT_LEDGER, JOB_RUN, SHEDLOCK, REPORT_SCHEDULE, REPORT_RUN, LEGAL_HOLD_EVENT, USER_PREFERENCE FROM ${purge_user};
+  ALERT_LEDGER, JOB_RUN, SHEDLOCK, REPORT_SCHEDULE, REPORT_RUN, LEGAL_HOLD_EVENT, USER_PREFERENCE, IMPORT_RUN,
+  IMPORT_ISSUE, IMPORT_RUN_SUMMARY FROM ${app_user}, ${purge_user}, ${import_user};
 REVOKE ALL ON SEQUENCE SEQ_APP_USER, SEQ_TEAM, SEQ_AUDIT_EVENT, SEQ_SLA_POLICY, SEQ_CASE_TYPE, SEQ_CASE_RECORD, SEQ_CASE_NUMBER,
   SEQ_CASE_COMMENT, SEQ_CASE_ATTACHMENT, SEQ_SAVED_VIEW, SEQ_NOTIFICATION_OUTBOX, SEQ_USER_ALERT, SEQ_UPDATE_REQUEST, SEQ_CLOSURE_REQUEST, SEQ_CASE_REOPEN, SEQ_ALERT_LEDGER,
-  SEQ_REPORT_SCHEDULE, SEQ_REPORT_RUN, SEQ_LEGAL_HOLD_EVENT FROM ${app_user};
-REVOKE ALL ON SEQUENCE SEQ_APP_USER, SEQ_TEAM, SEQ_AUDIT_EVENT, SEQ_SLA_POLICY, SEQ_CASE_TYPE, SEQ_CASE_RECORD, SEQ_CASE_NUMBER,
-  SEQ_CASE_COMMENT, SEQ_CASE_ATTACHMENT, SEQ_SAVED_VIEW, SEQ_NOTIFICATION_OUTBOX, SEQ_USER_ALERT, SEQ_UPDATE_REQUEST, SEQ_CLOSURE_REQUEST, SEQ_CASE_REOPEN, SEQ_ALERT_LEDGER,
-  SEQ_REPORT_SCHEDULE, SEQ_REPORT_RUN, SEQ_LEGAL_HOLD_EVENT FROM ${purge_user};
+  SEQ_REPORT_SCHEDULE, SEQ_REPORT_RUN, SEQ_LEGAL_HOLD_EVENT, SEQ_IMPORT_RUN, SEQ_IMPORT_ISSUE, SEQ_IMPORT_RUN_SUMMARY
+  FROM ${app_user}, ${purge_user}, ${import_user};
 
 GRANT SELECT, INSERT, UPDATE         ON TABLE APP_USER             TO ${app_user};
 GRANT SELECT, INSERT, UPDATE         ON TABLE TEAM                 TO ${app_user};
@@ -131,8 +141,28 @@ GRANT SELECT, INSERT, UPDATE         ON TABLE REPORT_SCHEDULE      TO ${app_user
 GRANT SELECT, INSERT                 ON TABLE REPORT_RUN           TO ${app_user};
 GRANT SELECT, INSERT                 ON TABLE LEGAL_HOLD_EVENT     TO ${app_user};
 GRANT SELECT, INSERT, UPDATE         ON TABLE USER_PREFERENCE      TO ${app_user};
+-- The Import runs screen requests runs and signs them off; the importer Job writes everything else (V10).
+GRANT SELECT, INSERT                 ON TABLE IMPORT_RUN           TO ${app_user};
+GRANT UPDATE (APPROVED_BY, APPROVED_AT, ACKNOWLEDGED_WARNINGS, UPDATED_AT, VERSION) ON TABLE IMPORT_RUN TO ${app_user};
+GRANT SELECT                         ON TABLE IMPORT_ISSUE, IMPORT_RUN_SUMMARY TO ${app_user};
+GRANT SELECT ON SEQUENCE SEQ_IMPORT_ISSUE, SEQ_IMPORT_RUN_SUMMARY TO ${app_user};
+
+-- The importer Job (design §5): its own tables, and SELECT on every table and sequence an entity maps, for validate.
+GRANT SELECT ON TABLE APP_USER, TEAM, APP_USER_TEAM, APP_USER_GLOBAL_ROLE, AUDIT_EVENT, SLA_POLICY, CASE_TYPE,
+  CASE_TYPE_OUTCOME, CASE_RECORD, CASE_SLA, CASE_SEARCH, CASE_COMMENT, CASE_COMMENT_PIN, CASE_ATTACHMENT, SAVED_VIEW,
+  NOTIFICATION_OUTBOX, USER_ALERT, UPDATE_REQUEST, CLOSURE_REQUEST, CASE_REOPEN, ALERT_LEDGER, JOB_RUN, REPORT_SCHEDULE,
+  REPORT_RUN, LEGAL_HOLD_EVENT, USER_PREFERENCE TO ${import_user};
+GRANT SELECT, INSERT                 ON TABLE IMPORT_RUN           TO ${import_user};
+GRANT UPDATE (STATUS, MAPPING_HASH, SOURCE_FINGERPRINT, SCAN_MODE, ROWS_STAGED, ROWS_LOADED, STAGING_EXPIRES_AT,
+  STAGING_PURGED_AT, UPDATED_AT, VERSION) ON TABLE IMPORT_RUN TO ${import_user};
+GRANT SELECT, INSERT, DELETE         ON TABLE IMPORT_ISSUE, IMPORT_RUN_SUMMARY TO ${import_user};
+GRANT USAGE ON SEQUENCE SEQ_IMPORT_RUN, SEQ_IMPORT_ISSUE, SEQ_IMPORT_RUN_SUMMARY TO ${import_user};
+GRANT SELECT ON SEQUENCE SEQ_APP_USER, SEQ_TEAM, SEQ_AUDIT_EVENT, SEQ_SLA_POLICY, SEQ_CASE_TYPE, SEQ_CASE_RECORD,
+  SEQ_CASE_COMMENT, SEQ_CASE_ATTACHMENT, SEQ_SAVED_VIEW, SEQ_NOTIFICATION_OUTBOX, SEQ_USER_ALERT, SEQ_UPDATE_REQUEST,
+  SEQ_CLOSURE_REQUEST, SEQ_CASE_REOPEN, SEQ_ALERT_LEDGER, SEQ_REPORT_SCHEDULE, SEQ_REPORT_RUN, SEQ_LEGAL_HOLD_EVENT
+  TO ${import_user};
 
 -- USAGE allows nextval(), which is all Hibernate's pooled optimizer calls.
 GRANT USAGE ON SEQUENCE SEQ_APP_USER, SEQ_TEAM, SEQ_AUDIT_EVENT, SEQ_SLA_POLICY, SEQ_CASE_TYPE, SEQ_CASE_RECORD, SEQ_CASE_NUMBER,
   SEQ_CASE_COMMENT, SEQ_CASE_ATTACHMENT, SEQ_SAVED_VIEW, SEQ_NOTIFICATION_OUTBOX, SEQ_USER_ALERT, SEQ_UPDATE_REQUEST, SEQ_CLOSURE_REQUEST, SEQ_CASE_REOPEN, SEQ_ALERT_LEDGER,
-  SEQ_REPORT_SCHEDULE, SEQ_REPORT_RUN, SEQ_LEGAL_HOLD_EVENT TO ${app_user};
+  SEQ_REPORT_SCHEDULE, SEQ_REPORT_RUN, SEQ_LEGAL_HOLD_EVENT, SEQ_IMPORT_RUN TO ${app_user};

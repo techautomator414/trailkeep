@@ -18,6 +18,8 @@ import org.springframework.validation.annotation.Validated;
  *     {@code R__grants.sql} (Flyway placeholder {@code app_user}); required
  * @param purgeUser the database user of the retention job; grantee of the case-data deletions in
  *     {@code R__grants.sql} (Flyway placeholder {@code purge_user}); required
+ * @param importUser the database user of the importer Job; grantee of the staging tables and the import writes in
+ *     {@code R__grants.sql} (Flyway placeholder {@code import_user}); required, and locked where nothing is imported
  */
 @Validated
 @ConfigurationProperties("app.db")
@@ -25,4 +27,5 @@ public record DatabaseProperties(
         @NotNull DatabaseVendor vendor,
         @Nullable String schema,
         @NotBlank String appUser,
-        @NotBlank String purgeUser) {}
+        @NotBlank String purgeUser,
+        @NotBlank String importUser) {}

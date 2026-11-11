@@ -33,7 +33,8 @@ public class PostgresTestcontainersConfiguration {
     TestDatabaseUsers testDatabaseUsers(
             JdbcConnectionDetails connection,
             @Value("${app.db.app-user}") String appUser,
-            @Value("${app.db.purge-user}") String purgeUser) {
-        return new TestDatabaseUsers(DatabaseVendor.POSTGRESQL, connection, appUser, purgeUser);
+            @Value("${app.db.purge-user}") String purgeUser,
+            @Value("${app.db.import-user}") String importUser) {
+        return new TestDatabaseUsers(DatabaseVendor.POSTGRESQL, connection, appUser, purgeUser, importUser);
     }
 }

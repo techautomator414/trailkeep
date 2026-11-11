@@ -62,7 +62,7 @@ class PersistenceConfigTest {
     }
 
     private static DatabaseProperties properties(DatabaseVendor vendor, @Nullable String schema) {
-        return new DatabaseProperties(vendor, schema, "trailkeep_app", "trailkeep_purge");
+        return new DatabaseProperties(vendor, schema, "trailkeep_app", "trailkeep_purge", "trailkeep_import");
     }
 
     private static DataSource dataSourceReporting(String productName) throws SQLException {

@@ -9,6 +9,7 @@
 --
 --   ${app_user}    the runtime user of every replica
 --   ${purge_user}  the retention CronJob; owns every deletion of case data
+--   ${import_user} the importer Job (docs/design/importer.md §5); owns staging, and may read every mapped table
 --
 -- Matrix (S = SELECT, I = INSERT, U = UPDATE, D = DELETE):
 --
@@ -63,10 +64,23 @@
 --   SEQ_REPORT_SCHEDULE   SELECT     -
 --   SEQ_REPORT_RUN        SELECT     -
 --   SEQ_LEGAL_HOLD_EVENT  SELECT     -
+--   IMPORT_RUN            S I (U)    -            run requests; UPDATE of the sign-off columns only (V10)
+--   IMPORT_ISSUE          S          -            codes, numbers and keyed hashes, for the screen (V10)
+--   IMPORT_RUN_SUMMARY    S          -            the sign-off screen's aggregates (V10)
+--   SEQ_IMPORT_RUN        SELECT     -
+--   SEQ_IMPORT_ISSUE      SELECT     -            needed by Hibernate validate; NEXTVAL comes with it on Oracle
+--   SEQ_IMPORT_RUN_SUMMARY SELECT    -
+--
+-- The import user: S I D on IMPORT_ISSUE and IMPORT_RUN_SUMMARY; S I on IMPORT_RUN with UPDATE of the status, hash,
+-- scanning-mode, count and staging-expiry columns, never the sign-off. On every other table and sequence an entity
+-- maps it has SELECT only, because the dictionary views Hibernate validate reads (ALL_TABLES, ALL_SEQUENCES) list
+-- only objects a user holds a privilege on (design §2.1 R3); on a sequence that SELECT is also NEXTVAL. Staging and
+-- the import writes come with the importer PRs that use them (design §12).
 --
 -- Later migrations add their rows to the cursor below. Fixed rules for them: the app user has no UPDATE or DELETE
 -- on CASE_COMMENT, CASE_ATTACHMENT_CHUNK, AUDIT_EVENT and ALERT_LEDGER, and no DELETE on CASE_ATTACHMENT; it may DELETE only from CASE_COMMENT_PIN, SAVED_VIEW, USER_ALERT,
--- SPRING_SESSION*, OIDC_SESSION, SHEDLOCK and importer staging tables, besides the membership tables above.
+-- SPRING_SESSION*, OIDC_SESSION and SHEDLOCK, besides the membership tables above. Importer staging belongs to the
+-- import user, never to the app user; the import user has no UPDATE or DELETE on those four insert-only tables either.
 -- DatabaseGrantsIT asserts this matrix by executing each statement as each user.
 --
 -- Object names below are literals from this file only; the grantees come from deployment configuration.
@@ -136,7 +150,26 @@ DECLARE
     UNION ALL SELECT 'CASE_RECORD', 'SELECT', UPPER('${purge_user}') FROM DUAL
     UNION ALL SELECT 'AUDIT_EVENT', 'INSERT', UPPER('${purge_user}') FROM DUAL
     UNION ALL SELECT 'SEQ_AUDIT_EVENT', 'SELECT', UPPER('${purge_user}') FROM DUAL
-    UNION ALL SELECT 'JOB_RUN', 'SELECT,INSERT,UPDATE', UPPER('${purge_user}') FROM DUAL;
+    UNION ALL SELECT 'JOB_RUN', 'SELECT,INSERT,UPDATE', UPPER('${purge_user}') FROM DUAL
+    UNION ALL SELECT 'IMPORT_RUN', 'SELECT,INSERT', UPPER('${app_user}') FROM DUAL
+    UNION ALL SELECT 'IMPORT_ISSUE', 'SELECT', UPPER('${app_user}') FROM DUAL
+    UNION ALL SELECT 'IMPORT_RUN_SUMMARY', 'SELECT', UPPER('${app_user}') FROM DUAL
+    UNION ALL SELECT 'SEQ_IMPORT_RUN', 'SELECT', UPPER('${app_user}') FROM DUAL
+    UNION ALL SELECT 'SEQ_IMPORT_ISSUE', 'SELECT', UPPER('${app_user}') FROM DUAL
+    UNION ALL SELECT 'SEQ_IMPORT_RUN_SUMMARY', 'SELECT', UPPER('${app_user}') FROM DUAL
+    UNION ALL SELECT 'IMPORT_RUN', 'SELECT,INSERT', UPPER('${import_user}') FROM DUAL
+    UNION ALL SELECT 'IMPORT_ISSUE', 'SELECT,INSERT,DELETE', UPPER('${import_user}') FROM DUAL
+    UNION ALL SELECT 'IMPORT_RUN_SUMMARY', 'SELECT,INSERT,DELETE', UPPER('${import_user}') FROM DUAL
+    -- Every other table and sequence an entity maps: SELECT only, for validate (design §2.1 R3).
+    UNION ALL SELECT COLUMN_VALUE, 'SELECT', UPPER('${import_user}') FROM TABLE(SYS.ODCIVARCHAR2LIST(
+      'APP_USER', 'TEAM', 'APP_USER_TEAM', 'APP_USER_GLOBAL_ROLE', 'AUDIT_EVENT', 'SLA_POLICY', 'CASE_TYPE',
+      'CASE_TYPE_OUTCOME', 'CASE_RECORD', 'CASE_SLA', 'CASE_SEARCH', 'CASE_COMMENT', 'CASE_COMMENT_PIN',
+      'CASE_ATTACHMENT', 'SAVED_VIEW', 'NOTIFICATION_OUTBOX', 'USER_ALERT', 'UPDATE_REQUEST', 'CLOSURE_REQUEST',
+      'CASE_REOPEN', 'ALERT_LEDGER', 'JOB_RUN', 'REPORT_SCHEDULE', 'REPORT_RUN', 'LEGAL_HOLD_EVENT', 'USER_PREFERENCE',
+      'SEQ_APP_USER', 'SEQ_TEAM', 'SEQ_AUDIT_EVENT', 'SEQ_SLA_POLICY', 'SEQ_CASE_TYPE', 'SEQ_CASE_RECORD',
+      'SEQ_CASE_COMMENT', 'SEQ_CASE_ATTACHMENT', 'SEQ_SAVED_VIEW', 'SEQ_NOTIFICATION_OUTBOX', 'SEQ_USER_ALERT',
+      'SEQ_UPDATE_REQUEST', 'SEQ_CLOSURE_REQUEST', 'SEQ_CASE_REOPEN', 'SEQ_ALERT_LEDGER', 'SEQ_REPORT_SCHEDULE',
+      'SEQ_REPORT_RUN', 'SEQ_LEGAL_HOLD_EVENT', 'SEQ_IMPORT_RUN', 'SEQ_IMPORT_ISSUE', 'SEQ_IMPORT_RUN_SUMMARY'));
   keep PLS_INTEGER;
 BEGIN
   FOR w IN wanted LOOP
@@ -147,7 +180,7 @@ BEGIN
     SELECT TABLE_NAME, PRIVILEGE, GRANTEE
       FROM USER_TAB_PRIVS
      WHERE OWNER = USER
-       AND GRANTEE IN (UPPER('${app_user}'), UPPER('${purge_user}'))
+       AND GRANTEE IN (UPPER('${app_user}'), UPPER('${purge_user}'), UPPER('${import_user}'))
   ) LOOP
     keep := 0;
     FOR w IN wanted LOOP
@@ -168,5 +201,10 @@ BEGIN
   -- The retention purge (WP-24 part c) turns a case row into a tombstone and changes nothing else on it.
   EXECUTE IMMEDIATE 'GRANT UPDATE (DESCRIPTION, SUBJECT_TEXT, PURGED_AT, VERSION) ON CASE_RECORD TO '
     || UPPER('${purge_user}');
+  -- An import run: the screen writes its sign-off, the importer Job everything else (V10).
+  EXECUTE IMMEDIATE 'GRANT UPDATE (APPROVED_BY, APPROVED_AT, ACKNOWLEDGED_WARNINGS, UPDATED_AT, VERSION) ON IMPORT_RUN TO '
+    || UPPER('${app_user}');
+  EXECUTE IMMEDIATE 'GRANT UPDATE (STATUS, MAPPING_HASH, SOURCE_FINGERPRINT, SCAN_MODE, ROWS_STAGED, ROWS_LOADED, '
+    || 'STAGING_EXPIRES_AT, STAGING_PURGED_AT, UPDATED_AT, VERSION) ON IMPORT_RUN TO ' || UPPER('${import_user}');
 END;
 /
