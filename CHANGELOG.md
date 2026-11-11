@@ -9,6 +9,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Role conflicts on the System screen (WP-25 part b, IMPLEMENTATION_PLAN A.2 #18): the users whose System Admin
+  claim is withheld because they hold team roles, durable and cluster-wide, read from the audit trail
+  (`UserDirectoryService.roleConflicts()`): a user is listed while their latest `LOGIN` or `ROLE_CONFLICT` event is the
+  conflict, latest by time and then by id (ids are not time-ordered across replicas), so a later conflict-free sign-in
+  clears it. The audit module gains one narrow read, `AuditTrailService.standing`, returning entity ids and times only.
+  `UserSignInService.roleConflicts()` and its per-replica in-memory list are gone (#67 item 9).
 - The System screen (WP-25 part a, BUILD_PLAN §3.1, §4.6), `/admin/system`, for System Admins and Compliance Admins
   (anyone else 403), linked from the Users and Teams pages and the Compliance Admin's screens. It lists every
   scheduled job from `JOB_RUN` (the cluster truth) with its last success on any replica in `app.timezone`, the items

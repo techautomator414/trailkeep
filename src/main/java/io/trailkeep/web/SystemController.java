@@ -11,6 +11,7 @@ import io.trailkeep.shared.config.AppProperties;
 import io.trailkeep.sla.JobHealth;
 import io.trailkeep.sla.JobRuns;
 import io.trailkeep.user.GlobalRole;
+import io.trailkeep.user.RoleConflict;
 import io.trailkeep.user.UserDirectoryService;
 import io.trailkeep.user.UserPermissions;
 import java.time.Duration;
@@ -34,8 +35,9 @@ import org.springframework.web.bind.annotation.GetMapping;
 /**
  * The System screen (WP-25, BUILD_PLAN §3.1 "System health, scheduler, scan engine", §4.6): System Admins and
  * Compliance Admins see each scheduled job's last success on any replica ({@code JOB_RUN}, the cluster truth), whether
- * it is late against its health indicator's grace, the outbox's backlog and failures, and whether clamd answers, with
- * its version. Anyone else gets 403. It reads, never writes, and shows no case content. Times are in
+ * it is late against its health indicator's grace, the outbox's backlog and failures, whether clamd answers, with its
+ * version, and the users whose System Admin claim is withheld because they hold team roles (the durable list from the
+ * audit trail). Anyone else gets 403. It reads, never writes, and shows no case content. Times are in
  * {@code app.timezone}.
  */
 @Controller
@@ -88,6 +90,14 @@ class SystemController {
      */
     record JobLine(String job, @Nullable LocalDateTime lastSuccess, int items, JobState state) {}
 
+    /**
+     * A user whose System Admin claim is withheld because they hold team roles.
+     *
+     * @param name their display name
+     * @param seen when their latest sign-in recorded the conflict, in {@code app.timezone}, to the minute
+     */
+    record ConflictLine(String name, LocalDateTime seen) {}
+
     @GetMapping("/admin/system")
     String show(@AuthenticationPrincipal TrailkeepOidcUser principal, Model model) {
         UserPermissions user = directory.permissionsOf(principal.userId());
@@ -112,6 +122,14 @@ class SystemController {
         model.addAttribute("outbox", backlog);
         model.addAttribute("oldestPending", oldest == null ? null : local(oldest));
         model.addAttribute("scanner", scanner.status());
+        List<RoleConflict> conflicts = directory.roleConflicts();
+        Map<Long, String> names = directory.displayNames(
+                conflicts.stream().map(RoleConflict::userId).toList());
+        model.addAttribute(
+                "conflicts",
+                conflicts.stream()
+                        .map(c -> new ConflictLine(names.getOrDefault(c.userId(), ""), local(c.detectedAt())))
+                        .toList());
         return "web/system";
     }
 

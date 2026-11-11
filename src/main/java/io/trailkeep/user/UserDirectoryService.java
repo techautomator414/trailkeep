@@ -58,6 +58,16 @@ public interface UserDirectoryService {
     Optional<String> mailAddress(long userId);
 
     /**
+     * The users whose System Admin claim is withheld right now (IMPLEMENTATION_PLAN A.2 #18), cluster-wide and durable:
+     * those whose latest sign-in recorded a {@code ROLE_CONFLICT} audit event, read from the audit trail. A later
+     * sign-in without the conflict ({@code LOGIN} with no {@code ROLE_CONFLICT} after it) clears it. Callers decide
+     * who may see the list (the System screen: System Admins and Compliance Admins).
+     *
+     * @return the conflicts, oldest first, each with the time it was last seen
+     */
+    List<RoleConflict> roleConflicts();
+
+    /**
      * One team.
      *
      * @param teamId the team id

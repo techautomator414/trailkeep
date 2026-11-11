@@ -58,6 +58,7 @@ class SystemControllerIT {
 
     private Instant evaluated;
     private Instant queued;
+    private Instant conflictAt;
 
     @BeforeEach
     void seed() {
@@ -75,6 +76,12 @@ class SystemControllerIT {
         mail(987_101L, "PENDING", queued);
         mail(987_102L, "PENDING", now.minus(Duration.ofMinutes(1)));
         mail(987_103L, "FAILED", now.minus(Duration.ofDays(2)));
+        conflictAt = now.minus(Duration.ofHours(1));
+        jdbc.update(
+                "INSERT INTO AUDIT_EVENT (ID, AT_TS, ORIGIN, ENTITY_TYPE, ENTITY_ID, ACTION)"
+                        + " VALUES (-987001, ?, 'UI', 'USER', ?, 'ROLE_CONFLICT')",
+                Timestamp.from(conflictAt),
+                ANALYST);
     }
 
     @Test
@@ -94,6 +101,9 @@ class SystemControllerIT {
                 .contains("Waiting to be sent</dt>", "<dd class=\"col-sm-8\">2</dd>", "<dd class=\"col-sm-8\">1</dd>")
                 .contains(MINUTE.format(queued.atZone(ZoneOffset.UTC)))
                 .contains("clamd does not answer: uploads are refused until it does.")
+                .contains("<caption>Role conflicts, oldest first</caption>")
+                .contains("<th scope=\"row\">Synthetic System User " + ANALYST + "</th><td>"
+                        + MINUTE.format(conflictAt.atZone(ZoneOffset.UTC)) + "</td>")
                 .doesNotContain("system-test@example.invalid", "Synthetic system body");
         assertThat(page.indexOf(">Archive<")).isLessThan(page.indexOf(">Purge<"));
     }

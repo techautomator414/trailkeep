@@ -44,6 +44,11 @@ class CasePermissionServiceTest {
         }
 
         @Override
+        public List<io.trailkeep.user.RoleConflict> roleConflicts() {
+            return List.of();
+        }
+
+        @Override
         public Optional<String> displayName(long userId) {
             return Optional.empty();
         }

@@ -8,14 +8,11 @@ import io.trailkeep.audit.AuditOrigin;
 import io.trailkeep.audit.AuditRecorder;
 import java.time.Instant;
 import java.time.InstantSource;
-import java.util.Comparator;
 import java.util.EnumSet;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -46,7 +43,6 @@ class UserSignInServiceImpl implements UserSignInService {
     private final AppUserGlobalRoleRepository globalRoles;
     private final InstantSource clock;
     private final AuditRecorder audit;
-    private final Map<Long, RoleConflict> conflicts = new ConcurrentHashMap<>();
 
     UserSignInServiceImpl(
             AppUserRepository users,
@@ -88,11 +84,8 @@ class UserSignInServiceImpl implements UserSignInService {
                 claimedRoles.isEmpty() ? EnumSet.noneOf(GlobalRole.class) : EnumSet.copyOf(claimedRoles);
         if (effective.contains(GlobalRole.SYSTEM_ADMIN) && !teamRoles.isEmpty()) {
             effective.remove(GlobalRole.SYSTEM_ADMIN);
-            conflicts.put(userId, new RoleConflict(userId, now));
             record(user, ROLE_CONFLICT, AuditChanges.none());
             LOG.warn("Role conflict: SYSTEM_ADMIN claimed for user {} who holds team roles; not applied", userId);
-        } else {
-            conflicts.remove(userId);
         }
         Set<GlobalRole> before = replaceGlobalRoles(userId, effective);
         if (!before.equals(effective)) {
@@ -100,13 +93,6 @@ class UserSignInServiceImpl implements UserSignInService {
         }
         return new SignInOutcome.SignedIn(
                 new UserAccount(userId, user.getExternalId(), user.getDisplayName(), effective, teamRoles));
-    }
-
-    @Override
-    public List<RoleConflict> roleConflicts() {
-        return conflicts.values().stream()
-                .sorted(Comparator.comparing(RoleConflict::detectedAt))
-                .toList();
     }
 
     private Map<String, TeamRole> teamRoles(long userId) {

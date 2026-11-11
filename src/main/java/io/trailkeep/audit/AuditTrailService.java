@@ -3,6 +3,7 @@
 package io.trailkeep.audit;
 
 import io.trailkeep.shared.access.CaseScope;
+import java.time.Instant;
 import java.util.List;
 import java.util.Set;
 
@@ -43,6 +44,27 @@ public interface AuditTrailService {
      * @return the page and how many events match in all
      */
     AuditPage pageForCase(CaseScope scope, long caseId, Set<String> actions, int offset, int limit);
+
+    /**
+     * An entity whose event still stands, and when that event happened; no payload, actor or request detail.
+     *
+     * @param entityId the entity's id, such as a user's {@code APP_USER.ID}
+     * @param at when the standing event was recorded
+     */
+    record StandingEvent(long entityId, Instant at) {}
+
+    /**
+     * The entities of one type whose latest case-less event, among {@code action} and {@code clearedBy}, is {@code
+     * action}, oldest first: for example the users whose last {@code ROLE_CONFLICT} has not been followed by a {@code
+     * LOGIN} (WP-25). Latest is by time, then by id within the same instant. Case-less events only, so no scope; the
+     * caller decides who may see the result.
+     *
+     * @param entityType the entity type, such as {@code USER}
+     * @param action the action that stands until cleared
+     * @param clearedBy the actions that clear it when they come later
+     * @return the entities and the time of their standing event
+     */
+    List<StandingEvent> standing(String entityType, String action, Set<String> clearedBy);
 
     /**
      * One page of audit events.
