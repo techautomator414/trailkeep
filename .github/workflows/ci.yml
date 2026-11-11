@@ -12,6 +12,9 @@ on:
 
 permissions: {}
 
+# Each job cancels its own earlier run for the same pull request. A push to main is grouped by its commit instead, so
+# a second merge never cancels the first merge's run: Part E needs every merge's full set green on main.
+
 jobs:
   build:
     name: build (./mvnw verify)
@@ -20,7 +23,7 @@ jobs:
     permissions:
       contents: read
     concurrency:
-      group: ci-build-${{ github.ref }}
+      group: ci-build-${{ github.event_name == 'push' && github.sha || github.ref }}
       cancel-in-progress: true
     steps:
       - name: Check out
@@ -64,7 +67,7 @@ jobs:
       contents: read
       pull-requests: read
     concurrency:
-      group: ci-gitleaks-${{ github.ref }}
+      group: ci-gitleaks-${{ github.event_name == 'push' && github.sha || github.ref }}
       cancel-in-progress: true
     steps:
       - name: Check out (full history)
@@ -87,7 +90,7 @@ jobs:
     permissions:
       contents: read
     concurrency:
-      group: ci-semgrep-${{ github.ref }}
+      group: ci-semgrep-${{ github.event_name == 'push' && github.sha || github.ref }}
       cancel-in-progress: true
     steps:
       - name: Check out
@@ -133,7 +136,7 @@ jobs:
     permissions:
       contents: read
     concurrency:
-      group: ci-dco-${{ github.ref }}
+      group: ci-dco-${{ github.event_name == 'push' && github.sha || github.ref }}
       cancel-in-progress: true
     steps:
       - name: Check out (full history)
@@ -171,7 +174,7 @@ jobs:
     permissions:
       contents: read
     concurrency:
-      group: ci-actionlint-${{ github.ref }}
+      group: ci-actionlint-${{ github.event_name == 'push' && github.sha || github.ref }}
       cancel-in-progress: true
     env:
       ACTIONLINT_VERSION: "1.7.12"

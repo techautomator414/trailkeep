@@ -348,6 +348,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - The `main` workflow's concurrency group now includes the triggering event, so a push to `main` (which cancels the
   run before it) no longer cancels a full run requested by hand with `gh workflow run main.yml`; runs called from
   `nightly.yml` and `release.yml` keep their own groups. `main.yml` already had `workflow_dispatch`; no gate changes.
+- A push to `main` no longer cancels the previous merge's runs: `main.yml` and each `ci.yml` job group a push to
+  `main` by its commit, and `main.yml` no longer cancels in progress on it, so every merge gets its own complete run of
+  the full set, Oracle leg included (Part E). Pull requests, hand-requested runs, the nightly and release tags keep
+  their groups and cancelling as before; no gate changes.
 - ClamAV pod (`deploy/base/clamav.yaml`, `compose.yaml`): clamd now binds `127.0.0.1:3310` only (new
   `deploy/base/clamd.conf`, shipped as a generated ConfigMap), the TLS sidecar forwards to `127.0.0.1:3310`, and
   clamd's startup, readiness and liveness probes are `clamdscan --ping` exec probes instead of TCP-socket probes. The
