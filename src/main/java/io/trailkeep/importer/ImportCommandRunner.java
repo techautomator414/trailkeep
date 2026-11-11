@@ -2,6 +2,8 @@
 // Copyright 2026 Charlie Genova and contributors
 package io.trailkeep.importer;
 
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.time.InstantSource;
 import java.util.List;
@@ -60,7 +62,10 @@ class ImportCommandRunner implements ApplicationRunner {
             throw new IllegalStateException("import.mapping is required");
         }
         List<MappingProblem> problems = validateMapping.run(run, mapping);
-        problems.forEach(problem -> LOG.warn("Import run {} mapping: {} at {}", run, problem.code(), shown(problem)));
+        long runId = run;
+        for (MappingProblem problem : problems) {
+            LOG.warn("Import run {} mapping: {} at {}", runId, problem.code().name(), shown(problem));
+        }
         if (!problems.isEmpty()) {
             throw new IllegalStateException(
                     "The mapping has " + problems.size() + " problems; run " + run + " lists them as issues");
@@ -68,9 +73,17 @@ class ImportCommandRunner implements ApplicationRunner {
         LOG.info("Import run {}: mapping structure valid", run);
     }
 
-    /** A lookup's entries are legacy values, so a place inside one is logged as the lookup's name only. */
+    /**
+     * The place as logged. A lookup's entries are legacy values, so a place inside one is the lookup's name only, and
+     * each key is URL-encoded, so a key with a line break (YAML allows one) cannot forge a log line.
+     */
     private static String shown(MappingProblem problem) {
-        String[] parts = problem.pointer().split("/", 4);
-        return parts.length == 4 && "lookups".equals(parts[1]) ? "/lookups/" + parts[2] : problem.pointer();
+        String[] parts = problem.pointer().split("/", -1);
+        int keep = parts.length > 3 && "lookups".equals(parts[1]) ? 3 : parts.length;
+        StringBuilder place = new StringBuilder();
+        for (int i = 1; i < keep; i++) {
+            place.append('/').append(URLEncoder.encode(parts[i], StandardCharsets.UTF_8));
+        }
+        return place.toString();
     }
 }

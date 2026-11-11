@@ -34,7 +34,7 @@ import tools.jackson.dataformat.yaml.YAMLMapper;
  * a value.
  */
 @Component
-class MappingValidator {
+final class MappingValidator {
 
     /** A mapping file is configuration: anything larger is refused before it is parsed. */
     static final int MAX_BYTES = 1024 * 1024;
