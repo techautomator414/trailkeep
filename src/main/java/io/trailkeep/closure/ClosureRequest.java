@@ -2,6 +2,7 @@
 // Copyright 2026 Charlie Genova and contributors
 package io.trailkeep.closure;
 
+import io.trailkeep.user.ImportPeopleService;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -69,6 +70,10 @@ class ClosureRequest {
     @Column(name = "REASON", length = 1000)
     private @Nullable String reason;
 
+    /** An imported closure (WP-26, V15): approved in the legacy tracker, recorded here, never decided in Trailkeep. */
+    @Column(name = "IMPORTED", nullable = false, updatable = false)
+    private boolean imported;
+
     @Version
     @Column(name = "VERSION", nullable = false)
     private int version;
@@ -104,9 +109,39 @@ class ClosureRequest {
         this.requestedAt = now;
     }
 
+    /**
+     * An imported closure (WP-26 part h, design §7.1, R6 8): already approved, requested by the import principal and
+     * decided by the legacy-approval principal at the legacy closing time.
+     *
+     * @param caseId the imported case
+     * @param principals the import principal (requester) and the legacy-approval principal (approver and decider)
+     * @param outcome the legacy outcome
+     * @param resolutionSummary the legacy summary
+     * @param closedAt when the legacy case was closed
+     * @return the request, not yet persisted
+     */
+    static ClosureRequest imported(
+            long caseId,
+            ImportPeopleService.ImportPrincipals principals,
+            String outcome,
+            String resolutionSummary,
+            Instant closedAt) {
+        ClosureRequest request = new ClosureRequest(
+                caseId, principals.importer(), principals.legacyApproval(), outcome, resolutionSummary, null, closedAt);
+        request.decision = ClosureDecision.APPROVED;
+        request.decidedBy = principals.legacyApproval();
+        request.decidedAt = closedAt;
+        request.imported = true;
+        return request;
+    }
+
     @Nullable
     Long getId() {
         return id;
+    }
+
+    boolean isImported() {
+        return imported;
     }
 
     long getCaseId() {

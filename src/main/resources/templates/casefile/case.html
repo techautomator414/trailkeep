@@ -99,8 +99,10 @@
   <section th:if="${lastDecision != null and (lastDecision.requiresChanges or c.status.name() == 'CLOSED')}"
            th:with="d=${lastDecision}" th:class="${d.requiresChanges} ? 'alert alert-warning' : 'alert alert-secondary'"
            aria-labelledby="tk-decided-title">
-    <h2 id="tk-decided-title" class="h5" th:text="#{'tk.decision.heading.' + ${d.decision}}">Closure</h2>
-    <p th:text="#{'tk.decision.decided.' + ${d.decision}(${d.decidedBy},
+    <h2 id="tk-decided-title" class="h5"
+        th:text="${d.imported} ? #{tk.decision.heading.imported} : #{'tk.decision.heading.' + ${d.decision}}">Closure</h2>
+    <p th:text="${d.imported} ? #{tk.decision.decided.imported(${#temporals.format(d.decidedAt, 'yyyy-MM-dd HH:mm')},
+                  ${d.outcome})} : #{'tk.decision.decided.' + ${d.decision}(${d.decidedBy},
                   ${#temporals.format(d.decidedAt, 'yyyy-MM-dd HH:mm')}, ${d.outcome})}">Approved by X.</p>
     <th:block th:if="${d.reason != null}">
       <h3 class="h6" th:text="#{tk.decision.reason.title}">Reason</h3>

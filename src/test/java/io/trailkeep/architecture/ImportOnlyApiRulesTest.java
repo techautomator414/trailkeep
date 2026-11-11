@@ -9,24 +9,33 @@ import com.tngtech.archunit.core.domain.JavaClasses;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.tngtech.archunit.core.importer.ImportOption;
 import com.tngtech.archunit.lang.ArchRule;
+import com.tngtech.archunit.lang.CompositeArchRule;
 import com.tngtech.archunit.lang.EvaluationResult;
+import io.trailkeep.closure.ClosureImportService;
 import io.trailkeep.document.AttachmentImportService;
 import org.junit.jupiter.api.Test;
 
 /**
  * The import-only APIs relax rules for imports alone (docs/design/importer.md §8.1, R6), so only the {@code importer}
- * module may call them, besides the module that implements each. The rule is checked on the production classes and
- * proven to fire on a planted caller in {@code trailkeep.archfixtures}.
+ * module may call them, besides the module that implements each (and only that one: {@code closure} may not call the
+ * attachment API). One rule per API, checked together on the production classes and proven to fire on a planted
+ * caller in {@code trailkeep.archfixtures}. Each later import-only API adds its line here.
  */
 class ImportOnlyApiRulesTest {
 
-    static final ArchRule IMPORT_APIS_CALLED_ONLY_BY_THE_IMPORTER = noClasses()
-            .that()
-            .resideOutsideOfPackages("io.trailkeep.importer..", "io.trailkeep.document..")
-            .should()
-            .dependOnClassesThat()
-            .areAssignableTo(AttachmentImportService.class)
-            .because("the import-only APIs relax upload rules for imports alone (design §8.1, R6)");
+    static final ArchRule IMPORT_APIS_CALLED_ONLY_BY_THE_IMPORTER = CompositeArchRule.of(
+                    onlyTheImporterAnd("io.trailkeep.document..", AttachmentImportService.class))
+            .and(onlyTheImporterAnd("io.trailkeep.closure..", ClosureImportService.class));
+
+    private static ArchRule onlyTheImporterAnd(String module, Class<?> api) {
+        return noClasses()
+                .that()
+                .resideOutsideOfPackages("io.trailkeep.importer..", module)
+                .should()
+                .dependOnClassesThat()
+                .areAssignableTo(api)
+                .because("the import-only APIs relax Trailkeep's rules for imports alone (design §8.1, R6)");
+    }
 
     @Test
     void onlyTheImporterUsesTheImportOnlyApis() {
@@ -44,6 +53,8 @@ class ImportOnlyApiRulesTest {
 
         assertThat(result.hasViolation()).isTrue();
         assertThat(result.getFailureReport().getDetails())
-                .anySatisfy(detail -> assertThat(detail).contains("ImportApiOutsideImporter"));
+                .anySatisfy(
+                        detail -> assertThat(detail).contains("ImportApiOutsideImporter", "AttachmentImportService"))
+                .anySatisfy(detail -> assertThat(detail).contains("ImportApiOutsideImporter", "ClosureImportService"));
     }
 }
