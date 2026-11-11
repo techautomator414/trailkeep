@@ -104,7 +104,7 @@
         event.detail.isError = false;
       } else if (status >= 500) {
         event.detail.shouldSwap = false;
-        announce(document.body.getAttribute('data-tk-error-text') || 'Something went wrong. Please try again.');
+        announce(document.body.getAttribute('data-tk-error-text'));
       }
     });
     document.addEventListener('htmx:afterSwap', function (event) {
@@ -154,7 +154,7 @@
           dialogs.close(document.getElementById('tk-session-dialog'));
           if (response.ok) {
             resetSessionTimer();
-            announce(document.body.getAttribute('data-tk-extended-text') || 'Your session was extended.');
+            announce(document.body.getAttribute('data-tk-extended-text'));
           } else {
             window.location.reload();
           }

@@ -330,6 +330,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- `app.js` carries no English of its own (WP-27 part c, which closes WP-27): the server-error and session-extended
+  announcements read only the layout's `data-tk-error-text` and `data-tk-extended-text`, which come from
+  `messages.properties`; the two hard-coded fallbacks are gone.
 - The wording of all 11 mails (subject, in-app alert, text and HTML body) moved out of `templates/notification/*` into
   `messages.properties` (`tk.mail.<id>.*`, 91 keys), read through the application's `MessageSource` (WP-27 part b).
   The text is the same (`MailTemplatesTest` renders every mail and compares it with what the templates produced);
