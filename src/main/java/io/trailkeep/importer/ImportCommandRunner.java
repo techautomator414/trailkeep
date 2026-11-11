@@ -61,15 +61,16 @@ class ImportCommandRunner implements ApplicationRunner {
         if (expired > 0) {
             LOG.info("Staging purged for {} expired import runs", expired);
         }
+        long runId = run;
         if ("validate-mapping".equals(command)) {
-            validateMapping(run);
+            validateMapping(runId);
             return;
         }
         if ("purge-staging".equals(command)) {
-            purger.purge(run, clock.instant());
-            LOG.info("Import run {}: staging purged", run.longValue());
+            purger.purge(runId, clock.instant());
+            LOG.info("Import run {}: staging purged", runId);
         }
-        LOG.info("Import status: {}", statuses.status(run, clock.instant()));
+        LOG.info("Import status: {}", statuses.status(runId, clock.instant()));
     }
 
     private void validateMapping(long run) {
