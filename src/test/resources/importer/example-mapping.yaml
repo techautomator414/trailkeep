@@ -1,0 +1,88 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Charlie Genova and contributors
+# A synthetic, complete mapping file (docs/design/importer.md §6.1) against a synthetic legacy tracker. Every name in
+# it is invented; it maps no real system.
+version: 1
+source:
+  id: legacy1
+  kind: jdbc
+  vendor: sqlserver
+  url: ${import.source.url}
+  user: ${import.source.user}
+  timezone: America/Chicago
+  dstAmbiguity: earlier
+limits:
+  maxErrorRate: 0.0
+  acceptSkip: [ATTACHMENT_TOO_LARGE]
+  batchSize: 500
+lookups:
+  status: { "Open": OPEN, "In Review": OPEN, "Closed": CLOSED, "Void": CLOSED }
+  priority: { "1": HIGH, "2": NORMAL, "3": NORMAL }
+  outcome: { "Substantiated": SUBSTANTIATED, "Unfounded": UNSUBSTANTIATED }
+  team: { file: lookups/teams.csv, key: legacy_unit, value: trailkeep_team }
+  historyField: { "State": status, "Assignee": owner, "Details": description, "Subject": subject }
+entities:
+  case:
+    query: |
+      SELECT c.case_id, c.case_no, c.subject_line, c.details, c.unit, c.assignee, c.state, c.result,
+             c.opened, c.closed, c.found_on, c.confidential, c.acl_entries, c.hold_flag
+      FROM dbo.cases c
+    key: case_id
+    keyCase: sensitive
+    fields:
+      legacyNumber: case_no
+      title: { trim: subject_line, maxLength: 200, onOverflow: truncateWithIssue }
+      description: { coalesce: [details, "(no description in the legacy record)"],
+                     maxLength: 20000, onOverflow: continueInComment }
+      teamKey: { lookup: team, from: unit, onMissing: fail }
+      ownerKey: assignee
+      status: { lookup: status, from: state, onMissing: fail }
+      closureOutcome: { lookup: outcome, from: result, onMissing: default, default: UNSUBSTANTIATED }
+      priority: { const: NORMAL }
+      sensitivity: { when: { column: confidential, equals: "Y" }, then: RESTRICTED, else: STANDARD }
+      legacyAcl: { when: { column: acl_entries, notBlank: true }, then: true, else: false }
+      legalHold: { when: { column: hold_flag, equals: "Y" }, then: true, else: false }
+      openedAt: { timestamp: opened }
+      closedAt: { timestamp: closed }
+      identifiedOn: { date: { coalesce: [found_on, opened] } }
+      caseTypeKey: { const: general-review }
+  comment:
+    query: SELECT note_id, case_id, author, created, body FROM dbo.notes
+    key: note_id
+    parent: { entity: case, columns: [case_id] }
+    fields:
+      authorKey: author
+      writtenAt: { timestamp: created }
+      body: { text: body, format: plain }
+  attachment:
+    query: SELECT file_id, case_id, file_name, size_bytes, uploaded, uploader FROM dbo.files
+    key: file_id
+    parent: { entity: case, columns: [case_id] }
+    fields:
+      fileName: file_name
+      uploadedAt: { timestamp: uploaded }
+      uploaderKey: uploader
+      content: { query: "SELECT content FROM dbo.files WHERE file_id = ?", size: size_bytes }
+  event:
+    query: SELECT audit_id, case_id, changed_at, changed_by, field_name, old_val, new_val FROM dbo.case_audit
+    key: audit_id
+    parent: { entity: case, columns: [case_id] }
+    fields:
+      at: { timestamp: changed_at }
+      whoKey: changed_by
+      kind: { const: FIELD_CHANGE }
+      field: { lookup: historyField, from: field_name, onMissing: default, default: other }
+      oldValue: old_val
+      newValue: new_val
+attachments:
+  root: /var/lib/trailkeep/import/files
+  stripPrefix: '\\fileshare\cases\'
+people:
+  query: SELECT user_id, display_name, email FROM dbo.users
+  key: user_id
+  match: [externalId, email]
+  unmatched: snapshot
+defaults:
+  owner: { byTeam: lookups/default-owners.csv }
+visibility:
+  onUnrepresentableAcl: restricted
