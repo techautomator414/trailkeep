@@ -55,6 +55,20 @@
     </tr>
     </tbody>
   </table>
+  <h2 id="tk-test-mail" th:text="#{tk.system.test}">Send me a test</h2>
+  <p th:if="${testOutcome != null}" class="alert alert-info" data-tk-toast
+     th:text="#{'tk.system.test.outcome.' + ${testOutcome}}">Queued.</p>
+  <p id="tk-test-hint" th:text="#{tk.system.test.hint}">Sends one mail with sample values to your own address.</p>
+  <form method="post" th:action="@{/admin/system/test-mail}">
+    <div class="mb-3">
+      <label class="form-label" for="tk-test-template" th:text="#{tk.system.test.template}">Mail</label>
+      <select class="form-select" id="tk-test-template" name="template" aria-describedby="tk-test-hint">
+        <option th:each="t : ${templates}" th:value="${t}" th:text="#{'tk.system.test.template.' + ${t}}"
+          >Comment added</option>
+      </select>
+    </div>
+    <button class="btn btn-outline-primary" type="submit" th:text="#{tk.system.test.send}">Send me a test</button>
+  </form>
 </main>
 </body>
 </html>

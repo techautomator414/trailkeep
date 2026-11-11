@@ -18,6 +18,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   entities gain write constructors. A mapping's RE2 patterns and date formats are compiled once per mapping instead of
   per row, and `validate-mapping` compiles all of them and the time zone first: `BAD_PATTERN`, `BAD_FORMAT` and
   `BAD_TIMEZONE` are FATAL mapping problems.
+- "Send me a test" on the System screen (WP-25 part e, BUILD_PLAN §4.6 "Email wording"): a System Admin or a
+  Compliance Admin picks one of the 11 mails and has it rendered with sample values (`tk.system.test.sample.*`, a
+  case number of zeros, a link to the System screen) and queued through the outbox to their own address; there is no
+  address field. `POST /admin/system/test-mail` needs CSRF; anyone else gets 403 and a template outside the list 422.
+  Audited as `TEST_MAIL_QUEUED` with the template id, never the address. One test per person every 5 minutes on each
+  replica; a person the identity provider gives no address is told so.
+
 - clamd down alert (WP-25 part f, BUILD_PLAN §16): in `clamd` mode every replica asks clamd for `VERSION` once a
   minute (`ScannerProbe`, `app.attachments.clamd.probe-cron`, the same 3-second bound as the System screen) and reports
   gauge `trailkeep.scanner.up`, 1 or 0 (absent with external scanning). `TrailkeepScannerDown` (critical) fires when

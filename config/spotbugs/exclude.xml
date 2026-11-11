@@ -227,6 +227,13 @@
     before anything is read. It shows job names, times and counts, the outbox's counts and clamd's version line,
     never case content, a recipient or a mail body. Covered by SystemControllerIT and SystemAccessibilityIT. Approved
     in the security-reviewer role on #139.
+    TestMailController (WP-25 part e): behind login; POST /admin/system/test-mail only, with CSRF (403 without).
+    TestMailService takes nothing from the request but the template id: permissions are rebuilt from the database,
+    anyone but a System Admin or a Compliance Admin gets 403, a template outside its fixed list 422; the recipient is
+    always the actor's own address from the directory (no address parameter exists), the mail goes through the outbox,
+    TEST_MAIL_QUEUED is audited with the template id only, and one test per person per 5 minutes per replica. The
+    redirect is the fixed path /admin/system plus an enum name. Covered by TestMailControllerIT. Needs
+    security-reviewer approval.
     Approved in the security-reviewer role on #20. Listed by class, never by pattern alone, so each new controller
     is reviewed the same way.
   -->
@@ -258,6 +265,7 @@
       <Class name="io.trailkeep.web.LegalHoldController"/>
       <Class name="io.trailkeep.web.PreferencesController"/>
       <Class name="io.trailkeep.web.SystemController"/>
+      <Class name="io.trailkeep.web.TestMailController"/>
     </Or>
   </Match>
   <!--
