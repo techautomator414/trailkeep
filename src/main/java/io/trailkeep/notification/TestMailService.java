@@ -10,7 +10,7 @@ import java.util.List;
  * Compliance Admin has one of the real mail templates rendered with sample values and queued to their own address,
  * so wording overrides in {@code messages_*.properties} and the mail relay can be checked end to end. There is no
  * address field: the recipient is always the actor. It goes through the outbox like any mail, is audited, and is
- * limited to one per person every {@link #INTERVAL_MINUTES} minutes on each replica.
+ * limited to one per person every {@link #INTERVAL_MINUTES} minutes, from the audit trail, across replicas.
  */
 public interface TestMailService {
 

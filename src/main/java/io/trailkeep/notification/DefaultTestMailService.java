@@ -5,6 +5,7 @@ package io.trailkeep.notification;
 import io.trailkeep.audit.AuditEntry;
 import io.trailkeep.audit.AuditOrigin;
 import io.trailkeep.audit.AuditRecorder;
+import io.trailkeep.audit.AuditTrailService;
 import io.trailkeep.shared.DomainException;
 import io.trailkeep.shared.config.AppProperties;
 import io.trailkeep.user.GlobalRole;
@@ -20,41 +21,46 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.ConcurrentHashMap;
 import org.springframework.context.MessageSource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Queues a test mail to the actor's own address. The sample values are synthetic: a case number of zeros, and a
- * title, person, team and outcome from {@code tk.system.test.sample.*}. The interval is kept per replica in memory:
- * enough to stop the button being used to flood the actor's own mailbox, without a table for it.
+ * title, person, team and outcome from {@code tk.system.test.sample.*}. The interval is read from the audit trail (the
+ * actor's latest {@code TEST_MAIL_QUEUED}), so it holds across replicas and restarts and a rolled-back request leaves
+ * nothing behind. Two requests in flight at the same moment can both pass the check before either commits; the worst
+ * case is two mails to the actor's own address, which is accepted.
  */
 @Service
 @Transactional
 class DefaultTestMailService implements TestMailService {
 
     private static final String SAMPLE = "tk.system.test.sample.";
+    private static final String ENTITY = "USER";
+    private static final String ACTION = "TEST_MAIL_QUEUED";
 
     private final NotificationService notifications;
     private final UserDirectoryService directory;
     private final AuditRecorder audit;
+    private final AuditTrailService trail;
     private final MessageSource messages;
     private final InstantSource clock;
     private final ZoneId zone;
     private final String baseUrl;
-    private final Map<Long, Instant> lastSent = new ConcurrentHashMap<>();
 
     DefaultTestMailService(
             NotificationService notifications,
             UserDirectoryService directory,
             AuditRecorder audit,
+            AuditTrailService trail,
             MessageSource messages,
             InstantSource clock,
             AppProperties app) {
         this.notifications = notifications;
         this.directory = directory;
         this.audit = audit;
+        this.trail = trail;
         this.messages = messages;
         this.clock = clock;
         this.zone = app.timezone();
@@ -75,8 +81,8 @@ class DefaultTestMailService implements TestMailService {
         }
         long userId = actor.userId();
         Instant now = clock.instant();
-        Instant last = lastSent.get(userId);
-        if (last != null && Duration.between(last, now).toMinutes() < INTERVAL_MINUTES) {
+        Optional<Instant> last = trail.latest(ENTITY, userId, ACTION);
+        if (last.isPresent() && Duration.between(last.get(), now).compareTo(Duration.ofMinutes(INTERVAL_MINUTES)) < 0) {
             return Outcome.TOO_SOON;
         }
         Optional<String> address = directory.mailAddress(userId);
@@ -84,15 +90,14 @@ class DefaultTestMailService implements TestMailService {
             return Outcome.NO_ADDRESS;
         }
         notifications.enqueue(address.get(), templateId, sample(now), null);
-        lastSent.put(userId, now);
         audit.record(new AuditEntry(
                 userId,
                 actorName,
                 AuditOrigin.UI,
                 null,
-                "USER",
+                ENTITY,
                 userId,
-                "TEST_MAIL_QUEUED",
+                ACTION,
                 audit.diff(null, new Queued(templateId))));
         return Outcome.QUEUED;
     }

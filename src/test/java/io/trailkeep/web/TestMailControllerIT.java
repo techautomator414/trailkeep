@@ -15,6 +15,9 @@ import io.trailkeep.testsupport.RequiresDocker;
 import io.trailkeep.testsupport.WithAppUser;
 import io.trailkeep.user.GlobalRole;
 import jakarta.persistence.EntityManager;
+import java.sql.Timestamp;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -32,9 +35,9 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * "Send me a test" over HTTP (WP-25 part e): a System Admin's test is queued through the outbox to their own address
  * only, with sample values and a link to the System screen, audited with the template id and never the address, and a
- * second one within 5 minutes is refused; a person without an address is told so; CSRF is required, an unknown template
- * is 422, an Analyst 403, and every template renders with the sample values. Each test uses its own people, because
- * the interval is kept per person for the life of the application. Rows are rolled back after each test.
+ * second one within 5 minutes is refused, also when the first was queued on another replica (the interval is read
+ * from the audit trail); a person without an address is told so; CSRF is required, an unknown template
+ * is 422, an Analyst 403, and every template renders with the sample values. Rows are rolled back after each test.
  */
 // "IT" is the Failsafe suffix Part B mandates for integration tests, not an abbreviation.
 @SuppressWarnings("checkstyle:AbbreviationAsWordInName")
@@ -127,6 +130,21 @@ class TestMailControllerIT {
         assertThat(page("/admin/system?test=SOMETHING")).doesNotContain("Not sent", "Test mail queued");
     }
 
+    /** The interval is read from the audit trail, so a test queued on another replica counts too. */
+    @Test
+    void theIntervalComesFromTheAuditTrailNotFromThisReplica() {
+        long other = FIRST_OF_MANY + 50;
+        user(other, "COMPLIANCE_ADMIN", "other-replica@example.invalid");
+        queuedElsewhere(-989_001L, other, Instant.now().minus(Duration.ofMinutes(3)));
+        assertThat(testMail.sendTest(directory.permissionsOf(other), "Synthetic", "comment-added"))
+                .isEqualTo(TestMailService.Outcome.TOO_SOON);
+
+        jdbc.update("DELETE FROM AUDIT_EVENT WHERE ID = -989001");
+        queuedElsewhere(-989_002L, other, Instant.now().minus(Duration.ofMinutes(6)));
+        assertThat(testMail.sendTest(directory.permissionsOf(other), "Synthetic", "comment-added"))
+                .isEqualTo(TestMailService.Outcome.QUEUED);
+    }
+
     @Test
     @WithAppUser(id = ANALYST)
     void anyoneElseIsForbidden() throws Exception {
@@ -168,6 +186,17 @@ class TestMailControllerIT {
                 .andReturn()
                 .getResponse()
                 .getContentAsString();
+    }
+
+    /** A TEST_MAIL_QUEUED row as another replica would have written it. */
+    private void queuedElsewhere(long id, long userId, Instant at) {
+        jdbc.update(
+                "INSERT INTO AUDIT_EVENT (ID, AT_TS, ACTOR_ID, ORIGIN, ENTITY_TYPE, ENTITY_ID, ACTION)"
+                        + " VALUES (?, ?, ?, 'UI', 'USER', ?, 'TEST_MAIL_QUEUED')",
+                id,
+                Timestamp.from(at),
+                userId,
+                userId);
     }
 
     private void user(long id, @Nullable String role, String email) {
