@@ -3,6 +3,7 @@
 package io.trailkeep.web;
 
 import io.trailkeep.document.ScanEngineService;
+import io.trailkeep.importer.ImportRunService;
 import io.trailkeep.notification.OutboxStatusService;
 import io.trailkeep.notification.OutboxStatusService.Backlog;
 import io.trailkeep.security.TrailkeepOidcUser;
@@ -34,9 +35,9 @@ import org.springframework.web.bind.annotation.GetMapping;
 /**
  * The System screen (WP-25, BUILD_PLAN §3.1 "System health, scheduler, scan engine", §4.6): System Admins and
  * Compliance Admins see each scheduled job's last success on any replica ({@code JOB_RUN}, the cluster truth), whether
- * it is late against its health indicator's grace, the outbox's backlog and failures, and whether clamd answers, with
- * its version. Anyone else gets 403. It reads, never writes, and shows no case content. Times are in
- * {@code app.timezone}.
+ * it is late against its health indicator's grace, the outbox's backlog and failures, whether clamd answers, with its
+ * version, and the last import run. Anyone else gets 403. It reads, never writes, and shows no case content. Times are
+ * in {@code app.timezone}.
  */
 @Controller
 class SystemController {
@@ -46,6 +47,7 @@ class SystemController {
     private final OutboxStatusService outbox;
     private final ScanEngineService scanner;
     private final UserDirectoryService directory;
+    private final ImportRunService imports;
     private final InstantSource clock;
     private final ZoneId zone;
 
@@ -55,6 +57,7 @@ class SystemController {
             OutboxStatusService outbox,
             ScanEngineService scanner,
             UserDirectoryService directory,
+            ImportRunService imports,
             InstantSource clock,
             AppProperties app) {
         this.runs = runs;
@@ -62,6 +65,7 @@ class SystemController {
         this.outbox = outbox;
         this.scanner = scanner;
         this.directory = directory;
+        this.imports = imports;
         this.clock = clock;
         this.zone = app.timezone();
     }
@@ -88,6 +92,24 @@ class SystemController {
      */
     record JobLine(String job, @Nullable LocalDateTime lastSuccess, int items, JobState state) {}
 
+    /**
+     * The last import run, as the screen shows it.
+     *
+     * @param id the run's id
+     * @param kind {@code IMPORT} or {@code RELINK}
+     * @param status its status code
+     * @param requested when it was requested, in {@code app.timezone}, to the minute
+     * @param updated when it last changed, in {@code app.timezone}, to the minute
+     * @param rowsLoaded the rows loaded so far, or {@code null} before loading
+     */
+    record ImportLine(
+            long id,
+            String kind,
+            String status,
+            LocalDateTime requested,
+            LocalDateTime updated,
+            @Nullable Long rowsLoaded) {}
+
     @GetMapping("/admin/system")
     String show(@AuthenticationPrincipal TrailkeepOidcUser principal, Model model) {
         UserPermissions user = directory.permissionsOf(principal.userId());
@@ -112,6 +134,17 @@ class SystemController {
         model.addAttribute("outbox", backlog);
         model.addAttribute("oldestPending", oldest == null ? null : local(oldest));
         model.addAttribute("scanner", scanner.status());
+        model.addAttribute(
+                "lastImport",
+                imports.latest()
+                        .map(run -> new ImportLine(
+                                run.id(),
+                                run.kind(),
+                                run.status(),
+                                local(run.requestedAt()),
+                                local(run.updatedAt()),
+                                run.rowsLoaded()))
+                        .orElse(null));
         return "web/system";
     }
 

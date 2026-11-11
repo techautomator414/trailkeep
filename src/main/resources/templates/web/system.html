@@ -38,6 +38,22 @@
   <h2 th:text="#{tk.system.scanner}">Virus scanner</h2>
   <p th:text="#{'tk.system.scanner.' + ${scanner.state}}">clamd answers; uploads are scanned.</p>
   <p th:if="${scanner.version != null}" th:text="#{tk.system.scanner.version(${scanner.version})}">Version</p>
+  <h2 th:text="#{tk.system.import}">Last import run</h2>
+  <p th:if="${lastImport == null}" th:text="#{tk.system.import.none}">No import has been run.</p>
+  <dl th:if="${lastImport != null}" class="row">
+    <dt class="col-sm-4" th:text="#{tk.system.import.run}">Run</dt>
+    <dd class="col-sm-8" th:text="#{tk.system.import.run.value(${lastImport.id},
+        #{'tk.system.import.kind.' + ${lastImport.kind}})}">12 (import)</dd>
+    <dt class="col-sm-4" th:text="#{tk.system.import.status}">Status</dt>
+    <dd class="col-sm-8" th:text="#{'tk.system.import.status.' + ${lastImport.status}}">Loaded</dd>
+    <dt class="col-sm-4" th:text="#{tk.system.import.requested}">Requested</dt>
+    <dd class="col-sm-8" th:text="${#temporals.format(lastImport.requested, 'yyyy-MM-dd HH:mm')}">2026-11-11 09:00</dd>
+    <dt class="col-sm-4" th:text="#{tk.system.import.updated}">Last change</dt>
+    <dd class="col-sm-8" th:text="${#temporals.format(lastImport.updated, 'yyyy-MM-dd HH:mm')}">2026-11-11 09:30</dd>
+    <dt class="col-sm-4" th:text="#{tk.system.import.rows}">Rows loaded</dt>
+    <dd class="col-sm-8" th:text="${lastImport.rowsLoaded != null} ? ${lastImport.rowsLoaded}
+        : #{tk.system.import.rows.none}">Not loaded yet</dd>
+  </dl>
 </main>
 </body>
 </html>

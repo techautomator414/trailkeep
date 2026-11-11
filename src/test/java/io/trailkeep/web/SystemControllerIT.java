@@ -32,8 +32,9 @@ import org.springframework.transaction.annotation.Transactional;
  * The System screen over HTTP (WP-25): System Admins and Compliance Admins see every job from {@code JOB_RUN} with its
  * last success in {@code app.timezone} and its state against its health indicator (on time, late, never run, or not
  * watched, as the purge is), the outbox's waiting and failed counts with the oldest waiting time, and the scanner (here
- * unavailable: the test profile points clamd at a closed port); an Analyst gets 403 and nothing else is shown;
- * anonymous requests go to the identity provider. Rows are rolled back after each test.
+ * unavailable: the test profile points clamd at a closed port) and the last import run (none, the only one, or the
+ * later requested of two); an Analyst gets 403 and nothing else is shown; anonymous requests go to the identity
+ * provider. Rows are rolled back after each test.
  */
 // "IT" is the Failsafe suffix Part B mandates for integration tests, not an abbreviation.
 @SuppressWarnings("checkstyle:AbbreviationAsWordInName")
@@ -72,6 +73,9 @@ class SystemControllerIT {
         run("archive", now.minus(Duration.ofHours(5)), 0);
         run("purge", now.minus(Duration.ofDays(1)), 3);
         jdbc.update("DELETE FROM NOTIFICATION_OUTBOX");
+        jdbc.update("DELETE FROM IMPORT_ISSUE");
+        jdbc.update("DELETE FROM IMPORT_RUN_SUMMARY");
+        jdbc.update("DELETE FROM IMPORT_RUN");
         mail(987_101L, "PENDING", queued);
         mail(987_102L, "PENDING", now.minus(Duration.ofMinutes(1)));
         mail(987_103L, "FAILED", now.minus(Duration.ofDays(2)));
@@ -103,6 +107,41 @@ class SystemControllerIT {
     void complianceAdminsSeeItTooAndAnEmptyOutboxSaysSo() throws Exception {
         jdbc.update("DELETE FROM NOTIFICATION_OUTBOX");
         assertThat(html()).contains("<h1>System</h1>", "Nothing is waiting", "<dd class=\"col-sm-8\">0</dd>");
+    }
+
+    @Test
+    @WithAppUser(id = SYSTEM_ADMIN, globalRole = GlobalRole.SYSTEM_ADMIN)
+    void noImportRunSaysSo() throws Exception {
+        assertThat(html()).contains("<h2>Last import run</h2><p>No import has been run.</p>");
+    }
+
+    @Test
+    @WithAppUser(id = SYSTEM_ADMIN, globalRole = GlobalRole.SYSTEM_ADMIN)
+    void theOnlyImportRunIsShownWithoutALoadedCountBeforeLoading() throws Exception {
+        Instant requested = Instant.now().minus(Duration.ofHours(2)).truncatedTo(ChronoUnit.SECONDS);
+        importRun(987_201L, "IMPORT", "DRY_RUN", requested, 0);
+
+        assertThat(html())
+                .contains("<dd class=\"col-sm-8\">987201 (import)</dd>")
+                .contains("<dd class=\"col-sm-8\">Dry run done, waiting for sign-off</dd>")
+                .contains("<dd class=\"col-sm-8\">" + MINUTE.format(requested.atZone(ZoneOffset.UTC)) + "</dd>")
+                .contains("<dd class=\"col-sm-8\">"
+                        + MINUTE.format(requested.plus(Duration.ofMinutes(30)).atZone(ZoneOffset.UTC)) + "</dd>")
+                .contains("<dd class=\"col-sm-8\">Not loaded yet</dd>")
+                .doesNotContain("No import has been run.", "synthetic-source");
+    }
+
+    @Test
+    @WithAppUser(id = COMPLIANCE_ADMIN, globalRole = GlobalRole.COMPLIANCE_ADMIN)
+    void ofTwoImportRunsTheLaterRequestedIsShown() throws Exception {
+        Instant now = Instant.now().truncatedTo(ChronoUnit.SECONDS);
+        importRun(987_203L, "IMPORT", "RECONCILED", now.minus(Duration.ofDays(3)), 1_250);
+        importRun(987_202L, "RELINK", "LOADED", now.minus(Duration.ofHours(1)), 42);
+
+        assertThat(html())
+                .contains("<dd class=\"col-sm-8\">987202 (owner relink)</dd>")
+                .contains("<dd class=\"col-sm-8\">Loaded</dd>", "<dd class=\"col-sm-8\">42</dd>")
+                .doesNotContain("987203", "Loaded and reconciled");
     }
 
     @Test
@@ -148,6 +187,19 @@ class SystemControllerIT {
                 job,
                 Timestamp.from(at),
                 items);
+    }
+
+    private void importRun(long id, String kind, String status, Instant requested, long rowsLoaded) {
+        jdbc.update(
+                "INSERT INTO IMPORT_RUN (ID, KIND, SOURCE_ID, STATUS, REQUESTED_BY, REQUESTED_AT, ROWS_LOADED,"
+                        + " UPDATED_AT) VALUES (?, ?, 'synthetic-source', ?, ?, ?, ?, ?)",
+                id,
+                kind,
+                status,
+                SYSTEM_ADMIN,
+                Timestamp.from(requested),
+                rowsLoaded,
+                Timestamp.from(requested.plus(Duration.ofMinutes(30))));
     }
 
     private void mail(long id, String status, Instant at) {
