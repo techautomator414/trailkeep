@@ -298,4 +298,23 @@
       </And>
     </Or>
   </Match>
+  <!--
+    SQL_INJECTION_JDBC and SQL_PREPARED_STATEMENT_GENERATED_FROM_NONCONSTANT_STRING in SourceQueryJdbcDao.run (WP-26
+    part n, docs/design/importer.md §4.1, §10; ADR-0014 Part B amendment): the importer runs the operator's own source
+    queries against a legacy database, so the SQL is not a constant by design. It is never built from data: it comes
+    only from the reviewed mapping file, and run accepts nothing but a SourceQueryValidator.ValidatedSourceQuery, whose
+    only constructor is private to the validator (exactly one SELECT or WITH ... SELECT; no INTO, locking, table
+    function, database link or function outside the vendor allow-list). Values are bind parameters only, the session
+    is a read-only snapshot under the read-only source account of docs/importer/source-accounts.md, and the query is
+    never wrapped or rewritten. Covered by SourceQueryValidatorTest and PostgresSourceQueryIT.
+    Needs security-reviewer approval.
+  -->
+  <Match>
+    <Class name="io.trailkeep.importer.SourceQueryJdbcDao"/>
+    <Method name="run"/>
+    <Or>
+      <Bug pattern="SQL_INJECTION_JDBC"/>
+      <Bug pattern="SQL_PREPARED_STATEMENT_GENERATED_FROM_NONCONSTANT_STRING"/>
+    </Or>
+  </Match>
 </FindBugsFilter>
