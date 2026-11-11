@@ -103,24 +103,24 @@ class ManagementEndpointsIT {
     }
 
     /**
-     * The alerting rules in {@code deploy/components/prometheus-rules} (WP-25) name only metrics the application
-     * serves, so a renamed gauge cannot leave a rule silently matching nothing; and every alert carries a severity, a
-     * summary and a runbook link into {@code deploy/README.md}.
+     * The alerting rules in {@code deploy/components/prometheus-rules} (WP-25) name only metrics the application or
+     * its HikariCP pool serves, so a renamed gauge cannot leave a rule silently matching nothing; and every alert
+     * carries a severity, a summary and a runbook link into {@code deploy/README.md}.
      */
     @Test
     void everyMetricTheAlertingRulesNameIsServedAndEveryAlertHasARunbook() throws Exception {
         String rules = Files.readString(Path.of("deploy/components/prometheus-rules/prometheus-rules.yaml"));
         String scrape = get(managementPort, "/actuator/prometheus").body();
         Set<String> names = new TreeSet<>();
-        Matcher metric = Pattern.compile("\\btrailkeep_[a-z_]+").matcher(rules);
+        Matcher metric = Pattern.compile("\\b(?:trailkeep|hikaricp)_[a-z_]+").matcher(rules);
         while (metric.find()) {
             names.add(metric.group());
         }
-        assertThat(names).hasSizeGreaterThanOrEqualTo(6);
+        assertThat(names).hasSizeGreaterThanOrEqualTo(7).contains("hikaricp_connections_pending");
         assertThat(names).allSatisfy(name -> assertThat(scrape).as(name).containsPattern("(?m)^" + name + "[{ ]"));
 
         int alerts = rules.split("- alert: ", -1).length - 1;
-        assertThat(alerts).isGreaterThanOrEqualTo(7);
+        assertThat(alerts).isGreaterThanOrEqualTo(8);
         assertThat(rules.split("severity: ", -1).length - 1).isEqualTo(alerts);
         assertThat(rules.split("summary: ", -1).length - 1).isEqualTo(alerts);
         Matcher runbook = Pattern.compile("runbook_url: \"[^\"]*/deploy/README\\.md#([a-z-]+)\"")

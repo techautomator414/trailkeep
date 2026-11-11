@@ -4,7 +4,7 @@
 # rather than failing a pod's probe). Every replica reports the same job ages, read from JOB_RUN, so the job rules take
 # the minimum across replicas. The thresholds equal the health indicators' grace periods in application.yml
 # (app.sla.health-grace 30m, app.reminders/reports/retention health-grace 2h); change both together.
-# PrometheusRulesIT checks that every metric named here is served on /actuator/prometheus and that every alert has a
+# ManagementEndpointsIT checks that every metric named here is served on /actuator/prometheus and that every alert has a
 # severity, a summary and a runbook_url into deploy/README.md ("Alerts").
 apiVersion: monitoring.coreos.com/v1
 kind: PrometheusRule
@@ -73,3 +73,13 @@ spec:
           annotations:
             summary: "Mail failed for good in the last hour (its attempts are used up)."
             runbook_url: "https://github.com/techautomator414/trailkeep/blob/main/deploy/README.md#mail-failed-for-good"
+    - name: trailkeep.database
+      rules:
+        - alert: TrailkeepDbPoolExhausted
+          expr: max(hikaricp_connections_pending) > 0
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Requests have been waiting for a database connection for 5 minutes."
+            runbook_url: "https://github.com/techautomator414/trailkeep/blob/main/deploy/README.md#the-database-pool-is-exhausted"

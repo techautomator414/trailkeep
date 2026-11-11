@@ -13,7 +13,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Operational alerts (WP-25 part c): `deploy/components/prometheus-rules/`, an optional Kustomize component with a
   `PrometheusRule` (Prometheus Operator): each scheduled job late past its health indicator's grace (SLA evaluator,
   reminders, report delivery, archive; the minimum age across replicas, since all read `JOB_RUN`), mail not being
-  sent (only retries for 15 minutes), a mail backlog over 500 for 30 minutes, and mail failed for good. Every alert has
+  sent (only retries for 15 minutes), a mail backlog over 500 for 30 minutes, mail failed for good, and the database
+  pool exhausted (requests waiting for a HikariCP connection for 5 minutes). Every alert has
   a severity, a summary and a `runbook_url` into the new "Alerts" section of `deploy/README.md`.
   `ManagementEndpointsIT` checks that every metric a rule names is served on `/actuator/prometheus` and that every
   alert has its annotations and a matching README heading.

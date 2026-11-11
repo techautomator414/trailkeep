@@ -121,3 +121,13 @@ losing mail.
 `TrailkeepMailFailed`: a mail used up its attempts and is marked failed; it will not be retried. The System screen
 shows the count. The row's `LAST_ERROR` says why (for example a recipient the relay rejects). Failed rows stay in
 the outbox; the purge removes mail only together with the purged case or the expired report run it belongs to.
+
+### The database pool is exhausted
+
+`TrailkeepDbPoolExhausted`: on some replica, requests have been queuing for a connection from the HikariCP pool for
+5 minutes (`hikaricp_connections_pending` above zero). A connection that is momentarily busy shows as a pending count
+for milliseconds, so five minutes means the pool is too small for the load or connections are held too long. Check
+`hikaricp_connections_active` against `hikaricp_connections_max` and the database's own sessions and locks; long CSV
+exports and attachment downloads hold a connection while they stream (bounded by `app.export.max-rows` and
+`app.attachments.max-concurrent-downloads`). Raise `spring.datasource.hikari.maximum-pool-size` only within what the
+database allows for all replicas together.
