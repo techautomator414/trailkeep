@@ -9,6 +9,7 @@ import java.io.OutputStream;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.DigestInputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
@@ -88,13 +89,53 @@ final class UploadIntake {
             String type = AttachmentTypes.check(temp, fileName, properties.maxImagePixels());
             ScanVerdict verdict = scan(temp);
             ScannedUpload upload = new ScannedUpload(
-                    temp, type, size, HexFormat.of().formatHex(sha256.digest()), verdict, properties.scanning());
+                    temp, type, size, HexFormat.of().formatHex(sha256.digest()), verdict, properties.scanning(), true);
             handedOver = true;
             return upload;
         } finally {
             if (!handedOver) {
                 delete(temp);
             }
+        }
+    }
+
+    /**
+     * Validates and scans an imported file where it lies, in the run's content area or the mounted folder (WP-26 part
+     * g, design §4.3): the same name, type, image and scan checks as an upload, with the importer's size cap, and no
+     * copy, so the file is neither moved nor deleted.
+     *
+     * @param fileName the legacy file name; only its length and extension are used here
+     * @param file the file
+     * @param maxBytes the importer's cap, which may be above the upload cap
+     * @return the scanned file, which {@link ScannedUpload#close()} leaves in place
+     * @throws AttachmentRejectedException if the name, size, type or image is refused
+     * @throws ScannerUnavailableException if the scanner gave no verdict ({@link ScanSizeExceededException} if the
+     *     file is above the scanner's own limit)
+     */
+    ScannedUpload receive(String fileName, Path file, long maxBytes) {
+        if (fileName.isBlank() || fileName.length() > CaseAttachment.MAX_FILE_NAME) {
+            throw new AttachmentRejectedException(Reason.NAME, "file name blank or too long");
+        }
+        try {
+            long size = Files.size(file);
+            if (size > maxBytes) {
+                throw new AttachmentRejectedException(Reason.TOO_LARGE, "file exceeds the importer's cap");
+            }
+            MessageDigest sha256 = sha256();
+            try (InputStream in = new DigestInputStream(Files.newInputStream(file), sha256)) {
+                in.transferTo(OutputStream.nullOutputStream());
+            }
+            String type = AttachmentTypes.check(file, fileName, properties.maxImagePixels());
+            return new ScannedUpload(
+                    file,
+                    type,
+                    size,
+                    HexFormat.of().formatHex(sha256.digest()),
+                    scan(file),
+                    properties.scanning(),
+                    false);
+        } catch (IOException e) {
+            throw new UncheckedIOException("imported file not read", e);
         }
     }
 

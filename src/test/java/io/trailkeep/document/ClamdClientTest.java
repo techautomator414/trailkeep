@@ -113,6 +113,20 @@ class ClamdClientTest {
         }
     }
 
+    /** R13: clamd's stream-limit reply is told apart, so the importer can report the file and go on (WP-26 part g). */
+    @Test
+    void streamLimitRepliesAreSizeRefusalsThatStillFailClosed() throws IOException {
+        try (FakeClamd clamd = FakeClamd.answering(bytes -> "INSTREAM size limit exceeded. ERROR")) {
+            Path file = file(new byte[10]);
+            assertThatThrownBy(() -> client(clamd.port()).scan(file))
+                    .isInstanceOf(ScanSizeExceededException.class)
+                    .isInstanceOf(ScannerUnavailableException.class);
+        }
+        assertThatThrownBy(() -> ClamdClient.verdict("Some other thing. ERROR"))
+                .isInstanceOf(ScannerUnavailableException.class)
+                .isNotInstanceOf(ScanSizeExceededException.class);
+    }
+
     @Test
     void anyOtherReplyMeansTheScannerIsUnavailable() {
         for (String reply :

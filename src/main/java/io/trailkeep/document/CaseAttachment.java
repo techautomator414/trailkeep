@@ -85,6 +85,10 @@ class CaseAttachment {
     @Column(name = "UPLOADED_BY", nullable = false, updatable = false)
     private long uploadedBy;
 
+    /** The legacy uploader's name, when an imported file's uploader matched no user (WP-26, V14). */
+    @Column(name = "UPLOADER_NAME_SNAPSHOT", updatable = false, length = 200)
+    private @Nullable String uploaderNameSnapshot;
+
     /** For JPA. */
     protected CaseAttachment() {}
 
@@ -123,6 +127,21 @@ class CaseAttachment {
         attachment.uploadedBy = uploadedBy;
         attachment.uploadedAt = now;
         return attachment;
+    }
+
+    /**
+     * An imported file (WP-26 part g, design §8.1 R6 7): its legacy upload time, and the legacy uploader's name when
+     * they matched no user.
+     *
+     * @param scanned the file as {@link #scanned} would record it, with the uploader already chosen
+     * @param uploadedAt when it was uploaded to the legacy tracker
+     * @param uploaderNameSnapshot the legacy uploader's name, or {@code null}
+     * @return the attachment, not yet persisted
+     */
+    static CaseAttachment imported(CaseAttachment scanned, Instant uploadedAt, @Nullable String uploaderNameSnapshot) {
+        scanned.uploadedAt = uploadedAt;
+        scanned.uploaderNameSnapshot = uploaderNameSnapshot;
+        return scanned;
     }
 
     /**
