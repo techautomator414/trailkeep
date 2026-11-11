@@ -225,8 +225,8 @@
     SystemController (WP-25): behind login; GET /admin/system only, no state change. The actor's permissions are
     rebuilt from the database per request and anyone without the System Admin or Compliance Admin global role gets 403
     before anything is read. It shows job names, times and counts, the outbox's counts and clamd's version line,
-    never case content, a recipient or a mail body. Covered by SystemControllerIT and SystemAccessibilityIT. Needs
-    security-reviewer approval.
+    never case content, a recipient or a mail body. Covered by SystemControllerIT and SystemAccessibilityIT. Approved
+    in the security-reviewer role on #139.
     Approved in the security-reviewer role on #20. Listed by class, never by pattern alone, so each new controller
     is reviewed the same way.
   -->
