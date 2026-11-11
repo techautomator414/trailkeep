@@ -12,6 +12,7 @@ import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.MessageDigest;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.Optional;
@@ -29,6 +30,10 @@ class UploadIntakeTest {
 
     @TempDir
     Path tempDir;
+
+    /** An import run's content area; imported files are checked where they lie, never copied to the temp dir. */
+    @TempDir
+    Path contentArea;
 
     private final AtomicReference<Path> scanned = new AtomicReference<>();
 
@@ -295,5 +300,45 @@ class UploadIntakeTest {
                         e -> assertThat(e.reason()).isEqualTo(Reason.IMAGE));
         assertThat(scanned.get()).isNull();
         assertThat(tempFiles()).isZero();
+    }
+
+    @Test
+    void importedFileIsCheckedWhereItLiesAndHashedFromTheScannedStream() throws IOException {
+        Path file = Files.write(contentArea.resolve("notes.txt"), UploadSamples.ascii("abc"));
+        try (ScannedUpload upload = clean().receive("notes.txt", file, CAP)) {
+            assertThat(upload.sha256()).isEqualTo("ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
+            assertThat(upload.verdict()).isEqualTo(ScanVerdict.clean());
+            assertThat(upload.temporary()).isFalse();
+        }
+        assertThat(scanned.get()).isEqualTo(file);
+        assertThat(file).hasContent("abc");
+        assertThat(tempFiles()).isZero();
+    }
+
+    @Test
+    void importedFileSwappedBetweenItsTypeCheckAndItsScanIsRefused() throws IOException {
+        Path file = Files.write(contentArea.resolve("notes.txt"), UploadSamples.ascii("abc"));
+        VirusScanner swapping = new VirusScanner() {
+            @Override
+            public ScanVerdict scan(Path scannedFile) {
+                return ScanVerdict.clean();
+            }
+
+            // Replaces the content after the type pass, then scans and hashes the new bytes.
+            @Override
+            public ScanVerdict scan(Path scannedFile, MessageDigest sent) {
+                try {
+                    Files.write(scannedFile, UploadSamples.ascii("xyz"));
+                } catch (IOException e) {
+                    throw new UncheckedIOException(e);
+                }
+                return VirusScanner.super.scan(scannedFile, sent);
+            }
+        };
+
+        assertThatThrownBy(() -> intake(swapping).receive("notes.txt", file, CAP))
+                .isInstanceOfSatisfying(
+                        AttachmentRejectedException.class,
+                        e -> assertThat(e.reason()).isEqualTo(Reason.HASH_MISMATCH));
     }
 }

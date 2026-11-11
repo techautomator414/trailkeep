@@ -13,6 +13,8 @@ import java.net.SocketTimeoutException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.DigestInputStream;
+import java.security.MessageDigest;
 import java.time.Duration;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -24,6 +26,7 @@ import javax.net.ssl.SSLException;
 import javax.net.ssl.SSLParameters;
 import javax.net.ssl.SSLSocket;
 import javax.net.ssl.SSLSocketFactory;
+import org.jspecify.annotations.Nullable;
 import org.springframework.boot.ssl.SslBundles;
 import org.springframework.context.annotation.Conditional;
 import org.springframework.stereotype.Component;
@@ -99,7 +102,12 @@ final class ClamdClient implements VirusScanner {
 
     @Override
     public ScanVerdict scan(Path file) {
-        return verdict(exchange(out -> stream(file, out), clamd.readTimeout(), clamd.scanTimeout()));
+        return scan(file, null);
+    }
+
+    @Override
+    public ScanVerdict scan(Path file, @Nullable MessageDigest sent) {
+        return verdict(exchange(out -> stream(file, out, sent), clamd.readTimeout(), clamd.scanTimeout()));
     }
 
     /**
@@ -170,11 +178,13 @@ final class ClamdClient implements VirusScanner {
         }
     }
 
-    private static void stream(Path file, OutputStream socketOut) throws IOException {
+    /** Streams the file to clamd; with a digest, it hashes the very bytes sent. */
+    private static void stream(Path file, OutputStream socketOut, @Nullable MessageDigest sent) throws IOException {
         DataOutputStream out = new DataOutputStream(socketOut);
         out.write(INSTREAM);
         byte[] buffer = new byte[CHUNK_SIZE];
-        try (InputStream in = Files.newInputStream(file)) {
+        try (InputStream in =
+                sent == null ? Files.newInputStream(file) : new DigestInputStream(Files.newInputStream(file), sent)) {
             int n;
             while ((n = in.readNBytes(buffer, 0, CHUNK_SIZE)) > 0) {
                 out.writeInt(n);
