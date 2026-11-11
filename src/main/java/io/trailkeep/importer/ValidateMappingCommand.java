@@ -18,7 +18,8 @@ import org.springframework.transaction.support.TransactionTemplate;
  * {@code validate-mapping} for one run (design §3 step 1), structural checks only for now (26b). The problems replace
  * the run's earlier {@code VALIDATE} issues, each a {@code FATAL} issue about the mapping; a mapping with none moves
  * the run to {@code VALIDATED} with the file's SHA-256 as its mapping hash, which the sign-off and the load compare
- * against later (§3). The file holds no legacy data, so a plain hash is enough.
+ * against later (§3); a mapping with problems puts it back to {@code REQUESTED} with no hash, so an earlier pass
+ * never stands beside a failed file. The file holds no legacy data, so a plain hash is enough.
  */
 @Component
 class ValidateMappingCommand {
@@ -75,8 +76,10 @@ class ValidateMappingCommand {
             }
             if (problems.isEmpty()) {
                 run.mappingValidated(sha256(content), clock.instant());
-                runs.save(run);
+            } else {
+                run.mappingRejected(clock.instant());
             }
+            runs.save(run);
         });
         return problems;
     }
