@@ -38,6 +38,23 @@
   <h2 th:text="#{tk.system.scanner}">Virus scanner</h2>
   <p th:text="#{'tk.system.scanner.' + ${scanner.state}}">clamd answers; uploads are scanned.</p>
   <p th:if="${scanner.version != null}" th:text="#{tk.system.scanner.version(${scanner.version})}">Version</p>
+  <h2 th:text="#{tk.system.conflicts}">Role conflicts</h2>
+  <p th:text="#{tk.system.conflicts.hint}">The identity provider says these people are System Admins, but they hold team
+    roles, so the System Admin role was not applied.</p>
+  <p th:if="${conflicts.isEmpty()}" th:text="#{tk.system.conflicts.none}">No one.</p>
+  <table th:unless="${conflicts.isEmpty()}" class="table">
+    <caption th:text="#{tk.system.conflicts.caption}">Role conflicts, oldest first</caption>
+    <thead><tr>
+      <th scope="col" th:text="#{tk.system.conflicts.person}">Person</th>
+      <th scope="col" th:text="#{tk.system.conflicts.seen}">Last seen at sign-in</th>
+    </tr></thead>
+    <tbody>
+    <tr th:each="c : ${conflicts}">
+      <th scope="row" th:text="${c.name}">Synthetic person</th>
+      <td th:text="${#temporals.format(c.seen, 'yyyy-MM-dd HH:mm')}">2026-11-11 09:00</td>
+    </tr>
+    </tbody>
+  </table>
 </main>
 </body>
 </html>

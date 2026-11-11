@@ -18,9 +18,11 @@ class DefaultAuditTrailService implements AuditTrailService {
     static final int MAX_LIMIT = 500;
 
     private final AuditEventRepository repository;
+    private final StandingEventQueries standing;
 
-    DefaultAuditTrailService(AuditEventRepository repository) {
+    DefaultAuditTrailService(AuditEventRepository repository, StandingEventQueries standing) {
         this.repository = repository;
+        this.standing = standing;
     }
 
     @Override
@@ -43,6 +45,11 @@ class DefaultAuditTrailService implements AuditTrailService {
         return new AuditPage(
                 total == 0 ? List.of() : toRecords(repository.pageByCase(scope, caseId, kept, offset, checked(limit))),
                 total);
+    }
+
+    @Override
+    public List<StandingEvent> standing(String entityType, String action, Set<String> clearedBy) {
+        return standing.standing(entityType, action, clearedBy);
     }
 
     private static int checked(int limit) {
