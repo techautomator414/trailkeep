@@ -38,7 +38,23 @@ record MappingProblem(Code code, String pointer) implements Comparable<MappingPr
         /** A {@code timestamp} or {@code date} format that is not a valid pattern. */
         BAD_FORMAT,
         /** A {@code source.timezone} that is not a known zone id. */
-        BAD_TIMEZONE
+        BAD_TIMEZONE,
+        /** A source query the parser cannot read (design §4.1); it is refused, never passed. */
+        QUERY_UNPARSEABLE,
+        /** A source query that is not exactly one statement. */
+        QUERY_NOT_ONE_STATEMENT,
+        /** A source query that is not a {@code SELECT} or {@code WITH … SELECT}. */
+        QUERY_NOT_SELECT,
+        /** A source query with {@code INTO}. */
+        QUERY_INTO,
+        /** A source query that locks: {@code FOR UPDATE} or a locking table hint. */
+        QUERY_LOCKS,
+        /** A source query reading a table function such as {@code OPENROWSET}. */
+        QUERY_TABLE_FUNCTION,
+        /** A source query through an Oracle database link. */
+        QUERY_DATABASE_LINK,
+        /** A source query calling a function outside the vendor's allow-list of pure built-ins. */
+        QUERY_FUNCTION_NOT_ALLOWED
     }
 
     @Override

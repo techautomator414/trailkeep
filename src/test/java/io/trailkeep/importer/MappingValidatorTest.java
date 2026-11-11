@@ -58,6 +58,18 @@ class MappingValidatorTest {
                 .containsExactly(new MappingProblem(Code.PLACEHOLDER_NOT_ALLOWED, "/entities/comment/query"));
     }
 
+    /** Each source query goes through the query validator for the source's vendor (WP-26 part m, design §4.1). */
+    @Test
+    void sourceQueriesMustBeOneAllowListedSelect() throws IOException {
+        assertThat(validate(example().replace("FROM dbo.notes", "FROM dbo.notes; DELETE FROM dbo.notes")))
+                .containsExactly(new MappingProblem(Code.QUERY_NOT_ONE_STATEMENT, "/entities/comment/query"));
+        assertThat(validate(example().replace("SELECT user_id, display_name", "SELECT user_id, xp_cmdshell('dir')")))
+                .containsExactly(new MappingProblem(Code.QUERY_FUNCTION_NOT_ALLOWED, "/people/query"));
+        assertThat(validate(example().replace("WHERE file_id = ?", "WHERE file_id = ? FOR UPDATE")))
+                .extracting(MappingProblem::pointer)
+                .containsExactly("/entities/attachment/fields/content/query");
+    }
+
     @Test
     void credentialLookalikesAreRejectedWithoutBeingRepeated() throws IOException {
         List<MappingProblem> problems = validate(example()
