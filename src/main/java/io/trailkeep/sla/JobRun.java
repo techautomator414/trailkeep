@@ -50,6 +50,10 @@ class JobRun {
         this.lastItems = items;
     }
 
+    String getJobName() {
+        return jobName;
+    }
+
     Instant getLastSuccessAt() {
         return lastSuccessAt;
     }

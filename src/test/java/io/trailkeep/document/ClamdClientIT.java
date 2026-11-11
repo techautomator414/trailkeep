@@ -76,6 +76,12 @@ class ClamdClientIT {
     }
 
     @Test
+    void realClamdReportsItsVersionAndSignatureDatabase() {
+        ClamdClient client = ClamdClientTest.client(RealClamd.tlsPort(), Duration.ofSeconds(30), Duration.ofMinutes(1));
+        assertThat(client.version()).matches("ClamAV \\d+\\.\\d+\\.\\d+/\\d+/.+");
+    }
+
+    @Test
     void closedPortRefusesTheUpload() throws IOException {
         assertThatThrownBy(() -> intake(ClamdClientTest.closedPort())
                         .receive("notes.txt", new ByteArrayInputStream(UploadSamples.ascii("abc"))))

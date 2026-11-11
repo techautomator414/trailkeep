@@ -4,6 +4,7 @@ package io.trailkeep.sla;
 
 import jakarta.persistence.EntityManager;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -36,6 +37,30 @@ public class JobRuns {
             entityManager.persist(run);
         }
         run.succeeded(at, items);
+    }
+
+    /**
+     * One job's last success, as the System screen lists it.
+     *
+     * @param job the job's name
+     * @param lastSuccessAt when it last succeeded on any replica
+     * @param items how many items that run handled
+     */
+    public record Run(String job, Instant lastSuccessAt, int items) {}
+
+    /**
+     * Every job that has succeeded at least once, by name (WP-25, the System screen).
+     *
+     * @return the runs
+     */
+    @Transactional(readOnly = true)
+    public List<Run> all() {
+        return entityManager
+                .createQuery("SELECT r FROM JobRun r ORDER BY r.jobName", JobRun.class)
+                .getResultList()
+                .stream()
+                .map(run -> new Run(run.getJobName(), run.getLastSuccessAt(), run.getLastItems()))
+                .toList();
     }
 
     /**
