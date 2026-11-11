@@ -19,11 +19,13 @@ import io.trailkeep.testsupport.CaseSeed;
 import io.trailkeep.testsupport.PostgresTestcontainersConfiguration;
 import io.trailkeep.testsupport.RequiresDocker;
 import io.trailkeep.testsupport.WithAppUser;
+import io.trailkeep.user.ImportPeopleService;
 import io.trailkeep.user.TeamRole;
 import io.trailkeep.user.UserPermissions;
 import jakarta.persistence.EntityManager;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
@@ -179,6 +181,19 @@ class UpdateRequestControllerIT {
                 .contains("Update requested from Synthetic Person " + COLLEAGUE)
                 .containsPattern("action=\"/cases/" + number + "/update-requests/\\d+/answered\"")
                 .contains("class=\"visually-hidden\">: Synthetic Person " + COLLEAGUE + "</span>");
+    }
+
+    /**
+     * The {@code -1} a malformed id becomes, and the import principals' ids (ADR-0015), are never a recipient: no row
+     * has {@code -1}, and the principals read no case.
+     */
+    @Test
+    @WithAppUser(id = OWNER, team = TEAM, teamRole = TeamRole.ANALYST)
+    void theMalformedIdSentinelAndThePrincipalsAreRefusedAsRecipients() throws Exception {
+        for (long recipient : List.of(-1L, ImportPeopleService.IMPORTER_ID, ImportPeopleService.LEGACY_APPROVAL_ID)) {
+            mvc.perform(send(String.valueOf(recipient), "A synthetic question").with(csrf()))
+                    .andExpect(status().isUnprocessableContent());
+        }
     }
 
     @Test

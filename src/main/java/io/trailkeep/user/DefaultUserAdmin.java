@@ -38,6 +38,7 @@ class DefaultUserAdmin implements UserAdminService {
     public List<UserRow> users(Actor actor) {
         requireSystemAdmin(actor);
         return users.findAllByOrderByDisplayNameAsc().stream()
+                .filter(user -> !user.isPrincipal())
                 .map(user -> new UserRow(id(user), user.getDisplayName(), user.isDisabled()))
                 .toList();
     }
@@ -74,8 +75,11 @@ class DefaultUserAdmin implements UserAdminService {
         record(actor, userId, "USER_ENABLED", audit.diff(new UserSnapshot(true, null), new UserSnapshot(false, null)));
     }
 
+    /** A person; the import principals (ADR-0015) are not users an administrator manages. */
     private AppUser find(long userId) {
-        return users.findById(userId).orElseThrow(() -> new TeamAdminException(Kind.NOT_FOUND, "no such user"));
+        return users.findById(userId)
+                .filter(user -> !user.isPrincipal())
+                .orElseThrow(() -> new TeamAdminException(Kind.NOT_FOUND, "no such user"));
     }
 
     private static void requireSystemAdmin(Actor actor) {
