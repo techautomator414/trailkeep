@@ -9,6 +9,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- "Send me a test" on the System screen (WP-25 part e, BUILD_PLAN §4.6 "Email wording"): a System Admin or a
+  Compliance Admin picks one of the 11 mails and has it rendered with sample values (`tk.system.test.sample.*`, a
+  case number of zeros, a link to the System screen) and queued through the outbox to their own address; there is no
+  address field. `POST /admin/system/test-mail` needs CSRF; anyone else gets 403 and a template outside the list 422.
+  Audited as `TEST_MAIL_QUEUED` with the template id, never the address. One test per person every 5 minutes on each
+  replica; a person the identity provider gives no address is told so.
+
 - Role conflicts on the System screen (WP-25 part b, IMPLEMENTATION_PLAN A.2 #18): the users whose System Admin
   claim is withheld because they hold team roles, durable and cluster-wide, read from the audit trail
   (`UserDirectoryService.roleConflicts()`): a user is listed while their latest `LOGIN` or `ROLE_CONFLICT` event is the
