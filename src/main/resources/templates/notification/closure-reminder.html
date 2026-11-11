@@ -4,13 +4,11 @@
 <html lang="en" xmlns:th="http://www.thymeleaf.org">
 <head>
 <meta charset="UTF-8">
-<title th:text="|Reminder: closure of ${caseNumber}|">Reminder</title>
+<title th:text="#{tk.mail.closure-reminder.html.title(${caseNumber})}">Reminder</title>
 </head>
 <body>
-<p>Reminder: <span th:text="${requester}">Someone</span> is still waiting for your decision on closing case
-  <span th:text="${caseNumber}">CASE</span>, &ldquo;<span th:text="${title}">title</span>&rdquo;, with the outcome
-  &ldquo;<span th:text="${outcome}">Resolved</span>&rdquo;.</p>
-<p><a th:href="${link}" th:text="|Open ${caseNumber} to decide|">Open the case</a></p>
-<p>You receive this because you are the approver.</p>
+<p th:text="#{tk.mail.closure-reminder.html.line(${requester},${caseNumber},${title},${outcome})}">tk.mail.closure-reminder.html.line</p>
+<p><a th:href="${link}" th:text="#{tk.mail.closure-reminder.html.link(${caseNumber})}">Open the case</a></p>
+<p th:text="#{tk.mail.closure-reminder.footer}">tk.mail.closure-reminder.footer</p>
 </body>
 </html>

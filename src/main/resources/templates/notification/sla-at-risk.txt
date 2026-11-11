@@ -1,9 +1,9 @@
 /*[- SPDX-License-Identifier: Apache-2.0. Plain-text part of the sla-at-risk mail, to the case's owner once per SLA
      cycle (BUILD_PLAN §6): the case number, title, due date and a deep link; never the description or the subject
      (BUILD_PLAN §9). -]*/
-Case [(${caseNumber})], "[(${title})]", is at risk of missing its SLA: it is due on [(${due})].
+[(#{tk.mail.sla-at-risk.text.line(${caseNumber},${title},${due})})]
 
-Open the case:
+[(#{tk.mail.sla-at-risk.text.prompt})]
 [(${link})]
 
-You receive this because you own the case.
+[(#{tk.mail.sla-at-risk.footer})]

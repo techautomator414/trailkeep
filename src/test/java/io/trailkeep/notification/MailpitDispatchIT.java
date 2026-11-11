@@ -145,7 +145,7 @@ class MailpitDispatchIT {
         assertThat(atRisk.get("Text").asString())
                 .contains("\"Synthetic SLA case\", is at risk of missing its SLA: it is due on 2026-12-01.", link);
         assertThat(overdue.get("HTML").asString())
-                .contains("Synthetic SLA case", "was due on <span>2026-12-01</span>", "<a href=\"" + link + "\">");
+                .contains("Synthetic SLA case", "was due on 2026-12-01", "<a href=\"" + link + "\">");
     }
 
     @Test

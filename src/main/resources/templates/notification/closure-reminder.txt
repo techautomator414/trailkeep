@@ -1,9 +1,9 @@
 /*[- SPDX-License-Identifier: Apache-2.0. Plain-text part of the closure-reminder mail (WP-17b, BUILD_PLAN §6): the case
      number, title, requester, outcome and a deep link; never the resolution summary, the follow-up actions, the
      description or the subject (BUILD_PLAN §9). -]*/
-Reminder: [(${requester})] is still waiting for your decision on closing case [(${caseNumber})], "[(${title})]", with the outcome "[(${outcome})]".
+[(#{tk.mail.closure-reminder.text.line(${requester},${caseNumber},${title},${outcome})})]
 
-Open the case to read the resolution summary and decide:
+[(#{tk.mail.closure-reminder.text.prompt})]
 [(${link})]
 
-You receive this because you are the approver.
+[(#{tk.mail.closure-reminder.footer})]

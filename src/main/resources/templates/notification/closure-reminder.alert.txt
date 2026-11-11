@@ -1,2 +1,2 @@
 /*[- SPDX-License-Identifier: Apache-2.0. In-app alert of the closure-reminder mail: one line, never the summary. -]*/
-Reminder: [(${requester})] is still waiting for your decision on closing [(${caseNumber})], "[(${title})]"
+[(#{tk.mail.closure-reminder.alert(${requester},${caseNumber},${title})})]

@@ -1,9 +1,9 @@
 /*[- SPDX-License-Identifier: Apache-2.0. Plain-text part of the case-reopened mail, to the owner and the requester of
      the closure: number, title, who reopened it and a deep link, never the reason, the description or the subject
      (BUILD_PLAN §4.7, §9). -]*/
-[(${reopener})] reopened case [(${caseNumber})], "[(${title})]". Its SLA starts a new cycle today.
+[(#{tk.mail.case-reopened.text.line(${reopener},${caseNumber},${title})})]
 
-Open the case to read why:
+[(#{tk.mail.case-reopened.text.prompt})]
 [(${link})]
 
-You receive this because you own the case or requested its closure.
+[(#{tk.mail.case-reopened.footer})]

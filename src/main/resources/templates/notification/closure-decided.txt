@@ -1,9 +1,9 @@
 /*[- SPDX-License-Identifier: Apache-2.0. Plain-text part of the closure-decided mail, to the requester and the case's
      owner: the case number, title, the approver and the decision with a deep link; never the reason, the summary,
      the description or the subject (BUILD_PLAN §4.7, §9). -]*/
-[(${decider})] [(${verb})] the request to close case [(${caseNumber})], "[(${title})]".
+[(#{tk.mail.closure-decided.text.line(${decider},#{${verbKey}},${caseNumber},${title})})]
 
-Open the case to read the decision:
+[(#{tk.mail.closure-decided.text.prompt})]
 [(${link})]
 
-You receive this because you requested the closure or own the case.
+[(#{tk.mail.closure-decided.footer})]

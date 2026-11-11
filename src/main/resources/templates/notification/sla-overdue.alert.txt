@@ -1,2 +1,2 @@
 /*[- SPDX-License-Identifier: Apache-2.0. In-app alert of the sla-overdue mail: one line. -]*/
-[(${caseNumber})], "[(${title})]", is overdue: it was due on [(${due})]
+[(#{tk.mail.sla-overdue.alert(${caseNumber},${title},${due})})]

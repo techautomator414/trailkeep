@@ -1,8 +1,8 @@
 /*[- SPDX-License-Identifier: Apache-2.0. Plain-text part of the report-ready mail (WP-23, BUILD_PLAN §6): the team, the
      day and a deep link to the stored run; never the report's lines, case numbers or titles (BUILD_PLAN §9). -]*/
-The weekly aging report for [(${team})] as of [(${asOf})] is ready.
+[(#{tk.mail.report-ready.text.line(${team},${asOf})})]
 
-Open it, or download it as CSV, here:
+[(#{tk.mail.report-ready.text.prompt})]
 [(${link})]
 
-You receive this because you are a Manager of the team or a Compliance Admin.
+[(#{tk.mail.report-ready.footer})]

@@ -1,2 +1,2 @@
 /*[- SPDX-License-Identifier: Apache-2.0. In-app alert of the closure-decided mail: one line, never the reason. -]*/
-[(${decider})] [(${verb})] the request to close [(${caseNumber})], "[(${title})]"
+[(#{tk.mail.closure-decided.alert(${decider},#{${verbKey}},${caseNumber},${title})})]

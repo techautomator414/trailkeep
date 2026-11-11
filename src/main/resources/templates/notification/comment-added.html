@@ -4,12 +4,11 @@
 <html lang="en" xmlns:th="http://www.thymeleaf.org">
 <head>
 <meta charset="UTF-8">
-<title th:text="|New comment on ${caseNumber}|">New comment</title>
+<title th:text="#{tk.mail.comment-added.html.title(${caseNumber})}">New comment</title>
 </head>
 <body>
-<p><span th:text="${commenter}">Someone</span> commented on case <span th:text="${caseNumber}">CASE</span>,
-  &ldquo;<span th:text="${title}">title</span>&rdquo;.</p>
-<p><a th:href="${link}" th:text="|Open ${caseNumber} to read the comment|">Open the case</a></p>
-<p>You receive this because you own the case.</p>
+<p th:text="#{tk.mail.comment-added.html.line(${commenter},${caseNumber},${title})}">tk.mail.comment-added.html.line</p>
+<p><a th:href="${link}" th:text="#{tk.mail.comment-added.html.link(${caseNumber})}">Open the case</a></p>
+<p th:text="#{tk.mail.comment-added.footer}">tk.mail.comment-added.footer</p>
 </body>
 </html>

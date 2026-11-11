@@ -49,10 +49,8 @@ class DefaultClosureDecisionService implements ClosureDecisionService {
             + " WHERE r.id = :id AND r.decision = :pending AND r.version = :version";
     private static final String REASSIGN = "UPDATE ClosureRequest r SET r.approverId = :approver,"
             + " r.version = r.version + 1 WHERE r.id = :id AND r.decision = :pending AND r.version = :version";
-    private static final Map<ClosureDecision, String> VERBS = Map.of(
-            ClosureDecision.APPROVED, "approved",
-            ClosureDecision.REJECTED, "rejected",
-            ClosureDecision.CHANGES_REQUESTED, "sent back for changes");
+    /** The message key of the verb the closure-decided mail uses for a decision ({@code messages.properties}). */
+    private static final String VERB_KEY = "tk.mail.closure-decided.verb.";
 
     private final CaseStatusService statuses;
     private final ClosureRequestRepository requests;
@@ -119,8 +117,7 @@ class DefaultClosureDecisionService implements ClosureDecisionService {
                 "CLOSURE_" + decision.name(),
                 audit.diff(new Decided(ClosureDecision.PENDING, null), new Decided(decision, text)));
         // BUILD_PLAN §4.7: the owner and the requester, once each, never the approver who decided.
-        Map<String, String> model =
-                Map.of("decider", actor.displayName(), "verb", Objects.requireNonNull(VERBS.get(decision)));
+        Map<String, String> model = Map.of("decider", actor.displayName(), "verbKey", VERB_KEY + decision.name());
         Stream.of(request.getRequestedBy(), moved.facts().ownerId())
                 .filter(Objects::nonNull)
                 .distinct()
