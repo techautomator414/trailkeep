@@ -21,6 +21,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   `ManagementEndpointsIT` checks that every metric a rule names is served on `/actuator/prometheus` and that every
   alert has its annotations and a matching README heading.
 
+- The System screen (WP-25 part a, BUILD_PLAN §3.1, §4.6), `/admin/system`, for System Admins and Compliance Admins
+  (anyone else 403), linked from the Users and Teams pages and the Compliance Admin's screens. It lists every
+  scheduled job from `JOB_RUN` (the cluster truth) with its last success on any replica in `app.timezone`, the items
+  it handled and its state against its health indicator's grace (on time, late, not run yet, or not watched, as the
+  purge is); the outbox's waiting and failed counts and when the oldest waiting mail was queued
+  (`OutboxStatusService`); and the virus scanner, from clamd's `VERSION` reply over the same TLS exchange as a scan
+  (ClamAV release and signature database), or that scanning is external (`ScanEngineService`). Read-only; no case
+  content, recipient or mail body is shown.
 - Preferences and single-key shortcuts (WP-27 part a, BUILD_PLAN §3.1, §10.1). `V9__user_preference`: one
   `USER_PREFERENCE` row per person, created when they first save `/preferences` (a person with no row has the
   defaults), with the shortcuts switch on by default. The page is linked as "Preferences" in the navigation; saving
