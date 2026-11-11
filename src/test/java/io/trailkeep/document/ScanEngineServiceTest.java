@@ -8,6 +8,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import io.trailkeep.document.ScanEngineService.State;
 import io.trailkeep.document.ScanEngineService.Status;
 import java.io.IOException;
+import java.time.Duration;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.support.StaticListableBeanFactory;
@@ -44,6 +45,19 @@ class ScanEngineServiceTest {
         }
         ClamdClient refused = ClamdClientTest.client(ClamdClientTest.closedPort());
         assertThat(service(Map.of("clamd", refused)).status()).isEqualTo(new Status(State.UNAVAILABLE, null));
+    }
+
+    @Test
+    void clamdThatAcceptsAndStaysSilentIsUnavailableWithinTheStatusBoundNotTheScanTimeouts() throws IOException {
+        try (FakeClamd clamd = FakeClamd.answering(bytes -> null)) {
+            ClamdClient client = ClamdClientTest.client(clamd.port(), Duration.ofSeconds(30), Duration.ofMinutes(1));
+            long start = System.nanoTime();
+
+            assertThat(service(Map.of("clamd", client)).status()).isEqualTo(new Status(State.UNAVAILABLE, null));
+            assertThat(Duration.ofNanos(System.nanoTime() - start))
+                    .isLessThan(Duration.ofSeconds(ClamdClient.STATUS_SECONDS + 2));
+            assertThat(clamd.commands).containsExactly("zVERSION");
+        }
     }
 
     @Test
