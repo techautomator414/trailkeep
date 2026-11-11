@@ -54,6 +54,14 @@ LABEL org.opencontainers.image.title="Trailkeep" \
       io.k8s.display-name="Trailkeep" \
       io.openshift.expose-services="8080:http,8081:management"
 
+# Apply Red Hat's published errata on top of the base. The base tag lags the errata: an RPM fix (for example
+# util-linux 2.37.4-28.el9_9 for CVE-2026-53613) ships days before a rebuilt openjdk-21-runtime image does. CI still
+# pins the base by digest for every build, and this layer brings that pinned base up to the published updates, so a
+# fixable OS CVE never waits for a base rebuild and the Trivy gate (fixable HIGH and CRITICAL) stays as it is.
+USER 0
+RUN microdnf -y --nodocs --setopt=install_weak_deps=0 upgrade && microdnf clean all
+USER 185
+
 WORKDIR /deployments
 
 # Least-changing layers first, so a code-only change re-pushes only the last layer.
