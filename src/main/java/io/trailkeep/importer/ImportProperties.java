@@ -2,6 +2,7 @@
 // Copyright 2026 Charlie Genova and contributors
 package io.trailkeep.importer;
 
+import java.nio.file.Path;
 import org.jspecify.annotations.Nullable;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
@@ -12,6 +13,10 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  *
  * @param command the command, or {@code null} outside the importer Job
  * @param run the run id, or {@code null} outside the importer Job
+ * @param mapping the mapping file on the Job's read-only volume, for {@code validate-mapping}; {@code null} otherwise
  */
 @ConfigurationProperties("import")
-record ImportProperties(@Nullable String command, @Nullable Long run) {}
+record ImportProperties(
+        @Nullable String command,
+        @Nullable Long run,
+        @Nullable Path mapping) {}
