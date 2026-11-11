@@ -9,6 +9,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- The last import run on the System screen (WP-25 part d, BUILD_PLAN §3.1): its id, kind, status in words, request
+  and last-change times in `app.timezone` and rows loaded once loading has started, or "No import has been run." It
+  is read through the importer module's first public read API, `ImportRunService.latest()` (latest by `REQUESTED_AT`
+  and then `ID`), which returns codes, times and counts only, never a source id or anything from legacy data, and is
+  wired in the web application as well as the `importer` profile. The Import runs screen (WP-26 part s) extends it
+  and adds the link.
 - Staging one legacy row (WP-26 part k1a, docs/design/importer.md §5, §6). `RowStager` turns a source row, from
   whichever source, into a staging row: its canonical key (`KEY_INVALID`, or `KEY_TOO_LONG` when `LEGACY_REF` would
   pass 100 characters), a child's case key (`PARENT_KEY_INVALID`), every mapped field through the transforms and typed

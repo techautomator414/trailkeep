@@ -3,6 +3,7 @@
 package io.trailkeep.web;
 
 import io.trailkeep.document.ScanEngineService;
+import io.trailkeep.importer.ImportRunService;
 import io.trailkeep.notification.OutboxStatusService;
 import io.trailkeep.notification.OutboxStatusService.Backlog;
 import io.trailkeep.notification.TestMailService;
@@ -39,9 +40,8 @@ import org.springframework.web.bind.annotation.RequestParam;
  * Compliance Admins see each scheduled job's last success on any replica ({@code JOB_RUN}, the cluster truth), whether
  * it is late against its health indicator's grace, the outbox's backlog and failures, whether clamd answers, with its
  * version, and the users whose System Admin claim is withheld because they hold team roles (the durable list from the
- * audit trail), and offers "send me a test" ({@link TestMailController}). Anyone else gets 403. It reads, never
- * writes, and shows no case content. Times are in
- * {@code app.timezone}.
+ * audit trail) and the last import run, and offers "send me a test" ({@link TestMailController}). Anyone else gets
+ * 403. It reads, never writes, and shows no case content. Times are in {@code app.timezone}.
  */
 @Controller
 class SystemController {
@@ -51,6 +51,7 @@ class SystemController {
     private final OutboxStatusService outbox;
     private final ScanEngineService scanner;
     private final UserDirectoryService directory;
+    private final ImportRunService imports;
     private final InstantSource clock;
     private final ZoneId zone;
 
@@ -60,6 +61,7 @@ class SystemController {
             OutboxStatusService outbox,
             ScanEngineService scanner,
             UserDirectoryService directory,
+            ImportRunService imports,
             InstantSource clock,
             AppProperties app) {
         this.runs = runs;
@@ -67,6 +69,7 @@ class SystemController {
         this.outbox = outbox;
         this.scanner = scanner;
         this.directory = directory;
+        this.imports = imports;
         this.clock = clock;
         this.zone = app.timezone();
     }
@@ -100,6 +103,24 @@ class SystemController {
      * @param seen when their latest sign-in recorded the conflict, in {@code app.timezone}, to the minute
      */
     record ConflictLine(String name, LocalDateTime seen) {}
+
+    /**
+     * The last import run, as the screen shows it.
+     *
+     * @param id the run's id
+     * @param kind {@code IMPORT} or {@code RELINK}
+     * @param status its status code
+     * @param requested when it was requested, in {@code app.timezone}, to the minute
+     * @param updated when it last changed, in {@code app.timezone}, to the minute
+     * @param rowsLoaded the rows loaded so far, or {@code null} before loading
+     */
+    record ImportLine(
+            long id,
+            String kind,
+            String status,
+            LocalDateTime requested,
+            LocalDateTime updated,
+            @Nullable Long rowsLoaded) {}
 
     @GetMapping("/admin/system")
     String show(
@@ -136,6 +157,17 @@ class SystemController {
                 conflicts.stream()
                         .map(c -> new ConflictLine(names.getOrDefault(c.userId(), ""), local(c.detectedAt())))
                         .toList());
+        model.addAttribute(
+                "lastImport",
+                imports.latest()
+                        .map(run -> new ImportLine(
+                                run.id(),
+                                run.kind(),
+                                run.status(),
+                                local(run.requestedAt()),
+                                local(run.updatedAt()),
+                                run.rowsLoaded()))
+                        .orElse(null));
         model.addAttribute("templates", TestMailService.TEMPLATES);
         model.addAttribute("testOutcome", outcome(test));
         return "web/system";
