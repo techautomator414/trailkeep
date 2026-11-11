@@ -17,9 +17,9 @@ import org.springframework.stereotype.Component;
 /**
  * Runs the one command a start of the {@code importer} profile was given (deploy/jobs/importer-job.yaml, design §2.1),
  * as the {@code TRAILKEEP_IMPORT} user; the process then ends ({@code TrailkeepApplication}). A failure fails the
- * start, so the Job's pod exits non-zero. {@code status} and the structural {@code validate-mapping} exist so far; the
- * other commands arrive with their PRs (design §12) and are refused until then. Logs carry run ids, codes and counts
- * only.
+ * start, so the Job's pod exits non-zero. {@code status}, the structural {@code validate-mapping} and {@code
+ * purge-staging} exist so far; the other commands arrive with their PRs (design §12) and are refused until then. Every
+ * command first applies the staging TTL. Logs carry run ids, codes and counts only.
  */
 @Component
 @Profile("importer")
@@ -30,41 +30,56 @@ class ImportCommandRunner implements ApplicationRunner {
     private final ImportProperties properties;
     private final ImportStatusReader statuses;
     private final ValidateMappingCommand validateMapping;
+    private final StagingPurger purger;
     private final InstantSource clock;
 
     ImportCommandRunner(
             ImportProperties properties,
             ImportStatusReader statuses,
             ValidateMappingCommand validateMapping,
+            StagingPurger purger,
             InstantSource clock) {
         this.properties = properties;
         this.statuses = statuses;
         this.validateMapping = validateMapping;
+        this.purger = purger;
         this.clock = clock;
     }
 
     @Override
     public void run(ApplicationArguments args) {
         String command = properties.command();
-        if (!"status".equals(command) && !"validate-mapping".equals(command)) {
+        if (!"status".equals(command) && !"validate-mapping".equals(command) && !"purge-staging".equals(command)) {
             throw new IllegalStateException("Unknown or not yet available import command: " + command);
         }
         Long run = properties.run();
         if (run == null) {
             throw new IllegalStateException("import.run is required");
         }
-        if ("status".equals(command)) {
-            LOG.info("Import status: {}", statuses.status(run, clock.instant()));
+        // Every command first applies the staging TTL (design §5), whichever run it was started for.
+        int expired = purger.purgeExpired(clock.instant());
+        if (expired > 0) {
+            LOG.info("Staging purged for {} expired import runs", expired);
+        }
+        if ("validate-mapping".equals(command)) {
+            validateMapping(run);
             return;
         }
+        if ("purge-staging".equals(command)) {
+            purger.purge(run, clock.instant());
+            LOG.info("Import run {}: staging purged", run.longValue());
+        }
+        LOG.info("Import status: {}", statuses.status(run, clock.instant()));
+    }
+
+    private void validateMapping(long run) {
         Path mapping = properties.mapping();
         if (mapping == null) {
             throw new IllegalStateException("import.mapping is required");
         }
         List<MappingProblem> problems = validateMapping.run(run, mapping);
-        long runId = run;
         for (MappingProblem problem : problems) {
-            LOG.warn("Import run {} mapping: {} at {}", runId, problem.code().name(), shown(problem));
+            LOG.warn("Import run {} mapping: {} at {}", run, problem.code().name(), shown(problem));
         }
         if (!problems.isEmpty()) {
             throw new IllegalStateException(

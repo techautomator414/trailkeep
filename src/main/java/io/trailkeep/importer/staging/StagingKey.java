@@ -16,9 +16,16 @@ import java.util.Objects;
 @Embeddable
 public record StagingKey(
         @Column(name = "RUN_ID", nullable = false) Long runId,
-        @Column(name = "LEGACY_KEY", nullable = false, length = 100) String legacyKey) {
 
-    /** Checks both parts are present. */
+        @Column(name = "LEGACY_KEY", nullable = false, length = 100)
+        String legacyKey) {
+
+    /**
+     * Checks both parts are present.
+     *
+     * @param runId the run
+     * @param legacyKey the canonical key
+     */
     public StagingKey {
         Objects.requireNonNull(runId, "runId");
         Objects.requireNonNull(legacyKey, "legacyKey");
