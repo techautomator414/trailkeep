@@ -31,6 +31,8 @@ app:
       # Unreachable on purpose, like the provider endpoints below: scanner tests start their own clamd (fake or real).
       host: 127.0.0.1
       port: 9
+      # The per-replica clamd probe (WP-25 part f) is off; ScannerProbeTest calls probe() itself.
+      probe-cron: "-"
   proxy:
     # Placeholder router range. Loopback (the test client) is deliberately outside it.
     pattern: 10\.128\.\d+\.\d+

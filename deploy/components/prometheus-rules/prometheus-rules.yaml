@@ -83,3 +83,13 @@ spec:
           annotations:
             summary: "Requests have been waiting for a database connection for 5 minutes."
             runbook_url: "https://github.com/techautomator414/trailkeep/blob/main/deploy/README.md#the-database-pool-is-exhausted"
+    - name: trailkeep.scanner
+      rules:
+        - alert: TrailkeepScannerDown
+          expr: min(trailkeep_scanner_up) == 0
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "clamd has not answered a replica's probe for 5 minutes; uploads are refused."
+            runbook_url: "https://github.com/techautomator414/trailkeep/blob/main/deploy/README.md#the-virus-scanner-is-down"
