@@ -71,18 +71,21 @@
 --   SEQ_IMPORT_RUN        SELECT     -
 --   SEQ_IMPORT_ISSUE      SELECT     -            needed by Hibernate validate; NEXTVAL comes with it on Oracle
 --   SEQ_IMPORT_RUN_SUMMARY SELECT    -
+--   CASE_IMPORTED_EVENT   S          S D          legacy history, for the History tab; case content, purged (V16)
+--   SEQ_CASE_IMPORTED_EVENT SELECT   -
 --
 -- The import user: S I D on the staging tables (IMPORT_STG_PERSON, _CASE, _COMMENT, _ATTACHMENT, _EVENT and
 -- IMPORT_RUN_CHECKPOINT; V13), which no other user may even read, and on IMPORT_ISSUE and IMPORT_RUN_SUMMARY; S I on
--- IMPORT_RUN with UPDATE of the status, hash, scanning-mode, count and staging-expiry columns, never the sign-off. On
--- every other table and sequence an entity maps it has SELECT only, because the dictionary views Hibernate validate
--- reads (ALL_TABLES, ALL_SEQUENCES) list only objects a user holds a privilege on (design §2.1 R3); on a sequence
--- that SELECT is also NEXTVAL. The import writes to domain tables come with the importer PRs that use them (§12).
+-- IMPORT_RUN with UPDATE of the status, hash, scanning-mode, count and staging-expiry columns, never the sign-off;
+-- S I on CASE_IMPORTED_EVENT, insert-only, and SELECT (NEXTVAL) on SEQ_CASE_IMPORTED_EVENT (V16). On every other
+-- table and sequence an entity maps it has SELECT only, because the dictionary views Hibernate validate reads
+-- (ALL_TABLES, ALL_SEQUENCES) list only objects a user holds a privilege on (design §2.1 R3); on a sequence that
+-- SELECT is also NEXTVAL. The import writes to domain tables come with the importer PRs that use them (§12).
 --
 -- Later migrations add their rows to the cursor below. Fixed rules for them: the app user has no UPDATE or DELETE
--- on CASE_COMMENT, CASE_ATTACHMENT_CHUNK, AUDIT_EVENT and ALERT_LEDGER, and no DELETE on CASE_ATTACHMENT; it may DELETE only from CASE_COMMENT_PIN, SAVED_VIEW, USER_ALERT,
+-- on CASE_COMMENT, CASE_ATTACHMENT_CHUNK, AUDIT_EVENT, ALERT_LEDGER and CASE_IMPORTED_EVENT, and no DELETE on CASE_ATTACHMENT; it may DELETE only from CASE_COMMENT_PIN, SAVED_VIEW, USER_ALERT,
 -- SPRING_SESSION*, OIDC_SESSION and SHEDLOCK, besides the membership tables above. Importer staging belongs to the
--- import user, never to the app user; the import user has no UPDATE or DELETE on those four insert-only tables either.
+-- import user, never to the app user; the import user has no UPDATE or DELETE on those five insert-only tables either.
 -- DatabaseGrantsIT asserts this matrix by executing each statement as each user.
 --
 -- Object names below are literals from this file only; the grantees come from deployment configuration.
@@ -165,6 +168,12 @@ DECLARE
     UNION ALL SELECT COLUMN_VALUE, 'SELECT,INSERT,DELETE', UPPER('${import_user}') FROM TABLE(SYS.ODCIVARCHAR2LIST(
       'IMPORT_STG_PERSON', 'IMPORT_STG_CASE', 'IMPORT_STG_COMMENT', 'IMPORT_STG_ATTACHMENT', 'IMPORT_STG_EVENT',
       'IMPORT_RUN_CHECKPOINT'))
+    -- Imported legacy history (V16): the History tab reads it; only the importer writes it, and only purge deletes it.
+    UNION ALL SELECT 'CASE_IMPORTED_EVENT', 'SELECT', UPPER('${app_user}') FROM DUAL
+    UNION ALL SELECT 'SEQ_CASE_IMPORTED_EVENT', 'SELECT', UPPER('${app_user}') FROM DUAL
+    UNION ALL SELECT 'CASE_IMPORTED_EVENT', 'SELECT,DELETE', UPPER('${purge_user}') FROM DUAL
+    UNION ALL SELECT 'CASE_IMPORTED_EVENT', 'SELECT,INSERT', UPPER('${import_user}') FROM DUAL
+    UNION ALL SELECT 'SEQ_CASE_IMPORTED_EVENT', 'SELECT', UPPER('${import_user}') FROM DUAL
     -- Every other table and sequence an entity maps: SELECT only, for validate (design §2.1 R3).
     UNION ALL SELECT COLUMN_VALUE, 'SELECT', UPPER('${import_user}') FROM TABLE(SYS.ODCIVARCHAR2LIST(
       'APP_USER', 'TEAM', 'APP_USER_TEAM', 'APP_USER_GLOBAL_ROLE', 'AUDIT_EVENT', 'SLA_POLICY', 'CASE_TYPE',

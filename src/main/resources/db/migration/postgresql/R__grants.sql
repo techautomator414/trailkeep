@@ -48,6 +48,7 @@
 --   IMPORT_ISSUE          S          -            codes, numbers and keyed hashes, for the screen (V10)
 --   IMPORT_RUN_SUMMARY    S          -            the sign-off screen's aggregates (V10)
 --   IMPORT_STG_*, IMPORT_RUN_CHECKPOINT -  -       staging: legacy values; the import user's alone (V13)
+--   CASE_IMPORTED_EVENT   S          S D          legacy history, for the History tab; case content, purged (V16)
 --   SEQ_APP_USER          USAGE      -
 --   SEQ_TEAM              USAGE      -
 --   SEQ_AUDIT_EVENT       USAGE      USAGE        the purge's CASE_PURGED rows
@@ -70,19 +71,21 @@
 --   SEQ_IMPORT_RUN        USAGE      -
 --   SEQ_IMPORT_ISSUE      SELECT     -            no nextval: SELECT only lets Hibernate validate see it
 --   SEQ_IMPORT_RUN_SUMMARY SELECT    -
+--   SEQ_CASE_IMPORTED_EVENT SELECT   -
 --
 -- The import user: S I D on the staging tables (IMPORT_STG_PERSON, _CASE, _COMMENT, _ATTACHMENT, _EVENT and
 -- IMPORT_RUN_CHECKPOINT; V13), which no other user may even read, and on IMPORT_ISSUE and IMPORT_RUN_SUMMARY; S I on
 -- IMPORT_RUN with UPDATE of the status, hash, scanning-mode, count and staging-expiry columns, never the sign-off;
--- USAGE on SEQ_IMPORT_*. On every other table and sequence an entity maps it has SELECT only, so its Hibernate
--- validate sees the whole model (on Oracle the dictionary lists only objects a user holds a privilege on, design §2.1
--- R3). The import writes to domain tables come with the importer PRs that use them (design §12).
+-- S I on CASE_IMPORTED_EVENT, insert-only (V16); USAGE on SEQ_IMPORT_* and SEQ_CASE_IMPORTED_EVENT. On every other
+-- table and sequence an entity maps it has SELECT only, so its Hibernate validate sees the whole model (on Oracle the
+-- dictionary lists only objects a user holds a privilege on, design §2.1 R3). The import writes to domain tables come
+-- with the importer PRs that use them (design §12).
 --
 -- Later migrations add their tables here. Fixed rules for them: the app user has no UPDATE or DELETE on
--- CASE_COMMENT, CASE_ATTACHMENT_CHUNK, AUDIT_EVENT and ALERT_LEDGER, and no DELETE on CASE_ATTACHMENT; it may DELETE only from CASE_COMMENT_PIN, SAVED_VIEW, USER_ALERT,
+-- CASE_COMMENT, CASE_ATTACHMENT_CHUNK, AUDIT_EVENT, ALERT_LEDGER and CASE_IMPORTED_EVENT, and no DELETE on CASE_ATTACHMENT; it may DELETE only from CASE_COMMENT_PIN, SAVED_VIEW, USER_ALERT,
 -- SPRING_SESSION*, OIDC_SESSION and SHEDLOCK, besides the membership tables and CASE_TYPE_OUTCOME (configuration, not
 -- case data) above. Importer staging belongs to the import user, never to the app user; the import user has no
--- UPDATE or DELETE on those four insert-only tables either.
+-- UPDATE or DELETE on those five insert-only tables either.
 -- DatabaseGrantsIT asserts this matrix by executing each statement as each user.
 
 GRANT USAGE ON SCHEMA ${flyway:defaultSchema} TO ${app_user};
@@ -94,11 +97,11 @@ REVOKE ALL ON TABLE APP_USER, TEAM, APP_USER_TEAM, APP_USER_GLOBAL_ROLE, AUDIT_E
   CASE_RECORD, CASE_SLA, CASE_SEARCH, CASE_COMMENT, CASE_COMMENT_PIN, CASE_ATTACHMENT, CASE_ATTACHMENT_CHUNK, SAVED_VIEW, NOTIFICATION_OUTBOX, USER_ALERT, UPDATE_REQUEST, CLOSURE_REQUEST, CASE_REOPEN,
   ALERT_LEDGER, JOB_RUN, SHEDLOCK, REPORT_SCHEDULE, REPORT_RUN, LEGAL_HOLD_EVENT, USER_PREFERENCE, IMPORT_RUN,
   IMPORT_ISSUE, IMPORT_RUN_SUMMARY, IMPORT_STG_PERSON, IMPORT_STG_CASE, IMPORT_STG_COMMENT, IMPORT_STG_ATTACHMENT,
-  IMPORT_STG_EVENT, IMPORT_RUN_CHECKPOINT FROM ${app_user}, ${purge_user}, ${import_user};
+  IMPORT_STG_EVENT, IMPORT_RUN_CHECKPOINT, CASE_IMPORTED_EVENT FROM ${app_user}, ${purge_user}, ${import_user};
 REVOKE ALL ON SEQUENCE SEQ_APP_USER, SEQ_TEAM, SEQ_AUDIT_EVENT, SEQ_SLA_POLICY, SEQ_CASE_TYPE, SEQ_CASE_RECORD, SEQ_CASE_NUMBER,
   SEQ_CASE_COMMENT, SEQ_CASE_ATTACHMENT, SEQ_SAVED_VIEW, SEQ_NOTIFICATION_OUTBOX, SEQ_USER_ALERT, SEQ_UPDATE_REQUEST, SEQ_CLOSURE_REQUEST, SEQ_CASE_REOPEN, SEQ_ALERT_LEDGER,
-  SEQ_REPORT_SCHEDULE, SEQ_REPORT_RUN, SEQ_LEGAL_HOLD_EVENT, SEQ_IMPORT_RUN, SEQ_IMPORT_ISSUE, SEQ_IMPORT_RUN_SUMMARY
-  FROM ${app_user}, ${purge_user}, ${import_user};
+  SEQ_REPORT_SCHEDULE, SEQ_REPORT_RUN, SEQ_LEGAL_HOLD_EVENT, SEQ_IMPORT_RUN, SEQ_IMPORT_ISSUE, SEQ_IMPORT_RUN_SUMMARY,
+  SEQ_CASE_IMPORTED_EVENT FROM ${app_user}, ${purge_user}, ${import_user};
 
 GRANT SELECT, INSERT, UPDATE         ON TABLE APP_USER             TO ${app_user};
 GRANT SELECT, INSERT, UPDATE         ON TABLE TEAM                 TO ${app_user};
@@ -149,6 +152,10 @@ GRANT SELECT, INSERT                 ON TABLE IMPORT_RUN           TO ${app_user
 GRANT UPDATE (APPROVED_BY, APPROVED_AT, ACKNOWLEDGED_WARNINGS, UPDATED_AT, VERSION) ON TABLE IMPORT_RUN TO ${app_user};
 GRANT SELECT                         ON TABLE IMPORT_ISSUE, IMPORT_RUN_SUMMARY TO ${app_user};
 GRANT SELECT ON SEQUENCE SEQ_IMPORT_ISSUE, SEQ_IMPORT_RUN_SUMMARY TO ${app_user};
+-- Imported legacy history (V16): the History tab reads it; only the importer writes it, and only purge deletes it.
+GRANT SELECT                         ON TABLE CASE_IMPORTED_EVENT  TO ${app_user};
+GRANT SELECT ON SEQUENCE SEQ_CASE_IMPORTED_EVENT TO ${app_user};
+GRANT SELECT, DELETE                 ON TABLE CASE_IMPORTED_EVENT  TO ${purge_user};
 
 -- The importer Job (design §5): its own tables, and SELECT on every table and sequence an entity maps, for validate.
 GRANT SELECT ON TABLE APP_USER, TEAM, APP_USER_TEAM, APP_USER_GLOBAL_ROLE, AUDIT_EVENT, SLA_POLICY, CASE_TYPE,
@@ -163,6 +170,8 @@ GRANT SELECT, INSERT, DELETE         ON TABLE IMPORT_ISSUE, IMPORT_RUN_SUMMARY T
 GRANT SELECT, INSERT, DELETE ON TABLE IMPORT_STG_PERSON, IMPORT_STG_CASE, IMPORT_STG_COMMENT, IMPORT_STG_ATTACHMENT,
   IMPORT_STG_EVENT, IMPORT_RUN_CHECKPOINT TO ${import_user};
 GRANT USAGE ON SEQUENCE SEQ_IMPORT_RUN, SEQ_IMPORT_ISSUE, SEQ_IMPORT_RUN_SUMMARY TO ${import_user};
+GRANT SELECT, INSERT                 ON TABLE CASE_IMPORTED_EVENT  TO ${import_user};
+GRANT USAGE ON SEQUENCE SEQ_CASE_IMPORTED_EVENT TO ${import_user};
 GRANT SELECT ON SEQUENCE SEQ_APP_USER, SEQ_TEAM, SEQ_AUDIT_EVENT, SEQ_SLA_POLICY, SEQ_CASE_TYPE, SEQ_CASE_RECORD,
   SEQ_CASE_COMMENT, SEQ_CASE_ATTACHMENT, SEQ_SAVED_VIEW, SEQ_NOTIFICATION_OUTBOX, SEQ_USER_ALERT, SEQ_UPDATE_REQUEST,
   SEQ_CLOSURE_REQUEST, SEQ_CASE_REOPEN, SEQ_ALERT_LEDGER, SEQ_REPORT_SCHEDULE, SEQ_REPORT_RUN, SEQ_LEGAL_HOLD_EVENT

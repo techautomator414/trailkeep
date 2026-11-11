@@ -29,7 +29,8 @@ import org.springframework.transaction.support.TransactionTemplate;
  *
  * <p>A case is purged under its row lock, taken by re-reading it with every condition: archived, not yet purged, its
  * {@code PURGE_AFTER} passed and not on legal hold at that moment, so a hold placed while the job runs wins. Then, in
- * this order: comment pins; update requests (they name the comment that answered them); comments; attachment chunks;
+ * this order: comment pins; update requests (they name the comment that answered them); comments; imported legacy
+ * history ({@code CASE_IMPORTED_EVENT}, case content like comments, WP-26 part v); attachment chunks;
  * attachments; search text; reopens (they name a closure request); closure requests; the case's queued or sent mail.
  * Last, the case row becomes a tombstone: description and subject cleared, {@code PURGED_AT} set, the version moved on;
  * and each tombstone is audited as {@code CASE_PURGED} (origin {@code SCHEDULER}, no actor) with how many of each kind
@@ -96,6 +97,9 @@ class PurgeJdbcDao {
         counts.put("comments", "SELECT CASE_ID, COUNT(*) FROM CASE_COMMENT WHERE CASE_ID IN (:ids) GROUP BY CASE_ID");
         counts.put("pins", "SELECT CASE_ID, COUNT(*) FROM CASE_COMMENT_PIN WHERE CASE_ID IN (:ids) GROUP BY CASE_ID");
         counts.put(
+                "importedEvents",
+                "SELECT CASE_ID, COUNT(*) FROM CASE_IMPORTED_EVENT WHERE CASE_ID IN (:ids) GROUP BY CASE_ID");
+        counts.put(
                 "attachments",
                 "SELECT CASE_ID, COUNT(*) FROM CASE_ATTACHMENT WHERE CASE_ID IN (:ids) GROUP BY CASE_ID");
         counts.put(
@@ -115,6 +119,7 @@ class PurgeJdbcDao {
         deletes.put("pins", "DELETE FROM CASE_COMMENT_PIN WHERE CASE_ID IN (:ids)");
         deletes.put("updateRequests", "DELETE FROM UPDATE_REQUEST WHERE CASE_ID IN (:ids)");
         deletes.put("comments", "DELETE FROM CASE_COMMENT WHERE CASE_ID IN (:ids)");
+        deletes.put("importedEvents", "DELETE FROM CASE_IMPORTED_EVENT WHERE CASE_ID IN (:ids)");
         deletes.put(
                 "chunks",
                 "DELETE FROM CASE_ATTACHMENT_CHUNK WHERE ATTACHMENT_ID IN"
