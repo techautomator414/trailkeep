@@ -4,7 +4,9 @@ package io.trailkeep.audit;
 
 import io.trailkeep.shared.access.CaseAccessPath;
 import io.trailkeep.shared.access.CaseScope;
+import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -50,6 +52,11 @@ class DefaultAuditTrailService implements AuditTrailService {
     @Override
     public List<StandingEvent> standing(String entityType, String action, Set<String> clearedBy) {
         return standing.standing(entityType, action, clearedBy);
+    }
+
+    @Override
+    public Optional<Instant> latest(String entityType, long entityId, String action) {
+        return standing.latest(entityType, entityId, action);
     }
 
     private static int checked(int limit) {

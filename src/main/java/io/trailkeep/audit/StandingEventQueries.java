@@ -7,6 +7,7 @@ import jakarta.persistence.EntityManager;
 import java.time.Instant;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import org.springframework.stereotype.Component;
 
@@ -27,6 +28,9 @@ class StandingEventQueries {
             + " AND (l.at > e.at OR (l.at = e.at AND l.id > e.id)))"
             + " ORDER BY e.at, e.id";
 
+    private static final String LATEST = "SELECT MAX(e.at) FROM AuditEvent e WHERE e.caseId IS NULL"
+            + " AND e.entityType = :type AND e.entityId = :id AND e.action = :action";
+
     private final EntityManager entityManager;
 
     StandingEventQueries(EntityManager entityManager) {
@@ -45,5 +49,14 @@ class StandingEventQueries {
                 .stream()
                 .map(row -> new StandingEvent((Long) row[0], (Instant) row[1]))
                 .toList();
+    }
+
+    Optional<Instant> latest(String entityType, long entityId, String action) {
+        return Optional.ofNullable(entityManager
+                .createQuery(LATEST, Instant.class)
+                .setParameter("type", entityType)
+                .setParameter("id", entityId)
+                .setParameter("action", action)
+                .getSingleResult());
     }
 }
