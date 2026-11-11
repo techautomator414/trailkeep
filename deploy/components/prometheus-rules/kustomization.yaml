@@ -1,0 +1,12 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Charlie Genova and contributors
+# Prometheus alerting rules for Trailkeep (WP-25), as a Kustomize component, because a PrometheusRule needs the
+# Prometheus Operator's CRD (OpenShift's cluster monitoring or kube-prometheus). An overlay that has it adds:
+#   components:
+#     - ../../components/prometheus-rules
+# Without the operator, load the expressions in prometheus-rules.yaml into your own Prometheus instead.
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+
+resources:
+  - prometheus-rules.yaml

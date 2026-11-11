@@ -14,6 +14,7 @@ Reference manifests for OpenShift, usable on plain Kubernetes. They follow BUILD
 | `base/` | Kustomize base: `Deployment` (2 replicas), `Service`, `Route`, `NetworkPolicy`, `ConfigMap`, `ServiceAccount`, `PodDisruptionBudget`, and the suspended purge `CronJob`. |
 | `base/ingress-alternative.yaml` | Commented `Ingress` to use instead of `route.yaml` on plain Kubernetes. |
 | `overlays/external-scanning/` | Example overlay without ClamAV, for `APP_ATTACHMENTS_SCANNING=external` (see "Scanning mode"). |
+| `components/prometheus-rules/` | Optional Kustomize component with the `PrometheusRule` for the operational alerts (see "Alerts"). |
 | `jobs/importer-job.yaml` | One-off importer `Job`, applied by hand because applying a `Job` runs it. |
 
 Render and check locally:
@@ -89,3 +90,34 @@ file that bypasses it is stored unscanned and can be downloaded.
   `prod,importer` and `spring.main.web-application-type=none`.
 - **Migrations.** Run as a separate pre-deploy `Job` with the schema-owner credential (added with the persistence
   work). The app itself only validates the schema.
+
+## Alerts
+
+`components/prometheus-rules/` is a Kustomize component with a `PrometheusRule` (it needs the Prometheus Operator, as
+on OpenShift's cluster monitoring). Add it to an overlay with `components: [../../components/prometheus-rules]`, or
+load its expressions into your own Prometheus. Each alert links to the section below. The System screen
+(`/admin/system`, System Admins and Compliance Admins) shows the same facts: each job's last success, the outbox and
+the virus scanner.
+
+### A scheduled job is late
+
+`TrailkeepSlaEvaluatorLate`, `TrailkeepRemindersLate`, `TrailkeepReportDeliveryLate`, `TrailkeepArchiveLate`: the
+job has not succeeded on any replica within its health indicator's grace (30 minutes for the SLA evaluator, 2 hours
+for the others). The jobs run on one replica at a time under ShedLock, so a single stuck pod does not cause this.
+Check that at least one pod is running and can reach the database, read the pods' logs for the job's name, and check
+the `SHEDLOCK` row for the job (a lock held past its `LOCK_UNTIL` by a pod that no longer exists is released when it
+expires). The job resumes on the next schedule once the cause is gone; nothing has to be replayed by hand.
+
+### Mail is not being sent
+
+`TrailkeepMailNotSending` (every attempt for 15 minutes was a retry, none was sent) or `TrailkeepMailBacklog` (more
+than 500 mails waiting for 30 minutes): the SMTP relay is unreachable or refusing mail. Check the egress
+`NetworkPolicy` to the relay, `spring.mail.host` and the relay's own health. Mail keeps queuing in
+`NOTIFICATION_OUTBOX` and is sent when the relay is back; setting `app.mail.enabled` to false stops attempts without
+losing mail.
+
+### Mail failed for good
+
+`TrailkeepMailFailed`: a mail used up its attempts and is marked failed; it will not be retried. The System screen
+shows the count. The row's `LAST_ERROR` says why (for example a recipient the relay rejects). Failed rows stay in
+the outbox; the purge removes mail only together with the purged case or the expired report run it belongs to.

@@ -1,0 +1,75 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Charlie Genova and contributors
+# Operational alerts (WP-25, BUILD_PLAN §6 and §7: the scheduler and the outbox are cluster concerns, so they alert here
+# rather than failing a pod's probe). Every replica reports the same job ages, read from JOB_RUN, so the job rules take
+# the minimum across replicas. The thresholds equal the health indicators' grace periods in application.yml
+# (app.sla.health-grace 30m, app.reminders/reports/retention health-grace 2h); change both together.
+# PrometheusRulesIT checks that every metric named here is served on /actuator/prometheus and that every alert has a
+# severity, a summary and a runbook_url into deploy/README.md ("Alerts").
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: trailkeep
+spec:
+  groups:
+    - name: trailkeep.jobs
+      rules:
+        - alert: TrailkeepSlaEvaluatorLate
+          expr: min(trailkeep_sla_evaluator_age_seconds) > 1800
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "The SLA evaluator has not succeeded on any replica for more than 30 minutes."
+            runbook_url: "https://github.com/techautomator414/trailkeep/blob/main/deploy/README.md#a-scheduled-job-is-late"
+        - alert: TrailkeepRemindersLate
+          expr: min(trailkeep_reminders_age_seconds) > 7200
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "The reminders tick has not succeeded on any replica for more than 2 hours."
+            runbook_url: "https://github.com/techautomator414/trailkeep/blob/main/deploy/README.md#a-scheduled-job-is-late"
+        - alert: TrailkeepReportDeliveryLate
+          expr: min(trailkeep_reports_delivery_age_seconds) > 7200
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "The report delivery job has not succeeded on any replica for more than 2 hours."
+            runbook_url: "https://github.com/techautomator414/trailkeep/blob/main/deploy/README.md#a-scheduled-job-is-late"
+        - alert: TrailkeepArchiveLate
+          expr: min(trailkeep_retention_archive_age_seconds) > 7200
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "The archive job has not succeeded on any replica for more than 2 hours."
+            runbook_url: "https://github.com/techautomator414/trailkeep/blob/main/deploy/README.md#a-scheduled-job-is-late"
+    - name: trailkeep.outbox
+      rules:
+        - alert: TrailkeepMailNotSending
+          expr: >-
+            sum(rate(trailkeep_outbox_attempts_total{outcome="retry"}[15m])) > 0
+            and sum(rate(trailkeep_outbox_attempts_total{outcome="sent"}[15m])) == 0
+          for: 15m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Every mail send has failed for 15 minutes; mail is queuing in the outbox."
+            runbook_url: "https://github.com/techautomator414/trailkeep/blob/main/deploy/README.md#mail-is-not-being-sent"
+        - alert: TrailkeepMailBacklog
+          expr: max(trailkeep_outbox_pending) > 500
+          for: 30m
+          labels:
+            severity: warning
+          annotations:
+            summary: "More than 500 mails have been waiting in the outbox for 30 minutes."
+            runbook_url: "https://github.com/techautomator414/trailkeep/blob/main/deploy/README.md#mail-is-not-being-sent"
+        - alert: TrailkeepMailFailed
+          expr: max(delta(trailkeep_outbox_failed[1h])) > 0
+          labels:
+            severity: warning
+          annotations:
+            summary: "Mail failed for good in the last hour (its attempts are used up)."
+            runbook_url: "https://github.com/techautomator414/trailkeep/blob/main/deploy/README.md#mail-failed-for-good"
