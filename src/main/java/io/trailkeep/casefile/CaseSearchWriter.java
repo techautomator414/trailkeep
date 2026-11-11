@@ -61,7 +61,7 @@ class CaseSearchWriter {
      */
     void rebuild(UserPermissions user, CaseRecord record, Instant now) {
         long caseId = Objects.requireNonNull(record.getId());
-        CaseSearch search = entityManager.find(CaseSearch.class, caseId, LockModeType.PESSIMISTIC_WRITE);
+        final CaseSearch search = entityManager.find(CaseSearch.class, caseId, LockModeType.PESSIMISTIC_WRITE);
         StringBuilder text = new StringBuilder(record.getTitle());
         if (record.getLegacyNumber() != null) {
             text.append('\n').append(record.getLegacyNumber());

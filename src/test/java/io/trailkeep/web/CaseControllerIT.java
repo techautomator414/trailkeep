@@ -21,6 +21,7 @@ import io.trailkeep.testsupport.WithAppUser;
 import io.trailkeep.user.GlobalRole;
 import io.trailkeep.user.TeamRole;
 import io.trailkeep.user.UserPermissions;
+import jakarta.persistence.EntityManager;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.Map;

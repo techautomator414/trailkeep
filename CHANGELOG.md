@@ -29,6 +29,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   (`OutboxStatusService`); and the virus scanner, from clamd's `VERSION` reply over the same TLS exchange as a scan
   (ClamAV release and signature database), or that scanning is external (`ScanEngineService`). Read-only; no case
   content, recipient or mail body is shown.
+- Legacy number and legacy owner on cases (WP-26 part d, docs/design/importer.md §7.1, §7.3). `V12__case_legacy_number` adds `CASE_RECORD.LEGACY_NUMBER` (the number an imported case had in its old tracker) and `OWNER_NAME_SNAPSHOT` (the legacy owner's name when they matched no Trailkeep user); `LEGACY_REF` (V4), the internal identity, is now mapped too and never shown. All three are written only when a case is imported (26e) and stay null for cases created in Trailkeep. The case page shows "Legacy number" and "Legacy owner" when present. The legacy number is part of the search text, and an edit's rebuild keeps it, so an edited imported case is still found by it.
 - Preferences and single-key shortcuts (WP-27 part a, BUILD_PLAN §3.1, §10.1). `V9__user_preference`: one
   `USER_PREFERENCE` row per person, created when they first save `/preferences` (a person with no row has the
   defaults), with the shortcuts switch on by default. The page is linked as "Preferences" in the navigation; saving
