@@ -61,6 +61,7 @@ class ImportOnlyApiRulesTest {
                         detail -> assertThat(detail).contains("ImportApiOutsideImporter", "AttachmentImportService"))
                 .anySatisfy(detail -> assertThat(detail).contains("ImportApiOutsideImporter", "ClosureImportService"))
                 .anySatisfy(detail -> assertThat(detail).contains("ImportApiOutsideImporter", "CaseImportService"))
-                .anySatisfy(detail -> assertThat(detail).contains("ImportApiOutsideImporter", "ImportedHistoryService"));
+                .anySatisfy(
+                        detail -> assertThat(detail).contains("ImportApiOutsideImporter", "ImportedHistoryService"));
     }
 }

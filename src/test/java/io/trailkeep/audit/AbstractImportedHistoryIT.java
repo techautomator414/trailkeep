@@ -79,9 +79,9 @@ abstract class AbstractImportedHistoryIT {
     void importedHistoryKeepsLegacyTimeAndRedacts() {
         long status = history.record(event("Legacy Clerk", Kind.STATUS_CHANGE, "status", "New", "In review"));
         String description = "Synthetic description, résumé 😀";
-        long described = history.record(event(null, Kind.FIELD_CHANGE, "description", null, description));
-        long note = history.record(event("Legacy Clerk", Kind.NOTE, "title", "Old title", "Note text"));
-        long other = history.record(event("Legacy Clerk", Kind.OTHER, "other", "a", "b"));
+        final long described = history.record(event(null, Kind.FIELD_CHANGE, "description", null, description));
+        final long note = history.record(event("Legacy Clerk", Kind.NOTE, "title", "Old title", "Note text"));
+        final long other = history.record(event("Legacy Clerk", Kind.OTHER, "other", "a", "b"));
         entityManager.flush();
 
         Map<String, Object> plain = row(status);
@@ -132,13 +132,13 @@ abstract class AbstractImportedHistoryIT {
     }
 
     @Test
-    void aValueIsNeverBothPlainAndRedacted() {
+    void valuesAreNeverBothPlainAndRedacted() {
         assertThatThrownBy(() -> insert("FIELD_CHANGE", "New", HASH, 3))
                 .isInstanceOf(DataIntegrityViolationException.class);
     }
 
     @Test
-    void aHashIsNeverStoredWithoutItsLength() {
+    void hashesAreNeverStoredWithoutTheirLength() {
         assertThatThrownBy(() -> insert("FIELD_CHANGE", null, HASH, null))
                 .isInstanceOf(DataIntegrityViolationException.class);
     }

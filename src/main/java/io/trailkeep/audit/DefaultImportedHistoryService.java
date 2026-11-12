@@ -32,17 +32,8 @@ class DefaultImportedHistoryService implements ImportedHistoryService {
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
     public long record(ImportedEvent event) {
+        validate(event);
         String field = event.field();
-        if (event.at().isAfter(clock.instant())) {
-            throw new IllegalArgumentException("an imported event cannot be in the future");
-        }
-        String who = event.who();
-        if (who != null && who.length() > MAX_WHO) {
-            throw new IllegalArgumentException("an imported event's actor name is too long");
-        }
-        if (field != null && !FIELDS.contains(field)) {
-            throw new IllegalArgumentException("an imported event names a field outside the canonical set");
-        }
         CaseImportedEvent row;
         if (event.kind() != Kind.NOTE && field != null && PLAIN_FIELDS.contains(field)) {
             if (tooLong(event.oldValue()) || tooLong(event.newValue())) {
@@ -54,6 +45,21 @@ class DefaultImportedHistoryService implements ImportedHistoryService {
         }
         entityManager.persist(row);
         return Objects.requireNonNull(row.getId(), "persisted");
+    }
+
+    /** The rules every event keeps, whatever its values. */
+    private void validate(ImportedEvent event) {
+        if (event.at().isAfter(clock.instant())) {
+            throw new IllegalArgumentException("an imported event cannot be in the future");
+        }
+        String who = event.who();
+        if (who != null && who.length() > MAX_WHO) {
+            throw new IllegalArgumentException("an imported event's actor name is too long");
+        }
+        String field = event.field();
+        if (field != null && !FIELDS.contains(field)) {
+            throw new IllegalArgumentException("an imported event names a field outside the canonical set");
+        }
     }
 
     private static boolean tooLong(@Nullable String value) {
