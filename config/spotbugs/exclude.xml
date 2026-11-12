@@ -252,8 +252,9 @@
     read from IMPORT_ISSUE (never the posted strings) in APPROVED_BY, APPROVED_AT and ACKNOWLEDGED_WARNINGS, the
     runtime user's only UPDATE grant on the table, and flushes in its transaction so a concurrent dry run is a 409;
     audited IMPORT_RUN_SIGNED_OFF with the recorded scanning mode. Redirects are fixed paths plus a numeric id. Covered
-    by ImportRunSignOffIT, OracleImportRunSignOffIT, ImportRunActionsControllerIT and ImportRunsAccessibilityIT.
-    Needs security-reviewer approval.
+    by ImportRunSignOffIT, OracleImportRunSignOffIT, ImportRunActionsControllerIT and ImportRunsAccessibilityIT, and
+    as the runtime user by ImporterProfileIT and OracleImporterProfileIT.
+    Approved in the security-reviewer role on #176.
     Approved in the security-reviewer role on #20. Listed by class, never by pattern alone, so each new controller
     is reviewed the same way.
   -->
