@@ -48,6 +48,12 @@ app:
       trailkeep-compliance-admins: COMPLIANCE_ADMIN
       trailkeep-system-admins: SYSTEM_ADMIN
 
+# The importer's dry run and load refuse to start in clamd mode unless the deployment declares clamd's StreamMaxLength
+# (docs/design/importer.md §4.3 "Size", R13); this is clamd's default.
+import:
+  attachments:
+    clamd-stream-max: 100MB
+
 spring:
   ssl:
     bundle:

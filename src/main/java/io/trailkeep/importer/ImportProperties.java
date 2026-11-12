@@ -47,8 +47,13 @@ record ImportProperties(
      *
      * @param maxBytes the importer's cap: a larger file is never read at extract nor loaded; the importer profile sets
      *     it to {@code app.attachments.max-bytes} unless the deployment raises it
+     * @param clamdStreamMax clamd's {@code StreamMaxLength} as the deployment declares it, since the importer cannot
+     *     read a clamd server setting (R13): in {@code clamd} mode {@code dry-run} and {@code load} refuse to start
+     *     when it is unset or below {@code maxBytes} ({@link ScanModeInForce#checkStreamMax}); unused otherwise
      */
-    record Attachments(@DefaultValue("25MB") DataSize maxBytes) {}
+    record Attachments(
+            @DefaultValue("25MB") DataSize maxBytes,
+            @Nullable DataSize clamdStreamMax) {}
 
     /** The same floor as the audit key's. */
     static final int MIN_HASH_KEY_BYTES = 32;

@@ -19,7 +19,6 @@ import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import org.jspecify.annotations.Nullable;
@@ -34,7 +33,8 @@ import org.springframework.context.ConfigurableApplicationContext;
 /**
  * {@code load} as the import user (WP-26 part t, design §3 step 5, §8.2): a signed-off run's cases written with their
  * closures, owners as the dry run chose them and import ledger rows, a case with an ERROR skipped, a second load
- * writing nothing; each unmet condition refused with its own code before anything is written; the run lock refusing
+ * writing nothing; each unmet condition, a changed scanning mode among them, refused with its own code before anything
+ * is written, as is a clamd stream limit below the importer's cap; the run lock refusing
  * while a live load holds the run or another run of its source, and taken over once that load is stale; cases the
  * rules, the owners or the import APIs refuse at the load recorded as {@code LOAD} issues while the load goes on, and
  * tried again by the next load; and a load stopped by a case it cannot finish left {@code FAILED}, the next load
@@ -204,6 +204,36 @@ abstract class AbstractLoadIT extends DryRunSupport {
     }
 
     @Test
+    void loadRefusesChangedScanningModeAndClamdStreamLimitBelowTheCapBeforeWritingAnything(@TempDir Path directory)
+            throws Exception {
+        Path mapping = mapping(directory);
+        long run = signedOffRun(mapping);
+        stage(run, "c1", "OPEN", "p1");
+
+        assertThat(refusal(run, mapping, "--app.attachments.scanning=external"))
+                .as("the mode in force is not the one the sign-off approved")
+                .isEqualTo(Refusal.SCAN_MODE_CHANGED);
+        jdbc.update("UPDATE IMPORT_RUN SET SCAN_MODE = NULL WHERE ID = ?", run);
+        assertThat(refusal(run, mapping)).as("no mode recorded").isEqualTo(Refusal.SCAN_MODE_CHANGED);
+        jdbc.update("UPDATE IMPORT_RUN SET SCAN_MODE = 'CLAMD' WHERE ID = ?", run);
+        for (String streamMax : List.of("24MB", "")) {
+            assertThatThrownBy(() -> load(run, mapping, "--import.attachments.clamd-stream-max=" + streamMax))
+                    .as("clamd's declared stream limit unset or below the importer's cap")
+                    .hasMessageContaining("import.attachments.clamd-stream-max must declare");
+        }
+        assertThat(jdbc.queryForObject("SELECT STATUS FROM IMPORT_RUN WHERE ID = ?", String.class, run))
+                .isEqualTo("DRY_RUN");
+        assertThat(loadedCases("memory1:%")).isZero();
+
+        jdbc.update("UPDATE IMPORT_RUN SET SCAN_MODE = 'EXTERNAL' WHERE ID = ?", run);
+        load(run, mapping, "--app.attachments.scanning=external", "--import.attachments.clamd-stream-max=")
+                .close();
+        assertThat(ledger(run))
+                .as("external as signed off; no clamd limit needed")
+                .hasSize(1);
+    }
+
+    @Test
     void loadRecordsCasesTheRulesOrTheImportApisRefuseNowAsLoadIssuesAndGoesOn(@TempDir Path directory)
             throws Exception {
         Path mapping = mapping(directory);
@@ -323,17 +353,13 @@ abstract class AbstractLoadIT extends DryRunSupport {
         jdbc.update("UPDATE IMPORT_STG_CASE SET OWNER_KEY = ? WHERE RUN_ID = ? AND LEGACY_KEY = ?", owner, run, key);
     }
 
-    private ConfigurableApplicationContext load(long run, Path mapping) throws SQLException {
-        return start(
-                "--import.command=load",
-                "--import.run=" + run,
-                "--import.mapping=" + mapping,
-                "--import.hash-key=" + Base64.getEncoder().encodeToString(HASH_KEY));
+    private ConfigurableApplicationContext load(long run, Path mapping, String... more) throws SQLException {
+        return command("load", run, mapping, more);
     }
 
     /** The code a refused load names; the refusal is the cause of the failed start. */
-    private Refusal refusal(long run, Path mapping) {
-        Throwable failure = catchThrowable(() -> load(run, mapping));
+    private Refusal refusal(long run, Path mapping, String... more) {
+        Throwable failure = catchThrowable(() -> load(run, mapping, more));
         for (Throwable cause = failure; cause != null; cause = cause.getCause()) {
             if (cause instanceof LoadCommand.RefusedException refused) {
                 return refused.refusal();
