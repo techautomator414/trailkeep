@@ -33,7 +33,8 @@ import tools.jackson.dataformat.yaml.YAMLMapper;
  * expiry ({@code import.staging-ttl}) when the extract starts, so abandoned staging expires too, and moves from {@code
  * VALIDATED} to {@code EXTRACTED} with the number of rows staged. A source that cannot be read soundly (26k2: a file
  * that differs from its manifest, a line that is not one object) is a {@code FATAL} issue with a code and at most a
- * line number, and stops the extract before that entity is checkpointed.
+ * line number, and stops the extract before that entity is checkpointed; so is a source query that fails (26n2), with
+ * its code only. An extract that starts over also empties the run's content area.
  */
 @Component
 @Profile("importer")
@@ -96,15 +97,16 @@ class ExtractCommand {
                         refused(runId, ImportIssue.Subject.MAPPING, new SourceException("SOURCE_UNSUPPORTED", null)));
         Path directory = Objects.requireNonNull(file.toAbsolutePath().getParent(), "a file has a directory");
         try (SourceRows source = open(runId, factory, context, directory)) {
-            AttachmentFiles files = attachmentFiles(runId, context, source);
             String fingerprint = source.fingerprint();
             transactions.executeWithoutResult(status -> {
                 ImportRun run = load(runId);
                 if (run.extractStarting(fingerprint, clock.instant().plus(properties.stagingTtl()), clock.instant())) {
                     staging.purge(runId);
+                    ContentArea.delete(properties.contentArea(), runId);
                 }
                 runs.save(run);
             });
+            AttachmentFiles files = attachmentFiles(runId, context, source);
             for (StagedEntity entity : StagedEntity.values()) {
                 extract(runId, context, source, entity, entity == StagedEntity.ATTACHMENT ? files : null);
             }
@@ -181,7 +183,9 @@ class ExtractCommand {
             return AttachmentFiles.of(
                     context.mapping(),
                     source,
-                    properties.attachments().maxBytes().toBytes());
+                    properties.attachments().maxBytes().toBytes(),
+                    properties.contentArea(),
+                    runId);
         } catch (SourceException unsound) {
             throw refused(runId, ImportIssue.Subject.MAPPING, unsound);
         }

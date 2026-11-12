@@ -10,15 +10,12 @@ import java.sql.SQLTimeoutException;
  * column values), so the exception carries an issue code derived from the type and SQLState only, and neither the
  * driver's message nor the driver's exception as its cause: nothing it holds can reach a log or {@code IMPORT_ISSUE}.
  */
-final class SourceQueryException extends RuntimeException {
+final class SourceQueryException extends SourceException {
 
     private static final long serialVersionUID = 1L;
 
-    private final String code;
-
     private SourceQueryException(String code) {
-        super(code);
-        this.code = code;
+        super(code, null);
     }
 
     /**
@@ -40,14 +37,5 @@ final class SourceQueryException extends RuntimeException {
             code = "SOURCE_QUERY_FAILED";
         }
         return new SourceQueryException(code);
-    }
-
-    /**
-     * The issue code.
-     *
-     * @return for example {@code SOURCE_PERMISSION_DENIED}
-     */
-    String code() {
-        return code;
     }
 }

@@ -25,6 +25,8 @@ import org.springframework.util.unit.DataSize;
  *     key (design §5 "Hashes are keyed"); required by {@code extract}
  * @param stagingTtl how long a run's staging lives after its extract starts (design §5 "Staging TTL")
  * @param attachments the importer's attachment settings
+ * @param contentArea the folder on the run volume that holds each run's content area (design §4.3); required by an
+ *     extract whose attachments come from a content query
  */
 @ConfigurationProperties("import")
 record ImportProperties(
@@ -33,7 +35,8 @@ record ImportProperties(
         @Nullable Path mapping,
         @Nullable String hashKey,
         @DefaultValue("14d") Duration stagingTtl,
-        @DefaultValue Attachments attachments) {
+        @DefaultValue Attachments attachments,
+        @Nullable Path contentArea) {
 
     /**
      * {@code import.attachments} (design §4.3 "Size").

@@ -68,6 +68,12 @@ class MappingValidatorTest {
                 .containsOnly(new MappingProblem(Code.MAPPING_SCHEMA, ""));
     }
 
+    @Test
+    void contentQueryNamesItsSizeSoAnOverCapFileIsNeverFetched() throws IOException {
+        assertThat(validate(example().replace(", size: size_bytes }", " }")))
+                .containsOnly(new MappingProblem(Code.MAPPING_SCHEMA, "/entities/attachment/fields/content"));
+    }
+
     /** The design's own security test (§10): a placeholder outside the source block is rejected, never resolved. */
     @Test
     void placeholdersAreAllowedOnlyInUrlAndUserAndOnlyForImportSourceNames() throws IOException {

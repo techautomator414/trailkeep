@@ -155,7 +155,7 @@ final class RowStager {
             values.put("size", size(object("number", size), fields, issues));
         }
         if (files != null) {
-            files.capture(values, issues);
+            files.capture(fields.row(), values, issues);
         }
     }
 
@@ -266,7 +266,8 @@ final class RowStager {
         return switch (value) {
             case null -> null;
             case BigDecimal number -> number.toPlainString();
-            // Bytes are content; a text column never holds them (the content area does, with 26l and 26n2).
+            // Bytes are content; a text column never holds them (the content area does: content queries, 26l's inline
+            // bytes).
             case byte[] bytes -> {
                 issues.add(new Issue("BINARY_NOT_TEXT", Severity.ERROR));
                 yield null;

@@ -11,9 +11,6 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-import org.jspecify.annotations.Nullable;
 import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.JsonNode;
@@ -25,18 +22,14 @@ import tools.jackson.dataformat.yaml.YAMLMapper;
  * the source does not have, fails before any extract. Runs only on a mapping that passed every structural and query
  * check.
  *
- * <p>{@code source.url} and {@code source.user} are resolved here, and only from {@code import.source.*} names (§10;
- * {@link MappingValidator} has already refused any other placeholder). The password is {@code import.source.password},
- * a Secret file read through {@code configtree}, never named in the mapping. A failure is a code from the driver's
- * type and SQLState only ({@link SourceQueryException}), at the query's place in the file.
+ * <p>The account comes from {@link SourceAccount}, as the extract's does. A failure is a code from the driver's type
+ * and SQLState only ({@link SourceQueryException}), at the query's place in the file.
  */
 @Component
 class SourceTestFetch {
 
     /** The statement timeout of each test fetch. */
     static final Duration TIMEOUT = Duration.ofSeconds(30);
-
-    private static final Pattern PLACEHOLDER = Pattern.compile("\\$\\{(import\\.source\\.[a-z][a-z0-9.-]*)}");
 
     private final SourceQueryJdbcDao dao;
     private final Environment environment;
@@ -62,17 +55,14 @@ class SourceTestFetch {
         if (vendor != Vendor.POSTGRESQL) {
             return List.of(new MappingProblem(Code.SOURCE_UNSUPPORTED, "/source/vendor"));
         }
-        String url = resolve(mapping.at("/source/url").asString());
-        String user = resolve(mapping.at("/source/user").asString());
-        String password = environment.getProperty("import.source.password");
-        if (url == null || user == null || password == null) {
-            return List.of(new MappingProblem(Code.SOURCE_SETTING_MISSING, "/source"));
+        Source source;
+        try {
+            source = SourceAccount.of(mapping, vendor, environment);
+        } catch (SourceException refused) {
+            String pointer = "SOURCE_URL_NOT_ALLOWED".equals(refused.code()) ? "/source/url" : "/source";
+            return List.of(new MappingProblem(Code.valueOf(refused.code()), pointer));
         }
-        if (!SourceUrl.allowed(vendor, url)) {
-            // Refused before any connection: a driver URL can name classes to load and files to write.
-            return List.of(new MappingProblem(Code.SOURCE_URL_NOT_ALLOWED, "/source/url"));
-        }
-        return fetchAll(mapping, new Source(url, user, password, vendor));
+        return fetchAll(mapping, source);
     }
 
     /** Every query fetched for at most one row in one session; each failure a problem at its place. */
@@ -96,20 +86,5 @@ class SourceTestFetch {
             problems.add(new MappingProblem(Code.valueOf(e.code()), "/source"));
         }
         return List.copyOf(problems);
-    }
-
-    /** The text with each {@code import.source.*} placeholder replaced; {@code null} if one is not configured. */
-    private @Nullable String resolve(String text) {
-        Matcher placeholders = PLACEHOLDER.matcher(text);
-        StringBuilder resolved = new StringBuilder();
-        while (placeholders.find()) {
-            String value = environment.getProperty(placeholders.group(1));
-            if (value == null) {
-                return null;
-            }
-            placeholders.appendReplacement(resolved, Matcher.quoteReplacement(value));
-        }
-        placeholders.appendTail(resolved);
-        return resolved.toString();
     }
 }

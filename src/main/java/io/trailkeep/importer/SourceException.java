@@ -8,9 +8,10 @@ import org.jspecify.annotations.Nullable;
  * A source cannot be read soundly (design §4.2, §10): a missing or changed file, a manifest that does not match, a
  * line that is not one flat JSON object. Parser and decoder messages quote the data, so this carries an issue code and
  * at most a number (a line number, say), and never the underlying exception as its cause: nothing it holds can reach
- * a log or {@code IMPORT_ISSUE}. {@code extract} records it as a {@code FATAL} issue and stops.
+ * a log or {@code IMPORT_ISSUE}. {@code extract} records it as a {@code FATAL} issue and stops; a failed source query
+ * ({@link SourceQueryException}) is one too.
  */
-final class SourceException extends RuntimeException {
+class SourceException extends RuntimeException {
 
     private static final long serialVersionUID = 1L;
 

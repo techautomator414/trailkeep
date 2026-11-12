@@ -16,6 +16,7 @@ import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -163,6 +164,25 @@ class SourceQueryJdbcDao {
             Duration timeout,
             Consumer<Map<String, @Nullable Object>> rows) {
         run(session, query, binds, timeout, 0, rows);
+    }
+
+    /**
+     * Fetches at most a few rows of a keyed query: an attachment's content query (design §4.3), whose caller tells
+     * one row from two.
+     *
+     * @param session the session
+     * @param query the validated query
+     * @param binds its bind values, in order
+     * @param timeout the statement timeout
+     * @param maxRows the most rows read
+     * @return the rows, each as column name in lower case to value
+     * @throws SourceQueryException if the query fails
+     */
+    List<Map<String, @Nullable Object>> fetch(
+            Session session, ValidatedSourceQuery query, List<?> binds, Duration timeout, int maxRows) {
+        List<Map<String, @Nullable Object>> rows = new ArrayList<>();
+        run(session, query, binds, timeout, maxRows, rows::add);
+        return rows;
     }
 
     /** Runs a query; with {@code binds} null, every bind variable is set to null. */

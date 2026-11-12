@@ -9,6 +9,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- The PostgreSQL source for `extract`, attachment content queries and the run's content area (WP-26 part n2,
+  docs/design/importer.md §4.1, §4.3). A `kind: jdbc` PostgreSQL mapping is extracted through `SourceQueryJdbcDao` as
+  the source account (`import.source.*`, the URL allow-list checked before connecting), every entity query and every
+  content query in one `REPEATABLE READ READ ONLY` snapshot whose hash is the run's source fingerprint; a crashed
+  extract therefore starts over, since the snapshot dies with the connection. A content query now needs its `size`
+  column: an attachment whose mapped size is over `import.attachments.max-bytes` is never fetched; otherwise the query
+  runs with the attachment's key as its binds and its one binary value is written owner-only to
+  `<import.content-area>/<run id>/<sha256>` (no row is `ATTACHMENT_MISSING`, more than one value
+  `CONTENT_NOT_ONE_VALUE`, text `CONTENT_NOT_BINARY`; no content area is a FATAL `CONTENT_AREA_UNWRITABLE`). A source
+  query that fails stops the extract with its code only (`SOURCE_PERMISSION_DENIED`, ...). `purge-staging`, the staging
+  TTL and an extract that starts over delete the run's content area. `validate-mapping` now checks a files source's
+  manifest and files before any extract, with the extract's codes at the file's place (`MANIFEST_INVALID`,
+  `MANIFEST_MISMATCH` for an unlisted or changed file, `SOURCE_FILE_MISSING`, `PATH_OUTSIDE_ROOT`,
+  `ATTACHMENTS_ROOT_UNREADABLE`, ...). `SOURCE_UNSUPPORTED` now applies to Oracle, SQL Server and CSV mappings only.
 - The JSON Lines source, its manifest and attachment files hashed in place (WP-26 part k2, docs/design/importer.md
   §4.2, §4.3). A `kind: files` mapping whose every entity file ends in `.jsonl` is extracted line by line, each line
   one flat JSON object (columns case-folded, numbers as exact decimals), in `source.encoding` (UTF-8 by default; a BOM
