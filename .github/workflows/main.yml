@@ -22,12 +22,16 @@ on:
 
 permissions: {}
 
-# The event is part of the group so that a push (which cancels the run before it) never cancels a run someone
-# requested by hand with `gh workflow run main.yml`. Called from nightly.yml or release.yml, the workflow and event
-# are the caller's, so those runs keep a group of their own as before.
+# A push to main is grouped by its commit and never cancelled: Part E needs every code merge to get its own green
+# run of the full set (the Oracle leg above all), so a second merge must not cancel the first merge's run. The event
+# is part of the group so that a run someone requested by hand with `gh workflow run main.yml` keeps a group of its
+# own. Called from nightly.yml or release.yml, the workflow and event are the caller's, so those runs keep a group of
+# their own as before; a release tag push is still grouped by its tag and cancels an earlier run for the same tag.
 concurrency:
-  group: main-gates-${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'push' }}
+  group: >-
+    main-gates-${{ github.workflow }}-${{ github.event_name }}-${{
+    github.event_name == 'push' && github.ref == 'refs/heads/main' && github.sha || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'push' && github.ref != 'refs/heads/main' }}
 
 env:
   # SonarCloud project created for this public repository (see the PR 12 "Maintainer setup").
