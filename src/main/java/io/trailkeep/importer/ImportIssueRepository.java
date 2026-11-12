@@ -2,6 +2,7 @@
 // Copyright 2026 Charlie Genova and contributors
 package io.trailkeep.importer;
 
+import java.util.Collection;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.Repository;
@@ -22,4 +23,13 @@ interface ImportIssueRepository extends Repository<ImportIssue, Long> {
     @Modifying
     @Query("delete from ImportIssue i where i.runId = :runId and i.stage = :stage and i.subject = :subject")
     int deleteByRunIdAndStageAndSubject(long runId, ImportIssue.Stage stage, ImportIssue.Subject subject);
+
+    /**
+     * How many of an entity's rows have an issue of a severity under a code not accepted as skipped; before the load,
+     * only the extract and the dry run record row issues. An empty {@code accepted} excludes nothing.
+     */
+    @Query("select count(distinct i.keyHash) from ImportIssue i where i.runId = :runId and i.subject = :subject"
+            + " and i.severity = :severity and i.code not in :accepted")
+    long countFailedRows(
+            long runId, ImportIssue.Subject subject, ImportIssue.Severity severity, Collection<String> accepted);
 }

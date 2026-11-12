@@ -135,24 +135,30 @@ public class StagingStore {
     }
 
     /**
-     * One page of a run's staged cases in canonical-key order, after a key: the dry run reads them all in pages, each
-     * page by the key it starts after, so no offset is ever scanned.
+     * One page of a run's staged rows of one entity in canonical-key order, after a key: the dry run reads them all in
+     * pages, each page by the key it starts after, so no offset is ever scanned.
      *
+     * @param <T> the entity's row type
+     * @param type the entity's row type
      * @param runId the run
      * @param after the last key of the previous page; {@code null} for the first page (Oracle reads {@code ''} as null)
      * @param size the page size
-     * @return up to {@code size} cases with a key above {@code after}
+     * @return up to {@code size} rows with a key above {@code after}
      */
     @Transactional(readOnly = true)
-    public List<StagedCase> cases(long runId, @Nullable String after, int size) {
+    public <T extends StagedRow> List<T> page(Class<T> type, long runId, @Nullable String after, int size) {
         CriteriaBuilder criteria = entityManager.getCriteriaBuilder();
-        CriteriaQuery<StagedCase> query = criteria.createQuery(StagedCase.class);
-        Root<StagedCase> row = query.from(StagedCase.class);
+        // Typed by the class literal of the common supertype, so the query is visibly no string (Semgrep).
+        CriteriaQuery<StagedRow> query = criteria.createQuery(StagedRow.class);
+        Root<T> row = query.from(type);
         Path<String> legacyKey = row.get("key").get("legacyKey");
         Predicate inRun = criteria.equal(row.get("key").get("runId"), runId);
-        query.where(after == null ? inRun : criteria.and(inRun, criteria.greaterThan(legacyKey, after)))
+        query.select(row)
+                .where(after == null ? inRun : criteria.and(inRun, criteria.greaterThan(legacyKey, after)))
                 .orderBy(criteria.asc(legacyKey));
-        return entityManager.createQuery(query).setMaxResults(size).getResultList();
+        return entityManager.createQuery(query).setMaxResults(size).getResultList().stream()
+                .map(type::cast)
+                .toList();
     }
 
     private <T extends StagedRow> int delete(Class<T> type, long runId) {
