@@ -4,6 +4,8 @@ package io.trailkeep.document;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
@@ -14,7 +16,8 @@ import org.springframework.boot.test.system.OutputCaptureExtension;
 
 /**
  * {@code app.attachments.scanning} (ADR-0013): {@code clamd} unless a deployment says {@code external}, an unknown
- * value fails startup, and {@code external} needs no clamd host, no SSL bundle and no {@link ClamdClient}.
+ * value fails startup, and {@code external} needs no clamd host, no SSL bundle and no {@link ClamdClient}, and has
+ * no {@link ScannerProbe}, so the {@code trailkeep.scanner.up} gauge is absent.
  */
 @ExtendWith(OutputCaptureExtension.class)
 class ScanningModeTest {
@@ -26,7 +29,13 @@ class ScanningModeTest {
 
     private final ApplicationContextRunner runner = new ApplicationContextRunner()
             .withConfiguration(AutoConfigurations.of(SslAutoConfiguration.class))
-            .withUserConfiguration(AttachmentConfig.class, ClamdClient.class, UploadIntake.class)
+            .withUserConfiguration(
+                    AttachmentConfig.class,
+                    ClamdClient.class,
+                    UploadIntake.class,
+                    ScannerProbe.class,
+                    DefaultScanEngineService.class)
+            .withBean(MeterRegistry.class, SimpleMeterRegistry::new)
             // application.yml is not loaded here; its request limit is what AttachmentConfig checks the 25 MB cap
             // against.
             .withPropertyValues(TEMP_DIR, "spring.servlet.multipart.max-request-size=26MB");
@@ -37,6 +46,11 @@ class ScanningModeTest {
             assertThat(context).hasNotFailed();
             assertThat(context.getBean(AttachmentProperties.class).scanning()).isEqualTo(ScanMode.CLAMD);
             assertThat(context).hasSingleBean(ClamdClient.class).hasSingleBean(UploadIntake.class);
+            assertThat(context).hasSingleBean(ScannerProbe.class);
+            assertThat(context.getBean(MeterRegistry.class)
+                            .find("trailkeep.scanner.up")
+                            .gauge())
+                    .isNotNull();
         });
         assertThat(output).contains("INFO", "Attachment scanning is clamd").doesNotContain("scanning is external");
     }
@@ -64,7 +78,11 @@ class ScanningModeTest {
         runner.withPropertyValues("app.attachments.scanning=external").run(context -> {
             assertThat(context).hasNotFailed();
             assertThat(context).doesNotHaveBean(ClamdClient.class).doesNotHaveBean(VirusScanner.class);
-            assertThat(context).hasSingleBean(UploadIntake.class);
+            assertThat(context).hasSingleBean(UploadIntake.class).doesNotHaveBean(ScannerProbe.class);
+            assertThat(context.getBean(MeterRegistry.class)
+                            .find("trailkeep.scanner.up")
+                            .gauge())
+                    .isNull();
         });
         assertThat(output).contains("WARN", "Attachment scanning is external", "does not scan uploads", "NOT_SCANNED");
     }

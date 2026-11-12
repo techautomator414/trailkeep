@@ -137,6 +137,8 @@ app:
     # deployment scans upstream or at endpoints; files are stored as NOT_SCANNED, and clamd host and bundle are not
     # needed). Read at startup only: changing it is a redeploy.
     scanning: clamd
+    # clamd.probe-cron (default every minute, "0 * * * * *"): in clamd mode each replica asks clamd for VERSION on this
+    # schedule and reports trailkeep.scanner.up (1 or 0) for the TrailkeepScannerDown alert; "-" turns it off.
     # max-concurrent-downloads (default 8): downloads streaming at once per replica; one more is refused with 503 and
     # Retry-After. Each holds a database connection while it streams, so keep it below the Hikari pool (10 by
     # default), and at most the async executor's core size (spring.task.execution.pool.core-size, 8 by default).

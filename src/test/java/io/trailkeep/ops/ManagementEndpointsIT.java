@@ -116,11 +116,13 @@ class ManagementEndpointsIT {
         while (metric.find()) {
             names.add(metric.group());
         }
-        assertThat(names).hasSizeGreaterThanOrEqualTo(7).contains("hikaricp_connections_pending");
+        assertThat(names)
+                .hasSizeGreaterThanOrEqualTo(8)
+                .contains("hikaricp_connections_pending", "trailkeep_scanner_up");
         assertThat(names).allSatisfy(name -> assertThat(scrape).as(name).containsPattern("(?m)^" + name + "[{ ]"));
 
         int alerts = rules.split("- alert: ", -1).length - 1;
-        assertThat(alerts).isGreaterThanOrEqualTo(8);
+        assertThat(alerts).isGreaterThanOrEqualTo(9);
         assertThat(rules.split("severity: ", -1).length - 1).isEqualTo(alerts);
         assertThat(rules.split("summary: ", -1).length - 1).isEqualTo(alerts);
         Matcher runbook = Pattern.compile("runbook_url: \"[^\"]*/deploy/README\\.md#([a-z-]+)\"")

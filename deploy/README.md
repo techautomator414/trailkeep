@@ -131,3 +131,12 @@ for milliseconds, so five minutes means the pool is too small for the load or co
 exports and attachment downloads hold a connection while they stream (bounded by `app.export.max-rows` and
 `app.attachments.max-concurrent-downloads`). Raise `spring.datasource.hikari.maximum-pool-size` only within what the
 database allows for all replicas together.
+
+### The virus scanner is down
+
+`TrailkeepScannerDown`: clamd has not answered some replica's probe (a `VERSION` request every minute over the same TLS
+connection as a scan, `trailkeep_scanner_up`) for 5 minutes. Uploads are refused while it is down, fail-closed; nothing
+is stored unscanned. Check the ClamAV pod and its TLS sidecar, the `clamav-tls` and `clamav-ca` Secrets (an expired or
+replaced certificate fails the handshake), and the egress `NetworkPolicy` from the replica that reports 0. The System
+screen shows whether clamd answers right now and its version. With external scanning
+(`overlays/external-scanning`) there is no probe and no `trailkeep_scanner_up` series, so this alert never fires.
