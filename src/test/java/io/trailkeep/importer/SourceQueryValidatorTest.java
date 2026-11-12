@@ -69,6 +69,39 @@ class SourceQueryValidatorTest {
     }
 
     @Test
+    void dataModifyingCtesAreRefusedAndReadOnlyCtesPass() {
+        assertRefused(
+                Vendor.POSTGRESQL,
+                "WITH gone AS (DELETE FROM cases RETURNING id) SELECT id FROM gone",
+                Code.QUERY_NOT_SELECT);
+        assertRefused(
+                Vendor.POSTGRESQL,
+                "WITH changed AS (UPDATE cases SET title = 'x' RETURNING id) SELECT id FROM changed",
+                Code.QUERY_NOT_SELECT);
+        assertRefused(
+                Vendor.POSTGRESQL,
+                "WITH added AS (INSERT INTO cases (id) VALUES (1) RETURNING id) SELECT id FROM added",
+                Code.QUERY_NOT_SELECT);
+        assertPasses(Vendor.POSTGRESQL, "WITH open AS (SELECT id FROM cases) SELECT id FROM open");
+    }
+
+    @Test
+    void windowFunctionsAreNameCheckedLikeAnyCall() {
+        assertPasses(
+                Vendor.POSTGRESQL,
+                "SELECT id, ROW_NUMBER() OVER (PARTITION BY case_id ORDER BY changed_at DESC) AS n FROM notes");
+        assertPasses(Vendor.SQLSERVER, "SELECT id, SUM(amount) OVER (PARTITION BY case_id) FROM dbo.notes");
+        assertRefused(
+                Vendor.POSTGRESQL,
+                "SELECT pg_read_file('/etc/passwd') OVER (ORDER BY id) FROM cases",
+                Code.QUERY_FUNCTION_NOT_ALLOWED);
+        assertRefused(
+                Vendor.ORACLE,
+                "SELECT secret_fn(id) OVER (PARTITION BY id) FROM cases",
+                Code.QUERY_FUNCTION_NOT_ALLOWED);
+    }
+
+    @Test
     void theAllowListIsPerVendor() {
         assertPasses(Vendor.ORACLE, "SELECT NVL(title, 'x') FROM cases");
         assertRefused(Vendor.POSTGRESQL, "SELECT NVL(title, 'x') FROM cases", Code.QUERY_FUNCTION_NOT_ALLOWED);

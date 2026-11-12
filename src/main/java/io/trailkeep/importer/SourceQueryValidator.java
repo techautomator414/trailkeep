@@ -11,14 +11,17 @@ import java.util.Set;
 import java.util.TreeSet;
 import java.util.regex.Pattern;
 import net.sf.jsqlparser.JSQLParserException;
+import net.sf.jsqlparser.expression.AnalyticExpression;
 import net.sf.jsqlparser.expression.Function;
 import net.sf.jsqlparser.parser.CCJSqlParserUtil;
 import net.sf.jsqlparser.schema.Table;
 import net.sf.jsqlparser.statement.Statement;
 import net.sf.jsqlparser.statement.Statements;
+import net.sf.jsqlparser.statement.select.ParenthesedSelect;
 import net.sf.jsqlparser.statement.select.PlainSelect;
 import net.sf.jsqlparser.statement.select.Select;
 import net.sf.jsqlparser.statement.select.TableFunction;
+import net.sf.jsqlparser.statement.select.WithItem;
 import net.sf.jsqlparser.util.TablesNamesFinder;
 import org.jspecify.annotations.Nullable;
 
@@ -79,7 +82,10 @@ final class SourceQueryValidator {
      */
     record Result(@Nullable ValidatedSourceQuery query, List<MappingProblem.Code> problems) {}
 
-    /** Pure built-ins every vendor has: string, numeric, null handling and aggregates. */
+    /**
+     * Pure built-ins every vendor has: string, numeric, null handling, aggregates, and the window functions a recipe
+     * uses to pick one row per key. A window function is name-checked like any other call.
+     */
     private static final Set<String> COMMON = Set.of(
             "COALESCE",
             "NULLIF",
@@ -98,7 +104,14 @@ final class SourceQueryValidator {
             "COUNT",
             "MIN",
             "MAX",
-            "SUM");
+            "SUM",
+            "ROW_NUMBER",
+            "RANK",
+            "DENSE_RANK",
+            "LAG",
+            "LEAD",
+            "FIRST_VALUE",
+            "LAST_VALUE");
 
     /** Per vendor, the date, string and JSON-construction built-ins the export recipes use. */
     private static final Map<Vendor, Set<String>> VENDOR = Map.of(
@@ -235,6 +248,26 @@ final class SourceQueryValidator {
         public <S> Void visit(TableFunction function, S context) {
             problems.add(Code.QUERY_TABLE_FUNCTION);
             return super.visit(function, context);
+        }
+
+        /** A data-modifying CTE ({@code WITH x AS (DELETE … RETURNING …) SELECT …}) is not a read: refused unwalked. */
+        @Override
+        public <S> Void visit(WithItem<?> withItem, S context) {
+            if (!(withItem.getParenthesedStatement() instanceof ParenthesedSelect)) {
+                problems.add(Code.QUERY_NOT_SELECT);
+                return null;
+            }
+            return super.visit(withItem, context);
+        }
+
+        /** {@code name(...) OVER (...)} parses as an analytic expression, not a {@link Function}; same allow-list. */
+        @Override
+        public <S> Void visit(AnalyticExpression expression, S context) {
+            String name = expression.getName();
+            if (name == null || !allowed.contains(name.toUpperCase(Locale.ROOT))) {
+                problems.add(Code.QUERY_FUNCTION_NOT_ALLOWED);
+            }
+            return super.visit(expression, context);
         }
 
         @Override
