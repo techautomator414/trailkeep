@@ -9,6 +9,7 @@ import java.io.OutputStream;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.DigestInputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
@@ -88,7 +89,7 @@ final class UploadIntake {
             String type = AttachmentTypes.check(temp, fileName, properties.maxImagePixels());
             ScanVerdict verdict = scan(temp);
             ScannedUpload upload = new ScannedUpload(
-                    temp, type, size, HexFormat.of().formatHex(sha256.digest()), verdict, properties.scanning());
+                    temp, type, size, HexFormat.of().formatHex(sha256.digest()), verdict, properties.scanning(), true);
             handedOver = true;
             return upload;
         } finally {
@@ -98,10 +99,65 @@ final class UploadIntake {
         }
     }
 
+    /**
+     * Validates and scans an imported file where it lies, in the run's content area or the mounted folder (WP-26 part
+     * g, design §4.3): the same name, type, image and scan checks as an upload, with the importer's size cap, and no
+     * copy, so the file is neither moved nor deleted.
+     *
+     * @param fileName the legacy file name; only its length and extension are used here
+     * @param file the file
+     * @param maxBytes the importer's cap, which may be above the upload cap
+     * @return the scanned file, which {@link ScannedUpload#close()} leaves in place
+     * @throws AttachmentRejectedException if the name, size, type or image is refused
+     * @throws ScannerUnavailableException if the scanner gave no verdict ({@link ScanSizeExceededException} if the
+     *     file is above the scanner's own limit)
+     */
+    ScannedUpload receive(String fileName, Path file, long maxBytes) {
+        if (fileName.isBlank() || fileName.length() > CaseAttachment.MAX_FILE_NAME) {
+            throw new AttachmentRejectedException(Reason.NAME, "file name blank or too long");
+        }
+        try {
+            long size = Files.size(file);
+            if (size > maxBytes) {
+                throw new AttachmentRejectedException(Reason.TOO_LARGE, "file exceeds the importer's cap");
+            }
+            MessageDigest checked = sha256();
+            try (InputStream in = new DigestInputStream(Files.newInputStream(file), checked)) {
+                in.transferTo(OutputStream.nullOutputStream());
+            }
+            String type = AttachmentTypes.check(file, fileName, properties.maxImagePixels());
+            byte[] hash = checked.digest();
+            ScanVerdict verdict = scanSame(file, hash);
+            return new ScannedUpload(
+                    file, type, size, HexFormat.of().formatHex(hash), verdict, properties.scanning(), false);
+        } catch (IOException e) {
+            throw new UncheckedIOException("imported file not read", e);
+        }
+    }
+
     /** The one step that differs by mode: no call and no fallback in {@code external} mode. */
     private ScanVerdict scan(Path temp) {
         VirusScanner clamd = scanner;
         return clamd == null ? ScanVerdict.notScanned() : clamd.scan(temp);
+    }
+
+    /**
+     * Scans an imported file and proves the scanner read the bytes that were hashed. In {@code clamd} mode the hash
+     * is taken from the very stream sent to clamd; if it differs from the type pass's hash, the file changed in
+     * between and is refused. So the hash recorded, which the store compares with the bytes it writes, is the
+     * scanned bytes' hash. {@code external} mode has no scan and nothing to compare.
+     */
+    private ScanVerdict scanSame(Path file, byte[] hash) {
+        VirusScanner clamd = scanner;
+        if (clamd == null) {
+            return ScanVerdict.notScanned();
+        }
+        MessageDigest sent = sha256();
+        ScanVerdict verdict = clamd.scan(file, sent);
+        if (!MessageDigest.isEqual(hash, sent.digest())) {
+            throw new AttachmentRejectedException(Reason.HASH_MISMATCH, "file changed before its scan");
+        }
+        return verdict;
     }
 
     private Path createTempFile() {

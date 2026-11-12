@@ -7,7 +7,7 @@ package io.trailkeep.document;
  * unexpected. The upload is refused and the user asked to try again; a file is never stored unscanned
  * (IMPLEMENTATION_PLAN A.1 #3).
  */
-public final class ScannerUnavailableException extends RuntimeException {
+public sealed class ScannerUnavailableException extends RuntimeException permits ScanSizeExceededException {
 
     private static final long serialVersionUID = 1L;
 

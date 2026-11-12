@@ -23,7 +23,9 @@ public final class AttachmentRejectedException extends DomainException {
         /** The detected type is allowed but is not what the file's extension says. */
         EXTENSION_MISMATCH,
         /** An image whose header could not be read, or whose dimensions exceed the image cap. */
-        IMAGE
+        IMAGE,
+        /** An imported file whose content differs from the source's SHA-256, or changed after its scan (WP-26). */
+        HASH_MISMATCH
     }
 
     private final Reason reason;

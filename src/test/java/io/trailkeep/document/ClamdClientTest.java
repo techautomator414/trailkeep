@@ -11,6 +11,8 @@ import java.net.SocketTimeoutException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.Random;
@@ -111,6 +113,35 @@ class ClamdClientTest {
             Path file = file(new byte[10]);
             assertThatThrownBy(() -> client(clamd.port()).scan(file)).isInstanceOf(ScannerUnavailableException.class);
         }
+    }
+
+    /** R13: clamd's stream-limit reply is told apart, so the importer can report the file and go on (WP-26 part g). */
+    @Test
+    void theDigestHashesTheVeryBytesSentToClamd() throws IOException, NoSuchAlgorithmException {
+        byte[] content = new byte[ClamdClient.CHUNK_SIZE + 5];
+        new Random(7).nextBytes(content);
+        MessageDigest sent = MessageDigest.getInstance("SHA-256");
+        try (FakeClamd clamd = FakeClamd.answering(bytes -> "stream: OK")) {
+            assertThat(client(clamd.port()).scan(file(content), sent)).isEqualTo(ScanVerdict.clean());
+
+            byte[] received = clamd.received.getFirst();
+            assertThat(sent.digest())
+                    .isEqualTo(MessageDigest.getInstance("SHA-256").digest(received));
+            assertThat(received).isEqualTo(content);
+        }
+    }
+
+    @Test
+    void streamLimitRepliesAreSizeRefusalsThatStillFailClosed() throws IOException {
+        try (FakeClamd clamd = FakeClamd.answering(bytes -> "INSTREAM size limit exceeded. ERROR")) {
+            Path file = file(new byte[10]);
+            assertThatThrownBy(() -> client(clamd.port()).scan(file))
+                    .isInstanceOf(ScanSizeExceededException.class)
+                    .isInstanceOf(ScannerUnavailableException.class);
+        }
+        assertThatThrownBy(() -> ClamdClient.verdict("Some other thing. ERROR"))
+                .isInstanceOf(ScannerUnavailableException.class)
+                .isNotInstanceOf(ScanSizeExceededException.class);
     }
 
     @Test
