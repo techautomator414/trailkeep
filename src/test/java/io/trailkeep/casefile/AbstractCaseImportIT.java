@@ -19,6 +19,7 @@ import io.trailkeep.user.ImportPeopleService;
 import io.trailkeep.user.TeamRole;
 import jakarta.persistence.EntityManager;
 import java.sql.Timestamp;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.Year;
@@ -113,6 +114,29 @@ abstract class AbstractCaseImportIT {
 
         assertThat(imports.importCase(RUN, closed(analyst, caseType))).isNotNull();
         assertThatThrownBy(() -> imports.importCase(RUN, open(analyst, null))).satisfies(kind(Kind.INVALID));
+    }
+
+    @Test
+    void slaForecastIsTheStateImportWrites() {
+        String type = Objects.requireNonNull(
+                jdbc.queryForObject("SELECT NAME FROM CASE_TYPE WHERE ID = ?", String.class, caseType));
+        LocalDate day = LocalDate.of(2026, 3, 2);
+        Instant opened = day.atStartOfDay(app.timezone()).toInstant();
+        // The seeded policy: 30 days from the day after identification, at risk at 80 %.
+        Instant anchor = day.plusDays(1).atStartOfDay(app.timezone()).toInstant();
+
+        assertThat(imports.slaForecast(anchor.plus(Duration.ofDays(1))).state(type, day, opened))
+                .isEqualTo(SlaState.ON_TRACK);
+        assertThat(imports.slaForecast(anchor.plus(Duration.ofDays(25))).state(type, day, opened))
+                .isEqualTo(SlaState.AT_RISK);
+        assertThat(imports.slaForecast(anchor.plus(Duration.ofDays(31))).state(type, day, opened))
+                .isEqualTo(SlaState.OVERDUE);
+        assertThat(imports.slaForecast(anchor).state("No such type", day, opened))
+                .isNull();
+
+        CaseImportService.SlaForecast now = imports.slaForecast(Instant.now());
+        CaseNumber number = imports.importCase(RUN, open(analyst, null));
+        assertThat(slaState(number)).isEqualTo(String.valueOf(now.state(type, LocalDate.of(2019, 3, 1), OPENED)));
     }
 
     @Test

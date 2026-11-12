@@ -22,7 +22,9 @@ import java.time.Instant;
 import java.time.InstantSource;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
@@ -130,6 +132,23 @@ class DefaultCaseImportService implements CaseImportService {
                                 .map(CaseTypeOutcome::outcome)
                                 .collect(Collectors.toUnmodifiableSet())))
                 .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public SlaForecast slaForecast(Instant at) {
+        Map<String, SlaPolicyCommand> byType = new HashMap<>();
+        for (CaseType type : caseTypes.findAllByOrderByNameAsc()) {
+            policies.findById(type.getSlaPolicyId())
+                    .ifPresent(policy -> byType.put(type.getName(), policy.toCommand()));
+        }
+        return (name, identifiedOn, openedAt) -> {
+            SlaPolicyCommand policy = byType.get(name);
+            return policy == null
+                    ? null
+                    : CaseSla.importedOpen(0, SlaClock.start(policy, identifiedOn, openedAt, zone), at)
+                            .getState();
+        };
     }
 
     @Override

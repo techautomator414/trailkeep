@@ -20,6 +20,7 @@ import io.trailkeep.user.UserDirectoryService;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.time.InstantSource;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -138,10 +139,13 @@ class DryRunCommand {
                 caseImports.caseTypes().stream().collect(Collectors.toMap(ImportCaseType::name, Function.identity())),
                 now,
                 app.timezone());
+        Instant goLive = goLive(now);
         DryRunSummary summary = new DryRunSummary(
                 rules,
                 teams.stream().collect(Collectors.toMap(TeamSummary::name, TeamSummary::id)),
-                mapping.at("/visibility/onUnrepresentableAcl").asString("restricted"));
+                mapping.at("/visibility/onUnrepresentableAcl").asString("restricted"),
+                caseImports.slaForecast(goLive),
+                LocalDate.ofInstant(goLive, app.timezone()));
         ImportRun.ScanMode mode =
                 Binder.get(environment).bind(SCANNING, ImportRun.ScanMode.class).orElse(ImportRun.ScanMode.CLAMD);
         transactions.executeWithoutResult(status -> {
@@ -257,6 +261,16 @@ class DryRunCommand {
             fatal++;
         }
         return new Outcome(rows, recorded, fatal);
+    }
+
+    /**
+     * The instant the SLA forecast is for: the start of {@code import.go-live} in {@code app.timezone}, or now when
+     * that is unset or already past, since no case can be forecast for a day gone by.
+     */
+    private Instant goLive(Instant now) {
+        LocalDate day = properties.goLive();
+        Instant start = day == null ? now : day.atStartOfDay(app.timezone()).toInstant();
+        return start.isAfter(now) ? start : now;
     }
 
     private static ImportIssue issue(

@@ -109,10 +109,11 @@ abstract class AbstractDryRunIT extends ExtractJobSupport {
                         "ISSUES CASE/FATAL/CLOSURE_OUTCOME_NOT_ALLOWED 1",
                         "ISSUES CASE/ERROR/TITLE_MISSING 1",
                         "ROWS COMMENT 0",
-                        "NOT_SCANNED_FILES - 0")
+                        "NOT_SCANNED_FILES - 0",
+                        "SLA_FORECAST OVERDUE 501")
                 .noneMatch(figure -> figure.startsWith("HOLDS") || figure.startsWith("LEGACY_ACL"));
 
-        dryRun(run, mapping).close();
+        dryRun(run, mapping, "--import.go-live=2100-01-04").close();
 
         assertThat(jdbc.queryForObject("SELECT SCAN_MODE FROM IMPORT_RUN WHERE ID = ?", String.class, run))
                 .as("clamd unless the deployment says otherwise")
@@ -121,6 +122,7 @@ abstract class AbstractDryRunIT extends ExtractJobSupport {
         assertThat(figures(run))
                 .as("replaced, and no NOT_SCANNED figures under clamd")
                 .containsOnlyOnce("ROWS CASE 503")
+                .contains("SLA_FORECAST_DAY - " + LocalDate.of(2100, 1, 4).toEpochDay(), "SLA_FORECAST OVERDUE 501")
                 .noneMatch(figure -> figure.startsWith("NOT_SCANNED"));
         assertThat(count("SELECT COUNT(*) FROM CASE_RECORD WHERE TEAM_ID = ?", team))
                 .as("nothing reaches the domain")

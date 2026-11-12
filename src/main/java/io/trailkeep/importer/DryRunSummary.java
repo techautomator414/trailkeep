@@ -2,10 +2,14 @@
 // Copyright 2026 Charlie Genova and contributors
 package io.trailkeep.importer;
 
+import io.trailkeep.casefile.CaseImportService;
+import io.trailkeep.casefile.SlaState;
 import io.trailkeep.importer.ChildRules.Finding;
 import io.trailkeep.importer.ImportIssue.Severity;
 import io.trailkeep.importer.staging.StagedAttachment;
 import io.trailkeep.importer.staging.StagedCase;
+import java.time.Instant;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -28,7 +32,9 @@ import org.jspecify.annotations.Nullable;
  *   <li>{@code ATTACHMENT_FILES} and {@code ATTACHMENT_BYTES}: attachments the dry run found nothing against;
  *       {@code SKIPPED_FILES} and {@code SKIPPED_BYTES} per accepted code; in {@code external} scanning mode {@code
  *       NOT_SCANNED_FILES} and {@code NOT_SCANNED_BYTES}, the attachments that will be stored {@code NOT_SCANNED}
- *       (§4.3).
+ *       (§4.3);
+ *   <li>{@code SLA_FORECAST} per SLA state: the open cases by the state they would have on the go-live day ({@code
+ *       SLA_FORECAST_DAY}, an epoch day), as the load computes it (§7.1, §9).
  * </ul>
  */
 final class DryRunSummary {
@@ -39,6 +45,7 @@ final class DryRunSummary {
     private final CaseRules rules;
     private final Map<String, Long> teamIds;
     private final String aclHandling;
+    private final CaseImportService.SlaForecast forecast;
 
     /**
      * An empty summary.
@@ -46,11 +53,20 @@ final class DryRunSummary {
      * @param rules the case rules, which know a case's hold and visibility
      * @param teamIds each Trailkeep team's id by name, the key a mapped team names
      * @param aclHandling {@code visibility.onUnrepresentableAcl}
+     * @param forecast the open cases' SLA states on the go-live day
+     * @param goLiveDay that day, in {@code app.timezone}
      */
-    DryRunSummary(CaseRules rules, Map<String, Long> teamIds, String aclHandling) {
+    DryRunSummary(
+            CaseRules rules,
+            Map<String, Long> teamIds,
+            String aclHandling,
+            CaseImportService.SlaForecast forecast,
+            LocalDate goLiveDay) {
         this.rules = rules;
         this.teamIds = Map.copyOf(teamIds);
         this.aclHandling = aclHandling;
+        this.forecast = forecast;
+        add("SLA_FORECAST_DAY", null, goLiveDay.toEpochDay());
     }
 
     /**
@@ -84,6 +100,22 @@ final class DryRunSummary {
         String hold = rules.holdReason(row);
         if (hold != null) {
             add("HOLDS", hold, 1);
+        }
+        if ("OPEN".equals(status)) {
+            forecast(row);
+        }
+    }
+
+    /** Counts an open case by the SLA state it would have on the go-live day, when its type and dates are staged. */
+    private void forecast(StagedCase row) {
+        String type = row.getCaseTypeKey();
+        LocalDate identifiedOn = row.getIdentifiedOn();
+        Instant openedAt = row.getOpenedAt();
+        SlaState state = type == null || identifiedOn == null || openedAt == null
+                ? null
+                : forecast.state(type, identifiedOn, openedAt);
+        if (state != null) {
+            add("SLA_FORECAST", state.name(), 1);
         }
     }
 

@@ -5,6 +5,7 @@ package io.trailkeep.casefile;
 import io.trailkeep.shared.CaseNumber;
 import io.trailkeep.shared.CaseStatus;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Set;
 import org.jspecify.annotations.Nullable;
@@ -115,6 +116,34 @@ public interface CaseImportService {
      * @return them, by name
      */
     List<ImportCaseType> caseTypes();
+
+    /**
+     * The SLA state an imported open case would have at one instant (WP-26 part r3, design §7.1): its case type's
+     * policy started from its original dates by the one anchor rule (ADR-0007) and walked to that instant, exactly as
+     * {@link #importCase} computes it at load.
+     */
+    @FunctionalInterface
+    interface SlaForecast {
+
+        /**
+         * The state of one open case.
+         *
+         * @param caseTypeName its case type's name
+         * @param identifiedOn when the matter was identified
+         * @param openedAt when the legacy case was opened
+         * @return the state, or {@code null} for a case type Trailkeep does not have
+         */
+        @Nullable
+        SlaState state(String caseTypeName, LocalDate identifiedOn, Instant openedAt);
+    }
+
+    /**
+     * A forecast of open cases' SLA states at one instant, every case type's policy read once, for the dry run.
+     *
+     * @param at the instant, the go-live day the dry run forecasts
+     * @return the forecast, which reads nothing more
+     */
+    SlaForecast slaForecast(Instant at);
 
     /**
      * Creates the case with its SLA row and search text, and audits it, in the caller's transaction.

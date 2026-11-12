@@ -4,6 +4,7 @@ package io.trailkeep.importer;
 
 import java.nio.file.Path;
 import java.time.Duration;
+import java.time.LocalDate;
 import java.util.Base64;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
@@ -27,6 +28,8 @@ import org.springframework.util.unit.DataSize;
  * @param attachments the importer's attachment settings
  * @param contentArea the folder on the run volume that holds each run's content area (design §4.3); required by an
  *     extract whose attachments come from a content query
+ * @param goLive the go-live day the dry run forecasts open cases' SLA states for, from its start in {@code
+ *     app.timezone} (design §7.1, §9); the dry run's own time when unset or already past
  */
 @ConfigurationProperties("import")
 record ImportProperties(
@@ -36,7 +39,8 @@ record ImportProperties(
         @Nullable String hashKey,
         @DefaultValue("14d") Duration stagingTtl,
         @DefaultValue Attachments attachments,
-        @Nullable Path contentArea) {
+        @Nullable Path contentArea,
+        @Nullable LocalDate goLive) {
 
     /**
      * {@code import.attachments} (design §4.3 "Size").

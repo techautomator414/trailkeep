@@ -82,6 +82,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   `NOT_SCANNED`, and a `NOT_SCANNED` WARNING carrying that number, which the sign-off must acknowledge. A dry run
   that starts deletes the last one's issues and figures and sets the run back to `EXTRACTED` without a scanning mode,
   so `DRY_RUN` always means a dry run that completed.
+- The dry run forecasts open cases' SLA states on go-live day (WP-26 part r3, docs/design/importer.md §7.1, §9):
+  `IMPORT_RUN_SUMMARY` gains `SLA_FORECAST` per state (on track, at risk, overdue), each open case's case-type policy
+  started from its original dates by the one anchor rule and walked to the go-live instant exactly as the load computes
+  it (`CaseImportService.slaForecast`, every policy read once), and `SLA_FORECAST_DAY`, the day forecast for. The
+  optional `import.go-live` (a date in `app.timezone`) sets that day; unset or past, the forecast is for the dry run's
+  own time.
 - The Oracle source (WP-26 part o, docs/design/importer.md §4.1): a `kind: jdbc` Oracle mapping is test-fetched by
   `validate-mapping` and extracted in one `SET TRANSACTION READ ONLY` transaction, with the session in UTC and ISO
   date, timestamp and number formats; `DATE` and `TIMESTAMP` read as local date-times, `TIMESTAMP WITH TIME ZONE` with
