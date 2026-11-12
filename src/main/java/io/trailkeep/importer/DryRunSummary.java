@@ -2,11 +2,15 @@
 // Copyright 2026 Charlie Genova and contributors
 package io.trailkeep.importer;
 
+import io.trailkeep.casefile.CaseImportService;
+import io.trailkeep.casefile.SlaState;
 import io.trailkeep.importer.ChildRules.Finding;
 import io.trailkeep.importer.ImportIssue.Severity;
 import io.trailkeep.importer.staging.StagedAttachment;
 import io.trailkeep.importer.staging.StagedCase;
 import io.trailkeep.importer.staging.StagedComment;
+import java.time.Instant;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -32,7 +36,9 @@ import org.jspecify.annotations.Nullable;
  *       (§4.3);
  *   <li>{@code PEOPLE_MATCHED} and {@code PEOPLE_UNMATCHED} per role ({@code OPEN_OWNER}, {@code CLOSED_OWNER},
  *       {@code AUTHOR}, {@code UPLOADER}): the match rate (§7.3), an open case's owner counted as matched only when
- *       eligible to keep it; {@code DEFAULT_OWNER_CASES} per team id: open cases the team's default owner will get.
+ *       eligible to keep it; {@code DEFAULT_OWNER_CASES} per team id: open cases the team's default owner will get;
+ *   <li>{@code SLA_FORECAST} per SLA state: the open cases by the state they would have on the go-live day ({@code
+ *       SLA_FORECAST_DAY}, an epoch day), as the load computes it (§7.1, §9).
  * </ul>
  */
 final class DryRunSummary {
@@ -44,6 +50,7 @@ final class DryRunSummary {
     private final Map<String, Long> teamIds;
     private final String aclHandling;
     private final PeopleMatcher people;
+    private final CaseImportService.SlaForecast forecast;
 
     /**
      * An empty summary.
@@ -52,12 +59,22 @@ final class DryRunSummary {
      * @param teamIds each Trailkeep team's id by name, the key a mapped team names
      * @param aclHandling {@code visibility.onUnrepresentableAcl}
      * @param people the legacy people as matched, which know whether a case keeps its owner
+     * @param forecast the open cases' SLA states on the go-live day
+     * @param goLiveDay that day, in {@code app.timezone}
      */
-    DryRunSummary(CaseRules rules, Map<String, Long> teamIds, String aclHandling, PeopleMatcher people) {
+    DryRunSummary(
+            CaseRules rules,
+            Map<String, Long> teamIds,
+            String aclHandling,
+            PeopleMatcher people,
+            CaseImportService.SlaForecast forecast,
+            LocalDate goLiveDay) {
         this.rules = rules;
         this.teamIds = Map.copyOf(teamIds);
         this.aclHandling = aclHandling;
         this.people = people;
+        this.forecast = forecast;
+        add("SLA_FORECAST_DAY", null, goLiveDay.toEpochDay());
     }
 
     /**
@@ -71,8 +88,8 @@ final class DryRunSummary {
     }
 
     /**
-     * Counts one staged case: its status, the visibility it would load with in its team, a legacy ACL, a hold, and
-     * whether its owner matched or it gets its team's default owner.
+     * Counts one staged case: its status, the visibility it would load with in its team, a legacy ACL, a hold,
+     * whether its owner matched or it gets its team's default owner, and an open case's SLA state on go-live day.
      *
      * @param row the case
      * @param findings what the dry run found against it (unused: a case with issues is still counted as staged)
@@ -82,11 +99,7 @@ final class DryRunSummary {
         Long team = row.getTeamKey() == null ? null : teamIds.get(row.getTeamKey());
         if ("OPEN".equals(status) || "CLOSED".equals(status)) {
             add("CASES", status, 1);
-            boolean kept = people.keepsOwner(row, team);
-            person(status + "_OWNER", kept);
-            if (!kept && team != null && "OPEN".equals(status)) {
-                add("DEFAULT_OWNER_CASES", team.toString(), 1);
-            }
+            byStatus(row, "OPEN".equals(status), team);
         }
         if (team != null) {
             add("VISIBILITY_" + rules.visibility(row), team.toString(), 1);
@@ -97,6 +110,31 @@ final class DryRunSummary {
         String hold = rules.holdReason(row);
         if (hold != null) {
             add("HOLDS", hold, 1);
+        }
+    }
+
+    /** An open or closed case's owner figures, and an open case's SLA forecast. */
+    private void byStatus(StagedCase row, boolean open, @Nullable Long team) {
+        boolean kept = people.keepsOwner(row, team);
+        person(open ? "OPEN_OWNER" : "CLOSED_OWNER", kept);
+        if (open) {
+            if (!kept && team != null) {
+                add("DEFAULT_OWNER_CASES", team.toString(), 1);
+            }
+            forecast(row);
+        }
+    }
+
+    /** Counts an open case by the SLA state it would have on the go-live day, when its type and dates are staged. */
+    private void forecast(StagedCase row) {
+        String type = row.getCaseTypeKey();
+        LocalDate identifiedOn = row.getIdentifiedOn();
+        Instant openedAt = row.getOpenedAt();
+        SlaState state = type == null || identifiedOn == null || openedAt == null
+                ? null
+                : forecast.state(type, identifiedOn, openedAt);
+        if (state != null) {
+            add("SLA_FORECAST", state.name(), 1);
         }
     }
 

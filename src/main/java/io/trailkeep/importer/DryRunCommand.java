@@ -22,6 +22,7 @@ import io.trailkeep.user.UserDirectoryService;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.time.InstantSource;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -145,11 +146,7 @@ class DryRunCommand {
                 now,
                 app.timezone());
         PeopleMatcher matcher = new PeopleMatcher(people, caseImports, mapping, lookups.defaultOwners());
-        DryRunSummary summary = new DryRunSummary(
-                rules,
-                teams.stream().collect(Collectors.toMap(TeamSummary::name, TeamSummary::id)),
-                mapping.at("/visibility/onUnrepresentableAcl").asString("restricted"),
-                matcher);
+        DryRunSummary summary = summary(rules, teams, mapping, matcher, now);
         ImportRun.ScanMode mode =
                 Binder.get(environment).bind(SCANNING, ImportRun.ScanMode.class).orElse(ImportRun.ScanMode.CLAMD);
         transactions.executeWithoutResult(status -> {
@@ -289,6 +286,29 @@ class DryRunCommand {
             fatal++;
         }
         return new Outcome(rows, recorded, fatal);
+    }
+
+    /** An empty summary of this dry run, with its SLA forecast for the go-live day. */
+    private DryRunSummary summary(
+            CaseRules rules, List<TeamSummary> teams, JsonNode mapping, PeopleMatcher matcher, Instant now) {
+        Instant goLive = goLive(now);
+        return new DryRunSummary(
+                rules,
+                teams.stream().collect(Collectors.toMap(TeamSummary::name, TeamSummary::id)),
+                mapping.at("/visibility/onUnrepresentableAcl").asString("restricted"),
+                matcher,
+                caseImports.slaForecast(goLive),
+                LocalDate.ofInstant(goLive, app.timezone()));
+    }
+
+    /**
+     * The instant the SLA forecast is for: the start of {@code import.go-live} in {@code app.timezone}, or now when
+     * that is unset or already past, since no case can be forecast for a day gone by.
+     */
+    private Instant goLive(Instant now) {
+        LocalDate day = properties.goLive();
+        Instant start = day == null ? now : day.atStartOfDay(app.timezone()).toInstant();
+        return start.isAfter(now) ? start : now;
     }
 
     private static ImportIssue issue(
