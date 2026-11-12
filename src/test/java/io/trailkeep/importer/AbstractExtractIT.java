@@ -19,13 +19,12 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Base64;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.function.Consumer;
 import javax.crypto.spec.SecretKeySpec;
 import org.jspecify.annotations.Nullable;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -35,7 +34,6 @@ import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.jdbc.core.JdbcTemplate;
-import tools.jackson.databind.JsonNode;
 
 /**
  * {@code extract} as the import user (WP-26 part k1b, design §3 step 2, §4.1, §5), from a source held in memory: no
@@ -88,6 +86,33 @@ abstract class AbstractExtractIT {
 
     @Value("${app.db.import-user}")
     private String importUser = "";
+
+    /** The runs this test seeded, removed with everything they staged after it. */
+    private final List<Long> seeded = new ArrayList<>();
+
+    /**
+     * The extract commits from its own processes, so nothing rolls back: each test removes its runs and what they
+     * staged, children first, leaving the shared test database as it found it for the other importer ITs.
+     */
+    @AfterEach
+    void removeTheSeededRuns() {
+        for (long run : seeded) {
+            for (String table : List.of(
+                    "IMPORT_STG_EVENT",
+                    "IMPORT_STG_ATTACHMENT",
+                    "IMPORT_STG_COMMENT",
+                    "IMPORT_STG_CASE",
+                    "IMPORT_STG_PERSON",
+                    "IMPORT_RUN_CHECKPOINT",
+                    "IMPORT_ISSUE",
+                    "IMPORT_RUN_SUMMARY")) {
+                // Test-only cleanup over the fixed table names of this list.
+                jdbc.update("DELETE FROM " + table + " WHERE RUN_ID = ?", run);
+            }
+            jdbc.update("DELETE FROM IMPORT_RUN WHERE ID = ?", run);
+        }
+        seeded.clear();
+    }
 
     /**
      * The profile that points this vendor's test contexts at their container ({@code test} or {@code oracle-test}).
@@ -162,8 +187,8 @@ abstract class AbstractExtractIT {
         MemorySource other = new MemorySource("memory-fp-2", null);
         extract(otherRun, mapping, other).close();
 
-        assertThat(same.read).containsExactly(StagedEntity.COMMENT, StagedEntity.ATTACHMENT);
-        assertThat(other.read)
+        assertThat(same.entitiesRead()).containsExactly(StagedEntity.COMMENT, StagedEntity.ATTACHMENT);
+        assertThat(other.entitiesRead())
                 .containsExactly(StagedEntity.PERSON, StagedEntity.CASE, StagedEntity.COMMENT, StagedEntity.ATTACHMENT);
         for (long run : List.of(sameRun, otherRun)) {
             assertThat(staged(run)).containsExactly(2, 3, 2, 1, 0);
@@ -217,6 +242,7 @@ abstract class AbstractExtractIT {
                 "UPDATE IMPORT_RUN SET STATUS = 'VALIDATED', MAPPING_HASH = ? WHERE ID = ?",
                 ValidateMappingCommand.sha256(Files.readAllBytes(mapping)),
                 run);
+        seeded.add(run);
         return run;
     }
 
@@ -294,86 +320,5 @@ abstract class AbstractExtractIT {
 
     private static String hash(String key) {
         return KeyedHash.hex(new SecretKeySpec(HASH_KEY, "HmacSHA256"), key);
-    }
-
-    /** A synthetic legacy source held in memory; it can fail on the third row of one entity, after one batch. */
-    static final class MemorySource implements SourceRows.Factory, SourceRows {
-
-        private final String fingerprint;
-        private final @Nullable StagedEntity failIn;
-        private final List<StagedEntity> read = new ArrayList<>();
-
-        MemorySource(String fingerprint, @Nullable StagedEntity failIn) {
-            this.fingerprint = fingerprint;
-            this.failIn = failIn;
-        }
-
-        @Override
-        public boolean supports(JsonNode mapping) {
-            return "memory1".equals(mapping.at("/source/id").asString(""));
-        }
-
-        @Override
-        public SourceRows open(JsonNode mapping, Path directory) {
-            return this;
-        }
-
-        @Override
-        public String fingerprint() {
-            return fingerprint;
-        }
-
-        @Override
-        public void read(StagedEntity entity, JsonNode spec, Consumer<Map<String, @Nullable Object>> rows) {
-            read.add(entity);
-            List<Map<String, Object>> source = switch (entity) {
-                case PERSON ->
-                    List.of(
-                            Map.of("user_id", "u1", "name", "Synthetic One", "mail", "one@example.test"),
-                            Map.of("user_id", "u2", "name", "Synthetic Two", "mail", "two@example.test"));
-                case CASE -> List.of(legacyCase("c1", "Open"), legacyCase("c2", "Closed"), legacyCase("c3", "Weird"));
-                case COMMENT -> List.of(note("n1"), note("n2"), note("n2"));
-                case ATTACHMENT ->
-                    List.of(Map.of(
-                            "file_id", "f1", "case_id", "c1", "name", "scan.pdf", "path", "a/scan.pdf", "bytes", 2048));
-                case EVENT -> List.of();
-            };
-            for (int i = 0; i < source.size(); i++) {
-                if (entity == failIn && i == 2) {
-                    throw new IllegalStateException("planted source failure");
-                }
-                rows.accept(new HashMap<>(source.get(i)));
-            }
-        }
-
-        @Override
-        public void close() {
-            // Nothing is held open.
-        }
-
-        private static Map<String, Object> legacyCase(String id, String state) {
-            return Map.of(
-                    "case_id", id,
-                    "subject", "Synthetic case " + ("c1".equals(id) ? "one" : id),
-                    "details", "Synthetic details",
-                    "state", state,
-                    "opened", "2019-03-01T09:30:00",
-                    "found_on", "2019-02-28",
-                    "owner", "u1");
-        }
-
-        private static Map<String, Object> note(String id) {
-            return Map.of(
-                    "note_id",
-                    id,
-                    "case_id",
-                    "c1",
-                    "author",
-                    "u2",
-                    "created",
-                    "2019-03-02T10:00:00",
-                    "body",
-                    "Synthetic note");
-        }
     }
 }

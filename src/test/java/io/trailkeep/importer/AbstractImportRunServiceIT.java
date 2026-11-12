@@ -8,6 +8,7 @@ import io.trailkeep.testsupport.CaseSeed;
 import io.trailkeep.testsupport.RequiresDocker;
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -40,9 +41,21 @@ abstract class AbstractImportRunServiceIT {
 
     @BeforeEach
     void emptyTheRuns() {
-        jdbc.update("DELETE FROM IMPORT_ISSUE");
-        jdbc.update("DELETE FROM IMPORT_RUN_SUMMARY");
-        jdbc.update("DELETE FROM IMPORT_RUN");
+        // Every table that references IMPORT_RUN first, children before parents, so runs other importer ITs left in
+        // the shared test database never block the delete.
+        for (String table : List.of(
+                "IMPORT_STG_EVENT",
+                "IMPORT_STG_ATTACHMENT",
+                "IMPORT_STG_COMMENT",
+                "IMPORT_STG_CASE",
+                "IMPORT_STG_PERSON",
+                "IMPORT_RUN_CHECKPOINT",
+                "IMPORT_ISSUE",
+                "IMPORT_RUN_SUMMARY",
+                "IMPORT_RUN")) {
+            // Test-only cleanup over the fixed table names of this list.
+            jdbc.update("DELETE FROM " + table);
+        }
         requester = new CaseSeed(jdbc).user();
     }
 
