@@ -281,6 +281,19 @@ class ImportRun {
     }
 
     /**
+     * Records that a dry run has started, in the transaction that deletes the last one's issues and figures: the run is
+     * {@code EXTRACTED} again, without a recorded scanning mode, until {@link #dryRunDone} finishes it, so {@code
+     * DRY_RUN} always means a dry run that completed and a crashed one can never be signed off.
+     *
+     * @param at when
+     */
+    void dryRunStarting(Instant at) {
+        this.status = Status.EXTRACTED;
+        this.scanMode = null;
+        this.updatedAt = at;
+    }
+
+    /**
      * Records a finished dry run and the scanning mode in force while it ran, which the sign-off approves and the load
      * must still find (design §3, §4.3, R1).
      *

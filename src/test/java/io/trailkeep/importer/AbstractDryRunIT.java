@@ -17,12 +17,14 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
+import java.util.Objects;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ConfigurableApplicationContext;
 
 /**
@@ -44,6 +46,9 @@ abstract class AbstractDryRunIT extends ExtractJobSupport {
 
     @Autowired
     private ImportIssueRepository extractIssues;
+
+    @Value("${app.db.import-user}")
+    private String importUser = "";
 
     private long team;
     private long caseType;
@@ -95,6 +100,17 @@ abstract class AbstractDryRunIT extends ExtractJobSupport {
         assertThat(count("SELECT DETAIL FROM IMPORT_ISSUE WHERE RUN_ID = ? AND CODE = 'ERROR_RATE_EXCEEDED'", run))
                 .as("the cases with an ERROR")
                 .isEqualTo(1);
+        assertThat(figures(run))
+                .contains(
+                        "ROWS CASE 503",
+                        "CASES OPEN 501",
+                        "CASES CLOSED 2",
+                        "VISIBILITY_STANDARD " + team + " 503",
+                        "ISSUES CASE/FATAL/CLOSURE_OUTCOME_NOT_ALLOWED 1",
+                        "ISSUES CASE/ERROR/TITLE_MISSING 1",
+                        "ROWS COMMENT 0",
+                        "NOT_SCANNED_FILES - 0")
+                .noneMatch(figure -> figure.startsWith("HOLDS") || figure.startsWith("LEGACY_ACL"));
 
         dryRun(run, mapping).close();
 
@@ -102,6 +118,10 @@ abstract class AbstractDryRunIT extends ExtractJobSupport {
                 .as("clamd unless the deployment says otherwise")
                 .isEqualTo("CLAMD");
         assertThat(dryRunIssues(run)).as("replaced, not added to").containsExactlyInAnyOrderElementsOf(expected);
+        assertThat(figures(run))
+                .as("replaced, and no NOT_SCANNED figures under clamd")
+                .containsOnlyOnce("ROWS CASE 503")
+                .noneMatch(figure -> figure.startsWith("NOT_SCANNED"));
         assertThat(count("SELECT COUNT(*) FROM CASE_RECORD WHERE TEAM_ID = ?", team))
                 .as("nothing reaches the domain")
                 .isZero();
@@ -122,7 +142,8 @@ abstract class AbstractDryRunIT extends ExtractJobSupport {
         extractIssue(run, ImportIssue.Subject.COMMENT, "n1", "BAD_FLAG");
         extractIssue(run, ImportIssue.Subject.ATTACHMENT, "f2", "ATTACHMENT_MISSING");
 
-        dryRun(run, mapping, "--import.attachments.max-bytes=1000").close();
+        dryRun(run, mapping, "--import.attachments.max-bytes=1000", "--app.attachments.scanning=external")
+                .close();
 
         assertThat(dryRunIssues(run))
                 .containsExactlyInAnyOrder(
@@ -130,6 +151,7 @@ abstract class AbstractDryRunIT extends ExtractJobSupport {
                         List.of("COMMENT", "FATAL", "ERROR_RATE_EXCEEDED", ""),
                         List.of("ATTACHMENT", "WARNING", "ATTACHMENT_TOO_LARGE", hash("f1")),
                         List.of("ATTACHMENT", "WARNING", "ATTACHMENT_MISSING", hash("f2")),
+                        List.of("ATTACHMENT", "WARNING", "NOT_SCANNED", ""),
                         List.of("EVENT", "ERROR", "KIND_INVALID", hash("e1")),
                         List.of("EVENT", "FATAL", "ERROR_RATE_EXCEEDED", ""));
         assertThat(count("SELECT DETAIL FROM IMPORT_ISSUE WHERE RUN_ID = ? AND CODE = 'ATTACHMENT_TOO_LARGE'", run))
@@ -143,6 +165,40 @@ abstract class AbstractDryRunIT extends ExtractJobSupport {
                 .isEqualTo(2);
         assertThat(jdbc.queryForObject("SELECT STATUS FROM IMPORT_RUN WHERE ID = ?", String.class, run))
                 .isEqualTo("DRY_RUN");
+        assertChildFigures(run);
+    }
+
+    /** The children's figures: rows per entity, issues from both stages, loadable, skipped and unscanned files. */
+    private void assertChildFigures(long run) {
+        assertThat(count("SELECT DETAIL FROM IMPORT_ISSUE WHERE RUN_ID = ? AND CODE = 'NOT_SCANNED'", run))
+                .as("the one loadable file will be stored NOT_SCANNED")
+                .isEqualTo(1);
+        assertThat(figures(run))
+                .contains(
+                        "ROWS CASE 1",
+                        "ROWS COMMENT 2",
+                        "ROWS ATTACHMENT 3",
+                        "ROWS EVENT 1",
+                        "ISSUES COMMENT/ERROR/BAD_FLAG 1",
+                        "ISSUES ATTACHMENT/ERROR/ATTACHMENT_MISSING 1",
+                        "ISSUES ATTACHMENT/WARNING/ATTACHMENT_MISSING 1",
+                        "ISSUES ATTACHMENT/WARNING/NOT_SCANNED 1",
+                        "ATTACHMENT_FILES - 1",
+                        "ATTACHMENT_BYTES - 10",
+                        "SKIPPED_FILES ATTACHMENT_TOO_LARGE 1",
+                        "SKIPPED_BYTES ATTACHMENT_TOO_LARGE 1001",
+                        "SKIPPED_FILES ATTACHMENT_MISSING 1",
+                        "SKIPPED_BYTES ATTACHMENT_MISSING 0",
+                        "NOT_SCANNED_FILES - 1",
+                        "NOT_SCANNED_BYTES - 10");
+    }
+
+    private List<String> figures(long run) {
+        return jdbc.query(
+                "SELECT METRIC, DIMENSION, METRIC_VALUE FROM IMPORT_RUN_SUMMARY WHERE RUN_ID = ?",
+                (row, index) -> row.getString(1) + " " + Objects.requireNonNullElse(row.getString(2), "-") + " "
+                        + row.getLong(3),
+                run);
     }
 
     /** One sound case, a comment on it and one on no staged case, three attachments and an event of no known kind. */
@@ -172,6 +228,40 @@ abstract class AbstractDryRunIT extends ExtractJobSupport {
     private void extractIssue(long run, ImportIssue.Subject subject, String key, String code) {
         extractIssues.save(new ImportIssue(
                 run, ImportIssue.Stage.EXTRACT, subject, hash(key), Severity.ERROR, code, null, Instant.now()));
+    }
+
+    @Test
+    void dryRunFailingAfterItsFirstPageLeavesTheRunExtractedWithoutFigures(@TempDir Path directory) throws Exception {
+        Path mapping = mapping(directory, MAPPING);
+        long run = extractedRun(mapping);
+        List<Object[]> rows = new ArrayList<>();
+        for (int i = 1; i <= 500; i++) {
+            rows.add(row(run, String.format("c%04d", i), "Synthetic open case", "OPEN", null));
+        }
+        // On the second page: the first issue to write.
+        rows.add(row(run, "z1", null, "OPEN", null));
+        jdbc.batchUpdate(INSERT, rows);
+        dryRun(run, mapping).close();
+        assertThat(jdbc.queryForObject("SELECT STATUS FROM IMPORT_RUN WHERE ID = ?", String.class, run))
+                .isEqualTo("DRY_RUN");
+        assertThat(figures(run)).isNotEmpty();
+
+        // The import user can no longer write issues, so the repeat fails writing its second page.
+        jdbc.update("REVOKE INSERT ON IMPORT_ISSUE FROM " + importUser);
+        try {
+            assertThatThrownBy(() -> dryRun(run, mapping)).isNotNull();
+        } finally {
+            jdbc.update("GRANT INSERT ON IMPORT_ISSUE TO " + importUser);
+        }
+
+        assertThat(jdbc.queryForMap("SELECT STATUS, SCAN_MODE FROM IMPORT_RUN WHERE ID = ?", run))
+                .as("DRY_RUN means a dry run that completed")
+                .containsEntry("STATUS", "EXTRACTED")
+                .containsEntry("SCAN_MODE", null);
+        assertThat(figures(run))
+                .as("no figures from a dry run that did not finish")
+                .isEmpty();
+        assertThat(dryRunIssues(run)).isEmpty();
     }
 
     @Test
