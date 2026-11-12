@@ -8,6 +8,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -76,6 +77,10 @@ public interface ImportRunService {
      * @param issues its issues per class: fatal first, then by entity and code
      * @param figures its dry-run figures by metric and dimension, without the issue counts and the forecast day
      * @param forecastDay the day the SLA forecast is for, or {@code null} without one
+     * @param acknowledged the WARNING classes (codes) acknowledged at its sign-off, empty before one
+     * @param version the version a sign-off must name, so that a run changed since the page was loaded is refused
+     * @param signable whether it may be signed off: its last dry run completed, with no FATAL issue, its staging is
+     *     still there, and nobody has signed it off yet
      */
     record RunDetail(
             RunSummary summary,
@@ -86,7 +91,10 @@ public interface ImportRunService {
             long rowsStaged,
             List<IssueCount> issues,
             List<Figure> figures,
-            @Nullable LocalDate forecastDay) {
+            @Nullable LocalDate forecastDay,
+            List<String> acknowledged,
+            int version,
+            boolean signable) {
 
         /**
          * Copies the lists, so the record holds nothing mutable.
@@ -100,10 +108,28 @@ public interface ImportRunService {
          * @param issues its issues per class
          * @param figures its dry-run figures
          * @param forecastDay the SLA forecast day, or {@code null}
+         * @param acknowledged the WARNING classes acknowledged
+         * @param version the version
+         * @param signable whether it may be signed off
          */
         public RunDetail {
             issues = List.copyOf(issues);
             figures = List.copyOf(figures);
+            acknowledged = List.copyOf(acknowledged);
+        }
+
+        /**
+         * The WARNING classes a sign-off must acknowledge, one per code, in code order.
+         *
+         * @return the codes
+         */
+        public List<String> warnings() {
+            return issues.stream()
+                    .filter(issue -> "WARNING".equals(issue.severity()))
+                    .map(IssueCount::code)
+                    .distinct()
+                    .sorted()
+                    .toList();
         }
     }
 
@@ -133,4 +159,48 @@ public interface ImportRunService {
      * @throws ImportRunException {@code FORBIDDEN} for anyone else, then {@code NOT_FOUND} for an unknown run
      */
     RunDetail run(Actor actor, long id);
+
+    /**
+     * Refuses anyone who may not use the Import runs screen.
+     *
+     * @param actor who asks
+     * @throws ImportRunException {@code FORBIDDEN} for anyone but a System Admin or a Compliance Admin
+     */
+    void checkAccess(Actor actor);
+
+    /**
+     * Whether the actor may sign runs off.
+     *
+     * @param actor who asks
+     * @return true for a Compliance Admin
+     */
+    boolean signsOff(Actor actor);
+
+    /**
+     * Requests an import run for a source (design §3 step 0): the run starts {@code REQUESTED}, the importer Job's
+     * {@code validate-mapping} takes it from there. Audited as {@code IMPORT_RUN_REQUESTED}.
+     *
+     * @param actor who requests it: a System Admin or a Compliance Admin
+     * @param sourceId the mapping's {@code source.id}: 1 to 16 lowercase letters, digits or hyphens
+     * @return the new run's id
+     * @throws ImportRunException {@code FORBIDDEN} for anyone else, {@code INVALID} for a malformed source id
+     */
+    long request(Actor actor, String sourceId);
+
+    /**
+     * Signs a run off (design §3 step 4): any Compliance Admin, the requester included, approves the run as the page
+     * showed it, having acknowledged every WARNING class. Everything is checked again here, never taken from the
+     * page. Stored as {@code APPROVED_BY}, {@code APPROVED_AT} and {@code ACKNOWLEDGED_WARNINGS} and audited as {@code
+     * IMPORT_RUN_SIGNED_OFF}, with the recorded scanning mode.
+     *
+     * @param actor who signs it off
+     * @param id the run
+     * @param version the version the page showed
+     * @param acknowledged the WARNING classes (codes) acknowledged
+     * @throws ImportRunException {@code FORBIDDEN} for anyone but a Compliance Admin, then {@code NOT_FOUND} for an
+     *     unknown run, then {@code CONFLICT} for a run changed since that version or not signable (its last dry run
+     *     did not complete, it has a FATAL issue, its staging is gone or it is signed off already), then {@code
+     *     INVALID} when a WARNING class is not acknowledged
+     */
+    void signOff(Actor actor, long id, int version, Set<String> acknowledged);
 }

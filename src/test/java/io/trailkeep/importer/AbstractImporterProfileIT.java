@@ -6,12 +6,15 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.trailkeep.TrailkeepApplication;
+import io.trailkeep.casefile.CaseService.Actor;
 import io.trailkeep.importer.staging.RunCheckpoint;
 import io.trailkeep.importer.staging.StagedCase;
 import io.trailkeep.importer.staging.StagedComment;
 import io.trailkeep.testsupport.CaseSeed;
 import io.trailkeep.testsupport.RequiresDocker;
 import io.trailkeep.testsupport.TestDatabaseUsers;
+import io.trailkeep.user.GlobalRole;
+import io.trailkeep.user.UserPermissions;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -24,6 +27,8 @@ import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -121,9 +126,19 @@ abstract class AbstractImporterProfileIT {
         }
     }
 
+    /**
+     * The web application as the runtime user, which also proves the Import runs screen's two writes against its
+     * grants on {@code IMPORT_RUN} (WP-26 part s2): the run request is an INSERT drawing {@code SEQ_IMPORT_RUN}, the
+     * sign-off an UPDATE of the sign-off columns, {@code UPDATED_AT} and {@code VERSION} only, both audited.
+     */
     @Test
     void theWebApplicationStartsAsTheRuntimeUserWithoutTheStagingEntities() throws SQLException {
-        runWithIssues();
+        final long seeded = runWithIssues();
+        final long admin = Objects.requireNonNull(
+                jdbc.queryForObject("SELECT REQUESTED_BY FROM IMPORT_RUN WHERE ID = ?", Long.class, seeded));
+        Actor compliance =
+                new Actor(new UserPermissions(admin, false, Set.of(GlobalRole.COMPLIANCE_ADMIN), Map.of()), "Admin");
+        long requested = -1;
         try (ConfigurableApplicationContext web = start(appUser, false)) {
             ManagedClassNameFilter filter = web.getBean(ManagedClassNameFilter.class);
 
@@ -134,9 +149,32 @@ abstract class AbstractImporterProfileIT {
                     .contains(ImportRun.class.getName())
                     .noneMatch(name -> name.startsWith(StagingEntityFilter.STAGING_PACKAGE));
             assertThat(web.getBeanNamesForType(ImportCommandRunner.class)).isEmpty();
-            assertThat(web.getBean(ImportRunService.class).latest())
+            ImportRunService service = web.getBean(ImportRunService.class);
+            assertThat(service.latest())
                     .as("the read API is wired in the web application and the runtime user may SELECT the runs")
                     .isPresent();
+
+            requested = service.request(compliance, "legacy-b");
+            service.signOff(compliance, seeded, service.run(compliance, seeded).version(), Set.of("NOT_SCANNED"));
+
+            assertThat(jdbc.queryForObject(
+                            "SELECT COUNT(*) FROM IMPORT_RUN WHERE ID = ? AND STATUS = 'REQUESTED'"
+                                    + " AND SOURCE_ID = 'legacy-b' AND REQUESTED_BY = ?",
+                            Integer.class,
+                            requested,
+                            admin))
+                    .isOne();
+            assertThat(jdbc.queryForObject(
+                            "SELECT COUNT(*) FROM IMPORT_RUN WHERE ID = ? AND APPROVED_BY = ?"
+                                    + " AND ACKNOWLEDGED_WARNINGS = 'NOT_SCANNED' AND VERSION = 1",
+                            Integer.class,
+                            seeded,
+                            admin))
+                    .isOne();
+        } finally {
+            // Test-only cleanup of the runs this test committed, as the schema owner.
+            jdbc.update("DELETE FROM IMPORT_ISSUE WHERE RUN_ID IN (?, ?)", seeded, requested);
+            jdbc.update("DELETE FROM IMPORT_RUN WHERE ID IN (?, ?)", seeded, requested);
         }
     }
 

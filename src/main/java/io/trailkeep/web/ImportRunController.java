@@ -3,15 +3,18 @@
 package io.trailkeep.web;
 
 import io.trailkeep.casefile.CaseService.Actor;
+import io.trailkeep.importer.ImportRunException;
 import io.trailkeep.importer.ImportRunService;
 import io.trailkeep.importer.ImportRunService.Figure;
 import io.trailkeep.importer.ImportRunService.RunDetail;
 import io.trailkeep.importer.ImportRunService.RunSummary;
 import io.trailkeep.security.TrailkeepOidcUser;
+import io.trailkeep.shared.DomainException.Kind;
 import io.trailkeep.shared.Paged;
 import io.trailkeep.shared.config.AppProperties;
 import io.trailkeep.user.TeamAdminService.TeamSummary;
 import io.trailkeep.user.UserDirectoryService;
+import jakarta.servlet.http.HttpServletResponse;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
@@ -20,13 +23,16 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 
@@ -35,6 +41,12 @@ import org.springframework.web.bind.annotation.RequestParam;
  * see every run, newest first, and each run with its issues per class and the figures of its last completed dry run
  * ({@code IMPORT_RUN_SUMMARY}, R8), teams by name and times in {@code app.timezone}. {@link ImportRunService} runs
  * first on every request, so anyone else gets 403, and then an unknown run 404. It shows codes, times and counts only.
+ *
+ * <p>Both may request a run naming a source id ({@code POST /admin/import-runs}, from a native dialog on the list or
+ * {@code /admin/import-runs/new}, which a malformed id re-renders with 422). A Compliance Admin may sign off a run
+ * whose last dry run completed with no FATAL issue, acknowledging every WARNING class; the service checks it all
+ * again, and the run's page comes back with 409 and Reload when the run changed, or 422 with the acknowledgements
+ * kept.
  */
 @Controller
 @RequestMapping("/admin/import-runs")
@@ -95,8 +107,59 @@ class ImportRunController {
 
     @GetMapping("/{id}")
     String show(@AuthenticationPrincipal TrailkeepOidcUser principal, @PathVariable String id, Model model) {
+        return render(page.actor(principal), number(id, -1), List.of(), false, false, model);
+    }
+
+    @GetMapping("/new")
+    String requestForm(@AuthenticationPrincipal TrailkeepOidcUser principal, Model model) {
+        imports.checkAccess(page.actor(principal));
+        return requestPage("", false, model);
+    }
+
+    @PostMapping
+    String request(
+            @AuthenticationPrincipal TrailkeepOidcUser principal,
+            @RequestParam(defaultValue = "") String sourceId,
+            HttpServletResponse response,
+            Model model) {
+        try {
+            return "redirect:/admin/import-runs/" + imports.request(page.actor(principal), sourceId);
+        } catch (ImportRunException refused) {
+            if (refused.kind() != Kind.INVALID) {
+                throw refused;
+            }
+            response.setStatus(HttpStatus.UNPROCESSABLE_CONTENT.value());
+            return requestPage(sourceId, true, model);
+        }
+    }
+
+    @PostMapping("/{id}/sign-off")
+    String signOff(
+            @AuthenticationPrincipal TrailkeepOidcUser principal,
+            @PathVariable String id,
+            @RequestParam(defaultValue = "") String version,
+            @RequestParam(required = false) @Nullable List<String> acknowledged,
+            HttpServletResponse response,
+            Model model) {
         Actor actor = page.actor(principal);
-        RunDetail run = imports.run(actor, number(id, -1));
+        long run = number(id, -1);
+        List<String> ticked = acknowledged == null ? List.of() : acknowledged;
+        try {
+            imports.signOff(actor, run, version(version), Set.copyOf(ticked));
+        } catch (ImportRunException refused) {
+            boolean conflict = refused.kind() == Kind.CONFLICT;
+            if (!conflict && refused.kind() != Kind.INVALID) {
+                throw refused;
+            }
+            response.setStatus((conflict ? HttpStatus.CONFLICT : HttpStatus.UNPROCESSABLE_CONTENT).value());
+            return render(actor, run, ticked, conflict, !conflict, model);
+        }
+        return "redirect:/admin/import-runs/" + run;
+    }
+
+    private String render(
+            Actor actor, long id, List<String> ticked, boolean conflict, boolean unacknowledged, Model model) {
+        RunDetail run = imports.run(actor, id);
         List<Long> people = new ArrayList<>(List.of(run.requestedBy()));
         if (run.approvedBy() != null) {
             people.add(run.approvedBy());
@@ -111,7 +174,17 @@ class ImportRunController {
         model.addAttribute("approvedAt", run.approvedAt() == null ? null : local(run.approvedAt()));
         model.addAttribute(
                 "figures", run.figures().stream().map(f -> figure(f, teams)).toList());
+        model.addAttribute("approves", imports.signsOff(actor));
+        model.addAttribute("acknowledged", ticked);
+        model.addAttribute("conflict", conflict);
+        model.addAttribute("unacknowledged", unacknowledged);
         return "importer/run";
+    }
+
+    private static String requestPage(String sourceId, boolean invalid, Model model) {
+        model.addAttribute("sourceId", sourceId);
+        model.addAttribute("invalid", invalid);
+        return "importer/request";
     }
 
     private RunLine line(RunSummary run) {
@@ -135,6 +208,15 @@ class ImportRunController {
             return Long.parseLong(value);
         } catch (NumberFormatException malformed) {
             return fallback;
+        }
+    }
+
+    /** The version a form was loaded with; anything unreadable can only be stale. */
+    private static int version(String value) {
+        try {
+            return Integer.parseInt(value);
+        } catch (NumberFormatException unreadable) {
+            return Integer.MIN_VALUE;
         }
     }
 }

@@ -242,6 +242,19 @@
     approver's display names through th:text, never a source id, a mapping, a key hash or a legacy value. Covered by
     ImportRunServiceIT, OracleImportRunServiceIT, ImportRunControllerIT and ImportRunsAccessibilityIT.
     Approved in the security-reviewer role on #175.
+    WP-26 part s2 adds GET /admin/import-runs/new, POST /admin/import-runs and POST /admin/import-runs/{id}/sign-off,
+    both POSTs with CSRF (403 without). The request takes only the source id: ImportRunService refuses (403) anyone
+    but a System or Compliance Admin, then anything but 1 to 16 of [a-z0-9-] (422, echoed back through th:value), and
+    creates the run REQUESTED with the actor as requester, audited IMPORT_RUN_REQUESTED. The sign-off takes the version
+    (unreadable is stale) and the acknowledged codes: the service refuses anyone but a Compliance Admin (403), then an
+    unknown run (404), then re-reads the run and its issues: another version, a status other than DRY_RUN, an existing
+    sign-off, purged staging or any FATAL issue is a 409, an unacknowledged WARNING class a 422. It stores the codes
+    read from IMPORT_ISSUE (never the posted strings) in APPROVED_BY, APPROVED_AT and ACKNOWLEDGED_WARNINGS, the
+    runtime user's only UPDATE grant on the table, and flushes in its transaction so a concurrent dry run is a 409;
+    audited IMPORT_RUN_SIGNED_OFF with the recorded scanning mode. Redirects are fixed paths plus a numeric id. Covered
+    by ImportRunSignOffIT, OracleImportRunSignOffIT, ImportRunActionsControllerIT and ImportRunsAccessibilityIT, and
+    as the runtime user by ImporterProfileIT and OracleImporterProfileIT.
+    Approved in the security-reviewer role on #176.
     Approved in the security-reviewer role on #20. Listed by class, never by pattern alone, so each new controller
     is reviewed the same way.
   -->

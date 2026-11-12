@@ -108,6 +108,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   Compliance Admins only (403 for anyone else, 404 for an unknown run); codes, times and counts only, never the source
   id, a key hash or a legacy value. `ImportRunService` gains `runs` and `run`, and a signed-off dry run now reads as
   `APPROVED` there and on the System screen, whose "Last import run" links to the run's page and to all runs.
+- The run request and the sign-off on the Import runs screen (WP-26 part s2, docs/design/importer.md §3 steps 0 and
+  4): a System Admin or Compliance Admin requests a run naming the mapping's source id (1 to 16 lowercase letters,
+  digits or hyphens) from a native dialog on the list, or its own page without JavaScript; the run starts `REQUESTED`
+  and the request is audited as `IMPORT_RUN_REQUESTED`. A Compliance Admin, the requester included, signs off a run
+  whose last dry run completed with no FATAL issue: the run's page shows the scanning mode the dry run recorded and one
+  checkbox per WARNING class (`NOT_SCANNED` and `AMBIGUOUS_PERSON` among them), every one of which must be ticked. The
+  server checks everything again: a run changed since the page was loaded, not a completed dry run, signed off already,
+  with purged staging or with a FATAL issue is a 409 with Reload, an unacknowledged class a 422 with the ticks kept, and
+  anyone but a Compliance Admin a 403. The sign-off is stored in `APPROVED_BY`, `APPROVED_AT` and
+  `ACKNOWLEDGED_WARNINGS` (the classes read from the run's issues) and audited as `IMPORT_RUN_SIGNED_OFF` with the
+  recorded scanning mode.
 - The Oracle source (WP-26 part o, docs/design/importer.md §4.1): a `kind: jdbc` Oracle mapping is test-fetched by
   `validate-mapping` and extracted in one `SET TRANSACTION READ ONLY` transaction, with the session in UTC and ISO
   date, timestamp and number formats; `DATE` and `TIMESTAMP` read as local date-times, `TIMESTAMP WITH TIME ZONE` with
