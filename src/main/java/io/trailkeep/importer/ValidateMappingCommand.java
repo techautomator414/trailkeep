@@ -85,7 +85,7 @@ class ValidateMappingCommand {
     }
 
     /** The file's bytes; none when it is too large to be configuration, so it is never read into memory. */
-    private static byte[] read(Path mapping) {
+    static byte[] read(Path mapping) {
         try {
             return size(mapping) > MappingValidator.MAX_BYTES ? new byte[0] : Files.readAllBytes(mapping);
         } catch (IOException e) {
@@ -101,7 +101,7 @@ class ValidateMappingCommand {
         }
     }
 
-    private static String sha256(byte[] content) {
+    static String sha256(byte[] content) {
         try {
             return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(content));
         } catch (NoSuchAlgorithmException e) {

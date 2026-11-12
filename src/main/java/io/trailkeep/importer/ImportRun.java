@@ -12,6 +12,8 @@ import jakarta.persistence.Id;
 import jakarta.persistence.SequenceGenerator;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.time.Instant;
 import java.util.Objects;
 import org.hibernate.annotations.DynamicUpdate;
@@ -182,7 +184,63 @@ class ImportRun {
 
     /** Whether {@code validate-mapping} may run: an import run nobody has extracted for yet. */
     boolean awaitsMapping() {
-        return kind == Kind.IMPORT && (status == Status.REQUESTED || status == Status.VALIDATED);
+        // Once an extract has started, the run is that mapping and that snapshot: a new mapping needs a new run.
+        return kind == Kind.IMPORT
+                && (status == Status.REQUESTED || (status == Status.VALIDATED && sourceFingerprint == null));
+    }
+
+    /**
+     * Whether the run was validated with this mapping file.
+     *
+     * @param hash the file's SHA-256
+     * @return true if it is the validated file
+     */
+    boolean hasMappingHash(String hash) {
+        // Constant time, like every hash comparison here (SpotBugs UNSAFE_HASH_EQUALS); the hash is not a secret.
+        return mappingHash != null
+                && MessageDigest.isEqual(
+                        hash.getBytes(StandardCharsets.US_ASCII), mappingHash.getBytes(StandardCharsets.US_ASCII));
+    }
+
+    /**
+     * An extract starts or starts again (WP-26 part k1b): it records what the source was read at, and the staging
+     * expiry the first time, so that abandoned staging expires too.
+     *
+     * @param fingerprint the source's fingerprint
+     * @param expiresAt when staging expires, unless an earlier attempt set it
+     * @param at now
+     * @return true when an earlier attempt read another fingerprint, so its staging must go
+     */
+    boolean extractStarting(String fingerprint, Instant expiresAt, Instant at) {
+        boolean otherPoint = sourceFingerprint != null && !sourceFingerprint.equals(fingerprint);
+        if (sourceFingerprint == null || otherPoint) {
+            rowsStaged = 0;
+        }
+        this.sourceFingerprint = fingerprint;
+        this.stagingExpiresAt = Objects.requireNonNullElse(stagingExpiresAt, expiresAt);
+        this.updatedAt = at;
+        return otherPoint;
+    }
+
+    /**
+     * An entity's extract finished.
+     *
+     * @param rows how many rows it staged
+     * @param at now
+     */
+    void entityStaged(long rows, Instant at) {
+        this.rowsStaged += rows;
+        this.updatedAt = at;
+    }
+
+    /**
+     * Every entity is staged.
+     *
+     * @param at now
+     */
+    void extracted(Instant at) {
+        this.status = Status.EXTRACTED;
+        this.updatedAt = at;
     }
 
     /**

@@ -15,6 +15,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   and then `ID`), which returns codes, times and counts only, never a source id or anything from legacy data, and is
   wired in the web application as well as the `importer` profile. The Import runs screen (WP-26 part s) extends it
   and adds the link.
+- `extract` (WP-26 part k1b, docs/design/importer.md §3, §4.1, §5). `--import.command=extract --import.run=<id>
+  --import.mapping=<file>` reads the source a validated run's mapping names, at one fixed point, entity by entity
+  (people, cases, comments, attachments, events), stages every row through `RowStager` in batches of
+  `limits.batchSize`, and records each problem as an `EXTRACT` issue with the keyed hash of the row's key; a repeated
+  key is `DUPLICATE_KEY` and the first row stays. Each entity ends with its checkpoint in the transaction of its last
+  rows. Run again after a crash on the same source fingerprint, it deletes the unfinished entity's rows and issues and
+  reads that entity again; on another fingerprint it starts over. The run gets `SOURCE_FINGERPRINT` and
+  `STAGING_EXPIRES_AT` (`import.staging-ttl`, default 14 days) when the extract starts, so abandoned staging expires
+  too, and moves from `VALIDATED` to `EXTRACTED` with `ROWS_STAGED`. It refuses a run that is not validated or whose
+  mapping file changed since, needs `import.hash-key` (Base64 of at least 32 bytes, its own Secret), and stops at the
+  first FATAL row issue. Once an extract has started, the run no longer accepts another mapping. No source ships yet:
+  every mapping is refused with a FATAL `SOURCE_UNSUPPORTED` until the JSON Lines source (26k2), and one with lookup
+  files with `LOOKUP_FILE_UNSUPPORTED` until the CSV source (26l).
 - Staging one legacy row (WP-26 part k1a, docs/design/importer.md §5, §6). `RowStager` turns a source row, from
   whichever source, into a staging row: its canonical key (`KEY_INVALID`, or `KEY_TOO_LONG` when `LEGACY_REF` would
   pass 100 characters), a child's case key (`PARENT_KEY_INVALID`), every mapped field through the transforms and typed
