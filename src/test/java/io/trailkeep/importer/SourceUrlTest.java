@@ -76,6 +76,8 @@ class SourceUrlTest {
             "jdbc:oracle:thin:@db.invalid:1521/legacy?oracle.jdbc.Trace=true",
             "jdbc:oracle:thin:@db.invalid:1521/legacy?wallet_location=/tmp/wallet",
             "jdbc:oracle:thin:@db.invalid:1521/legacy?TNS_ADMIN=/tmp",
+            "jdbc:oracle:thin:@tcps://db.invalid:2484/legacy?javax.net.ssl.trustStore=/run/ca.p12"
+                    + "&javax.net.ssl.trustStorePassword=unused",
             "jdbc:oracle:thin:@db.invalid:1521/legacy/../x"
         }) {
             assertThat(SourceUrl.allowed(Vendor.ORACLE, refused)).as(refused).isFalse();

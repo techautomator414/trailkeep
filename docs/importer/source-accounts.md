@@ -53,7 +53,9 @@ production. The run's fingerprint records the SCN the transaction started near. 
 session, so an extract that crashed starts over.
 
 Connect with an Easy Connect URL, `jdbc:oracle:thin:@tcps://host:2484/service?ssl_server_dn_match=true` with
-`javax.net.ssl.trustStore` (and `javax.net.ssl.trustStoreType=PKCS12`) pointing at the mounted CA. The importer
+`javax.net.ssl.trustStore` (and `javax.net.ssl.trustStoreType=PKCS12`) pointing at the mounted CA, in a truststore
+that holds certificates only and has no password: a secret never goes in the URL, so `javax.net.ssl.trustStorePassword`
+is refused like any other property outside the allow-list. The importer
 refuses a TNS descriptor, a TNS alias and any URL property outside its allow-list of TLS and timeout settings before
 connecting, because descriptors and driver properties can name wallet and trace directories, provider classes and
 configuration files. Auto-login wallets need `oraclepki`, which is not on the importer's classpath.
@@ -89,6 +91,9 @@ account:
 - cannot lock rows with `SELECT … FOR UPDATE` or lock a table;
 - cannot create a table;
 - cannot read a table it was not granted;
+- cannot call a legacy function that writes in an autonomous transaction, even unqualified through a public synonym,
+  and nothing is written: an unqualified call without parentheses reads like a column, so it is the recipe's job (no
+  `EXECUTE`), not the validator's;
 - and the validator refuses a `DBMS_*` call with or without parentheses, a legacy-schema function and a database link.
 
 ## SQL Server

@@ -18,6 +18,7 @@ import java.security.SecureRandom;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.time.Duration;
@@ -155,14 +156,44 @@ class OracleSourceIT extends ExtractJobSupport {
 
     @AfterEach
     void dropLegacyUsers() throws SQLException {
-        for (String user : List.of("tk_source", "tk_legacy")) {
+        for (String drop :
+                List.of("DROP PUBLIC SYNONYM tk_leak", "DROP USER tk_source CASCADE", "DROP USER tk_legacy CASCADE")) {
             try (Connection admin = systemLogin();
                     Statement statement = admin.createStatement()) {
-                // Test-only DDL over the fixed names of this list.
-                statement.execute("DROP USER " + user + " CASCADE");
+                // Test-only DDL, fixed in this list.
+                statement.execute(drop);
             } catch (SQLException missing) {
-                // ORA-01918: not created yet.
+                // ORA-01432 or ORA-01918: not created yet.
             }
+        }
+    }
+
+    /**
+     * An unqualified parameterless call reads like a column, so the validator cannot tell it from one: such calls are
+     * the recipe's job. A legacy function that writes in an autonomous transaction, reachable even through a public
+     * synonym, is not callable by the recipe's account (no EXECUTE), and nothing is written.
+     */
+    @Test
+    void unqualifiedCallToAWritingLegacyFunctionFailsUnderTheRecipeWithoutWriting() throws SQLException {
+        admin(
+                "CREATE TABLE tk_legacy.written (n NUMBER(10))",
+                "CREATE FUNCTION tk_legacy.leak RETURN NUMBER AS PRAGMA AUTONOMOUS_TRANSACTION;"
+                        + " BEGIN INSERT INTO tk_legacy.written VALUES (1); COMMIT; RETURN 1; END;",
+                "CREATE PUBLIC SYNONYM tk_leak FOR tk_legacy.leak");
+        String call = "SELECT tk_leak FROM DUAL";
+        assertThat(SourceQueryValidator.validate(call, Vendor.ORACLE).problems())
+                .as("indistinguishable from a column")
+                .isEmpty();
+
+        try (Session session = dao.open(source())) {
+            assertThatThrownBy(() -> dao.testFetch(session, query(call), TIMEOUT))
+                    .isInstanceOf(SourceQueryException.class);
+        }
+        try (Connection admin = systemLogin();
+                Statement statement = admin.createStatement();
+                ResultSet rows = statement.executeQuery("SELECT COUNT(*) FROM tk_legacy.written")) {
+            rows.next();
+            assertThat(rows.getInt(1)).as("nothing written").isZero();
         }
     }
 

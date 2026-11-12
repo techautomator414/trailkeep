@@ -43,7 +43,6 @@ final class SourceUrl {
             "oracle.net.ssl_server_cert_dn",
             "javax.net.ssl.trustStore",
             "javax.net.ssl.trustStoreType",
-            "javax.net.ssl.trustStorePassword",
             "connect_timeout",
             "transport_connect_timeout",
             "retry_count",
