@@ -12,9 +12,11 @@ import io.trailkeep.importer.staging.StagedAttachment;
 import io.trailkeep.importer.staging.StagedCase;
 import io.trailkeep.importer.staging.StagedComment;
 import io.trailkeep.importer.staging.StagedEvent;
+import io.trailkeep.importer.staging.StagedPerson;
 import io.trailkeep.importer.staging.StagedRow;
 import io.trailkeep.importer.staging.StagingStore;
 import io.trailkeep.shared.config.AppProperties;
+import io.trailkeep.user.ImportPeopleService;
 import io.trailkeep.user.TeamAdminService.TeamSummary;
 import io.trailkeep.user.UserDirectoryService;
 import java.nio.file.Path;
@@ -40,12 +42,13 @@ import tools.jackson.dataformat.yaml.YAMLMapper;
 /**
  * {@code dry-run} (WP-26 part q, design §3 step 3): checks every staged case against Trailkeep's rules and its teams
  * and case types as they are now ({@link CaseRules}), and every staged comment, attachment and history event against
- * its case and its own rules ({@link ChildRules}), writes each problem as a {@code DRY_RUN} issue (a code, a severity
- * and the keyed hash of the row's key, never a value), and records the attachment scanning mode in force on
- * the run ({@code app.attachments.scanning}, read as the attachment intake reads it), which the sign-off approves and
- * the load must still find (R1). It writes nothing to the domain. A dry run may be repeated until the sign-off: each
- * replaces the last one's issues. The mapping file and its lookup files must be the ones {@code validate-mapping}
- * accepted ({@link LookupFiles#hash}).
+ * its case and its own rules ({@link ChildRules}), matches the staged people to Trailkeep users and checks every team
+ * with open cases has an eligible default owner ({@link PeopleMatcher}, 26r2), writes each problem as a {@code DRY_RUN}
+ * issue (a code, a severity and the keyed hash of the row's key, never a value), and records the attachment scanning
+ * mode in force on the run ({@code app.attachments.scanning}, read as the attachment intake reads it), which the
+ * sign-off approves and the load must still find (R1). It writes nothing to the domain. A dry run may be repeated until
+ * the sign-off: each replaces the last one's issues. The mapping file and its lookup files must be the ones {@code
+ * validate-mapping} accepted ({@link LookupFiles#hash}).
  */
 @Component
 @Profile("importer")
@@ -78,6 +81,7 @@ class DryRunCommand {
     private final TransactionTemplate transactions;
     private final CaseImportService caseImports;
     private final UserDirectoryService directory;
+    private final ImportPeopleService people;
     private final ImportProperties properties;
     private final Environment environment;
     private final AppProperties app;
@@ -92,6 +96,7 @@ class DryRunCommand {
             TransactionTemplate transactions,
             CaseImportService caseImports,
             UserDirectoryService directory,
+            ImportPeopleService people,
             ImportProperties properties,
             Environment environment,
             AppProperties app,
@@ -103,6 +108,7 @@ class DryRunCommand {
         this.transactions = transactions;
         this.caseImports = caseImports;
         this.directory = directory;
+        this.people = people;
         this.properties = properties;
         this.environment = environment;
         this.app = app;
@@ -138,10 +144,12 @@ class DryRunCommand {
                 caseImports.caseTypes().stream().collect(Collectors.toMap(ImportCaseType::name, Function.identity())),
                 now,
                 app.timezone());
+        PeopleMatcher matcher = new PeopleMatcher(people, caseImports, mapping, lookups.defaultOwners());
         DryRunSummary summary = new DryRunSummary(
                 rules,
                 teams.stream().collect(Collectors.toMap(TeamSummary::name, TeamSummary::id)),
-                mapping.at("/visibility/onUnrepresentableAcl").asString("restricted"));
+                mapping.at("/visibility/onUnrepresentableAcl").asString("restricted"),
+                matcher);
         ImportRun.ScanMode mode =
                 Binder.get(environment).bind(SCANNING, ImportRun.ScanMode.class).orElse(ImportRun.ScanMode.CLAMD);
         transactions.executeWithoutResult(status -> {
@@ -156,13 +164,14 @@ class DryRunCommand {
         Outcome checked = checkRows(
                 new Pass(runId, rules.maxErrorRate(), children.accepted(), properties.hashKeySpec(), now, summary),
                 rules,
-                children);
-        if (mode == ImportRun.ScanMode.EXTERNAL && summary.loadableFiles() > 0) {
-            Finding unscanned = new Finding("NOT_SCANNED", Severity.WARNING, summary.loadableFiles());
-            transactions.executeWithoutResult(
-                    status -> issues.save(issue(runId, Subject.ATTACHMENT, null, unscanned, now)));
-            checked = checked.plus(new Outcome(0, 1, 0));
-        }
+                children,
+                matcher);
+        checked = checked.plus(runIssues(
+                runId,
+                matcher.teamsWithoutDefaultOwner(
+                        teams.stream().collect(Collectors.toMap(TeamSummary::id, TeamSummary::name))),
+                mode == ImportRun.ScanMode.EXTERNAL ? summary.loadableFiles() : 0,
+                now));
         for (Object[] count : issues.countByCode(runId)) {
             summary.issues((Subject) count[0], (Severity) count[1], (String) count[2], (Long) count[3]);
         }
@@ -176,20 +185,24 @@ class DryRunCommand {
     }
 
     /**
-     * Every staged row of every entity through its rules, a page at a time, a child's case looked up among the run's
-     * staged cases; then each entity's share of rows with an ERROR, at extract or here, that the mapping has not
-     * accepted as skipped, against {@code limits.maxErrorRate}: above it, a FATAL {@code ERROR_RATE_EXCEEDED} for that
-     * entity carrying the number of such rows.
+     * Every staged person matched first, then every staged row of every other entity through its rules, a page at a
+     * time, a child's case looked up among the run's staged cases; then each entity's share of rows with an ERROR, at
+     * extract or here, that the mapping has not accepted as skipped, against {@code limits.maxErrorRate}: above it, a
+     * FATAL {@code ERROR_RATE_EXCEEDED} for that entity carrying the number of such rows.
      */
-    private Outcome checkRows(Pass pass, CaseRules cases, ChildRules children) {
+    private Outcome checkRows(Pass pass, CaseRules cases, ChildRules children, PeopleMatcher people) {
         DryRunSummary summary = pass.summary();
-        return check(pass, StagedCase.class, Subject.CASE, row -> null, (row, staged) -> {
+        return check(pass, StagedPerson.class, Subject.PERSON, row -> null, (row, staged) -> people.person(row))
+                .plus(check(pass, StagedCase.class, Subject.CASE, row -> null, (row, staged) -> {
                     List<Finding> found =
                             cases.check(row).stream().map(Finding::of).toList();
                     summary.caseRow(row, found);
                     return found;
-                })
-                .plus(check(pass, StagedComment.class, Subject.COMMENT, StagedComment::getCaseKey, children::comment))
+                }))
+                .plus(check(pass, StagedComment.class, Subject.COMMENT, StagedComment::getCaseKey, (row, in) -> {
+                    summary.comment(row);
+                    return children.comment(row, in);
+                }))
                 .plus(check(
                         pass, StagedAttachment.class, Subject.ATTACHMENT, StagedAttachment::getCaseKey, (row, in) -> {
                             List<Finding> found = children.attachment(row, in);
@@ -210,6 +223,24 @@ class DryRunCommand {
             SecretKey hashKey,
             Instant now,
             DryRunSummary summary) {}
+
+    /**
+     * The run's issues about no single row: a FATAL {@code DEFAULT_OWNER_MISSING} per team with open cases and no
+     * eligible default owner, carrying the team's Trailkeep id; in {@code external} scanning mode one {@code
+     * NOT_SCANNED} WARNING carrying how many files the load will store unscanned.
+     */
+    private Outcome runIssues(long runId, List<Long> teamsWithoutOwner, long unscanned, Instant now) {
+        List<Finding> found = new ArrayList<>();
+        teamsWithoutOwner.forEach(team -> found.add(new Finding("DEFAULT_OWNER_MISSING", Severity.FATAL, team)));
+        transactions.executeWithoutResult(status -> {
+            found.forEach(finding -> issues.save(issue(runId, Subject.CASE, null, finding, now)));
+            if (unscanned > 0) {
+                Finding warning = new Finding("NOT_SCANNED", Severity.WARNING, unscanned);
+                issues.save(issue(runId, Subject.ATTACHMENT, null, warning, now));
+            }
+        });
+        return new Outcome(0, found.size() + (unscanned > 0 ? 1 : 0), found.size());
+    }
 
     private <T extends StagedRow> Outcome check(
             Pass pass,
@@ -250,7 +281,8 @@ class DryRunCommand {
         }
         pass.summary().rows(subject, rows);
         long failed = issues.countFailedRows(runId, subject, Severity.ERROR, pass.accepted());
-        if (failed > pass.maxErrorRate() * rows) {
+        // People are never loaded, so they have no error rate: an unmatched person is a name snapshot.
+        if (subject != Subject.PERSON && failed > pass.maxErrorRate() * rows) {
             Finding rate = new Finding("ERROR_RATE_EXCEEDED", Severity.FATAL, failed);
             transactions.executeWithoutResult(status -> issues.save(issue(runId, subject, null, rate, now)));
             recorded++;

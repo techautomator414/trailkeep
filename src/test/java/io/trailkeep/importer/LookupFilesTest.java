@@ -124,6 +124,34 @@ class LookupFilesTest {
                 .isNotEqualTo(split);
     }
 
+    @Test
+    void defaultOwnerFileIsReadLikeLookupAndJoinsTheMappingHash() throws Exception {
+        String withOwners = MAPPING + "defaults: { owner: { byTeam: lookups/owners.csv } }\n";
+        final byte[] content = withOwners.getBytes(StandardCharsets.UTF_8);
+        teams("legacy_unit,trailkeep_team\nNorth,team-north\n");
+        final Path owners = Files.writeString(
+                directory.resolve("lookups/owners.csv"), "Team,owner\nteam-north,owner-1@example.test\n");
+
+        LookupFiles read = read(withOwners);
+        assertThat(read.problems()).isEmpty();
+        assertThat(read.defaultOwners()).isEqualTo(Map.of("team-north", "owner-1@example.test"));
+        assertThat(read.values()).containsOnlyKeys("team");
+        String hash = read.hash(content);
+
+        Files.writeString(owners, "team,owner\nteam-north,owner-2@example.test\n");
+        assertThat(read(withOwners).hash(content))
+                .as("an edited default-owner file")
+                .isNotEqualTo(hash);
+
+        Files.writeString(owners, "team,default_owner\nteam-north,owner-2@example.test\n");
+        assertThat(read(withOwners).problems())
+                .containsExactly(new MappingProblem(MappingProblem.Code.LOOKUP_FILE_INVALID, "/defaults/owner/byTeam"));
+        Files.delete(owners);
+        assertThat(read(withOwners).problems())
+                .containsExactly(new MappingProblem(MappingProblem.Code.SOURCE_FILE_MISSING, "/defaults/owner/byTeam"));
+        assertThat(read(MAPPING).defaultOwners()).as("no file named").isEmpty();
+    }
+
     private void teams(String text) throws Exception {
         Files.writeString(directory.resolve("lookups/teams.csv"), text);
     }

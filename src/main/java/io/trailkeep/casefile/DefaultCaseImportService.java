@@ -133,6 +133,13 @@ class DefaultCaseImportService implements CaseImportService {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public boolean eligibleOwner(long userId, long teamId) {
+        return userId != people.principals().legacyApproval()
+                && permissions.mayOwn(directory.permissionsOf(userId), teamId);
+    }
+
+    @Override
     public CaseNumber importCase(ImportRun run, ImportedCase imported) {
         Instant now = clock.instant();
         CaseFields fields = imported.fields();
@@ -247,9 +254,7 @@ class DefaultCaseImportService implements CaseImportService {
     private void checkOwner(CaseFields fields, boolean closed, ImportPeopleService.ImportPrincipals principals) {
         long owner = fields.ownerId();
         boolean allowed = owner != principals.legacyApproval()
-                && (closed
-                        ? directory.displayName(owner).isPresent()
-                        : permissions.mayOwn(directory.permissionsOf(owner), fields.teamId()));
+                && (closed ? directory.displayName(owner).isPresent() : eligibleOwner(owner, fields.teamId()));
         if (!allowed) {
             throw invalid("the owner may not own this case");
         }

@@ -6,26 +6,16 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.trailkeep.importer.ImportIssue.Severity;
-import io.trailkeep.testsupport.CaseSeed;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.sql.Date;
-import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
-import java.time.LocalDate;
 import java.util.ArrayList;
-import java.util.Base64;
 import java.util.List;
-import java.util.Objects;
-import org.jspecify.annotations.Nullable;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.context.ConfigurableApplicationContext;
 
 /**
  * {@code dry-run} as the import user (WP-26 part q, design §3 step 3): staged cases checked against the teams and case
@@ -33,45 +23,19 @@ import org.springframework.context.ConfigurableApplicationContext;
  * error rate against {@code limits.maxErrorRate}, the scanning mode in force recorded, a repeat replacing the last
  * one's issues, and nothing written to the domain; comments, attachments and history events checked against their
  * staged cases and their own rules (part q2), each entity with its own error rate, extract issues counted and {@code
- * limits.acceptSkip} codes left out. The staged rows are seeded by the schema owner.
+ * limits.acceptSkip} codes left out. With no default owners in the mapping, the seeded team's open cases make a FATAL
+ * {@code DEFAULT_OWNER_MISSING} (part r2, tested in {@link AbstractDryRunPeopleIT}). The staged rows are seeded by the
+ * schema owner.
  */
 // "IT" is the Failsafe suffix Part B mandates for integration tests, not an abbreviation.
 @SuppressWarnings("checkstyle:AbbreviationAsWordInName")
-abstract class AbstractDryRunIT extends ExtractJobSupport {
-
-    private static final String INSERT =
-            "INSERT INTO IMPORT_STG_CASE (RUN_ID, LEGACY_KEY, ROW_HASH, TITLE, DESCRIPTION,"
-                    + " TEAM_KEY, CASE_TYPE_KEY, STATUS, IDENTIFIED_ON, OPENED_AT, CLOSED_AT, CLOSURE_OUTCOME)"
-                    + " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+abstract class AbstractDryRunIT extends DryRunSupport {
 
     @Autowired
     private ImportIssueRepository extractIssues;
 
     @Value("${app.db.import-user}")
     private String importUser = "";
-
-    private long team;
-    private long caseType;
-
-    @BeforeEach
-    void seedTheReferenceData() {
-        CaseSeed seed = new CaseSeed(jdbc);
-        team = seed.team();
-        caseType = seed.caseType();
-        jdbc.update(
-                "INSERT INTO CASE_TYPE_OUTCOME (CASE_TYPE_ID, OUTCOME, SORT_ORDER) VALUES (?, ?, 1)",
-                caseType,
-                "SUBSTANTIATED");
-    }
-
-    @AfterEach
-    void removeTheReferenceData() {
-        Long policy = jdbc.queryForObject("SELECT SLA_POLICY_ID FROM CASE_TYPE WHERE ID = ?", Long.class, caseType);
-        jdbc.update("DELETE FROM CASE_TYPE_OUTCOME WHERE CASE_TYPE_ID = ?", caseType);
-        jdbc.update("DELETE FROM CASE_TYPE WHERE ID = ?", caseType);
-        jdbc.update("DELETE FROM SLA_POLICY WHERE ID = ?", policy);
-        jdbc.update("DELETE FROM TEAM WHERE ID = ?", team);
-    }
 
     @Test
     void dryRunRecordsEachCasesIssuesAndTheScanningModeAndMayRunAgain(@TempDir Path directory) throws Exception {
@@ -89,7 +53,8 @@ abstract class AbstractDryRunIT extends ExtractJobSupport {
         List<List<String>> expected = List.of(
                 List.of("CASE", "FATAL", "CLOSURE_OUTCOME_NOT_ALLOWED", hash("z1")),
                 List.of("CASE", "ERROR", "TITLE_MISSING", hash("z2")),
-                List.of("CASE", "FATAL", "ERROR_RATE_EXCEEDED", ""));
+                List.of("CASE", "FATAL", "ERROR_RATE_EXCEEDED", ""),
+                List.of("CASE", "FATAL", "DEFAULT_OWNER_MISSING", ""));
 
         dryRun(run, mapping, "--app.attachments.scanning=external").close();
 
@@ -147,6 +112,7 @@ abstract class AbstractDryRunIT extends ExtractJobSupport {
 
         assertThat(dryRunIssues(run))
                 .containsExactlyInAnyOrder(
+                        List.of("CASE", "FATAL", "DEFAULT_OWNER_MISSING", ""),
                         List.of("COMMENT", "ERROR", "PARENT_NOT_STAGED", hash("n2")),
                         List.of("COMMENT", "FATAL", "ERROR_RATE_EXCEEDED", ""),
                         List.of("ATTACHMENT", "WARNING", "ATTACHMENT_TOO_LARGE", hash("f1")),
@@ -191,14 +157,6 @@ abstract class AbstractDryRunIT extends ExtractJobSupport {
                         "SKIPPED_BYTES ATTACHMENT_MISSING 0",
                         "NOT_SCANNED_FILES - 1",
                         "NOT_SCANNED_BYTES - 10");
-    }
-
-    private List<String> figures(long run) {
-        return jdbc.query(
-                "SELECT METRIC, DIMENSION, METRIC_VALUE FROM IMPORT_RUN_SUMMARY WHERE RUN_ID = ?",
-                (row, index) -> row.getString(1) + " " + Objects.requireNonNullElse(row.getString(2), "-") + " "
-                        + row.getLong(3),
-                run);
     }
 
     /** One sound case, a comment on it and one on no staged case, three attachments and an event of no known kind. */
@@ -277,50 +235,5 @@ abstract class AbstractDryRunIT extends ExtractJobSupport {
                 .hasMessage("The mapping file or a lookup file changed after validate-mapping; validate it again");
         assertThat(jdbc.queryForObject("SELECT STATUS FROM IMPORT_RUN WHERE ID = ?", String.class, extracted))
                 .isEqualTo("EXTRACTED");
-    }
-
-    private long extractedRun(Path mapping) throws Exception {
-        long run = validatedRun(mapping);
-        jdbc.update("UPDATE IMPORT_RUN SET STATUS = 'EXTRACTED', SOURCE_FINGERPRINT = 'memory-fp-1' WHERE ID = ?", run);
-        return run;
-    }
-
-    private Object[] row(long run, String key, @Nullable String title, String status, @Nullable String outcome) {
-        boolean closed = "CLOSED".equals(status);
-        return new Object[] {
-            run,
-            key,
-            "ab".repeat(32),
-            title,
-            "Synthetic description",
-            "Seed Team " + team,
-            "Seed " + caseType,
-            status,
-            Date.valueOf(LocalDate.of(2024, 1, 14)),
-            Timestamp.from(Instant.parse("2024-01-15T10:00:00Z")),
-            closed ? Timestamp.from(Instant.parse("2024-03-01T10:00:00Z")) : null,
-            outcome
-        };
-    }
-
-    private ConfigurableApplicationContext dryRun(long run, Path mapping, String... more) throws SQLException {
-        List<String> args = new ArrayList<>(List.of(
-                "--import.command=dry-run",
-                "--import.run=" + run,
-                "--import.mapping=" + mapping,
-                "--import.hash-key=" + Base64.getEncoder().encodeToString(HASH_KEY)));
-        args.addAll(List.of(more));
-        return start(args.toArray(String[]::new));
-    }
-
-    private List<List<String>> dryRunIssues(long run) {
-        return jdbc.query(
-                "SELECT ENTITY, SEVERITY, CODE, KEY_HASH FROM IMPORT_ISSUE WHERE RUN_ID = ? AND STAGE = 'DRY_RUN'",
-                (row, index) -> List.of(
-                        row.getString(1),
-                        row.getString(2),
-                        row.getString(3),
-                        row.getString(4) == null ? "" : row.getString(4)),
-                run);
     }
 }

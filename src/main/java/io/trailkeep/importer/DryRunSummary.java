@@ -6,6 +6,7 @@ import io.trailkeep.importer.ChildRules.Finding;
 import io.trailkeep.importer.ImportIssue.Severity;
 import io.trailkeep.importer.staging.StagedAttachment;
 import io.trailkeep.importer.staging.StagedCase;
+import io.trailkeep.importer.staging.StagedComment;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -28,7 +29,10 @@ import org.jspecify.annotations.Nullable;
  *   <li>{@code ATTACHMENT_FILES} and {@code ATTACHMENT_BYTES}: attachments the dry run found nothing against;
  *       {@code SKIPPED_FILES} and {@code SKIPPED_BYTES} per accepted code; in {@code external} scanning mode {@code
  *       NOT_SCANNED_FILES} and {@code NOT_SCANNED_BYTES}, the attachments that will be stored {@code NOT_SCANNED}
- *       (§4.3).
+ *       (§4.3);
+ *   <li>{@code PEOPLE_MATCHED} and {@code PEOPLE_UNMATCHED} per role ({@code OPEN_OWNER}, {@code CLOSED_OWNER},
+ *       {@code AUTHOR}, {@code UPLOADER}): the match rate (§7.3), an open case's owner counted as matched only when
+ *       eligible to keep it; {@code DEFAULT_OWNER_CASES} per team id: open cases the team's default owner will get.
  * </ul>
  */
 final class DryRunSummary {
@@ -39,6 +43,7 @@ final class DryRunSummary {
     private final CaseRules rules;
     private final Map<String, Long> teamIds;
     private final String aclHandling;
+    private final PeopleMatcher people;
 
     /**
      * An empty summary.
@@ -46,11 +51,13 @@ final class DryRunSummary {
      * @param rules the case rules, which know a case's hold and visibility
      * @param teamIds each Trailkeep team's id by name, the key a mapped team names
      * @param aclHandling {@code visibility.onUnrepresentableAcl}
+     * @param people the legacy people as matched, which know whether a case keeps its owner
      */
-    DryRunSummary(CaseRules rules, Map<String, Long> teamIds, String aclHandling) {
+    DryRunSummary(CaseRules rules, Map<String, Long> teamIds, String aclHandling, PeopleMatcher people) {
         this.rules = rules;
         this.teamIds = Map.copyOf(teamIds);
         this.aclHandling = aclHandling;
+        this.people = people;
     }
 
     /**
@@ -64,17 +71,23 @@ final class DryRunSummary {
     }
 
     /**
-     * Counts one staged case: its status, the visibility it would load with in its team, a legacy ACL, a hold.
+     * Counts one staged case: its status, the visibility it would load with in its team, a legacy ACL, a hold, and
+     * whether its owner matched or it gets its team's default owner.
      *
      * @param row the case
      * @param findings what the dry run found against it (unused: a case with issues is still counted as staged)
      */
     void caseRow(StagedCase row, List<Finding> findings) {
         String status = row.getStatus();
+        Long team = row.getTeamKey() == null ? null : teamIds.get(row.getTeamKey());
         if ("OPEN".equals(status) || "CLOSED".equals(status)) {
             add("CASES", status, 1);
+            boolean kept = people.keepsOwner(row, team);
+            person(status + "_OWNER", kept);
+            if (!kept && team != null && "OPEN".equals(status)) {
+                add("DEFAULT_OWNER_CASES", team.toString(), 1);
+            }
         }
-        Long team = row.getTeamKey() == null ? null : teamIds.get(row.getTeamKey());
         if (team != null) {
             add("VISIBILITY_" + rules.visibility(row), team.toString(), 1);
         }
@@ -94,6 +107,7 @@ final class DryRunSummary {
      * @param findings what the dry run found against it
      */
     void attachment(StagedAttachment row, List<Finding> findings) {
+        person("UPLOADER", people.matched(row.getUploaderKey()));
         long size = Objects.requireNonNullElse(row.getSizeBytes(), 0L);
         if (findings.isEmpty()) {
             add("ATTACHMENT_FILES", null, 1);
@@ -105,6 +119,19 @@ final class DryRunSummary {
                     add("SKIPPED_FILES", finding.code(), 1);
                     add("SKIPPED_BYTES", finding.code(), size);
                 });
+    }
+
+    /**
+     * Counts one staged comment's author as matched or not.
+     *
+     * @param row the comment
+     */
+    void comment(StagedComment row) {
+        person("AUTHOR", people.matched(row.getAuthorKey()));
+    }
+
+    private void person(String role, boolean matched) {
+        add(matched ? "PEOPLE_MATCHED" : "PEOPLE_UNMATCHED", role, 1);
     }
 
     /**

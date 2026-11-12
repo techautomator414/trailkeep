@@ -11,8 +11,9 @@ import org.jspecify.annotations.Nullable;
 
 /**
  * Creates imported cases (WP-26 part e, docs/design/importer.md §7.1, §8.1), and lists the case types with their
- * outcomes for the dry run (26q). Called only by {@code importer} (ArchUnit), never on a request thread. It keeps the
- * rules of {@link CaseService#create} except the relaxations of §8.1 R6, each tested by name:
+ * outcomes and checks owner eligibility for the dry run (26q, 26r). Called only by {@code importer} (ArchUnit), never
+ * on a request thread. It keeps the rules of {@link CaseService#create} except the relaxations of §8.1 R6, each tested
+ * by name:
  *
  * <ol>
  *   <li>the case opens at the legacy {@code OPENED_AT}, not the clock ({@code importedCaseKeepsLegacyOpenedAt});
@@ -115,6 +116,17 @@ public interface CaseImportService {
      * @return them, by name
      */
     List<ImportCaseType> caseTypes();
+
+    /**
+     * Whether a user could own an imported open case in a team (WP-26 part r, design §7.3): enabled and allowed to own
+     * the team's cases ({@code mayOwn}: Analyst or Manager), and never the legacy-approval principal. The dry run
+     * asks this of every matched legacy owner and default owner, so {@link #importCase} refuses nobody it accepted.
+     *
+     * @param userId the user
+     * @param teamId the team
+     * @return true if {@link #importCase} would accept them as an open case's owner
+     */
+    boolean eligibleOwner(long userId, long teamId);
 
     /**
      * Creates the case with its SLA row and search text, and audits it, in the caller's transaction.

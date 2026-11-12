@@ -82,6 +82,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   `NOT_SCANNED`, and a `NOT_SCANNED` WARNING carrying that number, which the sign-off must acknowledge. A dry run
   that starts deletes the last one's issues and figures and sets the run back to `EXTRACTED` without a scanning mode,
   so `DRY_RUN` always means a dry run that completed.
+- The dry run matches legacy people and checks open cases' owners (WP-26 part r2, docs/design/importer.md §7.3).
+  Each staged person is matched to a Trailkeep user in `people.match` order, by external id (exact) and email
+  (case-insensitive); people are never created. An email that matches more than one user is an `AMBIGUOUS_PERSON`
+  WARNING and the person stays a name snapshot, never a guess. An open case keeps its legacy owner only when that
+  person matched a user who may own the team's cases (`CaseImportService.eligibleOwner`: enabled Analyst or Manager);
+  otherwise it gets the team's default owner. `defaults.owner.byTeam` names a CSV file with the columns `team` (the
+  Trailkeep team's name) and `owner` (the user's external id or an email only one user has), read under the same
+  containment, size and encoding rules as lookup files and part of the mapping hash, so editing it after
+  `validate-mapping` means validating again. A team with open cases and no eligible default owner is a FATAL
+  `DEFAULT_OWNER_MISSING` carrying the team's id. `IMPORT_RUN_SUMMARY` gains staged people, matched and unmatched
+  people per role (open-case owners, closed-case owners, authors, uploaders) and open cases given a default owner per
+  team id.
 - The Oracle source (WP-26 part o, docs/design/importer.md §4.1): a `kind: jdbc` Oracle mapping is test-fetched by
   `validate-mapping` and extracted in one `SET TRANSACTION READ ONLY` transaction, with the session in UTC and ISO
   date, timestamp and number formats; `DATE` and `TIMESTAMP` read as local date-times, `TIMESTAMP WITH TIME ZONE` with

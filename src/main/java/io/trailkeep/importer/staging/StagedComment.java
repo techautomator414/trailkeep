@@ -57,6 +57,10 @@ public class StagedComment extends StagedRow {
         return caseKey;
     }
 
+    public @Nullable String getAuthorKey() {
+        return authorKey;
+    }
+
     public @Nullable Instant getWrittenAt() {
         return writtenAt;
     }
