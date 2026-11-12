@@ -8,6 +8,7 @@ import io.trailkeep.importer.ImportIssue.Severity;
 import io.trailkeep.importer.ImportIssue.Subject;
 import io.trailkeep.importer.ImportLedgerEntry.Loaded;
 import io.trailkeep.importer.staging.StagedComment;
+import io.trailkeep.importer.staging.StagedRow;
 import io.trailkeep.importer.staging.StagingStore;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -17,6 +18,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
 import javax.crypto.SecretKey;
 
 /**
@@ -81,24 +83,43 @@ final class CommentLoad {
      * @return each case's comments; a case without any is absent
      */
     Map<String, List<StagedComment>> staged(List<String> caseKeys) {
+        Map<String, List<StagedComment>> byCase =
+                loadable(context, StagedComment.class, Subject.COMMENT, StagedComment::getCaseKey, caseKeys);
+        byCase.values().forEach(rows -> rows.sort(WRITTEN));
+        return byCase;
+    }
+
+    /**
+     * The staged children of one entity of a page's cases, by case key, in key order, leaving out every one with an
+     * ERROR from the extract or the dry run (skipped by rule or not); comments and attachments alike.
+     *
+     * @param <T> the entity's row type
+     * @param context the load
+     * @param type the entity's row type
+     * @param subject the entity, as its issues name it
+     * @param caseKey a row's case key
+     * @param caseKeys the cases' canonical keys
+     * @return each case's children; a case without any is absent
+     */
+    static <T extends StagedRow> Map<String, List<T>> loadable(
+            Context context, Class<T> type, Subject subject, Function<T, String> caseKey, List<String> caseKeys) {
         long runId = context.run().runId();
-        List<StagedComment> staged = context.staging().children(StagedComment.class, runId, caseKeys);
+        List<T> staged = context.staging().children(type, runId, caseKeys);
         List<String> hashes = staged.stream()
                 .map(row -> KeyedHash.hex(context.hashKey(), row.getKey().legacyKey()))
                 .toList();
         Set<String> failed = new HashSet<>();
         for (int from = 0; from < hashes.size(); from += HASHES_PER_QUERY) {
             List<String> some = hashes.subList(from, Math.min(hashes.size(), from + HASHES_PER_QUERY));
-            failed.addAll(context.issues().keyHashesWith(runId, Subject.COMMENT, Severity.ERROR, some));
+            failed.addAll(context.issues().keyHashesWith(runId, subject, Severity.ERROR, some));
         }
-        Map<String, List<StagedComment>> byCase = new HashMap<>();
+        Map<String, List<T>> byCase = new HashMap<>();
         for (int i = 0; i < staged.size(); i++) {
             if (!failed.contains(hashes.get(i))) {
-                byCase.computeIfAbsent(staged.get(i).getCaseKey(), key -> new ArrayList<>())
+                byCase.computeIfAbsent(caseKey.apply(staged.get(i)), key -> new ArrayList<>())
                         .add(staged.get(i));
             }
         }
-        byCase.values().forEach(rows -> rows.sort(WRITTEN));
         return byCase;
     }
 

@@ -83,7 +83,8 @@
 -- IMPORT_LEDGER, insert-only, and SELECT on SEQ_IMPORT_LEDGER (V17). The load (WP-26 part t) writes cases with their
 -- closures: S I on CASE_RECORD, CASE_SLA, CASE_SEARCH, CLOSURE_REQUEST and AUDIT_EVENT, and SELECT (NEXTVAL) on
 -- SEQ_CASE_NUMBER besides the sequences below; with their comments (part u) S I on CASE_COMMENT and UPDATE of
--- CASE_SEARCH's SEARCH_TEXT and UPDATED_AT alone, which appending a comment to the search text needs. On every other
+-- CASE_SEARCH's SEARCH_TEXT and UPDATED_AT alone, which appending a comment to the search text needs; with their
+-- attachments (part u) S I on CASE_ATTACHMENT and CASE_ATTACHMENT_CHUNK, insert-only. On every other
 -- table and sequence an entity maps it has SELECT only, because the dictionary views Hibernate validate reads
 -- (ALL_TABLES, ALL_SEQUENCES) list only objects a user holds a privilege on (design §2.1 R3); on a sequence that
 -- SELECT is also NEXTVAL. The import writes to domain tables come with the importer PRs that use them (§12).
@@ -190,11 +191,14 @@ DECLARE
       'CASE_RECORD', 'CASE_SLA', 'CASE_SEARCH', 'CLOSURE_REQUEST', 'AUDIT_EVENT'))
     -- Its comments (part u), insert-only; SELECT on SEQ_CASE_COMMENT below is the draw on Oracle.
     UNION ALL SELECT 'CASE_COMMENT', 'SELECT,INSERT', UPPER('${import_user}') FROM DUAL
+    -- Its attachments (part u): rows and chunks, insert-only; SELECT on SEQ_CASE_ATTACHMENT below is the draw.
+    UNION ALL SELECT COLUMN_VALUE, 'SELECT,INSERT', UPPER('${import_user}') FROM TABLE(SYS.ODCIVARCHAR2LIST(
+      'CASE_ATTACHMENT', 'CASE_ATTACHMENT_CHUNK'))
     UNION ALL SELECT 'SEQ_CASE_NUMBER', 'SELECT', UPPER('${import_user}') FROM DUAL
     -- Every other table and sequence an entity maps: SELECT only, for validate (design §2.1 R3).
     UNION ALL SELECT COLUMN_VALUE, 'SELECT', UPPER('${import_user}') FROM TABLE(SYS.ODCIVARCHAR2LIST(
       'APP_USER', 'TEAM', 'APP_USER_TEAM', 'APP_USER_GLOBAL_ROLE', 'SLA_POLICY', 'CASE_TYPE', 'CASE_TYPE_OUTCOME',
-      'CASE_COMMENT_PIN', 'CASE_ATTACHMENT', 'SAVED_VIEW', 'NOTIFICATION_OUTBOX', 'USER_ALERT',
+      'CASE_COMMENT_PIN', 'SAVED_VIEW', 'NOTIFICATION_OUTBOX', 'USER_ALERT',
       'UPDATE_REQUEST', 'CASE_REOPEN', 'ALERT_LEDGER', 'JOB_RUN', 'REPORT_SCHEDULE', 'REPORT_RUN', 'LEGAL_HOLD_EVENT',
       'USER_PREFERENCE',
       'SEQ_APP_USER', 'SEQ_TEAM', 'SEQ_AUDIT_EVENT', 'SEQ_SLA_POLICY', 'SEQ_CASE_TYPE', 'SEQ_CASE_RECORD',

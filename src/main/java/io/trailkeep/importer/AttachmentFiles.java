@@ -98,6 +98,37 @@ final class AttachmentFiles {
     }
 
     /**
+     * The file the load reads for a staged attachment (WP-26 part u), contained exactly as at extract: a file in the
+     * run's content area by its SHA-256, or a path under {@code attachments.root}, absolute paths and {@code ..}
+     * refused and the real path, symlinks followed, under the root's.
+     *
+     * @param mapping the validated mapping
+     * @param contentArea {@code import.content-area}
+     * @param runId the run
+     * @param pointer the staged content pointer
+     * @return the file, as a real path
+     * @throws SourceException with the code of what refused it: the file is not where the extract hashed it
+     */
+    static Path stored(JsonNode mapping, @Nullable Path contentArea, long runId, String pointer) {
+        JsonNode content = mapping.at("/entities/attachment/fields/content");
+        if (content.has("query") || content.has("binary")) {
+            return ContentArea.open(contentArea, runId).file(pointer);
+        }
+        Path root;
+        try {
+            root = Path.of(mapping.at("/attachments/root").asString()).toRealPath();
+        } catch (IOException | InvalidPathException unreadable) {
+            throw new SourceException("ATTACHMENTS_ROOT_UNREADABLE", null);
+        }
+        List<Issue> refused = new ArrayList<>();
+        Path file = open(root, pointer, refused);
+        if (file == null) {
+            throw new SourceException(refused.getFirst().code(), null);
+        }
+        return file;
+    }
+
+    /**
      * Stages an attachment's content: a path or content-id file's pointer under the root, or a content query's file in
      * the content area, with its size and its SHA-256.
      *

@@ -82,7 +82,8 @@
 -- SEQ_CASE_IMPORTED_EVENT. The load (WP-26 part t) writes cases with their closures: S I on CASE_RECORD, CASE_SLA,
 -- CASE_SEARCH, CLOSURE_REQUEST and AUDIT_EVENT, USAGE on their sequences and SEQ_CASE_NUMBER; with their comments
 -- (part u) S I on CASE_COMMENT, USAGE on SEQ_CASE_COMMENT, and UPDATE of CASE_SEARCH's SEARCH_TEXT and UPDATED_AT
--- alone, which appending a comment to the search text needs (CaseSearchJdbcDao). On every other
+-- alone, which appending a comment to the search text needs (CaseSearchJdbcDao); with their attachments (part u) S I
+-- on CASE_ATTACHMENT and CASE_ATTACHMENT_CHUNK, insert-only, and USAGE on SEQ_CASE_ATTACHMENT. On every other
 -- table and sequence an entity maps it has SELECT only, so its Hibernate validate sees the whole model (on Oracle the
 -- dictionary lists only objects a user holds a privilege on, design §2.1 R3). The import writes to domain tables come
 -- with the importer PRs that use them (design §12).
@@ -169,7 +170,7 @@ GRANT SELECT ON SEQUENCE SEQ_IMPORT_LEDGER TO ${app_user};
 
 -- The importer Job (design §5): its own tables, and SELECT on every table and sequence an entity maps, for validate.
 GRANT SELECT ON TABLE APP_USER, TEAM, APP_USER_TEAM, APP_USER_GLOBAL_ROLE, SLA_POLICY, CASE_TYPE, CASE_TYPE_OUTCOME,
-  CASE_COMMENT_PIN, CASE_ATTACHMENT, SAVED_VIEW, NOTIFICATION_OUTBOX, USER_ALERT, UPDATE_REQUEST,
+  CASE_COMMENT_PIN, SAVED_VIEW, NOTIFICATION_OUTBOX, USER_ALERT, UPDATE_REQUEST,
   CASE_REOPEN, ALERT_LEDGER, JOB_RUN, REPORT_SCHEDULE, REPORT_RUN, LEGAL_HOLD_EVENT, USER_PREFERENCE TO ${import_user};
 -- The load (WP-26 part t): a case with its SLA row, search row and closure, audited, in one transaction.
 GRANT SELECT, INSERT ON TABLE CASE_RECORD, CASE_SLA, CASE_SEARCH, CLOSURE_REQUEST, AUDIT_EVENT TO ${import_user};
@@ -178,6 +179,9 @@ GRANT USAGE ON SEQUENCE SEQ_CASE_RECORD, SEQ_CASE_NUMBER, SEQ_CLOSURE_REQUEST, S
 GRANT SELECT, INSERT                 ON TABLE CASE_COMMENT         TO ${import_user};
 GRANT USAGE ON SEQUENCE SEQ_CASE_COMMENT TO ${import_user};
 GRANT UPDATE (SEARCH_TEXT, UPDATED_AT) ON TABLE CASE_SEARCH TO ${import_user};
+-- Its attachments (part u): each row and its chunks, insert-only, stored in the case's transaction after the scan.
+GRANT SELECT, INSERT ON TABLE CASE_ATTACHMENT, CASE_ATTACHMENT_CHUNK TO ${import_user};
+GRANT USAGE ON SEQUENCE SEQ_CASE_ATTACHMENT TO ${import_user};
 GRANT SELECT, INSERT                 ON TABLE IMPORT_LEDGER        TO ${import_user};
 GRANT SELECT, INSERT                 ON TABLE IMPORT_RUN           TO ${import_user};
 GRANT UPDATE (STATUS, MAPPING_HASH, SOURCE_FINGERPRINT, SCAN_MODE, ROWS_STAGED, ROWS_LOADED, STAGING_EXPIRES_AT,
@@ -189,7 +193,7 @@ GRANT SELECT, INSERT, DELETE ON TABLE IMPORT_STG_PERSON, IMPORT_STG_CASE, IMPORT
 GRANT USAGE ON SEQUENCE SEQ_IMPORT_RUN, SEQ_IMPORT_ISSUE, SEQ_IMPORT_RUN_SUMMARY, SEQ_IMPORT_LEDGER TO ${import_user};
 GRANT SELECT, INSERT                 ON TABLE CASE_IMPORTED_EVENT  TO ${import_user};
 GRANT USAGE ON SEQUENCE SEQ_CASE_IMPORTED_EVENT TO ${import_user};
-GRANT SELECT ON SEQUENCE SEQ_APP_USER, SEQ_TEAM, SEQ_SLA_POLICY, SEQ_CASE_TYPE, SEQ_CASE_ATTACHMENT,
+GRANT SELECT ON SEQUENCE SEQ_APP_USER, SEQ_TEAM, SEQ_SLA_POLICY, SEQ_CASE_TYPE,
   SEQ_SAVED_VIEW, SEQ_NOTIFICATION_OUTBOX, SEQ_USER_ALERT, SEQ_UPDATE_REQUEST, SEQ_CASE_REOPEN, SEQ_ALERT_LEDGER,
   SEQ_REPORT_SCHEDULE, SEQ_REPORT_RUN, SEQ_LEGAL_HOLD_EVENT TO ${import_user};
 

@@ -146,16 +146,11 @@ final class GrantsMatrix {
 
     /**
      * The import user (WP-26, design §5): its own tables, and SELECT alone on every other table an entity maps, so
-     * Hibernate validate sees the whole model. The tables no entity maps (chunks, sessions, ShedLock) stay out of
-     * reach.
+     * Hibernate validate sees the whole model. The tables no entity maps (sessions, ShedLock) stay out of reach; the
+     * chunks are written by the load (WP-26 part u).
      */
     static final Map<String, Set<Privilege>> IMPORT_USER_GRANTS = TABLES.keySet().stream()
-            .filter(table -> !Set.of(
-                            "CASE_ATTACHMENT_CHUNK",
-                            "SPRING_SESSION",
-                            "SPRING_SESSION_ATTRIBUTES",
-                            "OIDC_SESSION",
-                            "SHEDLOCK")
+            .filter(table -> !Set.of("SPRING_SESSION", "SPRING_SESSION_ATTRIBUTES", "OIDC_SESSION", "SHEDLOCK")
                     .contains(table))
             .collect(Collectors.toUnmodifiableMap(Function.identity(), table -> switch (table) {
                 // UPDATE of the status, hash, scanning-mode, count and expiry columns only (see the column test).
@@ -168,6 +163,8 @@ final class GrantsMatrix {
                         "CASE_SLA",
                         "CASE_SEARCH",
                         "CASE_COMMENT",
+                        "CASE_ATTACHMENT",
+                        "CASE_ATTACHMENT_CHUNK",
                         "CLOSURE_REQUEST",
                         "AUDIT_EVENT" -> EnumSet.of(Privilege.SELECT, Privilege.INSERT);
                 // Staging (V13) is written, read and deleted by the import user alone; nobody else may even read it.
@@ -209,9 +206,14 @@ final class GrantsMatrix {
     static final List<String> IMPORTER_SEQUENCES =
             List.of("SEQ_IMPORT_ISSUE", "SEQ_IMPORT_RUN_SUMMARY", "SEQ_CASE_IMPORTED_EVENT", "SEQ_IMPORT_LEDGER");
 
-    /** The runtime user's sequences the load draws from too: its cases, closures and comments (parts t and u). */
-    static final List<String> LOAD_SEQUENCES =
-            List.of("SEQ_CASE_RECORD", "SEQ_CASE_NUMBER", "SEQ_CLOSURE_REQUEST", "SEQ_AUDIT_EVENT", "SEQ_CASE_COMMENT");
+    /** The runtime user's sequences the load draws from too: its cases, closures, comments and attachments (t, u). */
+    static final List<String> LOAD_SEQUENCES = List.of(
+            "SEQ_CASE_RECORD",
+            "SEQ_CASE_NUMBER",
+            "SEQ_CLOSURE_REQUEST",
+            "SEQ_AUDIT_EVENT",
+            "SEQ_CASE_COMMENT",
+            "SEQ_CASE_ATTACHMENT");
 
     private GrantsMatrix() {}
 }

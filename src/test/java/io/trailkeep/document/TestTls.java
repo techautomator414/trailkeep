@@ -4,6 +4,7 @@ package io.trailkeep.document;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.io.UncheckedIOException;
 import java.net.InetAddress;
 import java.nio.charset.StandardCharsets;
@@ -139,6 +140,28 @@ final class TestTls {
      */
     SslBundles bundles() {
         return new DefaultSslBundleRegistry(BUNDLE, SslBundle.of(SslStoreBundle.of(null, null, trust)));
+    }
+
+    /**
+     * The {@code clamd} bundle for an application context started outside this package, as arguments: a PKCS12 trust
+     * store holding only this CA, written to this material's temporary directory under its random password.
+     *
+     * @return the arguments that point the bundle at it
+     */
+    List<String> trustStoreArguments() {
+        Path store = dir.resolve("trust.p12");
+        try (OutputStream out = Files.newOutputStream(store)) {
+            trust.store(out, password);
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        } catch (GeneralSecurityException e) {
+            throw new IllegalStateException(e);
+        }
+        String prefix = "--spring.ssl.bundle.jks." + BUNDLE + ".truststore.";
+        return List.of(
+                prefix + "location=file:" + store,
+                prefix + "type=PKCS12",
+                prefix + "password=" + String.valueOf(password));
     }
 
     /**

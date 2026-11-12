@@ -71,6 +71,14 @@ public class StagedAttachment extends StagedRow {
         return uploaderKey;
     }
 
+    public @Nullable String getUploaderName() {
+        return uploaderName;
+    }
+
+    public @Nullable String getContentPointer() {
+        return contentPointer;
+    }
+
     public @Nullable String getFileName() {
         return fileName;
     }
