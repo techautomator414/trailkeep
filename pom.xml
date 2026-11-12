@@ -69,6 +69,7 @@
          applies to every policy; the later advisories concern SVG, srcset and ping, which the policy never allows. -->
     <commonmark.version>0.32.0</commonmark.version>
     <json-schema-validator.version>3.0.6</json-schema-validator.version>
+    <re2j.version>1.8</re2j.version>
     <owasp-java-html-sanitizer.version>20261103.2</owasp-java-html-sanitizer.version>
     <!-- Upload type detection (WP-14, BUILD_PLAN 11.1): the core jar only, never the parser bundle. The 3.x line,
          because tika-core 4.x pulls in commonmark extensions a magic-byte detector does not need. -->
@@ -229,6 +230,14 @@
       <groupId>com.networknt</groupId>
       <artifactId>json-schema-validator</artifactId>
       <version>${json-schema-validator.version}</version>
+    </dependency>
+    <dependency>
+      <!-- The importer's regexExtract and when/matches (WP-26 part i, design §6.3): RE2 semantics, linear time, so a
+           mapping's pattern cannot make an extract hang on a crafted legacy value. BSD-3-Clause (published as the
+           "Go License", which is that text). -->
+      <groupId>com.google.re2j</groupId>
+      <artifactId>re2j</artifactId>
+      <version>${re2j.version}</version>
     </dependency>
     <dependency>
       <!-- Compile-time only, never shipped: tika-core's package-info classes carry bnd's @Version, and without the
@@ -763,7 +772,11 @@
                 <licenseMerge>Apache-2.0|Apache License, Version 2.0|The Apache Software License, Version 2.0|The Apache License, Version 2.0|Apache License 2.0|Apache 2.0|Apache 2|Apache License Version 2.0|Apache Software License - Version 2.0|ASF 2.0|Apache License v2.0|Apache License, version 2.0</licenseMerge>
                 <licenseMerge>MIT|The MIT License|MIT License|The MIT License (MIT)|MIT-0</licenseMerge>
                 <licenseMerge>BSD-2-Clause|BSD 2-Clause License|The BSD 2-Clause License|BSD-2|Simplified BSD License</licenseMerge>
-                <licenseMerge>BSD-3-Clause|BSD 3-Clause License|The BSD 3-Clause License|BSD-3|New BSD License|Modified BSD License|BSD License 3|Revised BSD|Eclipse Distribution License - v 1.0|EDL 1.0|Eclipse Distribution License v. 1.0</licenseMerge>
+                <!-- "Go License" (WP-26 part i): the name com.google.re2j:re2j 1.8 publishes. Its LICENSE file was
+                     checked: Go's BSD-3-Clause text with a Google copyright, so it merges into BSD-3-Clause like EDL 1.0
+                     above. re2j is needed for linear-time matching, so an operator's mapping regex cannot cause
+                     catastrophic backtracking (ReDoS) on a crafted legacy value. -->
+                <licenseMerge>BSD-3-Clause|BSD 3-Clause License|The BSD 3-Clause License|BSD-3|New BSD License|Modified BSD License|BSD License 3|Revised BSD|Eclipse Distribution License - v 1.0|EDL 1.0|Eclipse Distribution License v. 1.0|Go License</licenseMerge>
                 <licenseMerge>EPL-1.0|Eclipse Public License - v 1.0|Eclipse Public License 1.0|Eclipse Public License v1.0</licenseMerge>
                 <licenseMerge>EPL-2.0|Eclipse Public License - v 2.0|Eclipse Public License v2.0|Eclipse Public License v. 2.0|Eclipse Public License 2.0|EPL 2.0</licenseMerge>
                 <licenseMerge>MPL-2.0|Mozilla Public License 2.0|Mozilla Public License, Version 2.0|MPL 2.0</licenseMerge>
