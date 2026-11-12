@@ -143,7 +143,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   value. The load goes on and ends `LOADED`; the next load drops the earlier `LOAD` issues and tries their cases again.
   Anything else a case cannot do still stops the load as `FAILED`. Only one run of a source loads at a time: a load is
   refused (`SOURCE_LOADING`) while a live load holds another run of its source, and the claim locks the source's runs
-  so two claims take turns. The log line counts refused cases.
+  so two claims take turns. The log line counts refused cases. The case rules (dry run and load) gain
+  `TITLE_TOO_LONG` and `SUBJECT_TOO_LONG` (ERROR): a title over 200 or a subject over 1000 characters, which the
+  case's columns cannot hold, is reported before the sign-off instead of stopping the load.
 - The Oracle source (WP-26 part o, docs/design/importer.md §4.1): a `kind: jdbc` Oracle mapping is test-fetched by
   `validate-mapping` and extracted in one `SET TRANSACTION READ ONLY` transaction, with the session in UTC and ISO
   date, timestamp and number formats; `DATE` and `TIMESTAMP` read as local date-times, `TIMESTAMP WITH TIME ZONE` with

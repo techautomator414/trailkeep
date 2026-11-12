@@ -120,6 +120,22 @@ class CaseRulesTest {
     }
 
     @Test
+    void titleAndSubjectMustFitTheCasesColumnsInCharacters() {
+        String emoji = new String(Character.toChars(0x1F600));
+        assertThat(codes(open(values -> {
+                    values.put("title", emoji.repeat(200));
+                    values.put("subject", "s".repeat(1000));
+                })))
+                .as("200 characters, though 400 UTF-16 units")
+                .isEmpty();
+        assertThat(codes(open(values -> {
+                    values.put("title", "t".repeat(201));
+                    values.put("subject", emoji.repeat(1001));
+                })))
+                .containsExactly("TITLE_TOO_LONG ERROR", "SUBJECT_TOO_LONG ERROR");
+    }
+
+    @Test
     void holdsAreFatalUntilTheImportHoldExists() {
         assertThat(codes(open(values -> values.put("legalHold", true)))).containsExactly("HOLD_UNAVAILABLE FATAL");
         assertThat(codes(closed(values -> {
