@@ -3,6 +3,7 @@
 package io.trailkeep.importer;
 
 import java.util.Collection;
+import java.util.List;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.Repository;
@@ -32,4 +33,9 @@ interface ImportIssueRepository extends Repository<ImportIssue, Long> {
             + " and i.severity = :severity and i.code not in :accepted")
     long countFailedRows(
             long runId, ImportIssue.Subject subject, ImportIssue.Severity severity, Collection<String> accepted);
+
+    /** A run's issues counted by entity, severity and code: each element is those three and the count. */
+    @Query("select i.subject, i.severity, i.code, count(i) from ImportIssue i where i.runId = :runId"
+            + " group by i.subject, i.severity, i.code")
+    List<Object[]> countByCode(long runId);
 }

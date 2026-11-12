@@ -73,6 +73,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   `ATTACHMENT_MISSING` marks an attachment with no staged bytes; both are WARNINGs ("skipped by rule") when
   `limits.acceptSkip` names them, ERRORs otherwise. Each entity has its own `ERROR_RATE_EXCEEDED`, which now counts
   the rows with an ERROR from the extract or the dry run, leaving out the codes `limits.acceptSkip` accepts.
+- The dry run writes its aggregates to `IMPORT_RUN_SUMMARY` for the sign-off (WP-26 part r1, docs/design/importer.md
+  §3 R8, §4.3, §7.1, §9), numbers only, replaced by each dry run: staged rows per entity, issues per entity, severity
+  and code (extract and dry run), cases per status, the visibility each case would load with per team id (a legacy ACL
+  under `onUnrepresentableAcl: restricted` counts as restricted), legacy-ACL cases per handling, holds per reason
+  (legacy legal hold, past retention), loadable attachments and their bytes, and attachments skipped by rule with their
+  bytes per code. In `external` scanning mode it adds the number and total size of the attachments that will be stored
+  `NOT_SCANNED`, and a `NOT_SCANNED` WARNING carrying that number, which the sign-off must acknowledge.
 - The Oracle source (WP-26 part o, docs/design/importer.md §4.1): a `kind: jdbc` Oracle mapping is test-fetched by
   `validate-mapping` and extracted in one `SET TRANSACTION READ ONLY` transaction, with the session in UTC and ISO
   date, timestamp and number formats; `DATE` and `TIMESTAMP` read as local date-times, `TIMESTAMP WITH TIME ZONE` with
