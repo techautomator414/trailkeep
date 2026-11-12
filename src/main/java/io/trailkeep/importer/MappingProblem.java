@@ -11,7 +11,7 @@ package io.trailkeep.importer;
  */
 record MappingProblem(Code code, String pointer) implements Comparable<MappingProblem> {
 
-    /** The structural checks of 26b; their names are the issue codes. */
+    /** The structural checks (26b), query checks (26m) and test fetch (26n); their names are the issue codes. */
     enum Code {
         /** Larger than {@link MappingValidator#MAX_BYTES}. */
         MAPPING_TOO_LARGE,
@@ -54,7 +54,19 @@ record MappingProblem(Code code, String pointer) implements Comparable<MappingPr
         /** A source query through an Oracle database link. */
         QUERY_DATABASE_LINK,
         /** A source query calling a function outside the vendor's allow-list of pure built-ins. */
-        QUERY_FUNCTION_NOT_ALLOWED
+        QUERY_FUNCTION_NOT_ALLOWED,
+        /** A JDBC source whose vendor has no adapter yet, so nothing is test-fetched (Oracle 26o, SQL Server 26p). */
+        SOURCE_UNSUPPORTED,
+        /** A setting the test fetch needs is not configured: an {@code import.source.*} placeholder or the password. */
+        SOURCE_SETTING_MISSING,
+        /** The source could not be reached, or refused the account. */
+        SOURCE_UNAVAILABLE,
+        /** The source account may not read what a query reads. */
+        SOURCE_PERMISSION_DENIED,
+        /** A query's test fetch ran past the statement timeout. */
+        SOURCE_TIMEOUT,
+        /** A query's test fetch failed for any other reason: the source holds no such table or column, for example. */
+        SOURCE_QUERY_FAILED
     }
 
     @Override

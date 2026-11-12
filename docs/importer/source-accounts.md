@@ -13,7 +13,7 @@ defence in depth, never relied on alone.
 production. A long extract holds a snapshot open, which blocks vacuum on PostgreSQL. On a copy the administrator can
 also revoke what production cannot spare.
 
-The account's password is given to the importer Job as a Secret file. It never appears in the mapping file.
+The account's password is given to the importer Job as a Secret file, read as `import.source.password`. It never appears in the mapping file. `validate-mapping` connects as this account to test-fetch every query, so a missing grant shows up there as `SOURCE_PERMISSION_DENIED` at the query's place.
 
 ## PostgreSQL
 

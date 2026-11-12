@@ -10,6 +10,8 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
+import java.sql.Savepoint;
+import java.sql.Types;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -114,18 +116,29 @@ class SourceQueryJdbcDao {
 
     /**
      * {@code validate-mapping}'s test fetch (design §4.1): runs the query for at most one row instead of asking for a
-     * plan, which Oracle would write to {@code PLAN_TABLE} and SQL Server cannot give without its own permission.
+     * plan, which Oracle would write to {@code PLAN_TABLE} and SQL Server cannot give without its own permission. Every
+     * bind variable is null, so a keyed query (an attachment's content query) proves it runs without reading content.
+     * A failure is rolled back to a savepoint, so the session's later test fetches still run.
      *
      * @param session the session
      * @param query the validated query
-     * @param binds its bind values, in order
      * @param timeout the statement timeout
      * @return how many rows came back: 0 or 1
      * @throws SourceQueryException if the query fails
      */
-    int testFetch(Session session, ValidatedSourceQuery query, List<?> binds, Duration timeout) {
+    int testFetch(Session session, ValidatedSourceQuery query, Duration timeout) {
         int[] count = {0};
-        run(session, query, binds, timeout, 1, row -> count[0]++);
+        try {
+            Savepoint before = session.connection.setSavepoint();
+            try {
+                run(session, query, null, timeout, 1, row -> count[0]++);
+            } catch (SourceQueryException e) {
+                session.connection.rollback(before);
+                throw e;
+            }
+        } catch (SQLException e) {
+            throw SourceQueryException.of(e);
+        }
         return count[0];
     }
 
@@ -148,10 +161,11 @@ class SourceQueryJdbcDao {
         run(session, query, binds, timeout, 0, rows);
     }
 
+    /** Runs a query; with {@code binds} null, every bind variable is set to null. */
     private void run(
             Session session,
             ValidatedSourceQuery query,
-            List<?> binds,
+            @Nullable List<?> binds,
             Duration timeout,
             int maxRows,
             Consumer<Map<String, @Nullable Object>> rows) {
@@ -162,8 +176,14 @@ class SourceQueryJdbcDao {
             statement.setQueryTimeout((int) Math.max(1, timeout.toSeconds()));
             statement.setFetchSize(FETCH_SIZE);
             statement.setMaxRows(maxRows);
-            for (int i = 0; i < binds.size(); i++) {
-                statement.setObject(i + 1, binds.get(i));
+            if (binds == null) {
+                for (int i = 1; i <= statement.getParameterMetaData().getParameterCount(); i++) {
+                    statement.setNull(i, Types.NULL);
+                }
+            } else {
+                for (int i = 0; i < binds.size(); i++) {
+                    statement.setObject(i + 1, binds.get(i));
+                }
             }
             try (ResultSet result = statement.executeQuery()) {
                 ResultSetMetaData columns = result.getMetaData();

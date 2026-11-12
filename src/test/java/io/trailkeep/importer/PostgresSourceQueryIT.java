@@ -12,6 +12,7 @@ import io.trailkeep.importer.SourceQueryValidator.Vendor;
 import io.trailkeep.testsupport.PostgresTestcontainersConfiguration;
 import io.trailkeep.testsupport.RequiresDocker;
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -30,6 +31,7 @@ import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.springframework.mock.env.MockEnvironment;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
 /**
@@ -86,7 +88,7 @@ class PostgresSourceQueryIT {
                     rows::add);
             admin("INSERT INTO legacy.cases (case_id, case_no) VALUES (101, 'C-101')");
 
-            assertThat(dao.testFetch(session, query("SELECT case_id FROM legacy.cases"), List.of(), TIMEOUT))
+            assertThat(dao.testFetch(session, query("SELECT case_id FROM legacy.cases"), TIMEOUT))
                     .isOne();
             List<Map<String, @Nullable Object>> later = new ArrayList<>();
             dao.stream(session, query("SELECT case_id FROM legacy.cases"), List.of(), TIMEOUT, later::add);
@@ -111,13 +113,54 @@ class PostgresSourceQueryIT {
     @Test
     void anUngrantedTableIsAPermissionCodeThatQuotesNothing() {
         try (Session session = dao.open(source())) {
-            assertThatThrownBy(() -> dao.testFetch(session, query("SELECT id FROM legacy.secrets"), List.of(), TIMEOUT))
+            assertThatThrownBy(() -> dao.testFetch(session, query("SELECT id FROM legacy.secrets"), TIMEOUT))
                     .isInstanceOfSatisfying(SourceQueryException.class, e -> {
                         assertThat(e.code()).isEqualTo("SOURCE_PERMISSION_DENIED");
                         assertThat(e.getMessage()).doesNotContain("secrets");
                         assertThat(e.getCause()).isNull();
                     });
         }
+    }
+
+    /**
+     * {@code validate-mapping}'s test fetch as the recipe's account: each query is fetched for one row, a keyed
+     * content query with its bind left null, and a failure is a code at the query's place that does not stop the
+     * queries after it. A missing setting, a refused login and a vendor with no adapter yet are problems too.
+     */
+    @Test
+    void validateMappingTestFetchesEveryQueryAndPlacesEachFailure() {
+        String mapping = """
+                source: { kind: jdbc, vendor: postgresql, url: "${import.source.url}", user: "${import.source.user}" }
+                people: { query: "SELECT nope FROM legacy.cases" }
+                entities:
+                  case: { query: "SELECT case_id FROM legacy.cases" }
+                  comment: { query: "SELECT id FROM legacy.secrets" }
+                  attachment:
+                    query: "SELECT case_id FROM legacy.cases"
+                    fields: { content: { query: "SELECT content FROM legacy.cases WHERE case_id = ?" } }
+                """;
+        MockEnvironment environment = new MockEnvironment()
+                .withProperty("import.source.url", LEGACY.getJdbcUrl())
+                .withProperty("import.source.user", "trailkeep_source")
+                .withProperty("import.source.password", PASSWORD);
+
+        assertThat(new SourceTestFetch(dao, environment).check(bytes(mapping)))
+                .containsExactly(
+                        new MappingProblem(MappingProblem.Code.SOURCE_PERMISSION_DENIED, "/entities/comment/query"),
+                        new MappingProblem(MappingProblem.Code.SOURCE_QUERY_FAILED, "/people/query"));
+        assertThat(new SourceTestFetch(dao, environment.withProperty("import.source.password", "wrong"))
+                        .check(bytes(mapping)))
+                .containsExactly(new MappingProblem(MappingProblem.Code.SOURCE_UNAVAILABLE, "/source"));
+        assertThat(new SourceTestFetch(dao, new MockEnvironment()).check(bytes(mapping)))
+                .containsExactly(new MappingProblem(MappingProblem.Code.SOURCE_SETTING_MISSING, "/source"));
+        assertThat(new SourceTestFetch(dao, environment).check(bytes(mapping.replace("postgresql", "oracle"))))
+                .containsExactly(new MappingProblem(MappingProblem.Code.SOURCE_UNSUPPORTED, "/source/vendor"));
+        assertThat(new SourceTestFetch(dao, environment).check(bytes("source: { kind: files }")))
+                .isEmpty();
+    }
+
+    private static byte[] bytes(String text) {
+        return text.getBytes(StandardCharsets.UTF_8);
     }
 
     /** What the recipe achieves, statement by statement, as the source account over plain JDBC. */
