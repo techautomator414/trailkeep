@@ -2,8 +2,7 @@
 // Copyright 2026 Charlie Genova and contributors
 package io.trailkeep.importer;
 
-import io.trailkeep.importer.LoadCommand.Refusal;
-import io.trailkeep.importer.LoadCommand.RefusedException;
+import io.trailkeep.importer.LoadRefusal.RefusedException;
 import java.time.Instant;
 import java.time.InstantSource;
 import java.util.Objects;
@@ -48,7 +47,7 @@ final class LoadRunLock {
                 for (ImportRun other : runs.findBySourceIdOrderByIdAsc(sourceId)) {
                     if (other.loadingSince(now.minus(LoadCommand.LEASE))) {
                         throw new RefusedException(
-                                runId, other.getId() == runId ? Refusal.RUN_LOCKED : Refusal.SOURCE_LOADING);
+                                runId, other.getId() == runId ? LoadRefusal.RUN_LOCKED : LoadRefusal.SOURCE_LOADING);
                     }
                 }
                 ImportRun own = load();
@@ -57,7 +56,7 @@ final class LoadRunLock {
                 return runs.save(own);
             });
         } catch (OptimisticLockingFailureException raced) {
-            throw new RefusedException(runId, Refusal.RUN_LOCKED);
+            throw new RefusedException(runId, LoadRefusal.RUN_LOCKED);
         }
         version = Objects.requireNonNull(run, "claimed").getVersion();
     }
@@ -96,7 +95,7 @@ final class LoadRunLock {
     private ImportRun held() {
         ImportRun run = load();
         if (run.getVersion() != version) {
-            throw new RefusedException(runId, Refusal.RUN_LOCKED);
+            throw new RefusedException(runId, LoadRefusal.RUN_LOCKED);
         }
         return run;
     }

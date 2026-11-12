@@ -154,6 +154,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   deployment declares it. In clamd mode `dry-run` and `load` refuse to start, before writing anything, when it is unset
   or below `import.attachments.max-bytes`; `status` and `purge-staging` never check it. The importer Job manifest
   declares 100MB, the default of the ClamAV in `deploy/base`.
+- `load` writes each case's comments (WP-26 part u-b, docs/design/importer.md §6.2, §6.4, §7.2, §8.2). In the case's
+  transaction, its staged comments go through the comment import API in the order they were written, formatted as the
+  mapping declares (plain and HTML Markdown-escaped, Markdown as written), a matched author named as Trailkeep knows
+  them and an unmatched one by the comment's or the person's name; each is appended to the search text, audited and
+  given an import ledger row. A comment with an ERROR from the extract or the dry run is left out. A comment longer than
+  20 000 characters is written as numbered parts, which the dry run reports as `COMMENT_SPLIT` (WARNING). The
+  description is loaded as a description holds it (HTML reduced to its text) and cut to 20 000 characters; under
+  `onOverflow: continueInComment` the rest is the case's first comment, escaped, written at its opening time by the
+  "Trailkeep import" principal, which lifts the load's temporary `DESCRIPTION_CONTINUED`; without it, a longer
+  description is `DESCRIPTION_TOO_LONG` (ERROR) at the dry run and the load. A comment the import API refuses takes its
+  case with it as `CASE_REFUSED`, tried again by the next load. The import user gains SELECT and INSERT on
+  `CASE_COMMENT`, USAGE on `SEQ_CASE_COMMENT` (PostgreSQL; Oracle's SELECT already draws) and UPDATE of
+  `CASE_SEARCH`'s `SEARCH_TEXT` and `UPDATED_AT` only.
 - The Oracle source (WP-26 part o, docs/design/importer.md §4.1): a `kind: jdbc` Oracle mapping is test-fetched by
   `validate-mapping` and extracted in one `SET TRANSACTION READ ONLY` transaction, with the session in UTC and ISO
   date, timestamp and number formats; `DATE` and `TIMESTAMP` read as local date-times, `TIMESTAMP WITH TIME ZONE` with
