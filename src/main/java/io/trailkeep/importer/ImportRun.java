@@ -209,6 +209,16 @@ class ImportRun {
         this.updatedAt = at;
     }
 
+    /**
+     * Records that the run's staging was deleted.
+     *
+     * @param at when
+     */
+    void stagingPurged(Instant at) {
+        this.stagingPurgedAt = at;
+        this.updatedAt = at;
+    }
+
     @Override
     public boolean equals(@Nullable Object other) {
         return this == other || (other instanceof ImportRun that && id != null && id.equals(that.id));

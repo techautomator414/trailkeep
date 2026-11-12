@@ -28,8 +28,8 @@ final class GrantsMatrix {
     /**
      * Identity (V1), audit (V2), admin (V3), case (V4), comment (V4.1), pin (V4.2), attachment (V4.3), saved view
      * (V4.7), outbox (V4.8), alert (V4.9), update request (V4.10), closure (V5), reopen (V5.1), SLA job (V6), report
-     * delivery (V7), legal hold history (V8), preference (V9) and import run (V10) tables, and the column each probe
-     * touches: the first key column.
+     * delivery (V7), legal hold history (V8), preference (V9), import run (V10) and import staging (V13) tables, and
+     * the column each probe touches: the first key column.
      */
     static final Map<String, String> TABLES = Map.ofEntries(
             Map.entry("APP_USER", "ID"),
@@ -65,7 +65,13 @@ final class GrantsMatrix {
             Map.entry("USER_PREFERENCE", "USER_ID"),
             Map.entry("IMPORT_RUN", "ID"),
             Map.entry("IMPORT_ISSUE", "ID"),
-            Map.entry("IMPORT_RUN_SUMMARY", "ID"));
+            Map.entry("IMPORT_RUN_SUMMARY", "ID"),
+            Map.entry("IMPORT_STG_PERSON", "RUN_ID"),
+            Map.entry("IMPORT_STG_CASE", "RUN_ID"),
+            Map.entry("IMPORT_STG_COMMENT", "RUN_ID"),
+            Map.entry("IMPORT_STG_ATTACHMENT", "RUN_ID"),
+            Map.entry("IMPORT_STG_EVENT", "RUN_ID"),
+            Map.entry("IMPORT_RUN_CHECKPOINT", "RUN_ID"));
 
     /** What the runtime user may do; anything absent is denied. */
     static final Map<String, Set<Privilege>> APP_USER_GRANTS = Map.ofEntries(
@@ -148,8 +154,15 @@ final class GrantsMatrix {
             .collect(Collectors.toUnmodifiableMap(Function.identity(), table -> switch (table) {
                 // UPDATE of the status, hash, scanning-mode, count and expiry columns only (see the column test).
                 case "IMPORT_RUN" -> EnumSet.of(Privilege.SELECT, Privilege.INSERT);
-                case "IMPORT_ISSUE", "IMPORT_RUN_SUMMARY" ->
-                    EnumSet.of(Privilege.SELECT, Privilege.INSERT, Privilege.DELETE);
+                // Staging (V13) is written, read and deleted by the import user alone; nobody else may even read it.
+                case "IMPORT_ISSUE",
+                        "IMPORT_RUN_SUMMARY",
+                        "IMPORT_STG_PERSON",
+                        "IMPORT_STG_CASE",
+                        "IMPORT_STG_COMMENT",
+                        "IMPORT_STG_ATTACHMENT",
+                        "IMPORT_STG_EVENT",
+                        "IMPORT_RUN_CHECKPOINT" -> EnumSet.of(Privilege.SELECT, Privilege.INSERT, Privilege.DELETE);
                 default -> EnumSet.of(Privilege.SELECT);
             }));
 
