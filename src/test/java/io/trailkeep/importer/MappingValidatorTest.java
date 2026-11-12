@@ -42,6 +42,32 @@ class MappingValidatorTest {
                 .containsOnly(Code.MAPPING_SCHEMA);
     }
 
+    @Test
+    void fileSourceNeedsItsManifest() throws IOException {
+        String files = example()
+                .replace("  kind: jdbc\n  vendor: sqlserver\n", "  kind: files\n")
+                .replace("  url: ${import.source.url}\n  user: ${import.source.user}\n", "");
+
+        assertThat(validate(files)).containsOnly(new MappingProblem(Code.MAPPING_SCHEMA, "/source"));
+        assertThat(validate(files.replace("  kind: files\n", "  kind: files\n  manifest: export/manifest.yaml\n")))
+                .isEmpty();
+    }
+
+    @Test
+    void attachmentsReadByPathOrContentIdNeedTheirFolder() throws IOException {
+        String byPath = example()
+                .replace(
+                        "{ query: \"SELECT content FROM dbo.files WHERE file_id = ?\", size: size_bytes }",
+                        "{ path: rel }");
+        String noFolder = byPath.substring(0, byPath.indexOf("attachments:\n  root:"))
+                + byPath.substring(byPath.indexOf("people:\n"));
+
+        assertThat(validate(byPath)).isEmpty();
+        assertThat(validate(noFolder)).containsOnly(new MappingProblem(Code.MAPPING_SCHEMA, ""));
+        assertThat(validate(noFolder.replace("{ path: rel }", "{ contentId: ref }")))
+                .containsOnly(new MappingProblem(Code.MAPPING_SCHEMA, ""));
+    }
+
     /** The design's own security test (§10): a placeholder outside the source block is rejected, never resolved. */
     @Test
     void placeholdersAreAllowedOnlyInUrlAndUserAndOnlyForImportSourceNames() throws IOException {

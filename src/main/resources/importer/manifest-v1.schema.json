@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://trailkeep.example.invalid/importer/manifest-v1.schema.json",
+  "$comment": "SPDX-License-Identifier: Apache-2.0. Copyright 2026 Charlie Genova and contributors. The file manifest of a files source, version 1 (docs/design/importer.md sections 4.2 and 4.2.1): every exported file with its entity, row count and SHA-256, and the fixed point the export was taken at. File names are the mapping's own file names. Unknown keys fail.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "fixedPoint", "files"],
+  "properties": {
+    "version": { "const": 1 },
+    "fixedPoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "value"],
+      "properties": {
+        "kind": { "enum": ["snapshot", "scn", "freeze"] },
+        "value": { "type": "string", "minLength": 1, "maxLength": 200 }
+      }
+    },
+    "files": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 5,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["file", "entity", "rows", "sha256"],
+        "properties": {
+          "file": { "type": "string", "minLength": 1, "maxLength": 500 },
+          "entity": { "enum": ["person", "case", "comment", "attachment", "event"] },
+          "rows": { "type": "integer", "minimum": 0 },
+          "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+        }
+      }
+    },
+    "contents": {
+      "$comment": "Attachment content ids (design section 4.3): each id names a file under the mapping's attachments.root.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "file", "sha256"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1, "maxLength": 1000 },
+          "file": { "type": "string", "minLength": 1, "maxLength": 1000 },
+          "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+        }
+      }
+    }
+  }
+}

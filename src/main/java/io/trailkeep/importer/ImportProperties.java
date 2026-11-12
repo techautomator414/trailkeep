@@ -10,6 +10,7 @@ import javax.crypto.spec.SecretKeySpec;
 import org.jspecify.annotations.Nullable;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.bind.DefaultValue;
+import org.springframework.util.unit.DataSize;
 
 /**
  * The importer Job's arguments under {@code import} (design §2.1): one command per Job run, for one run id from the
@@ -23,6 +24,7 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  * @param hashKey {@code import.hash-key}: Base64 of at least 32 bytes, mounted from its own Secret, never the audit
  *     key (design §5 "Hashes are keyed"); required by {@code extract}
  * @param stagingTtl how long a run's staging lives after its extract starts (design §5 "Staging TTL")
+ * @param attachments the importer's attachment settings
  */
 @ConfigurationProperties("import")
 record ImportProperties(
@@ -30,7 +32,16 @@ record ImportProperties(
         @Nullable Long run,
         @Nullable Path mapping,
         @Nullable String hashKey,
-        @DefaultValue("14d") Duration stagingTtl) {
+        @DefaultValue("14d") Duration stagingTtl,
+        @DefaultValue Attachments attachments) {
+
+    /**
+     * {@code import.attachments} (design §4.3 "Size").
+     *
+     * @param maxBytes the importer's cap: a larger file is never read at extract nor loaded; the importer profile sets
+     *     it to {@code app.attachments.max-bytes} unless the deployment raises it
+     */
+    record Attachments(@DefaultValue("25MB") DataSize maxBytes) {}
 
     /** The same floor as the audit key's. */
     static final int MIN_HASH_KEY_BYTES = 32;
