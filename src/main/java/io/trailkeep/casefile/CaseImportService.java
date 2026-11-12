@@ -94,7 +94,20 @@ public interface CaseImportService {
      * @param retentionYears how long after closing its cases are archived
      * @param outcomes the closure outcomes it allows
      */
-    record ImportCaseType(String name, boolean active, int retentionYears, Set<String> outcomes) {}
+    record ImportCaseType(String name, boolean active, int retentionYears, Set<String> outcomes) {
+
+        /**
+         * Copies the outcomes, so the record holds nothing mutable.
+         *
+         * @param name its name
+         * @param active whether an open case may use it
+         * @param retentionYears how long after closing its cases are archived
+         * @param outcomes the closure outcomes it allows
+         */
+        public ImportCaseType {
+            outcomes = Set.copyOf(outcomes);
+        }
+    }
 
     /**
      * Every case type with its outcomes, read-only, for the dry run.

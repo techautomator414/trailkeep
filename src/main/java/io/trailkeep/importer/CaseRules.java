@@ -176,12 +176,13 @@ final class CaseRules {
     private void dates(StagedCase row, List<Issue> issues) {
         Instant opened = row.getOpenedAt();
         Instant closedAt = row.getClosedAt();
+        LocalDate identifiedOn = row.getIdentifiedOn();
         if (opened != null && closedAt != null && closedAt.isBefore(opened)) {
             issues.add(error("CLOSED_BEFORE_OPENED"));
         }
         if ((opened != null && opened.isAfter(now))
                 || (closedAt != null && closedAt.isAfter(now))
-                || (row.getIdentifiedOn() != null && row.getIdentifiedOn().isAfter(today))) {
+                || (identifiedOn != null && identifiedOn.isAfter(today))) {
             issues.add(error("DATE_IN_FUTURE"));
         }
     }
