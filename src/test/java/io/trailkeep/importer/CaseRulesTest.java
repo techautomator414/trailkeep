@@ -136,6 +136,22 @@ class CaseRulesTest {
     }
 
     @Test
+    void descriptionLongerThanCasesTakeNeedsItsContinuationDeclared() {
+        assertThat(codes(open(values -> values.put("description", "d".repeat(20_000)))))
+                .isEmpty();
+        assertThat(codes(open(values -> values.put("description", "d".repeat(20_001)))))
+                .containsExactly("DESCRIPTION_TOO_LONG ERROR");
+        CaseRules continued = rules("entities: { case: { fields: { description: { text: d, maxLength: 20000,"
+                + " onOverflow: continueInComment } } } }");
+        assertThat(continued.check(open(values -> values.put("description", "d".repeat(20_001)))))
+                .isEmpty();
+        CaseRules html = rules("entities: { case: { fields: { description: { text: d, format: html } } } }");
+        assertThat(html.check(open(values -> values.put("description", "<p>" + "d".repeat(20_000) + "</p>"))))
+                .as("measured as the case holds it, without the markup")
+                .isEmpty();
+    }
+
+    @Test
     void holdsAreFatalUntilTheImportHoldExists() {
         assertThat(codes(open(values -> values.put("legalHold", true)))).containsExactly("HOLD_UNAVAILABLE FATAL");
         assertThat(codes(closed(values -> {

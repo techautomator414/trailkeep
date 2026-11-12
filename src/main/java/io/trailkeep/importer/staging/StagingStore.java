@@ -10,6 +10,7 @@ import jakarta.persistence.criteria.CriteriaQuery;
 import jakarta.persistence.criteria.Path;
 import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -159,6 +160,37 @@ public class StagingStore {
         return entityManager.createQuery(query).setMaxResults(size).getResultList().stream()
                 .map(type::cast)
                 .toList();
+    }
+
+    /**
+     * A run's staged rows of one child entity whose cases are among these, in canonical-key order: the load reads the
+     * children of a page of cases at once.
+     *
+     * @param <T> the entity's row type, which names its case
+     * @param type the entity's row type
+     * @param runId the run
+     * @param caseKeys the cases' canonical keys
+     * @return their staged children
+     */
+    @Transactional(readOnly = true)
+    public <T extends StagedRow> List<T> children(Class<T> type, long runId, List<String> caseKeys) {
+        List<T> children = new ArrayList<>();
+        for (int from = 0; from < caseKeys.size(); from += KEYS_PER_QUERY) {
+            CriteriaBuilder criteria = entityManager.getCriteriaBuilder();
+            // Typed by the class literal of the common supertype, so the query is visibly no string (Semgrep).
+            CriteriaQuery<StagedRow> query = criteria.createQuery(StagedRow.class);
+            Root<T> row = query.from(type);
+            query.select(row)
+                    .where(
+                            criteria.equal(row.get("key").get("runId"), runId),
+                            row.get("caseKey")
+                                    .in(caseKeys.subList(from, Math.min(caseKeys.size(), from + KEYS_PER_QUERY))))
+                    .orderBy(criteria.asc(row.get("key").get("legacyKey")));
+            entityManager.createQuery(query).getResultList().stream()
+                    .map(type::cast)
+                    .forEach(children::add);
+        }
+        return children;
     }
 
     private <T extends StagedRow> int delete(Class<T> type, long runId) {

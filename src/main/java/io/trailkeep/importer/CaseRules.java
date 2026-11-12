@@ -32,7 +32,9 @@ import tools.jackson.databind.JsonNode;
  *   <li>a status other than {@code OPEN} or {@code CLOSED} ({@code STATUS_INVALID}), a closing time on an open case
  *       ({@code CLOSED_AT_ON_OPEN_CASE}), a case closed before it opened ({@code CLOSED_BEFORE_OPENED}), a date in the
  *       future ({@code DATE_IN_FUTURE}), a priority or sensitivity Trailkeep does not have, a title or subject longer
- *       than the case's column holds ({@code TITLE_TOO_LONG}, {@code SUBJECT_TOO_LONG}): ERROR;
+ *       than the case's column holds ({@code TITLE_TOO_LONG}, {@code SUBJECT_TOO_LONG}), a description longer than a
+ *       case takes that the mapping does not continue in a comment ({@code DESCRIPTION_TOO_LONG}, {@link
+ *       CaseComments}): ERROR;
  *   <li>a team no Trailkeep team is named after ({@code TEAM_UNKNOWN}, FATAL: the mapping is wrong, §7.1), or an
  *       inactive one ({@code TEAM_INACTIVE}, ERROR);
  *   <li>a case type no Trailkeep type is named after ({@code CASE_TYPE_UNKNOWN}, FATAL), or an inactive one for an open
@@ -58,6 +60,7 @@ final class CaseRules {
 
     private final Map<String, Boolean> teams;
     private final Map<String, ImportCaseType> caseTypes;
+    private final CaseComments texts;
     private final boolean aclFails;
     private final boolean aclRestricts;
     private final double maxErrorRate;
@@ -81,6 +84,7 @@ final class CaseRules {
             ZoneId zone) {
         this.teams = Map.copyOf(teams);
         this.caseTypes = Map.copyOf(caseTypes);
+        this.texts = new CaseComments(mapping);
         String acl = mapping.at("/visibility/onUnrepresentableAcl").asString("restricted");
         this.aclFails = "fail".equals(acl);
         this.aclRestricts = "restricted".equals(acl);
@@ -139,11 +143,19 @@ final class CaseRules {
         if (aclFails && Boolean.TRUE.equals(row.getLegacyAcl())) {
             issues.add(error("ACL_UNREPRESENTABLE"));
         }
+        lengths(row, issues);
+    }
+
+    /** The texts a case's columns or {@code CaseFields} cannot hold. */
+    private void lengths(StagedCase row, List<Issue> issues) {
         if (longer(row.getTitle(), MAX_TITLE)) {
             issues.add(error("TITLE_TOO_LONG"));
         }
         if (longer(row.getSubjectText(), MAX_SUBJECT)) {
             issues.add(error("SUBJECT_TOO_LONG"));
+        }
+        if (row.getDescription() != null && texts.tooLong(row.getDescription())) {
+            issues.add(error("DESCRIPTION_TOO_LONG"));
         }
     }
 

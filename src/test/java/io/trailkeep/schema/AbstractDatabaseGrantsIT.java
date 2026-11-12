@@ -215,6 +215,23 @@ abstract class AbstractDatabaseGrantsIT {
     }
 
     /**
+     * The load appends each comment it writes to its case's search text (WP-26 part u, {@code CaseSearchJdbcDao}): the
+     * import user may update those two columns of a search row and nothing else, so it cannot move a row to another
+     * case.
+     */
+    @Test
+    void theImportUserMayUpdateOnlyTheSearchTextOfASearchRow() throws SQLException {
+        String search = users.ownerSchema() + ".CASE_SEARCH";
+        for (String column : List.of("SEARCH_TEXT", "UPDATED_AT")) {
+            assertThat(update(importUser, search, column)).as(column).isEqualTo(Outcome.ALLOWED);
+        }
+        assertThat(update(importUser, search, "CASE_ID")).isEqualTo(Outcome.DENIED);
+        assertThat(run(importUser, "UPDATE " + search + " SET SEARCH_TEXT = SEARCH_TEXT || 'x' WHERE CASE_ID = 0"))
+                .as("the append statement itself")
+                .isEqualTo(Outcome.ALLOWED);
+    }
+
+    /**
      * The INSERT-only negative test of WP-13, beside the matrix: comments are evidence, so no statement of the
      * runtime user may change or remove one, however it is phrased. Each statement would touch every row, and each
      * is refused by the privilege check before any row is read.
