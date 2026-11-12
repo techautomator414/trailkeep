@@ -52,6 +52,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   `import.attachments.max-bytes` cap checked before writing (over it, only the size is staged), with no
   `attachments` block needed. `SOURCE_ENCODING` from a JSON Lines file now carries the undecodable byte's own line, as
   for CSV.
+- The importer's `dry-run` command for cases (WP-26 part q1, docs/design/importer.md §3 step 3, §6.2, §7.1). An
+  extracted run's staged cases are read in key order, 500 at a time, and checked against Trailkeep's teams and case
+  types as they are now, each problem a `DRY_RUN` issue with its severity and the keyed hash of the case's key, never a
+  value: a missing required field (`TITLE_MISSING`, ..., `CLOSED_AT_MISSING` and `CLOSURE_OUTCOME_MISSING` for a closed
+  case), `STATUS_INVALID`, `CLOSED_AT_ON_OPEN_CASE`, `CLOSED_BEFORE_OPENED`, `DATE_IN_FUTURE`, `PRIORITY_INVALID`,
+  `SENSITIVITY_INVALID`, `TEAM_INACTIVE`, `CASE_TYPE_INACTIVE` for an open case and `ACL_UNREPRESENTABLE` under
+  `visibility.onUnrepresentableAcl: fail` are ERRORs; `TEAM_UNKNOWN`, `CASE_TYPE_UNKNOWN`, `CLOSURE_OUTCOME_NOT_ALLOWED`
+  (a closed case's outcome must be one of its case type's outcomes, read through `CaseImportService.caseTypes()`) and
+  `HOLD_UNAVAILABLE` (legal hold, or closed at or before the archive cut-off of its type, until the import hold
+  exists) are FATAL, as is `ERROR_RATE_EXCEEDED` when the share of cases with an ERROR is above
+  `limits.maxErrorRate`. The run moves to `DRY_RUN` with the attachment scanning mode in force
+  (`app.attachments.scanning`, default `clamd`) on `SCAN_MODE`; a dry run may be repeated until the sign-off, each
+  replacing the last one's issues, and it writes nothing to the domain.
 - The Oracle source (WP-26 part o, docs/design/importer.md §4.1): a `kind: jdbc` Oracle mapping is test-fetched by
   `validate-mapping` and extracted in one `SET TRANSACTION READ ONLY` transaction, with the session in UTC and ISO
   date, timestamp and number formats; `DATE` and `TIMESTAMP` read as local date-times, `TIMESTAMP WITH TIME ZONE` with

@@ -268,6 +268,32 @@ class ImportRun {
     }
 
     /**
+     * Whether {@code dry-run} may run (WP-26 part q): an extracted import run with its staging, not yet signed off. A
+     * dry run may be repeated until the sign-off, each one replacing the last.
+     *
+     * @return true when it may
+     */
+    boolean awaitsDryRun() {
+        return kind == Kind.IMPORT
+                && (status == Status.EXTRACTED || status == Status.DRY_RUN)
+                && approvedBy == null
+                && stagingPurgedAt == null;
+    }
+
+    /**
+     * Records a finished dry run and the scanning mode in force while it ran, which the sign-off approves and the load
+     * must still find (design §3, §4.3, R1).
+     *
+     * @param mode the scanning mode in force
+     * @param at when
+     */
+    void dryRunDone(ScanMode mode, Instant at) {
+        this.status = Status.DRY_RUN;
+        this.scanMode = mode;
+        this.updatedAt = at;
+    }
+
+    /**
      * Records that the run's staging was deleted.
      *
      * @param at when
