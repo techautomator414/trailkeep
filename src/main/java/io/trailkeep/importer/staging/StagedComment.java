@@ -52,4 +52,16 @@ public class StagedComment extends StagedRow {
         this.body = values.text("body");
         this.bodyFormat = values.text("bodyFormat");
     }
+
+    public String getCaseKey() {
+        return caseKey;
+    }
+
+    public @Nullable Instant getWrittenAt() {
+        return writtenAt;
+    }
+
+    public @Nullable String getBody() {
+        return body;
+    }
 }

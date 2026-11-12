@@ -62,4 +62,24 @@ public class StagedAttachment extends StagedRow {
         this.uploaderKey = values.text("uploaderKey");
         this.uploaderName = values.text("uploaderName");
     }
+
+    public String getCaseKey() {
+        return caseKey;
+    }
+
+    public @Nullable String getFileName() {
+        return fileName;
+    }
+
+    public @Nullable Long getSizeBytes() {
+        return sizeBytes;
+    }
+
+    public @Nullable String getSha256() {
+        return sha256;
+    }
+
+    public @Nullable Instant getUploadedAt() {
+        return uploadedAt;
+    }
 }

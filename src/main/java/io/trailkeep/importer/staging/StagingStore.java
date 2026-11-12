@@ -135,19 +135,21 @@ public class StagingStore {
     }
 
     /**
-     * One page of a run's staged cases in canonical-key order, after a key: the dry run reads them all in pages, each
-     * page by the key it starts after, so no offset is ever scanned.
+     * One page of a run's staged rows of one entity in canonical-key order, after a key: the dry run reads them all in
+     * pages, each page by the key it starts after, so no offset is ever scanned.
      *
+     * @param <T> the entity's row type
+     * @param type the entity's row type
      * @param runId the run
      * @param after the last key of the previous page; {@code null} for the first page (Oracle reads {@code ''} as null)
      * @param size the page size
-     * @return up to {@code size} cases with a key above {@code after}
+     * @return up to {@code size} rows with a key above {@code after}
      */
     @Transactional(readOnly = true)
-    public List<StagedCase> cases(long runId, @Nullable String after, int size) {
+    public <T extends StagedRow> List<T> page(Class<T> type, long runId, @Nullable String after, int size) {
         CriteriaBuilder criteria = entityManager.getCriteriaBuilder();
-        CriteriaQuery<StagedCase> query = criteria.createQuery(StagedCase.class);
-        Root<StagedCase> row = query.from(StagedCase.class);
+        CriteriaQuery<T> query = criteria.createQuery(type);
+        Root<T> row = query.from(type);
         Path<String> legacyKey = row.get("key").get("legacyKey");
         Predicate inRun = criteria.equal(row.get("key").get("runId"), runId);
         query.where(after == null ? inRun : criteria.and(inRun, criteria.greaterThan(legacyKey, after)))
