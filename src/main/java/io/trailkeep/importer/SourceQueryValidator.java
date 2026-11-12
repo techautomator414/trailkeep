@@ -13,6 +13,7 @@ import java.util.regex.Pattern;
 import net.sf.jsqlparser.JSQLParserException;
 import net.sf.jsqlparser.expression.AnalyticExpression;
 import net.sf.jsqlparser.expression.Function;
+import net.sf.jsqlparser.expression.NextValExpression;
 import net.sf.jsqlparser.parser.CCJSqlParserUtil;
 import net.sf.jsqlparser.schema.Column;
 import net.sf.jsqlparser.schema.Table;
@@ -30,11 +31,12 @@ import org.jspecify.annotations.Nullable;
  * Restricts a mapping's source queries (WP-26 part m, design §4.1, §10; ADR-0014 Part B amendment). A query is parsed
  * with JSqlParser and must be exactly one {@code SELECT} or {@code WITH … SELECT}: no statement separator, no {@code
  * INTO}, no {@code FOR UPDATE} or locking hint, no table function such as {@code OPENROWSET}, no Oracle {@code @dblink}
- * and no function outside the vendor's allow-list of pure built-ins. Oracle also calls a parameterless function
- * without parentheses ({@code SOME_PACKAGE.SOME_FUNCTION} reads like a qualified column), so on Oracle every qualifier
- * of a column must name a table, alias, subquery or {@code WITH} item of the statement (26o). A query the parser cannot
- * read is refused, never passed. The query is never rewritten; the grants recipe stays the control for which tables
- * it can read.
+ * or SQL Server linked server (a four-part name), no {@code NEXT VALUE FOR}, which advances a sequence outside any
+ * transaction, and no function outside the vendor's allow-list of pure built-ins (26p). Oracle also calls a
+ * parameterless function without parentheses ({@code SOME_PACKAGE.SOME_FUNCTION} reads like a qualified column), so on
+ * Oracle every qualifier of a column must name a table, alias, subquery or {@code WITH} item of the statement (26o). A
+ * query the parser cannot read is refused, never passed. The query is never rewritten; the grants recipe stays the
+ * control for which tables it can read.
  */
 final class SourceQueryValidator {
 
@@ -169,9 +171,14 @@ final class SourceQueryValidator {
                     "JSONB_BUILD_OBJECT",
                     "JSON_AGG"));
 
-    /** SQL Server table hints that lock; the parser reads few hints, so the deparsed text is checked too. */
+    /**
+     * SQL Server table hints that lock, or that step outside the snapshot ({@code NOLOCK} reads uncommitted rows,
+     * {@code READPAST} skips locked ones); the parser reads few hints, so the deparsed text is checked too.
+     */
     private static final Pattern LOCKING_HINT = Pattern.compile(
-            "\\b(UPDLOCK|XLOCK|HOLDLOCK|TABLOCKX?|ROWLOCK|PAGLOCK|SERIALIZABLE)\\b", Pattern.CASE_INSENSITIVE);
+            "\\b(UPDLOCK|XLOCK|HOLDLOCK|TABLOCKX?|ROWLOCK|PAGLOCK|SERIALIZABLE|REPEATABLEREAD|READCOMMITTEDLOCK"
+                    + "|NOLOCK|READUNCOMMITTED|READPAST)\\b",
+            Pattern.CASE_INSENSITIVE);
 
     private SourceQueryValidator() {}
 
@@ -247,7 +254,8 @@ final class SourceQueryValidator {
         @Override
         public <S> Void visit(Table table, S context) {
             // JSqlParser's getDBLinkName() answers the table name when there is no link, so the name itself is checked.
-            if (table.getFullyQualifiedName().contains("@")) {
+            if (table.getFullyQualifiedName().contains("@")
+                    || (table.getNameParts() != null && table.getNameParts().size() > 3)) {
                 problems.add(Code.QUERY_DATABASE_LINK);
             }
             // Column processing is off (init(false)), so only tables the statement reads arrive here.
@@ -286,6 +294,13 @@ final class SourceQueryValidator {
             }
             name(withItem.getAlias() == null ? null : withItem.getAlias().getName());
             return super.visit(withItem, context);
+        }
+
+        /** {@code NEXT VALUE FOR} (SQL Server) and {@code NEXTVAL FOR}: a sequence advance, never a read. */
+        @Override
+        public <S> Void visit(NextValExpression expression, S context) {
+            problems.add(Code.QUERY_FUNCTION_NOT_ALLOWED);
+            return super.visit(expression, context);
         }
 
         /** {@code name(...) OVER (...)} parses as an analytic expression, not a {@link Function}; same allow-list. */

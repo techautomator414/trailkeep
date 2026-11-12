@@ -173,7 +173,7 @@ jobs:
           set -euo pipefail
           mkdir -p pack
           cp artifacts/image-evidence/* pack/
-          for dir in test-reports trivy-sbom-report image-scan-reports dependency-check-report oracle-it-reports; do
+          for dir in test-reports trivy-sbom-report image-scan-reports dependency-check-report oracle-it-reports sqlserver-it-reports; do
             if [ -d "artifacts/${dir}" ]; then
               (cd artifacts && zip -qr "../pack/${dir}.zip" "${dir}")
             fi

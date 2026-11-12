@@ -125,7 +125,7 @@ class PostgresSourceQueryIT {
     /**
      * {@code validate-mapping}'s test fetch as the recipe's account: each query is fetched for one row, a keyed
      * content query with its bind left null, and a failure is a code at the query's place that does not stop the
-     * queries after it. A missing setting, a refused login and a vendor with no adapter yet are problems too.
+     * queries after it. A missing setting, a refused login and a URL of another vendor's driver are problems too.
      */
     @Test
     void validateMappingTestFetchesEveryQueryAndPlacesEachFailure() {
@@ -154,7 +154,8 @@ class PostgresSourceQueryIT {
         assertThat(new SourceTestFetch(dao, new MockEnvironment()).check(bytes(mapping)))
                 .containsExactly(new MappingProblem(MappingProblem.Code.SOURCE_SETTING_MISSING, "/source"));
         assertThat(new SourceTestFetch(dao, environment).check(bytes(mapping.replace("postgresql", "sqlserver"))))
-                .containsExactly(new MappingProblem(MappingProblem.Code.SOURCE_UNSUPPORTED, "/source/vendor"));
+                .as("a PostgreSQL URL for a SQL Server source")
+                .containsExactly(new MappingProblem(MappingProblem.Code.SOURCE_URL_NOT_ALLOWED, "/source/url"));
         assertThat(new SourceTestFetch(dao, environment).check(bytes("source: { kind: files }")))
                 .isEmpty();
     }

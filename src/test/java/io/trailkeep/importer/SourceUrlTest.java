@@ -82,8 +82,48 @@ class SourceUrlTest {
         }) {
             assertThat(SourceUrl.allowed(Vendor.ORACLE, refused)).as(refused).isFalse();
         }
-        assertThat(SourceUrl.allowed(Vendor.SQLSERVER, "jdbc:sqlserver://db.invalid;databaseName=legacy"))
-                .as("SQL Server's rule arrives with its adapter (26p)")
+    }
+
+    /**
+     * A SQL Server URL is {@code host[\instance][:port]} with database, TLS and timeout properties only (26p): no
+     * property that instantiates a class, loads native or Kerberos code, reads a key store or carries a secret; {@code
+     * trustServerCertificate} only as {@code false}; names compared case-insensitively, as the driver does, and no
+     * braces, which could hide a {@code ;}.
+     */
+    @Test
+    void onlySqlServerAddressesWithAllowListedPropertiesAreAllowed() {
+        for (String allowed : new String[] {
+            "jdbc:sqlserver://db.invalid:1433;databaseName=legacy",
+            "jdbc:sqlserver://db.invalid\\LEGACY;databaseName=legacy;",
+            "jdbc:sqlserver://db.invalid;databaseName=legacy;encrypt=strict;hostNameInCertificate=db.invalid"
+                    + ";trustServerCertificate=false;serverCertificate=/run/ca.pem;ApplicationIntent=ReadOnly"
+                    + ";loginTimeout=15",
+            "jdbc:sqlserver://db.invalid;DATABASENAME=legacy;Encrypt=true;trustStore=/run/ca.p12;trustStoreType=PKCS12"
+        }) {
+            assertThat(SourceUrl.allowed(Vendor.SQLSERVER, allowed)).as(allowed).isTrue();
+        }
+        for (String refused : new String[] {
+            "jdbc:sqlserver://;serverName=db.invalid",
+            "jdbc:jtds:sqlserver://db.invalid/legacy",
+            "jdbc:sqlserver://db.invalid;socketFactoryClass=x.Evil;socketFactoryConstructorArg=y",
+            "jdbc:sqlserver://db.invalid;encrypt=true;trustManagerClass=x.Evil",
+            "jdbc:sqlserver://db.invalid;accessTokenCallbackClass=x.Evil",
+            "jdbc:sqlserver://db.invalid;integratedSecurity=true",
+            "jdbc:sqlserver://db.invalid;authenticationScheme=JavaKerberos;jaasConfigurationName=x",
+            "jdbc:sqlserver://db.invalid;columnEncryptionSetting=Enabled;keyStoreAuthentication=JavaKeyStorePassword"
+                    + ";keyStoreLocation=/tmp/x.jks",
+            "jdbc:sqlserver://db.invalid;trustServerCertificate=true",
+            "jdbc:sqlserver://db.invalid;TRUSTSERVERCERTIFICATE=yes",
+            "jdbc:sqlserver://db.invalid;trustStore=/run/ca.p12;trustStorePassword=unused",
+            "jdbc:sqlserver://db.invalid;user=sa;password=unused",
+            "jdbc:sqlserver://db.invalid;databaseName={legacy;socketFactoryClass=x.Evil}",
+            "jdbc:sqlserver://db.invalid;=x",
+            "jdbc:sqlserver://db.invalid;encrypt",
+            "jdbc:sqlserver://db.invalid/legacy"
+        }) {
+            assertThat(SourceUrl.allowed(Vendor.SQLSERVER, refused)).as(refused).isFalse();
+        }
+        assertThat(SourceUrl.allowed(Vendor.POSTGRESQL, "jdbc:sqlserver://db.invalid"))
                 .isFalse();
     }
 

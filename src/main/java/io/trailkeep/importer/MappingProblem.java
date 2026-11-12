@@ -54,11 +54,11 @@ record MappingProblem(Code code, String pointer) implements Comparable<MappingPr
         QUERY_LOCKS,
         /** A source query reading a table function such as {@code OPENROWSET}. */
         QUERY_TABLE_FUNCTION,
-        /** A source query through an Oracle database link. */
+        /** A source query through an Oracle database link or a SQL Server linked server (a four-part name). */
         QUERY_DATABASE_LINK,
         /** A source query calling a function outside the vendor's allow-list of pure built-ins. */
         QUERY_FUNCTION_NOT_ALLOWED,
-        /** A JDBC source whose vendor has no adapter yet, so nothing is test-fetched (SQL Server, 26p). */
+        /** A source that cannot serve what the mapping asks: no source for its kind, or content queries on files. */
         SOURCE_UNSUPPORTED,
         /** A source URL with another driver's scheme or a parameter outside the allow-list ({@link SourceUrl}). */
         SOURCE_URL_NOT_ALLOWED,

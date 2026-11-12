@@ -33,8 +33,7 @@ import org.springframework.stereotype.Component;
  * necessity: the source is a foreign schema no entity maps, and the queries are the operator's own, from the reviewed
  * mapping. It runs nothing but a {@link ValidatedSourceQuery}, with values only as bind parameters, never wrapped or
  * rewritten, in one read-only snapshot per session, with a statement timeout. A driver failure becomes a code-only
- * {@link SourceQueryException}. PostgreSQL (26n) and Oracle (26o) sources are supported here; SQL Server arrives
- * with 26p.
+ * {@link SourceQueryException}. PostgreSQL (26n), Oracle (26o) and SQL Server (26p) sources are supported.
  */
 @Component
 class SourceQueryJdbcDao {
@@ -46,6 +45,16 @@ class SourceQueryJdbcDao {
     private static final String ORACLE_POINT = "SELECT TO_CHAR(TIMESTAMP_TO_SCN(SYSTIMESTAMP)),"
             + " SYS_CONTEXT('USERENV', 'SID') || ':' || SYS_CONTEXT('USERENV', 'SESSIONID') || ':'"
             + " || TO_CHAR(SYSTIMESTAMP, 'YYYYMMDDHH24MISSFF9') FROM DUAL";
+
+    /**
+     * Where a SQL Server snapshot transaction stands: the server, database, session and instant. A {@code SNAPSHOT}
+     * transaction's version is not visible without {@code VIEW SERVER STATE}, which the recipe does not grant.
+     */
+    private static final String SQLSERVER_POINT = "SELECT 'sqlserver', CONCAT(@@SERVERNAME, ':', DB_NAME(), ':',"
+            + " @@SPID, ':', CONVERT(VARCHAR(33), SYSUTCDATETIME(), 126))";
+
+    /** {@code SQLServerConnection.TRANSACTION_SNAPSHOT}; the driver is a runtime dependency only. */
+    private static final int SQLSERVER_SNAPSHOT = 0x1000;
 
     /** Where a PostgreSQL snapshot stands. */
     private static final String POSTGRESQL_POINT = "SELECT 'postgresql', pg_current_snapshot()::text";
@@ -92,16 +101,15 @@ class SourceQueryJdbcDao {
      * Connects and opens the snapshot every query of the session reads: PostgreSQL {@code REPEATABLE READ READ ONLY};
      * Oracle {@code SET TRANSACTION READ ONLY} (transaction-level read consistency, design §4.1), after the session's
      * time zone is set to UTC, so {@code TIMESTAMP WITH LOCAL TIME ZONE} reads as UTC, and its date, timestamp and
-     * number formats to ISO ones, so a query's implicit conversions read as the export recipes' do (§4.2.2).
+     * number formats to ISO ones, so a query's implicit conversions read as the export recipes' do (§4.2.2); SQL
+     * Server {@code SNAPSHOT} isolation, which needs {@code ALLOW_SNAPSHOT_ISOLATION ON} on the database. SQL Server
+     * has no read-only transaction, so there the grants alone keep the account from writing.
      *
      * @param source the source
      * @return the session
      * @throws SourceQueryException if the source cannot be reached or refuses the account
      */
     Session open(Source source) {
-        if (source.vendor() == Vendor.SQLSERVER) {
-            throw new UnsupportedOperationException("SQL Server sources arrive with their adapter (26p)");
-        }
         if (!SourceUrl.allowed(source.vendor(), source.url())) {
             throw new IllegalArgumentException(
                     "the source URL names another driver or a parameter outside the allow-list");
@@ -120,6 +128,8 @@ class SourceQueryJdbcDao {
                             + " NLS_NUMERIC_CHARACTERS = '.,'");
                     statement.execute("SET TRANSACTION READ ONLY");
                 }
+            } else if (source.vendor() == Vendor.SQLSERVER) {
+                connection.setTransactionIsolation(SQLSERVER_SNAPSHOT);
             } else {
                 connection.setReadOnly(true);
                 connection.setTransactionIsolation(Connection.TRANSACTION_REPEATABLE_READ);
@@ -136,6 +146,7 @@ class SourceQueryJdbcDao {
      * the SCN the read-only transaction started near ({@code TIMESTAMP_TO_SCN}, which needs no privilege, unlike
      * {@code V$DATABASE} or {@code DBMS_FLASHBACK}) and the hash of the session and its start, because that SCN is
      * approximate and the transaction's read point dies with the session: an extract that restarts always starts over.
+     * SQL Server: {@code sqlserver:} and the hash of the server, database, session and instant, for the same reason.
      *
      * @param session the session
      * @return the fingerprint, at most 128 characters
@@ -144,13 +155,15 @@ class SourceQueryJdbcDao {
         // Fixed statements of the engine's own; nothing in them comes from the mapping or from data.
         try (PreparedStatement statement = session.vendor == Vendor.ORACLE
                         ? session.connection.prepareStatement(ORACLE_POINT)
-                        : session.connection.prepareStatement(POSTGRESQL_POINT);
+                        : session.vendor == Vendor.SQLSERVER
+                                ? session.connection.prepareStatement(SQLSERVER_POINT)
+                                : session.connection.prepareStatement(POSTGRESQL_POINT);
                 ResultSet rows = statement.executeQuery()) {
             rows.next();
             String point = sha256(rows.getString(2));
             return session.vendor == Vendor.ORACLE
                     ? "oracle:scn=" + rows.getString(1) + ":" + point
-                    : "postgresql:" + point;
+                    : rows.getString(1) + ":" + point;
         } catch (SQLException e) {
             throw SourceQueryException.of(e);
         }
@@ -165,7 +178,8 @@ class SourceQueryJdbcDao {
      * plan, which Oracle would write to {@code PLAN_TABLE} and SQL Server cannot give without its own permission. Every
      * bind variable is null, so a keyed query (an attachment's content query) proves it runs without reading content.
      * On PostgreSQL a failure is rolled back to a savepoint, so the session's later test fetches still run; a failed
-     * query does not end an Oracle transaction, which as a read-only one takes no savepoint.
+     * query does not end an Oracle transaction, which as a read-only one takes no savepoint, nor, for the permission,
+     * timeout and missing-object errors a test fetch meets, a SQL Server one.
      *
      * @param session the session
      * @param query the validated query
@@ -175,7 +189,7 @@ class SourceQueryJdbcDao {
      */
     int testFetch(Session session, ValidatedSourceQuery query, Duration timeout) {
         int[] count = {0};
-        if (session.vendor == Vendor.ORACLE) {
+        if (session.vendor != Vendor.POSTGRESQL) {
             run(session, query, null, timeout, 1, row -> count[0]++);
             return count[0];
         }
@@ -248,7 +262,7 @@ class SourceQueryJdbcDao {
             statement.setMaxRows(maxRows);
             if (binds == null) {
                 for (int i = 1; i <= statement.getParameterMetaData().getParameterCount(); i++) {
-                    statement.setNull(i, session.vendor == Vendor.ORACLE ? Types.VARCHAR : Types.NULL);
+                    statement.setNull(i, session.vendor == Vendor.POSTGRESQL ? Types.NULL : Types.VARCHAR);
                 }
             } else {
                 for (int i = 0; i < binds.size(); i++) {
@@ -282,6 +296,9 @@ class SourceQueryJdbcDao {
         if (vendor == Vendor.ORACLE) {
             return oracleValue(result, columns.getColumnTypeName(column), column);
         }
+        if (vendor == Vendor.SQLSERVER) {
+            return sqlServerValue(result, columns.getColumnTypeName(column), column);
+        }
         // PostgreSQL names its types in lower case.
         Object value = switch (columns.getColumnTypeName(column)) {
             case "timestamp" -> result.getObject(column, LocalDateTime.class);
@@ -310,6 +327,24 @@ class SourceQueryJdbcDao {
             }
             case "CLOB", "NCLOB" -> result.getString(column);
             case "BLOB" -> result.getBytes(column);
+            default -> result.getObject(column);
+        };
+        return result.wasNull() ? null : value;
+    }
+
+    /**
+     * A SQL Server value (design §4.1): {@code DATETIME}, {@code DATETIME2} and {@code SMALLDATETIME} as {@link
+     * LocalDateTime}; {@code DATETIMEOFFSET} as {@link OffsetDateTime}; {@code DATE} as {@link LocalDate}; {@code
+     * VARBINARY}, {@code BINARY} and {@code IMAGE} as bytes and {@code NTEXT}, {@code TEXT} and {@code XML} as text,
+     * each materialised per value (§4.3); everything else as the driver gives it.
+     */
+    private static @Nullable Object sqlServerValue(ResultSet result, String type, int column) throws SQLException {
+        Object value = switch (type) {
+            case "datetime", "datetime2", "smalldatetime" -> result.getObject(column, LocalDateTime.class);
+            case "datetimeoffset" -> result.getObject(column, OffsetDateTime.class);
+            case "date" -> result.getObject(column, LocalDate.class);
+            case "varbinary", "binary", "image" -> result.getBytes(column);
+            case "ntext", "text", "xml" -> result.getString(column);
             default -> result.getObject(column);
         };
         return result.wasNull() ? null : value;
