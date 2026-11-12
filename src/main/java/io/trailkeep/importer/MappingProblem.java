@@ -57,6 +57,8 @@ record MappingProblem(Code code, String pointer) implements Comparable<MappingPr
         QUERY_FUNCTION_NOT_ALLOWED,
         /** A JDBC source whose vendor has no adapter yet, so nothing is test-fetched (Oracle 26o, SQL Server 26p). */
         SOURCE_UNSUPPORTED,
+        /** A source URL with another driver's scheme or a parameter outside the allow-list ({@link SourceUrl}). */
+        SOURCE_URL_NOT_ALLOWED,
         /** A setting the test fetch needs is not configured: an {@code import.source.*} placeholder or the password. */
         SOURCE_SETTING_MISSING,
         /** The source could not be reached, or refused the account. */

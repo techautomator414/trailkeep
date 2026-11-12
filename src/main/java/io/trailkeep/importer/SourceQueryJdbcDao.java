@@ -86,6 +86,10 @@ class SourceQueryJdbcDao {
         if (source.vendor() != Vendor.POSTGRESQL) {
             throw new UnsupportedOperationException(source.vendor() + " sources arrive with their adapter (26o, 26p)");
         }
+        if (!SourceUrl.allowed(source.vendor(), source.url())) {
+            throw new IllegalArgumentException(
+                    "the source URL names another driver or a parameter outside the allow-list");
+        }
         try {
             Connection connection = DriverManager.getConnection(source.url(), source.user(), source.password());
             connection.setAutoCommit(false);

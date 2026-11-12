@@ -68,11 +68,20 @@ class SourceTestFetch {
         if (url == null || user == null || password == null) {
             return List.of(new MappingProblem(Code.SOURCE_SETTING_MISSING, "/source"));
         }
+        if (!SourceUrl.allowed(vendor, url)) {
+            // Refused before any connection: a driver URL can name classes to load and files to write.
+            return List.of(new MappingProblem(Code.SOURCE_URL_NOT_ALLOWED, "/source/url"));
+        }
+        return fetchAll(mapping, new Source(url, user, password, vendor));
+    }
+
+    /** Every query fetched for at most one row in one session; each failure a problem at its place. */
+    private List<MappingProblem> fetchAll(JsonNode mapping, Source source) {
         Set<MappingProblem> problems = new TreeSet<>();
-        try (Session session = dao.open(new Source(url, user, password, vendor))) {
+        try (Session session = dao.open(source)) {
             for (String pointer : MappingValidator.queryPointers(mapping)) {
                 ValidatedSourceQuery query = SourceQueryValidator.validate(
-                                mapping.at(pointer).asString(), vendor)
+                                mapping.at(pointer).asString(), source.vendor())
                         .query();
                 if (query == null) {
                     throw new IllegalStateException("only a mapping whose queries all validate is test-fetched");

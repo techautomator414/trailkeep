@@ -307,7 +307,7 @@
     function, database link or function outside the vendor allow-list). Values are bind parameters only, the session
     is a read-only snapshot under the read-only source account of docs/importer/source-accounts.md, and the query is
     never wrapped or rewritten. Covered by SourceQueryValidatorTest and PostgresSourceQueryIT.
-    Needs security-reviewer approval.
+    Approved in the security-reviewer role on #162.
   -->
   <Match>
     <Class name="io.trailkeep.importer.SourceQueryJdbcDao"/>
