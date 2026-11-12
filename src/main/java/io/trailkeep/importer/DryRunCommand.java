@@ -74,6 +74,7 @@ class DryRunCommand {
     private final StagingStore staging;
     private final ImportRunRepository runs;
     private final ImportIssueRepository issues;
+    private final ImportRunSummaryRepository figures;
     private final TransactionTemplate transactions;
     private final CaseImportService caseImports;
     private final UserDirectoryService directory;
@@ -87,6 +88,7 @@ class DryRunCommand {
             StagingStore staging,
             ImportRunRepository runs,
             ImportIssueRepository issues,
+            ImportRunSummaryRepository figures,
             TransactionTemplate transactions,
             CaseImportService caseImports,
             UserDirectoryService directory,
@@ -97,6 +99,7 @@ class DryRunCommand {
         this.staging = staging;
         this.runs = runs;
         this.issues = issues;
+        this.figures = figures;
         this.transactions = transactions;
         this.caseImports = caseImports;
         this.directory = directory;
@@ -128,19 +131,38 @@ class DryRunCommand {
                     "The mapping file or a lookup file changed after validate-mapping; validate it again");
         }
         Instant now = clock.instant();
+        List<TeamSummary> teams = directory.allTeams();
         CaseRules rules = new CaseRules(
                 mapping,
-                directory.allTeams().stream().collect(Collectors.toMap(TeamSummary::name, TeamSummary::active)),
+                teams.stream().collect(Collectors.toMap(TeamSummary::name, TeamSummary::active)),
                 caseImports.caseTypes().stream().collect(Collectors.toMap(ImportCaseType::name, Function.identity())),
                 now,
                 app.timezone());
+        DryRunSummary summary = new DryRunSummary(
+                rules,
+                teams.stream().collect(Collectors.toMap(TeamSummary::name, TeamSummary::id)),
+                mapping.at("/visibility/onUnrepresentableAcl").asString("restricted"));
+        ImportRun.ScanMode mode =
+                Binder.get(environment).bind(SCANNING, ImportRun.ScanMode.class).orElse(ImportRun.ScanMode.CLAMD);
         transactions.executeWithoutResult(status -> issues.deleteByRunIdAndStage(runId, ImportIssue.Stage.DRY_RUN));
         ChildRules children =
                 new ChildRules(mapping, properties.attachments().maxBytes().toBytes(), now);
-        Outcome checked = checkRows(runId, rules, children, properties.hashKeySpec(), now);
-        ImportRun.ScanMode mode =
-                Binder.get(environment).bind(SCANNING, ImportRun.ScanMode.class).orElse(ImportRun.ScanMode.CLAMD);
+        Outcome checked = checkRows(
+                new Pass(runId, rules.maxErrorRate(), children.accepted(), properties.hashKeySpec(), now, summary),
+                rules,
+                children);
+        if (mode == ImportRun.ScanMode.EXTERNAL && summary.loadableFiles() > 0) {
+            Finding unscanned = new Finding("NOT_SCANNED", Severity.WARNING, summary.loadableFiles());
+            transactions.executeWithoutResult(
+                    status -> issues.save(issue(runId, Subject.ATTACHMENT, null, unscanned, now)));
+            checked = checked.plus(new Outcome(0, 1, 0));
+        }
+        for (Object[] count : issues.countByCode(runId)) {
+            summary.issues((Subject) count[0], (Severity) count[1], (String) count[2], (Long) count[3]);
+        }
         transactions.executeWithoutResult(status -> {
+            figures.deleteByRunId(runId);
+            summary.figures(runId, mode).forEach(figures::save);
             ImportRun run = load(runId);
             run.dryRunDone(mode, now);
             runs.save(run);
@@ -154,30 +176,35 @@ class DryRunCommand {
      * accepted as skipped, against {@code limits.maxErrorRate}: above it, a FATAL {@code ERROR_RATE_EXCEEDED} for that
      * entity carrying the number of such rows.
      */
-    private Outcome checkRows(long runId, CaseRules cases, ChildRules children, SecretKey hashKey, Instant now) {
-        Pass pass = new Pass(runId, cases.maxErrorRate(), children.accepted(), hashKey, now);
-        return check(
-                        pass,
-                        StagedCase.class,
-                        Subject.CASE,
-                        row -> null,
-                        (row, staged) ->
-                                cases.check(row).stream().map(Finding::of).toList())
+    private Outcome checkRows(Pass pass, CaseRules cases, ChildRules children) {
+        DryRunSummary summary = pass.summary();
+        return check(pass, StagedCase.class, Subject.CASE, row -> null, (row, staged) -> {
+                    List<Finding> found =
+                            cases.check(row).stream().map(Finding::of).toList();
+                    summary.caseRow(row, found);
+                    return found;
+                })
                 .plus(check(pass, StagedComment.class, Subject.COMMENT, StagedComment::getCaseKey, children::comment))
                 .plus(check(
-                        pass,
-                        StagedAttachment.class,
-                        Subject.ATTACHMENT,
-                        StagedAttachment::getCaseKey,
-                        children::attachment))
+                        pass, StagedAttachment.class, Subject.ATTACHMENT, StagedAttachment::getCaseKey, (row, in) -> {
+                            List<Finding> found = children.attachment(row, in);
+                            summary.attachment(row, found);
+                            return found;
+                        }))
                 .plus(check(pass, StagedEvent.class, Subject.EVENT, StagedEvent::getCaseKey, children::event));
     }
 
     /**
      * One dry run's settings: {@code limits.maxErrorRate}, the codes {@code limits.acceptSkip} keeps out of it, the
-     * key that hashes each row's key into its issues, and the run's time.
+     * key that hashes each row's key into its issues, the run's time, and the aggregates it counts.
      */
-    private record Pass(long runId, double maxErrorRate, Set<String> accepted, SecretKey hashKey, Instant now) {}
+    private record Pass(
+            long runId,
+            double maxErrorRate,
+            Set<String> accepted,
+            SecretKey hashKey,
+            Instant now,
+            DryRunSummary summary) {}
 
     private <T extends StagedRow> Outcome check(
             Pass pass,
@@ -216,6 +243,7 @@ class DryRunCommand {
             recorded += found.size();
             after = page.getLast().getKey().legacyKey();
         }
+        pass.summary().rows(subject, rows);
         long failed = issues.countFailedRows(runId, subject, Severity.ERROR, pass.accepted());
         if (failed > pass.maxErrorRate() * rows) {
             Finding rate = new Finding("ERROR_RATE_EXCEEDED", Severity.FATAL, failed);

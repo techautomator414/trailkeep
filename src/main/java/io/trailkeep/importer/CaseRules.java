@@ -53,6 +53,7 @@ final class CaseRules {
     private final Map<String, Boolean> teams;
     private final Map<String, ImportCaseType> caseTypes;
     private final boolean aclFails;
+    private final boolean aclRestricts;
     private final double maxErrorRate;
     private final Instant now;
     private final LocalDate today;
@@ -74,8 +75,9 @@ final class CaseRules {
             ZoneId zone) {
         this.teams = Map.copyOf(teams);
         this.caseTypes = Map.copyOf(caseTypes);
-        this.aclFails =
-                "fail".equals(mapping.at("/visibility/onUnrepresentableAcl").asString(""));
+        String acl = mapping.at("/visibility/onUnrepresentableAcl").asString("restricted");
+        this.aclFails = "fail".equals(acl);
+        this.aclRestricts = "restricted".equals(acl);
         this.maxErrorRate = mapping.at("/limits/maxErrorRate").asDouble(0.0);
         this.now = now;
         this.today = LocalDate.ofInstant(now, zone);
@@ -144,7 +146,7 @@ final class CaseRules {
 
     private void caseType(StagedCase row, boolean closed, List<Issue> issues) {
         ImportCaseType type = row.getCaseTypeKey() == null ? null : caseTypes.get(row.getCaseTypeKey());
-        hold(row, type, closed, issues);
+        hold(row, issues);
         if (row.getCaseTypeKey() != null && type == null) {
             issues.add(new Issue("CASE_TYPE_UNKNOWN", Severity.FATAL));
         }
@@ -159,16 +161,45 @@ final class CaseRules {
         }
     }
 
-    /** A legal hold, or a closing time at or before the archive job's cut-off for the case's type (WP-24's rule). */
-    private void hold(StagedCase row, @Nullable ImportCaseType type, boolean closed, List<Issue> issues) {
+    /**
+     * Why a case would be held at load (design §7.1): on legal hold in the legacy system, or closed at or before the
+     * archive job's cut-off for its type (WP-24's rule).
+     *
+     * @param row the case
+     * @return {@code LEGAL_HOLD}, {@code PAST_RETENTION}, or {@code null} when it would not be held
+     */
+    @Nullable
+    String holdReason(StagedCase row) {
+        if (Boolean.TRUE.equals(row.getLegalHold())) {
+            return "LEGAL_HOLD";
+        }
+        ImportCaseType type = row.getCaseTypeKey() == null ? null : caseTypes.get(row.getCaseTypeKey());
         Instant closedAt = row.getClosedAt();
         boolean pastRetention = type != null
-                && closed
+                && "CLOSED".equals(row.getStatus())
                 && closedAt != null
                 && !closedAt.isAfter(now.atZone(ZoneOffset.UTC)
                         .minusYears(type.retentionYears())
                         .toInstant());
-        if (Boolean.TRUE.equals(row.getLegalHold()) || pastRetention) {
+        return pastRetention ? "PAST_RETENTION" : null;
+    }
+
+    /**
+     * The visibility a case would load with (design §7.1): its mapped sensitivity, {@code STANDARD} when it has none,
+     * and {@code RESTRICTED} for a legacy ACL under {@code visibility.onUnrepresentableAcl: restricted} (the default).
+     *
+     * @param row the case
+     * @return the sensitivity's name
+     */
+    String visibility(StagedCase row) {
+        if (aclRestricts && Boolean.TRUE.equals(row.getLegacyAcl())) {
+            return Sensitivity.RESTRICTED.name();
+        }
+        return row.getSensitivity() == null ? Sensitivity.STANDARD.name() : row.getSensitivity();
+    }
+
+    private void hold(StagedCase row, List<Issue> issues) {
+        if (holdReason(row) != null) {
             issues.add(new Issue("HOLD_UNAVAILABLE", Severity.FATAL));
         }
     }

@@ -133,6 +133,26 @@ class CaseRulesTest {
     }
 
     @Test
+    void holdReasonAndVisibilityAreWhatTheLoadWouldApply() {
+        assertThat(rules.holdReason(open(values -> values.put("legalHold", true))))
+                .isEqualTo("LEGAL_HOLD");
+        assertThat(rules.holdReason(closed(values -> values.put("closedAt", Instant.parse("2019-11-12T15:00:00Z")))))
+                .isEqualTo("PAST_RETENTION");
+        assertThat(rules.holdReason(closed(values -> {}))).isNull();
+        StagedCase withAcl = open(values -> values.put("legacyAcl", true));
+        assertThat(rules.visibility(open(values -> {})))
+                .as("Trailkeep's default")
+                .isEqualTo("STANDARD");
+        assertThat(rules.visibility(withAcl))
+                .as("restricted is the default handling")
+                .isEqualTo("RESTRICTED");
+        assertThat(rules("visibility: { onUnrepresentableAcl: standard }").visibility(withAcl))
+                .isEqualTo("STANDARD");
+        assertThat(rules.visibility(open(values -> values.put("sensitivity", "RESTRICTED"))))
+                .isEqualTo("RESTRICTED");
+    }
+
+    @Test
     void legacyAclFailsOnlyWhenTheMappingSaysSo() {
         StagedCase withAcl = open(values -> values.put("legacyAcl", true));
         assertThat(codes(withAcl)).isEmpty();
