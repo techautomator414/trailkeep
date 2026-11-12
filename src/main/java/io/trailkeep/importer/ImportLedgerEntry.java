@@ -102,6 +102,32 @@ class ImportLedgerEntry {
     }
 
     /**
+     * A loaded child of a case: a comment, attachment or history event.
+     *
+     * @param run the run that loaded it, with the source id and mapping hash it was loaded under
+     * @param entity what it is
+     * @param legacyKey its canonical key
+     * @param rowHash its staged row's keyed hash
+     * @param caseId its Trailkeep case
+     * @param targetId the row written, the first when it was split
+     * @param at when it was loaded
+     */
+    static ImportLedgerEntry ofChild(
+            Loaded run,
+            ImportIssue.Subject entity,
+            String legacyKey,
+            String rowHash,
+            long caseId,
+            long targetId,
+            Instant at) {
+        ImportLedgerEntry entry = ofCase(run, legacyKey, rowHash, caseId, "", null, at);
+        entry.entity = entity;
+        entry.targetId = targetId;
+        entry.status = null;
+        return entry;
+    }
+
+    /**
      * What every ledger row of one load shares.
      *
      * @param runId the run

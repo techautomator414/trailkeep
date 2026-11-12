@@ -28,6 +28,8 @@ import tools.jackson.databind.JsonNode;
  *       case an earlier run loaded, needs the import ledger and comes with it);
  *   <li>a required field that is empty, {@code <FIELD>_MISSING} (ERROR): a comment's time and body, an attachment's
  *       file name and upload time, an event's time and kind; a time in the future: {@code DATE_IN_FUTURE} (ERROR);
+ *   <li>a comment longer, as a comment holds it, than one comment takes: {@code COMMENT_SPLIT} (WARNING) with the
+ *       number of comments the load splits it into ({@link CaseComments});
  *   <li>an event kind or field {@code CASE_IMPORTED_EVENT} does not have: {@code KIND_INVALID}, {@code FIELD_INVALID}
  *       (ERROR);
  *   <li>an attachment over {@code import.attachments.max-bytes}: {@code ATTACHMENT_TOO_LARGE} with its staged size as
@@ -99,6 +101,12 @@ final class ChildRules {
         required(found, "WRITTEN_AT", row.getWrittenAt());
         required(found, "BODY", row.getBody());
         future(found, row.getWrittenAt());
+        int parts = row.getBody() == null
+                ? 1
+                : CaseComments.parts(CaseComments.body(row)).size();
+        if (parts > 1) {
+            found.add(new Finding("COMMENT_SPLIT", Severity.WARNING, (long) parts));
+        }
         return List.copyOf(found);
     }
 

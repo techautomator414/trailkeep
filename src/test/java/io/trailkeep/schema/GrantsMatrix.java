@@ -160,12 +160,14 @@ final class GrantsMatrix {
             .collect(Collectors.toUnmodifiableMap(Function.identity(), table -> switch (table) {
                 // UPDATE of the status, hash, scanning-mode, count and expiry columns only (see the column test).
                 case "IMPORT_RUN" -> EnumSet.of(Privilege.SELECT, Privilege.INSERT);
-                // Insert-only: imported history (V16), the ledger (V17), and what the load writes per case (part t).
+                // Insert-only: imported history (V16), the ledger (V17), and what the load writes per case (parts t,
+                // u); CASE_SEARCH's UPDATE is of two columns only (see the column test).
                 case "CASE_IMPORTED_EVENT",
                         "IMPORT_LEDGER",
                         "CASE_RECORD",
                         "CASE_SLA",
                         "CASE_SEARCH",
+                        "CASE_COMMENT",
                         "CLOSURE_REQUEST",
                         "AUDIT_EVENT" -> EnumSet.of(Privilege.SELECT, Privilege.INSERT);
                 // Staging (V13) is written, read and deleted by the import user alone; nobody else may even read it.
@@ -207,9 +209,9 @@ final class GrantsMatrix {
     static final List<String> IMPORTER_SEQUENCES =
             List.of("SEQ_IMPORT_ISSUE", "SEQ_IMPORT_RUN_SUMMARY", "SEQ_CASE_IMPORTED_EVENT", "SEQ_IMPORT_LEDGER");
 
-    /** The runtime user's sequences the load draws from too, for the cases and closures it writes (WP-26 part t). */
+    /** The runtime user's sequences the load draws from too: its cases, closures and comments (parts t and u). */
     static final List<String> LOAD_SEQUENCES =
-            List.of("SEQ_CASE_RECORD", "SEQ_CASE_NUMBER", "SEQ_CLOSURE_REQUEST", "SEQ_AUDIT_EVENT");
+            List.of("SEQ_CASE_RECORD", "SEQ_CASE_NUMBER", "SEQ_CLOSURE_REQUEST", "SEQ_AUDIT_EVENT", "SEQ_CASE_COMMENT");
 
     private GrantsMatrix() {}
 }

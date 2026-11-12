@@ -104,6 +104,28 @@ final class PeopleMatcher {
     }
 
     /**
+     * The user a legacy person matched, as the load names a comment's author (WP-26 part u).
+     *
+     * @param personKey the person's canonical key, or {@code null} when the row names nobody
+     * @return the match, or {@code null}
+     */
+    @Nullable
+    PersonMatch match(@Nullable String personKey) {
+        return personKey == null ? null : matched.get(personKey);
+    }
+
+    /**
+     * A legacy person's staged display name.
+     *
+     * @param personKey the person's canonical key, or {@code null}
+     * @return the name, or {@code null} when none was staged
+     */
+    @Nullable
+    String name(@Nullable String personKey) {
+        return personKey == null ? null : names.get(personKey);
+    }
+
+    /**
      * Whether a case keeps its legacy owner: for an open case a matched user eligible in its team; for a closed case
      * any match. An open case in a known team that does not keep its owner will get the team's default owner.
      *

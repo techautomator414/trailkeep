@@ -61,6 +61,14 @@ public class StagedComment extends StagedRow {
         return authorKey;
     }
 
+    public @Nullable String getAuthorName() {
+        return authorName;
+    }
+
+    public @Nullable String getBodyFormat() {
+        return bodyFormat;
+    }
+
     public @Nullable Instant getWrittenAt() {
         return writtenAt;
     }

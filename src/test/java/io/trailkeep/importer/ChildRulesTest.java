@@ -5,6 +5,7 @@ package io.trailkeep.importer;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.trailkeep.importer.ChildRules.Finding;
+import io.trailkeep.importer.ImportIssue.Severity;
 import io.trailkeep.importer.staging.StagedAttachment;
 import io.trailkeep.importer.staging.StagedComment;
 import io.trailkeep.importer.staging.StagedEvent;
@@ -62,6 +63,9 @@ class ChildRulesTest {
                 .containsExactly("BODY_MISSING ERROR");
         assertThat(codes(rules.comment(comment(values -> values.put("writtenAt", NOW.plusSeconds(1))), true)))
                 .containsExactly("DATE_IN_FUTURE ERROR");
+        assertThat(rules.comment(comment(values -> values.put("body", "*".repeat(10_001))), true))
+                .as("escaped, 20 002 characters: two comments")
+                .containsExactly(new Finding("COMMENT_SPLIT", Severity.WARNING, 2L));
         assertThat(codes(rules.attachment(
                         attachment(values -> {
                             values.remove("fileName");
