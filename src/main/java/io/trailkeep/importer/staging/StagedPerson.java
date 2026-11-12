@@ -37,4 +37,12 @@ public class StagedPerson extends StagedRow {
         this.email = values.text("email");
         this.externalId = values.text("externalId");
     }
+
+    public @Nullable String getEmail() {
+        return email;
+    }
+
+    public @Nullable String getExternalId() {
+        return externalId;
+    }
 }

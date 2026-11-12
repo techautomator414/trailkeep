@@ -116,6 +116,26 @@ abstract class AbstractCaseImportIT {
     }
 
     @Test
+    void eligibleOwnerIsWhomOpenImportAccepts() {
+        CaseSeed seed = new CaseSeed(jdbc);
+        long reader = seed.user();
+        seed.member(reader, team, TeamRole.READER);
+        long disabled = seed.user();
+        seed.member(disabled, team, TeamRole.MANAGER);
+        jdbc.update("UPDATE APP_USER SET DISABLED = ? WHERE ID = ?", true, disabled);
+
+        assertThat(imports.eligibleOwner(analyst, team)).isTrue();
+        assertThat(imports.eligibleOwner(analyst, seed.team()))
+                .as("another team")
+                .isFalse();
+        assertThat(imports.eligibleOwner(reader, team)).isFalse();
+        assertThat(imports.eligibleOwner(disabled, team)).isFalse();
+        assertThat(imports.eligibleOwner(ImportPeopleService.LEGACY_APPROVAL_ID, team))
+                .isFalse();
+        assertThatThrownBy(() -> imports.importCase(RUN, open(reader, null))).satisfies(kind(Kind.INVALID));
+    }
+
+    @Test
     void closedImportMayBeOwnedByPrincipal() {
         CaseNumber number = imports.importCase(RUN, closed(ImportPeopleService.IMPORTER_ID, caseType));
 
