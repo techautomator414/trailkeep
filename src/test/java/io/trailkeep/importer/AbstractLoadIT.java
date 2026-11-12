@@ -28,15 +28,18 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ConfigurableApplicationContext;
 
 /**
  * {@code load} as the import user (WP-26 part t, design §3 step 5, §8.2): a signed-off run's cases written with their
  * closures, owners as the dry run chose them and import ledger rows, a case with an ERROR skipped, a second load
  * writing nothing; each unmet condition refused with its own code before anything is written; the run lock refusing
- * while a live load holds the run and taken over once that load is stale; and a load stopped by a case it cannot
- * write left {@code FAILED}, the next load resuming at that case. The runs and staged rows are seeded by the schema
- * owner; each test removes the cases the load committed.
+ * while a live load holds the run or another run of its source, and taken over once that load is stale; cases the
+ * rules, the owners or the import APIs refuse at the load recorded as {@code LOAD} issues while the load goes on, and
+ * tried again by the next load; and a load stopped by a case it cannot finish left {@code FAILED}, the next load
+ * resuming at that case. The runs and staged rows are seeded by the schema owner; each test removes the cases the
+ * load committed.
  */
 // "IT" is the Failsafe suffix Part B mandates for integration tests, not an abbreviation.
 @SuppressWarnings("checkstyle:AbbreviationAsWordInName")
@@ -44,6 +47,9 @@ abstract class AbstractLoadIT extends DryRunSupport {
 
     @Autowired
     private ImportIssueRepository issueRows;
+
+    @Value("${app.db.import-user}")
+    private String importUser = "";
 
     private final List<Long> users = new ArrayList<>();
     private long analyst;
@@ -174,6 +180,14 @@ abstract class AbstractLoadIT extends DryRunSupport {
         assertThat(refusal(run, mapping)).isEqualTo(Refusal.NOT_LOADABLE);
         jdbc.update("UPDATE IMPORT_RUN SET STAGING_PURGED_AT = NULL WHERE ID = ?", run);
 
+        long other = extractedRun(mapping);
+        loading(other, Instant.now());
+        assertThat(refusal(run, mapping))
+                .as("a live load holds another run of the source")
+                .isEqualTo(Refusal.SOURCE_LOADING);
+        // That load dies: its run no longer stands in the way.
+        loading(other, Instant.now().minus(LoadCommand.LEASE).minus(Duration.ofMinutes(1)));
+
         loading(run, Instant.now());
         assertThat(refusal(run, mapping)).as("a live load holds the run").isEqualTo(Refusal.RUN_LOCKED);
         assertThat(loadedCases("memory1:%")).isZero();
@@ -190,21 +204,72 @@ abstract class AbstractLoadIT extends DryRunSupport {
     }
 
     @Test
-    void loadStoppedByCaseItCannotWriteFailsAndNextLoadResumesAtThatCase(@TempDir Path directory) throws Exception {
+    void loadRecordsCasesTheRulesOrTheImportApisRefuseNowAsLoadIssuesAndGoesOn(@TempDir Path directory)
+            throws Exception {
+        Path mapping = mapping(directory);
+        long run = signedOffRun(mapping);
+        stage(run, "c1", "OPEN", "p1");
+        stage(run, "c2", "CLOSED", "p2");
+        stage(run, "c3", "OPEN", "p1");
+        stage(run, "c4", "OPEN", "p1");
+        stage(run, "c5", "OPEN", "p2");
+        // Changed after the dry run: the closure API refuses c2's summary, the rules c3's priority; c4's description
+        // continues in a comment, which the comment load brings; and c5's default owner leaves the team.
+        jdbc.update(
+                "UPDATE IMPORT_STG_CASE SET CLOSURE_SUMMARY = ? WHERE RUN_ID = ? AND LEGACY_KEY = 'c2'",
+                "s".repeat(5001),
+                run);
+        jdbc.update("UPDATE IMPORT_STG_CASE SET PRIORITY = 'URGENTISH' WHERE RUN_ID = ? AND LEGACY_KEY = 'c3'", run);
+        jdbc.update(
+                "UPDATE IMPORT_STG_CASE SET DESCRIPTION = ? WHERE RUN_ID = ? AND LEGACY_KEY = 'c4'",
+                "d".repeat(20_001),
+                run);
+        jdbc.update("DELETE FROM APP_USER_TEAM WHERE USER_ID = ?", manager);
+
+        load(run, mapping).close();
+
+        assertThat(jdbc.queryForMap("SELECT STATUS, ROWS_LOADED FROM IMPORT_RUN WHERE ID = ?", run))
+                .containsEntry("STATUS", "LOADED")
+                .satisfies(row -> assertThat(number(row, "ROWS_LOADED")).isEqualTo(1));
+        assertThat(loadIssues(run))
+                .containsExactly(
+                        "CASE_REFUSED " + hash("c2"),
+                        "DEFAULT_OWNER_MISSING " + hash("c5"),
+                        "DESCRIPTION_CONTINUED " + hash("c4"),
+                        "PRIORITY_INVALID " + hash("c3"));
+        assertThat(ledger(run)).hasSize(1).first().asString().startsWith("c1 ");
+        assertThat(loadedCases("memory1:%"))
+                .as("the refused closure took its case with it")
+                .isEqualTo(1);
+    }
+
+    @Test
+    void loadStoppedMidwayFailsAndLaterLoadsResumeAndRetryTheCaseItRefused(@TempDir Path directory) throws Exception {
         Path mapping = mapping(directory);
         long run = signedOffRun(mapping);
         stage(run, "c1", "OPEN", "p1");
         stage(run, "c2", "OPEN", "p2");
-        // The default owner leaves the team after the sign-off, so c2 has no eligible owner at the load.
+        // The default owner leaves the team after the sign-off, so c2 has no eligible owner at the load; and the
+        // import user may not record that, so the load stops there.
         jdbc.update("DELETE FROM APP_USER_TEAM WHERE USER_ID = ?", manager);
-
-        assertThatThrownBy(() -> load(run, mapping))
-                .hasStackTraceContaining("Import run " + run + ": case " + hash("c2") + " has no eligible owner");
+        jdbc.update("REVOKE INSERT ON IMPORT_ISSUE FROM " + importUser);
+        try {
+            assertThatThrownBy(() -> load(run, mapping))
+                    .hasStackTraceContaining("Import run " + run + ": the load stopped");
+        } finally {
+            jdbc.update("GRANT INSERT ON IMPORT_ISSUE TO " + importUser);
+        }
 
         assertThat(jdbc.queryForMap("SELECT STATUS, ROWS_LOADED FROM IMPORT_RUN WHERE ID = ?", run))
                 .containsEntry("STATUS", "FAILED")
                 .satisfies(row -> assertThat(number(row, "ROWS_LOADED")).isEqualTo(1));
         assertThat(ledger(run)).hasSize(1).first().asString().startsWith("c1 ");
+
+        load(run, mapping).close();
+
+        assertThat(jdbc.queryForObject("SELECT STATUS FROM IMPORT_RUN WHERE ID = ?", String.class, run))
+                .isEqualTo("LOADED");
+        assertThat(loadIssues(run)).containsExactly("DEFAULT_OWNER_MISSING " + hash("c2"));
 
         new CaseSeed(jdbc).member(manager, team, TeamRole.MANAGER);
         load(run, mapping).close();
@@ -212,9 +277,12 @@ abstract class AbstractLoadIT extends DryRunSupport {
         assertThat(jdbc.queryForMap("SELECT STATUS, ROWS_LOADED FROM IMPORT_RUN WHERE ID = ?", run))
                 .containsEntry("STATUS", "LOADED")
                 .satisfies(row -> assertThat(number(row, "ROWS_LOADED")).isEqualTo(2));
+        assertThat(loadIssues(run))
+                .as("the earlier attempt's LOAD issue went, and its case was tried again")
+                .isEmpty();
         assertThat(ledger(run)).hasSize(2);
         assertThat(loadedCases("memory1:%"))
-                .as("the resumed load wrote only the case it stopped at")
+                .as("the resumed loads wrote only the case they stopped at")
                 .isEqualTo(2);
     }
 
@@ -284,6 +352,15 @@ abstract class AbstractLoadIT extends DryRunSupport {
         return jdbc.queryForMap(
                 "SELECT ID, STATUS, OWNER_ID, OWNER_NAME_SNAPSHOT FROM CASE_RECORD WHERE LEGACY_REF = ?",
                 "memory1:" + key);
+    }
+
+    /** The run's {@code LOAD} issues, each an ERROR: code and keyed hash, in code order. */
+    private List<String> loadIssues(long run) {
+        return jdbc.query(
+                "SELECT CODE, KEY_HASH FROM IMPORT_ISSUE WHERE RUN_ID = ? AND STAGE = 'LOAD' AND SEVERITY = 'ERROR'"
+                        + " ORDER BY CODE",
+                (row, index) -> row.getString(1) + " " + row.getString(2),
+                run);
     }
 
     /** The run's ledger rows: key, status, case id and whether a closing time was recorded, in key order. */

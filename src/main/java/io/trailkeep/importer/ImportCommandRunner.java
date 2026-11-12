@@ -90,7 +90,12 @@ class ImportCommandRunner implements ApplicationRunner {
         }
         if ("load".equals(command)) {
             LoadCommand.Outcome outcome = load.run(runId, mapping());
-            LOG.info("Import run {}: {} cases loaded, {} skipped", runId, outcome.loaded(), outcome.skipped());
+            LOG.info(
+                    "Import run {}: {} cases loaded, {} skipped, {} refused",
+                    runId,
+                    outcome.loaded(),
+                    outcome.skipped(),
+                    outcome.refused());
         }
         if ("purge-staging".equals(command)) {
             purger.purge(runId, clock.instant());

@@ -134,6 +134,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   written. The import user gains SELECT and INSERT on `CASE_RECORD`, `CASE_SLA`, `CASE_SEARCH`, `CLOSURE_REQUEST`,
   `AUDIT_EVENT` and `IMPORT_LEDGER` and draws from their sequences and `SEQ_CASE_NUMBER`; the runtime user may read
   `IMPORT_LEDGER`; nobody may change or delete a ledger row.
+- `load` checks every case again and goes on past the ones it refuses (WP-26 part t2, docs/design/importer.md §8.2).
+  Each case not skipped is checked against the dry run's case rules and the reference data of the load's moment; a
+  case they refuse now (with the rule's code, such as `TEAM_INACTIVE` or `PRIORITY_INVALID`), an open case whose team
+  has no eligible owner now (`DEFAULT_OWNER_MISSING`), a case whose description needs the continuation comment the
+  comment load brings (`DESCRIPTION_CONTINUED`), and a case the case or closure import API refuses as invalid
+  (`CASE_REFUSED`) is written nowhere but as a `LOAD` issue: an ERROR with its code and the case's keyed hash, never a
+  value. The load goes on and ends `LOADED`; the next load drops the earlier `LOAD` issues and tries their cases again.
+  Anything else a case cannot do still stops the load as `FAILED`. Only one run of a source loads at a time: a load is
+  refused (`SOURCE_LOADING`) while a live load holds another run of its source, and the claim locks the source's runs
+  so two claims take turns. The log line counts refused cases.
 - The Oracle source (WP-26 part o, docs/design/importer.md §4.1): a `kind: jdbc` Oracle mapping is test-fetched by
   `validate-mapping` and extracted in one `SET TRANSACTION READ ONLY` transaction, with the session in UTC and ISO
   date, timestamp and number formats; `DATE` and `TIMESTAMP` read as local date-times, `TIMESTAMP WITH TIME ZONE` with
