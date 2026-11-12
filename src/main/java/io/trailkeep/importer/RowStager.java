@@ -266,7 +266,7 @@ final class RowStager {
         return switch (value) {
             case null -> null;
             case BigDecimal number -> number.toPlainString();
-            // Bytes are content; a text column never holds them (the content area does, with 26k2 and 26n2).
+            // Bytes are content; a text column never holds them (the content area does, with 26l and 26n2).
             case byte[] bytes -> {
                 issues.add(new Issue("BINARY_NOT_TEXT", Severity.ERROR));
                 yield null;
