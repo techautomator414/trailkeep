@@ -241,7 +241,7 @@
     anything, then answers 404 for an unknown run. It shows codes, times, counts, team names and the requester's and
     approver's display names through th:text, never a source id, a mapping, a key hash or a legacy value. Covered by
     ImportRunServiceIT, OracleImportRunServiceIT, ImportRunControllerIT and ImportRunsAccessibilityIT.
-    Needs security-reviewer approval.
+    Approved in the security-reviewer role on #175.
     Approved in the security-reviewer role on #20. Listed by class, never by pattern alone, so each new controller
     is reviewed the same way.
   -->
