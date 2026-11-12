@@ -19,6 +19,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.regex.Pattern;
+import org.jspecify.annotations.Nullable;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Component;
 import tools.jackson.core.JacksonException;
@@ -162,30 +163,52 @@ final class MappingValidator {
 
     /** Every source query of a JDBC mapping, through {@link SourceQueryValidator} for the source's vendor (§4.1). */
     private static void checkQueries(JsonNode mapping, Set<MappingProblem> problems) {
-        if (!"jdbc".equals(mapping.at("/source/kind").asString(""))) {
+        SourceQueryValidator.Vendor vendor = vendor(mapping);
+        if (vendor == null) {
             return;
         }
+        for (String pointer : queryPointers(mapping)) {
+            for (MappingProblem.Code code : SourceQueryValidator.validate(
+                            mapping.at(pointer).asString(), vendor)
+                    .problems()) {
+                problems.add(new MappingProblem(code, pointer));
+            }
+        }
+    }
+
+    /**
+     * A JDBC mapping's source vendor.
+     *
+     * @param mapping the parsed mapping
+     * @return the vendor, or {@code null} for a file source
+     */
+    static SourceQueryValidator.@Nullable Vendor vendor(JsonNode mapping) {
+        if (!"jdbc".equals(mapping.at("/source/kind").asString(""))) {
+            return null;
+        }
         // The schema allows exactly these three names for a jdbc source.
-        SourceQueryValidator.Vendor vendor =
-                switch (mapping.at("/source/vendor").asString("")) {
-                    case "oracle" -> SourceQueryValidator.Vendor.ORACLE;
-                    case "postgresql" -> SourceQueryValidator.Vendor.POSTGRESQL;
-                    default -> SourceQueryValidator.Vendor.SQLSERVER;
-                };
+        return switch (mapping.at("/source/vendor").asString("")) {
+            case "oracle" -> SourceQueryValidator.Vendor.ORACLE;
+            case "postgresql" -> SourceQueryValidator.Vendor.POSTGRESQL;
+            default -> SourceQueryValidator.Vendor.SQLSERVER;
+        };
+    }
+
+    /**
+     * Where a mapping holds source queries: the people, content, entity and count queries that are present.
+     *
+     * @param mapping the parsed mapping
+     * @return their JSON pointers, each to a string
+     */
+    static List<String> queryPointers(JsonNode mapping) {
         List<String> pointers = new ArrayList<>(List.of("/people/query", "/entities/attachment/fields/content/query"));
         mapping.path("entities").propertyNames().forEach(name -> {
             pointers.add("/entities/" + name + "/query");
             pointers.add("/entities/" + name + "/countQuery");
         });
-        for (String pointer : pointers) {
-            JsonNode query = mapping.at(pointer);
-            if (query.isString()) {
-                for (MappingProblem.Code code :
-                        SourceQueryValidator.validate(query.asString(), vendor).problems()) {
-                    problems.add(new MappingProblem(code, pointer));
-                }
-            }
-        }
+        return pointers.stream()
+                .filter(pointer -> mapping.at(pointer).isString())
+                .toList();
     }
 
     private static void checkKeys(JsonNode mapping, Set<MappingProblem> problems) {

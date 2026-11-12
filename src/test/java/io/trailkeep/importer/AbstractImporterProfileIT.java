@@ -227,15 +227,17 @@ abstract class AbstractImporterProfileIT {
      * {@code validate-mapping} as the import user (WP-26 part b): a sound mapping validates the run with the file's
      * SHA-256; a broken one records a FATAL issue, fails the Job and puts the run back to {@code REQUESTED} with no
      * hash; the corrected file replaces the issue and validates the run again. This proves the import user's grants on
-     * both tables.
+     * both tables. The example's vendor is set to PostgreSQL so its queries are test-fetched from {@link
+     * ExampleLegacySource} (26n).
      */
     @Test
     void validateMappingValidatesASoundMappingAndRevokesThatWhenTheFileBreaks(@TempDir Path directory)
             throws Exception {
         long run = runs.save(new ImportRun(ImportRun.Kind.IMPORT, "legacy1", new CaseSeed(jdbc).user(), NOW))
                 .getId();
-        String example =
-                new ClassPathResource("importer/example-mapping.yaml").getContentAsString(StandardCharsets.UTF_8);
+        String example = new ClassPathResource("importer/example-mapping.yaml")
+                .getContentAsString(StandardCharsets.UTF_8)
+                .replace("vendor: sqlserver", "vendor: postgresql");
         Path mapping = directory.resolve("mapping.yaml");
         String hash = HexFormat.of()
                 .formatHex(MessageDigest.getInstance("SHA-256").digest(example.getBytes(StandardCharsets.UTF_8)));
@@ -269,12 +271,9 @@ abstract class AbstractImporterProfileIT {
     }
 
     private ConfigurableApplicationContext validateMapping(long run, Path mapping) throws SQLException {
-        return start(
-                importUser,
-                true,
-                "--import.command=validate-mapping",
-                "--import.run=" + run,
-                "--import.mapping=" + mapping);
+        List<String> args = new ArrayList<>(ExampleLegacySource.args());
+        args.addAll(List.of("--import.command=validate-mapping", "--import.run=" + run, "--import.mapping=" + mapping));
+        return start(importUser, true, args.toArray(String[]::new));
     }
 
     private long runWithIssues() {

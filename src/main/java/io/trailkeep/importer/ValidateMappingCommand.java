@@ -15,16 +15,18 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * {@code validate-mapping} for one run (design §3 step 1), structural checks only for now (26b). The problems replace
- * the run's earlier {@code VALIDATE} issues, each a {@code FATAL} issue about the mapping; a mapping with none moves
- * the run to {@code VALIDATED} with the file's SHA-256 as its mapping hash, which the sign-off and the load compare
- * against later (§3); a mapping with problems puts it back to {@code REQUESTED} with no hash, so an earlier pass
- * never stands beside a failed file. The file holds no legacy data, so a plain hash is enough.
+ * {@code validate-mapping} for one run (design §3 step 1): the structural and query checks (26b, 26m), then, for a
+ * JDBC source whose file passed them, a one-row test fetch of every query as the source account (26n). The problems
+ * replace the run's earlier {@code VALIDATE} issues, each a {@code FATAL} issue about the mapping; a mapping with none
+ * moves the run to {@code VALIDATED} with the file's SHA-256 as its mapping hash, which the sign-off and the load
+ * compare against later (§3); a mapping with problems puts it back to {@code REQUESTED} with no hash, so an earlier
+ * pass never stands beside a failed file. The file holds no legacy data, so a plain hash is enough.
  */
 @Component
 class ValidateMappingCommand {
 
     private final MappingValidator validator;
+    private final SourceTestFetch testFetch;
     private final ImportRunRepository runs;
     private final ImportIssueRepository issues;
     private final TransactionTemplate transactions;
@@ -32,11 +34,13 @@ class ValidateMappingCommand {
 
     ValidateMappingCommand(
             MappingValidator validator,
+            SourceTestFetch testFetch,
             ImportRunRepository runs,
             ImportIssueRepository issues,
             TransactionTemplate transactions,
             InstantSource clock) {
         this.validator = validator;
+        this.testFetch = testFetch;
         this.runs = runs;
         this.issues = issues;
         this.transactions = transactions;
@@ -53,9 +57,11 @@ class ValidateMappingCommand {
      */
     List<MappingProblem> run(long runId, Path mapping) {
         byte[] content = read(mapping);
-        List<MappingProblem> problems = content.length == 0 && size(mapping) > MappingValidator.MAX_BYTES
+        List<MappingProblem> found = content.length == 0 && size(mapping) > MappingValidator.MAX_BYTES
                 ? List.of(new MappingProblem(MappingProblem.Code.MAPPING_TOO_LARGE, ""))
                 : validator.validate(mapping, content);
+        // Outside the run's transaction: the test fetch is network I/O against the source.
+        List<MappingProblem> problems = found.isEmpty() ? testFetch.check(content) : found;
         transactions.executeWithoutResult(status -> {
             ImportRun run = runs.findById(runId).orElseThrow(() -> new IllegalStateException("No import run " + runId));
             if (!run.awaitsMapping()) {

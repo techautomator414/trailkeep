@@ -1,0 +1,49 @@
+<!--
+  SPDX-License-Identifier: Apache-2.0
+  Copyright 2026 Charlie Genova and contributors
+-->
+# Source accounts: the read-only login the importer uses on a legacy database
+
+The importer reads a legacy database through one account, which the legacy database's administrator creates by
+following this recipe (docs/design/importer.md §4.1). The recipe is the control over which tables the importer can
+read. The importer's query validator is the control over which functions a query can call. The read-only snapshot is
+defence in depth, never relied on alone.
+
+**Prefer a copy.** Run the import against a restored copy or a snapshot of the legacy database, not against
+production. A long extract holds a snapshot open, which blocks vacuum on PostgreSQL. On a copy the administrator can
+also revoke what production cannot spare.
+
+The account's password is given to the importer Job as a Secret file, read as `import.source.password`. It never appears in the mapping file. `validate-mapping` connects as this account to test-fetch every query, so a missing grant shows up there as `SOURCE_PERMISSION_DENIED` at the query's place.
+
+## PostgreSQL
+
+The importer reads in one `REPEATABLE READ READ ONLY` transaction, so every query of a run sees the same snapshot.
+Use TLS with `sslmode=verify-full` and `sslrootcert` pointing at the mounted CA.
+
+Replace `legacy` with the schema the mapping reads, and `trailkeep_source` with the account name.
+
+```sql
+CREATE ROLE trailkeep_source LOGIN PASSWORD '<from your secret store>';
+GRANT CONNECT ON DATABASE <legacy database> TO trailkeep_source;
+GRANT USAGE ON SCHEMA legacy TO trailkeep_source;
+-- Only the tables or views the mapping's queries read; never ALL TABLES, never pg_read_all_data.
+GRANT SELECT ON legacy.cases, legacy.notes, legacy.files, legacy.users TO trailkeep_source;
+-- PUBLIC can execute every function unless revoked. Revoke the legacy schema's functions where you can (always on
+-- a copy); built-in functions stay executable, and the importer's allow-list refuses calls to any other function.
+REVOKE EXECUTE ON ALL FUNCTIONS IN SCHEMA legacy FROM PUBLIC;
+```
+
+Do not grant `dblink`, `postgres_fdw`, `pg_execute_server_program`, `pg_read_server_files`,
+`pg_write_server_files` or membership of any role that holds them.
+
+What the recipe achieves is tested against a PostgreSQL container (`PostgresSourceQueryIT`). The account:
+
+- can read the granted table;
+- cannot insert, update or delete;
+- cannot lock rows with `SELECT … FOR UPDATE`;
+- cannot read a table it was not granted;
+- cannot execute a legacy-schema function after the revoke.
+
+## Oracle and SQL Server
+
+The recipes and their tests arrive with the Oracle adapter (WP-26 part o) and the SQL Server adapter (part p).
