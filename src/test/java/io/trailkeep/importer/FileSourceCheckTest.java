@@ -66,6 +66,16 @@ class FileSourceCheckTest {
     }
 
     @Test
+    void csvDialectThatTheParserRefusesIsOneProblemAtTheDialect() throws Exception {
+        assertThat(check(MAPPING.formatted(directory.resolve("files"))
+                        .replace("manifest.yaml }", "manifest.yaml, csv: { delimiter: \"\\n\" } }")
+                        .replace("cases.jsonl", "cases.csv")))
+                .containsExactly(
+                        new MappingProblem(Code.MANIFEST_MISMATCH, "/entities/case/file"),
+                        new MappingProblem(Code.CSV_DIALECT_INVALID, "/source/csv"));
+    }
+
+    @Test
     void missingOrBrokenManifestIsOneProblemAtTheManifest() throws Exception {
         String mapping = MAPPING.formatted(directory.resolve("files"));
         Files.writeString(directory.resolve("manifest.yaml"), "version: 2\n");

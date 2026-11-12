@@ -12,8 +12,8 @@ package io.trailkeep.importer;
 record MappingProblem(Code code, String pointer) implements Comparable<MappingProblem> {
 
     /**
-     * The structural checks (26b), query checks (26m), test fetch (26n) and a files source's manifest check (26n2, with
-     * the extract's codes); their names are the issue codes.
+     * The structural checks (26b), query checks (26m), test fetch (26n), a files source's manifest check (26n2, with
+     * the extract's codes) and CSV dialect check (26l); their names are the issue codes.
      */
     enum Code {
         /** Larger than {@link MappingValidator#MAX_BYTES}. */
@@ -85,7 +85,9 @@ record MappingProblem(Code code, String pointer) implements Comparable<MappingPr
         /** A mapped file's real path, symlinks followed, leaves the mapping file's directory. */
         PATH_OUTSIDE_ROOT,
         /** {@code attachments.root} is not a readable folder. */
-        ATTACHMENTS_ROOT_UNREADABLE
+        ATTACHMENTS_ROOT_UNREADABLE,
+        /** {@code source.csv} declares characters that clash: a delimiter that is the quote or holds a line break. */
+        CSV_DIALECT_INVALID
     }
 
     @Override

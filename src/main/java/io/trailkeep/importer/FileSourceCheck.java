@@ -27,9 +27,9 @@ import tools.jackson.dataformat.yaml.YAMLMapper;
  * {@code validate-mapping}'s check of a files source (WP-26 part n2, design §3 step 1 "files and manifest checked"):
  * the manifest must be readable and pass its schema; every mapped file must be listed for its entity, lie under the
  * mapping file's directory once symlinks are followed, and match the manifest's SHA-256; {@code attachments.root} must
- * be a readable folder. The codes are the ones the extract records, which checks the same again, row counts included,
- * as it reads; each problem sits at the place in the mapping that names the file. Runs only on a structurally sound
- * mapping.
+ * be a readable folder; a CSV file's declared dialect must be one the parser accepts (26l). The codes are the ones the
+ * extract records, which checks the same again, row counts included, as it reads; each problem sits at the place in
+ * the mapping that names the file ({@code /source/csv} for the dialect). Runs only on a structurally sound mapping.
  */
 final class FileSourceCheck {
 
@@ -64,13 +64,7 @@ final class FileSourceCheck {
                     .toRealPath();
             FileManifest manifest = FileManifest.read(directory, mapping, FileManifest.schema());
             for (StagedEntity entity : StagedEntity.values()) {
-                String pointer = entity == StagedEntity.PERSON
-                        ? "/people/file"
-                        : "/entities/" + FileManifest.name(entity) + "/file";
-                if (mapping.at(pointer).isString()) {
-                    checkFile(directory, manifest, mapping.at(pointer).asString(), entity)
-                            .ifPresent(code -> problems.add(new MappingProblem(code, pointer)));
-                }
+                checkEntity(mapping, directory, manifest, entity, problems);
             }
         } catch (IOException unreadable) {
             problems.add(new MappingProblem(Code.SOURCE_FILE_UNREADABLE, "/source/manifest"));
@@ -78,6 +72,35 @@ final class FileSourceCheck {
             problems.add(new MappingProblem(Code.valueOf(refused.code()), "/source/manifest"));
         }
         return List.copyOf(problems);
+    }
+
+    /** One entity's file, if it names one: its CSV dialect, then its manifest entry. */
+    private static void checkEntity(
+            JsonNode mapping,
+            Path directory,
+            FileManifest manifest,
+            StagedEntity entity,
+            Set<MappingProblem> problems) {
+        String pointer =
+                entity == StagedEntity.PERSON ? "/people/file" : "/entities/" + FileManifest.name(entity) + "/file";
+        if (!mapping.at(pointer).isString()) {
+            return;
+        }
+        String name = mapping.at(pointer).asString();
+        if (CsvSource.isCsv(name)) {
+            dialect(mapping, name).ifPresent(problems::add);
+        }
+        checkFile(directory, manifest, name, entity).ifPresent(code -> problems.add(new MappingProblem(code, pointer)));
+    }
+
+    /** A CSV file's dialect, as the extract will build it. */
+    private static Optional<MappingProblem> dialect(JsonNode mapping, String file) {
+        try {
+            CsvSource.format(mapping, file);
+            return Optional.empty();
+        } catch (SourceException clash) {
+            return Optional.of(new MappingProblem(Code.CSV_DIALECT_INVALID, "/source/csv"));
+        }
     }
 
     /** One mapped file against its manifest entry: listed for its entity, contained, unchanged. */

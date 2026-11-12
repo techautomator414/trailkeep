@@ -43,7 +43,19 @@
         "timezone": { "type": "string", "minLength": 1, "maxLength": 64 },
         "dstAmbiguity": { "enum": ["earlier", "later", "reject"], "default": "reject" },
         "manifest": { "$ref": "#/$defs/relativePath" },
-        "encoding": { "enum": ["UTF-8", "UTF-16LE", "UTF-16BE", "windows-1252", "ISO-8859-1"] }
+        "encoding": { "enum": ["UTF-8", "UTF-16LE", "UTF-16BE", "windows-1252", "ISO-8859-1"] },
+        "csv": {
+          "$comment": "The CSV/TSV dialect (design section 4.2). quote is one character or empty for none; nullToken matches unquoted fields only.",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "delimiter": { "type": "string", "minLength": 1, "maxLength": 8 },
+            "quote": { "type": "string", "maxLength": 1 },
+            "escape": { "type": "string", "minLength": 1, "maxLength": 1 },
+            "header": { "type": "boolean" },
+            "nullToken": { "type": "string", "maxLength": 20 }
+          }
+        }
       },
       "if": { "properties": { "kind": { "const": "jdbc" } } },
       "then": { "required": ["vendor", "url", "user"] },
