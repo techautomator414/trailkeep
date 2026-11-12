@@ -627,6 +627,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- On a deployment where the application connects as a user that does not own the tables and names the owner in
+  `app.db.schema` (BUILD_PLAN §8 rule 7, as on Oracle), every statement Hibernate does not write failed with
+  ORA-00942 or ORA-02289: creating a case (the case-number sequence), posting a comment (the search text), uploading
+  and downloading attachments, the mail outbox, ShedLock, Spring Session, and the purge as `TRAILKEEP_PURGE`.
+  `app.db.schema` is now every pooled connection's default schema as well as Hibernate's (`ALTER SESSION SET
+  CURRENT_SCHEMA` on Oracle, `SET search_path` on PostgreSQL, run as the pool's connection-init SQL), and it must be a
+  plain identifier: anything else, or a connection-init SQL already configured, stops the start.
 - `SlaAccessibilityIT` failed between 23:00 and 24:00 in `app.timezone`: it set the case due at now plus three days
   and an hour and expected "3 days left", but the page counts calendar days, so in the last hour of the day it read "4
   days left". The test now sets the due time at noon three calendar days from today in `app.timezone`. Test-only; the
