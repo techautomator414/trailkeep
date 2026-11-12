@@ -17,9 +17,9 @@ import org.springframework.stereotype.Component;
 /**
  * Runs the one command a start of the {@code importer} profile was given (deploy/jobs/importer-job.yaml, design §2.1),
  * as the {@code TRAILKEEP_IMPORT} user; the process then ends ({@code TrailkeepApplication}). A failure fails the
- * start, so the Job's pod exits non-zero. {@code status}, {@code validate-mapping}, {@code extract}, {@code dry-run}
- * and {@code purge-staging} exist so far; the other commands arrive with their PRs (design §12) and are refused until
- * then. Every command first applies the staging TTL. Logs carry run ids, codes and counts only.
+ * start, so the Job's pod exits non-zero. {@code status}, {@code validate-mapping}, {@code extract}, {@code dry-run},
+ * {@code load} and {@code purge-staging} exist so far; the other commands arrive with their PRs (design §12) and are
+ * refused until then. Every command first applies the staging TTL. Logs carry run ids, codes and counts only.
  */
 @Component
 @Profile("importer")
@@ -32,6 +32,7 @@ class ImportCommandRunner implements ApplicationRunner {
     private final ValidateMappingCommand validateMapping;
     private final ExtractCommand extract;
     private final DryRunCommand dryRun;
+    private final LoadCommand load;
     private final StagingPurger purger;
     private final InstantSource clock;
 
@@ -41,6 +42,7 @@ class ImportCommandRunner implements ApplicationRunner {
             ValidateMappingCommand validateMapping,
             ExtractCommand extract,
             DryRunCommand dryRun,
+            LoadCommand load,
             StagingPurger purger,
             InstantSource clock) {
         this.properties = properties;
@@ -48,6 +50,7 @@ class ImportCommandRunner implements ApplicationRunner {
         this.validateMapping = validateMapping;
         this.extract = extract;
         this.dryRun = dryRun;
+        this.load = load;
         this.purger = purger;
         this.clock = clock;
     }
@@ -55,7 +58,7 @@ class ImportCommandRunner implements ApplicationRunner {
     @Override
     public void run(ApplicationArguments args) {
         String command = properties.command();
-        if (!List.of("status", "validate-mapping", "extract", "dry-run", "purge-staging")
+        if (!List.of("status", "validate-mapping", "extract", "dry-run", "load", "purge-staging")
                 .contains(command)) {
             throw new IllegalStateException("Unknown or not yet available import command: " + command);
         }
@@ -84,6 +87,10 @@ class ImportCommandRunner implements ApplicationRunner {
                     outcome.rows(),
                     outcome.issues(),
                     outcome.fatal());
+        }
+        if ("load".equals(command)) {
+            LoadCommand.Outcome outcome = load.run(runId, mapping());
+            LOG.info("Import run {}: {} cases loaded, {} skipped", runId, outcome.loaded(), outcome.skipped());
         }
         if ("purge-staging".equals(command)) {
             purger.purge(runId, clock.instant());

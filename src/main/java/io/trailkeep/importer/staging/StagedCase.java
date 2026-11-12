@@ -101,6 +101,18 @@ public class StagedCase extends StagedRow {
         this.legalHold = values.flag("legalHold");
     }
 
+    public @Nullable String getLegacyNumber() {
+        return legacyNumber;
+    }
+
+    public @Nullable String getSubjectText() {
+        return subjectText;
+    }
+
+    public @Nullable String getClosureSummary() {
+        return closureSummary;
+    }
+
     public @Nullable String getTitle() {
         return title;
     }

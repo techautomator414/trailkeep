@@ -35,8 +35,9 @@ class CaseRulesTest {
     private static final Map<String, Boolean> TEAMS = Map.of("Team North", true, "Team Old", false);
 
     private static final Map<String, ImportCaseType> TYPES = Map.of(
-            "general-review", new ImportCaseType("general-review", true, 7, Set.of("SUBSTANTIATED", "UNSUBSTANTIATED")),
-            "retired-type", new ImportCaseType("retired-type", false, 7, Set.of("CLOSED_OTHER")));
+            "general-review",
+                    new ImportCaseType(1, "general-review", true, 7, Set.of("SUBSTANTIATED", "UNSUBSTANTIATED")),
+            "retired-type", new ImportCaseType(2, "retired-type", false, 7, Set.of("CLOSED_OTHER")));
 
     private final CaseRules rules = rules("limits: { maxErrorRate: 0.25 }");
 

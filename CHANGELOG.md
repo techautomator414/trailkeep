@@ -119,6 +119,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   anyone but a Compliance Admin a 403. The sign-off is stored in `APPROVED_BY`, `APPROVED_AT` and
   `ACKNOWLEDGED_WARNINGS` (the classes read from the run's issues) and audited as `IMPORT_RUN_SIGNED_OFF` with the
   recorded scanning mode.
+- The `load` command and the import ledger (WP-26 part t1, docs/design/importer.md §3 step 5, §8.2; migration V17
+  `IMPORT_LEDGER`): `load` writes a signed-off run's staged cases through `casefile`'s and `closure`'s import APIs, one
+  case per transaction with its SLA row, search row, imported closure (closed cases), audit events, ledger row and the
+  run's count, so a case is either fully in or absent. It refuses to start, each with its own code and before writing
+  anything, unless the run is signed off (`NOT_SIGNED_OFF`), still has its staging (`NOT_LOADABLE`), has no FATAL
+  issue (`FATAL_ISSUES`) and is loaded with the mapping file, lookup files and default-owner file it was validated and
+  dry-run with (`MAPPING_CHANGED`). Cases the ledger holds for the run's source are never written again, so a crashed
+  or failed load resumes at the next case and a load after `LOADED` writes nothing; cases with an ERROR from the
+  extract or the dry run are skipped; owners are chosen as the dry run forecast them. A run lock keeps one load per
+  run on any number of nodes: the load claims the run (`LOADING`) by a conditional update on its version and every
+  case's transaction checks and moves that version on; a live load's run is refused (`RUN_LOCKED`), and a load that
+  has not moved its run for 10 minutes is taken over. The run ends `LOADED`, or `FAILED` when a case cannot be
+  written. The import user gains SELECT and INSERT on `CASE_RECORD`, `CASE_SLA`, `CASE_SEARCH`, `CLOSURE_REQUEST`,
+  `AUDIT_EVENT` and `IMPORT_LEDGER` and draws from their sequences and `SEQ_CASE_NUMBER`; the runtime user may read
+  `IMPORT_LEDGER`; nobody may change or delete a ledger row.
 - The Oracle source (WP-26 part o, docs/design/importer.md §4.1): a `kind: jdbc` Oracle mapping is test-fetched by
   `validate-mapping` and extracted in one `SET TRANSACTION READ ONLY` transaction, with the session in UTC and ISO
   date, timestamp and number formats; `DATE` and `TIMESTAMP` read as local date-times, `TIMESTAMP WITH TIME ZONE` with

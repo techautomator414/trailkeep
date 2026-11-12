@@ -89,18 +89,20 @@ public interface CaseImportService {
     long importComment(ImportRun run, ImportedComment comment);
 
     /**
-     * A case type as the dry run checks staged cases against it (WP-26 part q, design §7.1).
+     * A case type as the dry run checks staged cases against it (WP-26 part q, design §7.1), and the load names it.
      *
+     * @param id its id, which an imported case's fields carry
      * @param name its name, which the mapping's {@code caseTypeKey} names exactly
      * @param active whether an open case may use it
      * @param retentionYears how long after closing its cases are archived
      * @param outcomes the closure outcomes it allows
      */
-    record ImportCaseType(String name, boolean active, int retentionYears, Set<String> outcomes) {
+    record ImportCaseType(long id, String name, boolean active, int retentionYears, Set<String> outcomes) {
 
         /**
          * Copies the outcomes, so the record holds nothing mutable.
          *
+         * @param id its id
          * @param name its name
          * @param active whether an open case may use it
          * @param retentionYears how long after closing its cases are archived
@@ -158,12 +160,20 @@ public interface CaseImportService {
     SlaForecast slaForecast(Instant at);
 
     /**
+     * An imported case as created.
+     *
+     * @param caseId its id, which its closure and the import ledger name (WP-26 part t)
+     * @param number its new Trailkeep number
+     */
+    record Created(long caseId, CaseNumber number) {}
+
+    /**
      * Creates the case with its SLA row and search text, and audits it, in the caller's transaction.
      *
      * @param run the run
      * @param imported the case
-     * @return its new Trailkeep number
+     * @return its id and new Trailkeep number
      * @throws CaseException {@code INVALID} for a case the rules refuse
      */
-    CaseNumber importCase(ImportRun run, ImportedCase imported);
+    Created importCase(ImportRun run, ImportedCase imported);
 }

@@ -77,7 +77,7 @@ abstract class AbstractCaseImportIT {
 
     @Test
     void importedCaseKeepsLegacyOpenedAt() {
-        CaseNumber number = imports.importCase(RUN, open(analyst, null));
+        CaseNumber number = imports.importCase(RUN, open(analyst, null)).number();
 
         Map<String, Object> row = caseRow(number);
         assertThat(number.year())
@@ -96,7 +96,7 @@ abstract class AbstractCaseImportIT {
 
     @Test
     void importedCaseMayBeCreatedClosed() {
-        CaseNumber number = imports.importCase(RUN, closed(analyst, caseType));
+        CaseNumber number = imports.importCase(RUN, closed(analyst, caseType)).number();
 
         Map<String, Object> row = caseRow(number);
         assertThat(row.get("STATUS")).isEqualTo("CLOSED");
@@ -155,13 +155,14 @@ abstract class AbstractCaseImportIT {
                 .isNull();
 
         CaseImportService.SlaForecast now = imports.slaForecast(Instant.now());
-        CaseNumber number = imports.importCase(RUN, open(analyst, null));
+        CaseNumber number = imports.importCase(RUN, open(analyst, null)).number();
         assertThat(slaState(number)).isEqualTo(String.valueOf(now.state(type, LocalDate.of(2019, 3, 1), OPENED)));
     }
 
     @Test
     void closedImportMayBeOwnedByPrincipal() {
-        CaseNumber number = imports.importCase(RUN, closed(ImportPeopleService.IMPORTER_ID, caseType));
+        CaseNumber number = imports.importCase(RUN, closed(ImportPeopleService.IMPORTER_ID, caseType))
+                .number();
 
         assertThat(id(caseRow(number).get("OWNER_ID"))).isEqualTo(ImportPeopleService.IMPORTER_ID);
         assertThatThrownBy(() -> imports.importCase(RUN, open(ImportPeopleService.IMPORTER_ID, null)))
@@ -174,7 +175,8 @@ abstract class AbstractCaseImportIT {
 
     @Test
     void defaultOwnerApplied() {
-        CaseNumber number = imports.importCase(RUN, open(analyst, "Synthetic Legacy Owner"));
+        CaseNumber number =
+                imports.importCase(RUN, open(analyst, "Synthetic Legacy Owner")).number();
 
         assertThat(caseRow(number).get("OWNER_NAME_SNAPSHOT")).isEqualTo("Synthetic Legacy Owner");
         long outsider = new CaseSeed(jdbc).user();
@@ -228,7 +230,7 @@ abstract class AbstractCaseImportIT {
 
     @Test
     void theImportIsAuditedByThePrincipalWithTheRunAndRedactedText() {
-        CaseNumber number = imports.importCase(RUN, open(analyst, null));
+        CaseNumber number = imports.importCase(RUN, open(analyst, null)).number();
 
         Map<String, Object> event = jdbc.queryForMap(
                 "SELECT ACTOR_ID, ACTOR_NAME_SNAPSHOT, ORIGIN, ACTION, NEW_VALUES_JSON FROM AUDIT_EVENT"
@@ -246,7 +248,7 @@ abstract class AbstractCaseImportIT {
 
     @Test
     void importedCommentKeepsLegacyTimeAndAuthor() {
-        CaseNumber number = imports.importCase(RUN, closed(analyst, caseType));
+        CaseNumber number = imports.importCase(RUN, closed(analyst, caseType)).number();
         Instant written = Instant.parse("2019-04-02T10:15:00Z");
 
         long unmatched = imports.importComment(
@@ -278,7 +280,7 @@ abstract class AbstractCaseImportIT {
     /** A description over 20 000 characters continues, escaped by the importer, in a first comment (§6.2). */
     @Test
     void descriptionOverflowContinuesInAnEscapedFirstComment() {
-        CaseNumber number = imports.importCase(RUN, open(analyst, null));
+        CaseNumber number = imports.importCase(RUN, open(analyst, null)).number();
         String escapedTail = "\\*the rest of a long description\\* 1\\. as typed";
 
         long comment = imports.importComment(
@@ -292,7 +294,7 @@ abstract class AbstractCaseImportIT {
 
     @Test
     void importedCommentsKeepTheCommentRules() {
-        CaseNumber number = imports.importCase(RUN, open(analyst, null));
+        CaseNumber number = imports.importCase(RUN, open(analyst, null)).number();
         CaseNumber unknown = new CaseNumber(number.prefix(), number.year(), 9_999_999L);
 
         for (ImportedComment refused : new ImportedComment[] {

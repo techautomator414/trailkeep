@@ -34,6 +34,12 @@ interface ImportIssueRepository extends Repository<ImportIssue, Long> {
     long countFailedRows(
             long runId, ImportIssue.Subject subject, ImportIssue.Severity severity, Collection<String> accepted);
 
+    /** Those of these keyed hashes whose rows have an issue of a severity, at any stage; the load skips them. */
+    @Query("select distinct i.keyHash from ImportIssue i where i.runId = :runId and i.subject = :subject"
+            + " and i.severity = :severity and i.keyHash in :keyHashes")
+    List<String> keyHashesWith(
+            long runId, ImportIssue.Subject subject, ImportIssue.Severity severity, Collection<String> keyHashes);
+
     /** A run's issues counted by entity, severity and code: each element is those three and the count. */
     @Query("select i.subject, i.severity, i.code, count(i) from ImportIssue i where i.runId = :runId"
             + " group by i.subject, i.severity, i.code")

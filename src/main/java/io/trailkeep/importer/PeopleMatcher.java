@@ -12,6 +12,7 @@ import io.trailkeep.user.ImportPeopleService.PersonMatch;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.SortedSet;
 import java.util.TreeSet;
@@ -40,6 +41,7 @@ final class PeopleMatcher {
     private final List<String> order;
     private final Map<String, String> defaultOwners;
     private final Map<String, PersonMatch> matched = new HashMap<>();
+    private final Map<String, String> names = new HashMap<>();
     private final Map<Eligibility, Boolean> eligible = new HashMap<>();
     private final Map<Long, Optional<Long>> defaults = new HashMap<>();
     private final SortedSet<Long> openTeams = new TreeSet<>();
@@ -70,6 +72,9 @@ final class PeopleMatcher {
      * @return {@code AMBIGUOUS_PERSON} when only an ambiguous email address matched; else nothing
      */
     List<Finding> person(StagedPerson row) {
+        if (row.getDisplayName() != null) {
+            names.put(row.getKey().legacyKey(), row.getDisplayName());
+        }
         boolean ambiguous = false;
         for (String way : order) {
             List<PersonMatch> found = switch (way) {
@@ -115,6 +120,37 @@ final class PeopleMatcher {
         }
         PersonMatch match = row.getOwnerKey() == null ? null : matched.get(row.getOwnerKey());
         return match != null && teamId != null && eligible(match.userId(), teamId);
+    }
+
+    /**
+     * Who owns a case at load (WP-26 part t, design §7.3), and the legacy owner's name when that is someone else.
+     *
+     * @param userId the owner's {@code APP_USER} id
+     * @param nameSnapshot the legacy owner's name as staged when the case does not keep them, or {@code null}
+     */
+    record Owner(long userId, @Nullable String nameSnapshot) {}
+
+    /**
+     * The owner the load gives a case: its legacy owner when {@link #keepsOwner} keeps them; otherwise, for an open
+     * case, its team's eligible default owner, and for a closed case the "Trailkeep import" principal.
+     *
+     * @param row the case
+     * @param teamId its team's id
+     * @param teamName its team's name
+     * @param importer the import principal's id
+     * @return the owner, or {@code null} for an open case whose team has no eligible default owner now
+     */
+    @Nullable
+    Owner owner(StagedCase row, long teamId, String teamName, long importer) {
+        String key = row.getOwnerKey();
+        if (keepsOwner(row, teamId)) {
+            return new Owner(Objects.requireNonNull(matched.get(key), "kept").userId(), null);
+        }
+        String snapshot = key == null ? null : names.get(key);
+        if (!"OPEN".equals(row.getStatus())) {
+            return new Owner(importer, snapshot);
+        }
+        return defaultOwner(teamId, teamName).map(id -> new Owner(id, snapshot)).orElse(null);
     }
 
     /**

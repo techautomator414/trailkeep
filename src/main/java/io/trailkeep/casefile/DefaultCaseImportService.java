@@ -122,6 +122,7 @@ class DefaultCaseImportService implements CaseImportService {
     public List<ImportCaseType> caseTypes() {
         return caseTypes.findAllByOrderByNameAsc().stream()
                 .map(type -> new ImportCaseType(
+                        Objects.requireNonNull(type.getId(), "persisted"),
                         type.getName(),
                         type.isActive(),
                         type.getRetentionYears(),
@@ -159,7 +160,7 @@ class DefaultCaseImportService implements CaseImportService {
     }
 
     @Override
-    public CaseNumber importCase(ImportRun run, ImportedCase imported) {
+    public Created importCase(ImportRun run, ImportedCase imported) {
         Instant now = clock.instant();
         CaseFields fields = imported.fields();
         boolean closed = checkDates(imported, now);
@@ -196,7 +197,7 @@ class DefaultCaseImportService implements CaseImportService {
                 caseId,
                 "CASE_IMPORTED",
                 audit.diff(null, snapshot(run, imported))));
-        return number;
+        return new Created(caseId, number);
     }
 
     @Override
