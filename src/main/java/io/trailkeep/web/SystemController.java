@@ -5,6 +5,7 @@ package io.trailkeep.web;
 import io.trailkeep.document.ScanEngineService;
 import io.trailkeep.notification.OutboxStatusService;
 import io.trailkeep.notification.OutboxStatusService.Backlog;
+import io.trailkeep.notification.TestMailService;
 import io.trailkeep.security.TrailkeepOidcUser;
 import io.trailkeep.shared.DomainException;
 import io.trailkeep.shared.config.AppProperties;
@@ -31,13 +32,15 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 
 /**
  * The System screen (WP-25, BUILD_PLAN §3.1 "System health, scheduler, scan engine", §4.6): System Admins and
  * Compliance Admins see each scheduled job's last success on any replica ({@code JOB_RUN}, the cluster truth), whether
  * it is late against its health indicator's grace, the outbox's backlog and failures, whether clamd answers, with its
  * version, and the users whose System Admin claim is withheld because they hold team roles (the durable list from the
- * audit trail). Anyone else gets 403. It reads, never writes, and shows no case content. Times are in
+ * audit trail), and offers "send me a test" ({@link TestMailController}). Anyone else gets 403. It reads, never
+ * writes, and shows no case content. Times are in
  * {@code app.timezone}.
  */
 @Controller
@@ -99,7 +102,10 @@ class SystemController {
     record ConflictLine(String name, LocalDateTime seen) {}
 
     @GetMapping("/admin/system")
-    String show(@AuthenticationPrincipal TrailkeepOidcUser principal, Model model) {
+    String show(
+            @AuthenticationPrincipal TrailkeepOidcUser principal,
+            @RequestParam(name = "test", required = false) @Nullable String test,
+            Model model) {
         UserPermissions user = directory.permissionsOf(principal.userId());
         if (Collections.disjoint(user.globalRoles(), List.of(GlobalRole.SYSTEM_ADMIN, GlobalRole.COMPLIANCE_ADMIN))) {
             throw new Forbidden();
@@ -130,7 +136,19 @@ class SystemController {
                 conflicts.stream()
                         .map(c -> new ConflictLine(names.getOrDefault(c.userId(), ""), local(c.detectedAt())))
                         .toList());
+        model.addAttribute("templates", TestMailService.TEMPLATES);
+        model.addAttribute("testOutcome", outcome(test));
         return "web/system";
+    }
+
+    /** The outcome of the test mail just requested, from the redirect; anything else is no notice. */
+    private static TestMailService.@Nullable Outcome outcome(@Nullable String test) {
+        for (TestMailService.Outcome outcome : TestMailService.Outcome.values()) {
+            if (outcome.name().equals(test)) {
+                return outcome;
+            }
+        }
+        return null;
     }
 
     private LocalDateTime local(Instant instant) {

@@ -5,6 +5,7 @@ package io.trailkeep.audit;
 import io.trailkeep.shared.access.CaseScope;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -65,6 +66,18 @@ public interface AuditTrailService {
      * @return the entities and the time of their standing event
      */
     List<StandingEvent> standing(String entityType, String action, Set<String> clearedBy);
+
+    /**
+     * When the latest case-less event with this action happened for one entity, for example a user's last {@code
+     * TEST_MAIL_QUEUED} (WP-25). Only the time: no payload, actor or request detail. Case-less events only, so no
+     * scope; the caller decides what the answer is used for.
+     *
+     * @param entityType the entity type, such as {@code USER}
+     * @param entityId the entity's id
+     * @param action the action
+     * @return its latest time, or empty if it never happened
+     */
+    Optional<Instant> latest(String entityType, long entityId, String action);
 
     /**
      * One page of audit events.

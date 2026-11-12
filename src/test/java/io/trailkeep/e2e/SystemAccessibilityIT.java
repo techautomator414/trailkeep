@@ -30,7 +30,8 @@ import org.springframework.test.context.DynamicPropertySource;
 /**
  * The System screen in a real browser after a real OIDC login as {@code system.admin} (WP-25): reached from the
  * Users page by keyboard, it has one h1, a captioned jobs table with row headers, the outbox as a description list and
- * the scanner's state in text, and axe finds 0 violations with no CSP problem in the console.
+ * the scanner's state in text, and "send me a test" works from the keyboard; axe finds 0 violations before and
+ * after, with no CSP problem in the console.
  */
 // "IT" is the Failsafe suffix Part B mandates for integration tests, not an abbreviation.
 @SuppressWarnings("checkstyle:AbbreviationAsWordInName")
@@ -110,6 +111,17 @@ class SystemAccessibilityIT {
         assertThat(page.locator("table caption").textContent()).isEqualTo("Scheduled jobs, by name");
         assertThat(page.locator("tbody th[scope=row]").count()).isGreaterThanOrEqualTo(4);
         assertThat(page.textContent("main")).contains("Waiting to be sent", "clamd does not answer");
+        assertThat(shell.axeViolations()).isEmpty();
+        assertThat(consoleProblems).isEmpty();
+
+        // "Send me a test" from the keyboard: choose a mail, Tab to the button, Enter; the outcome is announced.
+        page.focus("#tk-test-template");
+        page.keyboard().press("ArrowDown");
+        page.keyboard().press("Tab");
+        page.keyboard().press("Enter");
+        page.waitForURL("**/admin/system?test=*");
+        page.waitForLoadState();
+        assertThat(page.locator("[data-tk-toast]").textContent()).containsAnyOf("Test mail queued", "Not sent");
         assertThat(shell.axeViolations()).isEmpty();
         assertThat(consoleProblems).isEmpty();
     }
