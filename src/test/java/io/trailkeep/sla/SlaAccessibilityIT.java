@@ -16,6 +16,7 @@ import io.trailkeep.e2e.pages.ShellPage;
 import io.trailkeep.e2e.pages.SignInPage;
 import io.trailkeep.shared.CaseNumber;
 import io.trailkeep.shared.Sensitivity;
+import io.trailkeep.shared.config.AppProperties;
 import io.trailkeep.testsupport.CaseSeed;
 import io.trailkeep.testsupport.KeycloakDevRealm;
 import io.trailkeep.testsupport.PostgresTestcontainersConfiguration;
@@ -26,6 +27,8 @@ import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalTime;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
@@ -82,6 +85,9 @@ class SlaAccessibilityIT {
 
     @Autowired
     private JdbcTemplate jdbc;
+
+    @Autowired
+    private AppProperties app;
 
     @DynamicPropertySource
     static void provider(DynamicPropertyRegistry registry) {
@@ -164,7 +170,11 @@ class SlaAccessibilityIT {
         assertThat(page.textContent("main")).contains(number + ", \"" + TITLE + "\", is at risk: it is due on");
     }
 
-    /** A case the analyst owns, at risk since yesterday and due in three days, moved on by the chunk writer. */
+    /**
+     * A case the analyst owns, at risk since yesterday and due at noon three calendar days from today in {@code
+     * app.timezone}, moved on by the chunk writer. The page counts calendar days in that zone, so a due time of now
+     * plus three days and an hour would read "4 days left" when run in the last hour of the day.
+     */
     private CaseNumber atRiskCase() {
         analyst = Objects.requireNonNull(
                 jdbc.queryForObject("SELECT ID FROM APP_USER WHERE EXTERNAL_ID = ?", Long.class, ALPHA_ANALYST));
@@ -187,12 +197,18 @@ class SlaAccessibilityIT {
                         "Synthetic description",
                         Sensitivity.STANDARD));
         Instant now = Instant.now();
+        ZoneId zone = app.timezone();
+        Instant due = LocalDate.ofInstant(now, zone)
+                .plusDays(3)
+                .atTime(LocalTime.NOON)
+                .atZone(zone)
+                .toInstant();
         long caseId = Objects.requireNonNull(
                 jdbc.queryForObject("SELECT ID FROM CASE_RECORD WHERE CASE_NUMBER = ?", Long.class, number.toString()));
         jdbc.update(
                 "UPDATE CASE_SLA SET AT_RISK_AT = ?, SLA_DUE_AT = ? WHERE CASE_ID = ?",
                 Timestamp.from(now.minus(Duration.ofDays(1))),
-                Timestamp.from(now.plus(Duration.ofDays(3)).plus(Duration.ofHours(1))),
+                Timestamp.from(due),
                 caseId);
         assertThat(writer.write(List.of(caseId), now).atRisk()).isOne();
         return number;

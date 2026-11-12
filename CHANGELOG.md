@@ -380,6 +380,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- `SlaAccessibilityIT` failed between 23:00 and 24:00 in `app.timezone`: it set the case due at now plus three days
+  and an hour and expected "3 days left", but the page counts calendar days, so in the last hour of the day it read "4
+  days left". The test now sets the due time at noon three calendar days from today in `app.timezone`. Test-only; the
+  product's wording was right.
 - The legal hold's time and its history's times on the case page were rendered in the JVM's time zone instead of
   `app.timezone` (the two `Instant`s of `LegalHoldService` went straight to `#temporals.format`). They are now
   `LocalDateTime`s in `app.timezone`, like every other time on the page; a test sets a different JVM zone and checks the
