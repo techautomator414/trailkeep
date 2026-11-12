@@ -59,6 +59,9 @@ class UserSignInServiceIT {
     @Autowired
     private AuditTrailService auditTrail;
 
+    @Autowired
+    private UserDirectoryService directory;
+
     @Test
     void firstLoginCreatesTheUserAndLaterLoginsRefreshTheProfile() {
         String subject = subject();
@@ -98,7 +101,7 @@ class UserSignInServiceIT {
         assertThat(globalRoles.findByIdUserId(account.id()))
                 .extracting(row -> row.getId().role())
                 .containsExactly(GlobalRole.SYSTEM_ADMIN);
-        assertThat(service.roleConflicts()).noneMatch(conflict -> conflict.userId() == account.id());
+        assertThat(directory.roleConflicts()).noneMatch(conflict -> conflict.userId() == account.id());
         List<AuditRecord> roleChanges = audit(account.id()).stream()
                 .filter(event -> event.action().equals("GLOBAL_ROLES_CHANGED"))
                 .toList();
@@ -139,7 +142,7 @@ class UserSignInServiceIT {
         assertThat(globalRoles.findByIdUserId(account.id()))
                 .extracting(row -> row.getId().role())
                 .containsExactly(GlobalRole.COMPLIANCE_ADMIN);
-        assertThat(service.roleConflicts()).anyMatch(conflict -> conflict.userId() == account.id());
+        assertThat(directory.roleConflicts()).anyMatch(conflict -> conflict.userId() == account.id());
         assertThat(actions(account.id())).containsSubsequence("LOGIN", "ROLE_CONFLICT", "GLOBAL_ROLES_CHANGED");
 
         memberships.delete(memberships.findByIdUserId(account.id()).getFirst());
@@ -147,7 +150,7 @@ class UserSignInServiceIT {
         UserAccount resolved = signedIn(service.signIn(identity(subject, "Lead"), Set.of(GlobalRole.SYSTEM_ADMIN)));
 
         assertThat(resolved.globalRoles()).containsExactly(GlobalRole.SYSTEM_ADMIN);
-        assertThat(service.roleConflicts()).noneMatch(conflict -> conflict.userId() == account.id());
+        assertThat(directory.roleConflicts()).noneMatch(conflict -> conflict.userId() == account.id());
     }
 
     @Test

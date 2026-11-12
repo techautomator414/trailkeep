@@ -2,6 +2,7 @@
 // Copyright 2026 Charlie Genova and contributors
 package io.trailkeep.user;
 
+import io.trailkeep.audit.AuditTrailService;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.List;
@@ -21,16 +22,31 @@ class DefaultUserDirectory implements UserDirectoryService {
     private final AppUserTeamRepository memberships;
     private final AppUserGlobalRoleRepository globalRoles;
     private final TeamRepository teams;
+    private final AuditTrailService audit;
 
     DefaultUserDirectory(
             AppUserRepository users,
             AppUserTeamRepository memberships,
             AppUserGlobalRoleRepository globalRoles,
-            TeamRepository teams) {
+            TeamRepository teams,
+            AuditTrailService audit) {
         this.users = users;
+        this.audit = audit;
         this.teams = teams;
         this.memberships = memberships;
         this.globalRoles = globalRoles;
+    }
+
+    @Override
+    public List<RoleConflict> roleConflicts() {
+        return audit
+                .standing(
+                        UserSignInServiceImpl.ENTITY_USER,
+                        UserSignInServiceImpl.ROLE_CONFLICT,
+                        Set.of(UserSignInServiceImpl.LOGIN))
+                .stream()
+                .map(event -> new RoleConflict(event.entityId(), event.at()))
+                .toList();
     }
 
     @Override
