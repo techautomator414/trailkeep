@@ -6,15 +6,18 @@ import java.sql.Connection;
 import java.sql.SQLException;
 import javax.sql.DataSource;
 import org.hibernate.cfg.MappingSettings;
+import org.springframework.beans.factory.config.BeanPostProcessor;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.flyway.autoconfigure.FlywayConfigurationCustomizer;
 import org.springframework.boot.hibernate.autoconfigure.HibernatePropertiesCustomizer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.env.Environment;
 import org.springframework.util.StringUtils;
 
 /**
- * Persistence settings that depend on {@code app.db}: the optional default schema, and a start-up guard that the
+ * Persistence settings that depend on {@code app.db}: the optional default schema (for Hibernate's mapped tables and,
+ * through {@code SessionSchema}, for every connection), and a start-up guard that the
  * configured vendor (which chose the Flyway placeholders and the dialect version) is the vendor actually connected
  * (which chose the {@code {vendor}} migration folder).
  */
@@ -37,6 +40,18 @@ public class PersistenceConfig {
                 hibernateProperties.put(MappingSettings.DEFAULT_SCHEMA, schema);
             }
         };
+    }
+
+    /**
+     * Makes {@code app.db.schema}, when set, every pooled connection's default schema ({@link SessionSchema}). Static,
+     * as a post-processor must be, so it reads {@code app.db} from the environment itself.
+     *
+     * @param environment the environment
+     * @return the post-processor
+     */
+    @Bean
+    static BeanPostProcessor sessionSchema(Environment environment) {
+        return new SessionSchema(environment);
     }
 
     /**

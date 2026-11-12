@@ -4,6 +4,7 @@ package io.trailkeep.retention;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.trailkeep.TrailkeepApplication;
 import io.trailkeep.audit.AuditChanges;
 import io.trailkeep.audit.AuditEntry;
 import io.trailkeep.audit.AuditOrigin;
@@ -30,6 +31,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.WebApplicationType;
+import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
@@ -48,7 +51,9 @@ import org.springframework.transaction.support.TransactionTemplate;
  * row, legal hold event and in-app alert stay; the run is recorded in {@code JOB_RUN}. A held case, a case not yet due
  * and a closed case are untouched; a hold placed between the scan and the purge wins; a second run purges nothing.
  * Audit ids the application's pooled optimizer allocates before and after a purge never collide with the purge's.
- * Report runs older than the retention go, and the mail naming them first; a recent run stays.
+ * Report runs older than the retention go, and the mail naming them first; a recent run stays. Finally the {@code
+ * purge} profile itself, started as the purge user with only {@code app.db.schema} naming the owner, finds every table
+ * it touches and purges a due case.
  */
 // "IT" is the Failsafe suffix Part B mandates for integration tests, not an abbreviation.
 @SuppressWarnings("checkstyle:AbbreviationAsWordInName")
@@ -88,7 +93,8 @@ abstract class AbstractPurgeIT {
         connection = users.login(purgeUser);
         if (database.vendor() == DatabaseVendor.ORACLE) {
             try (Statement statement = connection.createStatement()) {
-                // Test-only: the owner schema is the container user's name, as TestDatabaseUsers reports it.
+                // Test-only: this hand-made connection is not from the pool, so it sets the owner schema itself, as
+                // the application's pool does from app.db.schema (SessionSchema).
                 statement.execute("ALTER SESSION SET CURRENT_SCHEMA = " + users.ownerSchema());
             }
         }
@@ -208,6 +214,30 @@ abstract class AbstractPurgeIT {
                 .isZero();
         assertThat(fixture.count("SELECT COUNT(*) FROM NOTIFICATION_OUTBOX WHERE REPORT_RUN_ID = ?", recent))
                 .isEqualTo(1);
+    }
+
+    @Test
+    void thePurgeProfileRunsAsThePurgeUserWithTheOwnerSchemaFromConfiguration() throws SQLException {
+        long due = fixture.archived(now.minus(Duration.ofDays(1)), false);
+        fixture.content(due);
+        String vendorProfile = database.vendor() == DatabaseVendor.ORACLE ? "oracle-test" : "test";
+
+        // As the retention CronJob starts it: the purge profile, the purge user's own pool, the owner named only by
+        // app.db.schema. The runner purges once during start-up.
+        new SpringApplicationBuilder(TrailkeepApplication.class)
+                .web(WebApplicationType.NONE)
+                .profiles(vendorProfile, "purge")
+                .properties(
+                        "spring.datasource.url=" + users.jdbcUrl(),
+                        "spring.datasource.username=" + purgeUser,
+                        "spring.datasource.password=" + users.newPassword(purgeUser),
+                        "app.db.schema=" + users.ownerSchema())
+                .run()
+                .close();
+
+        assertThat(jdbc.queryForObject("SELECT PURGED_AT FROM CASE_RECORD WHERE ID = ?", Timestamp.class, due))
+                .isNotNull();
+        assertThat(fixture.contentRows(due)).isZero();
     }
 
     /** Audit rows written by the application, their ids from Hibernate's pooled optimizer over the same sequence. */
