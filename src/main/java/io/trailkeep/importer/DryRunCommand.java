@@ -4,9 +4,15 @@ package io.trailkeep.importer;
 
 import io.trailkeep.casefile.CaseImportService;
 import io.trailkeep.casefile.CaseImportService.ImportCaseType;
-import io.trailkeep.importer.FieldTransformer.Issue;
+import io.trailkeep.importer.ChildRules.Finding;
 import io.trailkeep.importer.ImportIssue.Severity;
+import io.trailkeep.importer.ImportIssue.Subject;
+import io.trailkeep.importer.staging.RunCheckpoint.StagedEntity;
+import io.trailkeep.importer.staging.StagedAttachment;
 import io.trailkeep.importer.staging.StagedCase;
+import io.trailkeep.importer.staging.StagedComment;
+import io.trailkeep.importer.staging.StagedEvent;
+import io.trailkeep.importer.staging.StagedRow;
 import io.trailkeep.importer.staging.StagingStore;
 import io.trailkeep.shared.config.AppProperties;
 import io.trailkeep.user.TeamAdminService.TeamSummary;
@@ -16,6 +22,9 @@ import java.time.Instant;
 import java.time.InstantSource;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
+import java.util.Set;
+import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import javax.crypto.SecretKey;
@@ -30,8 +39,9 @@ import tools.jackson.dataformat.yaml.YAMLMapper;
 
 /**
  * {@code dry-run} (WP-26 part q, design §3 step 3): checks every staged case against Trailkeep's rules and its teams
- * and case types as they are now ({@link CaseRules}), writes each problem as a {@code DRY_RUN} issue (a code, a
- * severity and the keyed hash of the case's key, never a value), and records the attachment scanning mode in force on
+ * and case types as they are now ({@link CaseRules}), and every staged comment, attachment and history event against
+ * its case and its own rules ({@link ChildRules}), writes each problem as a {@code DRY_RUN} issue (a code, a severity
+ * and the keyed hash of the row's key, never a value), and records the attachment scanning mode in force on
  * the run ({@code app.attachments.scanning}, read as the attachment intake reads it), which the sign-off approves and
  * the load must still find (R1). It writes nothing to the domain. A dry run may be repeated until the sign-off: each
  * replaces the last one's issues. The mapping file and its lookup files must be the ones {@code validate-mapping}
@@ -50,11 +60,16 @@ class DryRunCommand {
     /**
      * What a dry run found.
      *
-     * @param cases how many staged cases it checked
+     * @param rows how many staged rows it checked
      * @param issues how many issues it recorded
      * @param fatal how many of them are FATAL, any of which stops the load
      */
-    record Outcome(long cases, long issues, long fatal) {}
+    record Outcome(long rows, long issues, long fatal) {
+
+        Outcome plus(Outcome other) {
+            return new Outcome(rows + other.rows, issues + other.issues, fatal + other.fatal);
+        }
+    }
 
     private final StagingStore staging;
     private final ImportRunRepository runs;
@@ -120,7 +135,9 @@ class DryRunCommand {
                 now,
                 app.timezone());
         transactions.executeWithoutResult(status -> issues.deleteByRunIdAndStage(runId, ImportIssue.Stage.DRY_RUN));
-        Outcome cases = checkCases(runId, rules, properties.hashKeySpec(), now);
+        ChildRules children =
+                new ChildRules(mapping, properties.attachments().maxBytes().toBytes(), now);
+        Outcome checked = checkRows(runId, rules, children, properties.hashKeySpec(), now);
         ImportRun.ScanMode mode =
                 Binder.get(environment).bind(SCANNING, ImportRun.ScanMode.class).orElse(ImportRun.ScanMode.CLAMD);
         transactions.executeWithoutResult(status -> {
@@ -128,51 +145,98 @@ class DryRunCommand {
             run.dryRunDone(mode, now);
             runs.save(run);
         });
-        return cases;
+        return checked;
     }
 
     /**
-     * Every staged case through the rules, a page at a time; then the share of cases with an ERROR against {@code
-     * limits.maxErrorRate}: above it, a FATAL {@code ERROR_RATE_EXCEEDED} carrying the number of such cases.
+     * Every staged row of every entity through its rules, a page at a time, a child's case looked up among the run's
+     * staged cases; then each entity's share of rows with an ERROR, at extract or here, that the mapping has not
+     * accepted as skipped, against {@code limits.maxErrorRate}: above it, a FATAL {@code ERROR_RATE_EXCEEDED} for that
+     * entity carrying the number of such rows.
      */
-    private Outcome checkCases(long runId, CaseRules rules, SecretKey hashKey, Instant now) {
-        long cases = 0;
-        long failed = 0;
+    private Outcome checkRows(long runId, CaseRules cases, ChildRules children, SecretKey hashKey, Instant now) {
+        Pass pass = new Pass(runId, cases.maxErrorRate(), children.accepted(), hashKey, now);
+        return check(
+                        pass,
+                        StagedCase.class,
+                        Subject.CASE,
+                        row -> null,
+                        (row, staged) ->
+                                cases.check(row).stream().map(Finding::of).toList())
+                .plus(check(pass, StagedComment.class, Subject.COMMENT, StagedComment::getCaseKey, children::comment))
+                .plus(check(
+                        pass,
+                        StagedAttachment.class,
+                        Subject.ATTACHMENT,
+                        StagedAttachment::getCaseKey,
+                        children::attachment))
+                .plus(check(pass, StagedEvent.class, Subject.EVENT, StagedEvent::getCaseKey, children::event));
+    }
+
+    /**
+     * One dry run's settings: {@code limits.maxErrorRate}, the codes {@code limits.acceptSkip} keeps out of it, the
+     * key that hashes each row's key into its issues, and the run's time.
+     */
+    private record Pass(long runId, double maxErrorRate, Set<String> accepted, SecretKey hashKey, Instant now) {}
+
+    private <T extends StagedRow> Outcome check(
+            Pass pass,
+            Class<T> type,
+            Subject subject,
+            Function<T, @Nullable String> parent,
+            BiFunction<T, Boolean, List<Finding>> rules) {
+        long runId = pass.runId();
+        Instant now = pass.now();
+        long rows = 0;
         long recorded = 0;
         long fatal = 0;
         @Nullable String after = null;
-        for (List<StagedCase> page = staging.cases(runId, null, PAGE);
+        for (List<T> page = staging.page(type, runId, null, PAGE);
                 !page.isEmpty();
-                page = staging.cases(runId, after, PAGE)) {
+                page = staging.page(type, runId, after, PAGE)) {
+            Set<String> parents = staging.stagedKeys(
+                    StagedEntity.CASE,
+                    runId,
+                    page.stream()
+                            .map(parent)
+                            .filter(Objects::nonNull)
+                            .distinct()
+                            .toList());
             List<ImportIssue> found = new ArrayList<>();
-            for (StagedCase row : page) {
-                List<Issue> problems = rules.check(row);
-                String keyHash = KeyedHash.hex(hashKey, row.getKey().legacyKey());
-                problems.forEach(
-                        problem -> found.add(issue(runId, keyHash, problem.severity(), problem.code(), null, now)));
-                failed += problems.stream().anyMatch(problem -> problem.severity() == Severity.ERROR) ? 1 : 0;
-                fatal += problems.stream()
-                        .filter(problem -> problem.severity() == Severity.FATAL)
-                        .count();
+            for (T row : page) {
+                String keyHash = KeyedHash.hex(pass.hashKey(), row.getKey().legacyKey());
+                String caseKey = parent.apply(row);
+                for (Finding problem : rules.apply(row, caseKey == null || parents.contains(caseKey))) {
+                    found.add(issue(runId, subject, keyHash, problem, now));
+                    fatal += problem.severity() == Severity.FATAL ? 1 : 0;
+                }
             }
             transactions.executeWithoutResult(status -> found.forEach(issues::save));
-            cases += page.size();
+            rows += page.size();
             recorded += found.size();
             after = page.getLast().getKey().legacyKey();
         }
-        if (failed > rules.maxErrorRate() * cases) {
-            ImportIssue rate = issue(runId, null, Severity.FATAL, "ERROR_RATE_EXCEEDED", failed, now);
-            transactions.executeWithoutResult(status -> issues.save(rate));
+        long failed = issues.countFailedRows(runId, subject, Severity.ERROR, pass.accepted());
+        if (failed > pass.maxErrorRate() * rows) {
+            Finding rate = new Finding("ERROR_RATE_EXCEEDED", Severity.FATAL, failed);
+            transactions.executeWithoutResult(status -> issues.save(issue(runId, subject, null, rate, now)));
             recorded++;
             fatal++;
         }
-        return new Outcome(cases, recorded, fatal);
+        return new Outcome(rows, recorded, fatal);
     }
 
     private static ImportIssue issue(
-            long runId, @Nullable String keyHash, Severity severity, String code, @Nullable Long detail, Instant now) {
+            long runId, Subject subject, @Nullable String keyHash, Finding finding, Instant now) {
         return new ImportIssue(
-                runId, ImportIssue.Stage.DRY_RUN, ImportIssue.Subject.CASE, keyHash, severity, code, detail, now);
+                runId,
+                ImportIssue.Stage.DRY_RUN,
+                subject,
+                keyHash,
+                finding.severity(),
+                finding.code(),
+                finding.detail(),
+                now);
     }
 
     private ImportRun load(long runId) {

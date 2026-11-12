@@ -60,4 +60,20 @@ public class StagedEvent extends StagedRow {
         this.oldValue = values.text("oldValue");
         this.newValue = values.text("newValue");
     }
+
+    public String getCaseKey() {
+        return caseKey;
+    }
+
+    public @Nullable Instant getEventAt() {
+        return eventAt;
+    }
+
+    public @Nullable String getKind() {
+        return kind;
+    }
+
+    public @Nullable String getFieldName() {
+        return fieldName;
+    }
 }

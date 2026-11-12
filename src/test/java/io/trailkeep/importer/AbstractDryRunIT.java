@@ -5,6 +5,7 @@ package io.trailkeep.importer;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import io.trailkeep.importer.ImportIssue.Severity;
 import io.trailkeep.testsupport.CaseSeed;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -21,13 +22,16 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ConfigurableApplicationContext;
 
 /**
  * {@code dry-run} as the import user (WP-26 part q, design §3 step 3): staged cases checked against the teams and case
  * types (with their outcomes, read through {@code casefile}'s import API) in pages, each problem a keyed issue, the
  * error rate against {@code limits.maxErrorRate}, the scanning mode in force recorded, a repeat replacing the last
- * one's issues, and nothing written to the domain. The staged rows are seeded by the schema owner.
+ * one's issues, and nothing written to the domain; comments, attachments and history events checked against their
+ * staged cases and their own rules (part q2), each entity with its own error rate, extract issues counted and {@code
+ * limits.acceptSkip} codes left out. The staged rows are seeded by the schema owner.
  */
 // "IT" is the Failsafe suffix Part B mandates for integration tests, not an abbreviation.
 @SuppressWarnings("checkstyle:AbbreviationAsWordInName")
@@ -37,6 +41,9 @@ abstract class AbstractDryRunIT extends ExtractJobSupport {
             "INSERT INTO IMPORT_STG_CASE (RUN_ID, LEGACY_KEY, ROW_HASH, TITLE, DESCRIPTION,"
                     + " TEAM_KEY, CASE_TYPE_KEY, STATUS, IDENTIFIED_ON, OPENED_AT, CLOSED_AT, CLOSURE_OUTCOME)"
                     + " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+
+    @Autowired
+    private ImportIssueRepository extractIssues;
 
     private long team;
     private long caseType;
@@ -98,6 +105,73 @@ abstract class AbstractDryRunIT extends ExtractJobSupport {
         assertThat(count("SELECT COUNT(*) FROM CASE_RECORD WHERE TEAM_ID = ?", team))
                 .as("nothing reaches the domain")
                 .isZero();
+    }
+
+    @Test
+    void dryRunChecksCommentsAttachmentsAndEventsAgainstTheirCasesAndTheirOwnErrorRates(@TempDir Path directory)
+            throws Exception {
+        Path mapping = mapping(
+                directory,
+                MAPPING.replace(
+                        "limits: { maxErrorRate: 0.0, batchSize: 2 }",
+                        "limits: { maxErrorRate: 0.5, batchSize: 2,"
+                                + " acceptSkip: [ATTACHMENT_TOO_LARGE, ATTACHMENT_MISSING] }"));
+        long run = extractedRun(mapping);
+        stageChildren(run);
+        // What the extract found: a comment field it could not read, and the second file missing.
+        extractIssue(run, ImportIssue.Subject.COMMENT, "n1", "BAD_FLAG");
+        extractIssue(run, ImportIssue.Subject.ATTACHMENT, "f2", "ATTACHMENT_MISSING");
+
+        dryRun(run, mapping, "--import.attachments.max-bytes=1000").close();
+
+        assertThat(dryRunIssues(run))
+                .containsExactlyInAnyOrder(
+                        List.of("COMMENT", "ERROR", "PARENT_NOT_STAGED", hash("n2")),
+                        List.of("COMMENT", "FATAL", "ERROR_RATE_EXCEEDED", ""),
+                        List.of("ATTACHMENT", "WARNING", "ATTACHMENT_TOO_LARGE", hash("f1")),
+                        List.of("ATTACHMENT", "WARNING", "ATTACHMENT_MISSING", hash("f2")),
+                        List.of("EVENT", "ERROR", "KIND_INVALID", hash("e1")),
+                        List.of("EVENT", "FATAL", "ERROR_RATE_EXCEEDED", ""));
+        assertThat(count("SELECT DETAIL FROM IMPORT_ISSUE WHERE RUN_ID = ? AND CODE = 'ATTACHMENT_TOO_LARGE'", run))
+                .as("the staged size against import.attachments.max-bytes")
+                .isEqualTo(1001);
+        assertThat(count(
+                        "SELECT DETAIL FROM IMPORT_ISSUE WHERE RUN_ID = ? AND ENTITY = 'COMMENT'"
+                                + " AND CODE = 'ERROR_RATE_EXCEEDED'",
+                        run))
+                .as("both comments failed, one at extract: over half of them")
+                .isEqualTo(2);
+        assertThat(jdbc.queryForObject("SELECT STATUS FROM IMPORT_RUN WHERE ID = ?", String.class, run))
+                .isEqualTo("DRY_RUN");
+    }
+
+    /** One sound case, a comment on it and one on no staged case, three attachments and an event of no known kind. */
+    private void stageChildren(long run) {
+        jdbc.update(INSERT, row(run, "c1", "Synthetic open case", "OPEN", null));
+        Timestamp at = Timestamp.from(Instant.parse("2024-01-16T10:00:00Z"));
+        String comment = "INSERT INTO IMPORT_STG_COMMENT (RUN_ID, LEGACY_KEY, ROW_HASH, CASE_KEY, WRITTEN_AT, BODY)"
+                + " VALUES (?, ?, ?, ?, ?, ?)";
+        jdbc.update(comment, run, "n1", "ab".repeat(32), "c1", at, "Synthetic note");
+        jdbc.update(comment, run, "n2", "ab".repeat(32), "c9", at, "Synthetic note on no staged case");
+        String attachment = "INSERT INTO IMPORT_STG_ATTACHMENT (RUN_ID, LEGACY_KEY, ROW_HASH, CASE_KEY, FILE_NAME,"
+                + " SIZE_BYTES, SHA256, CONTENT_POINTER, UPLOADED_AT) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        jdbc.update(attachment, run, "f1", "ab".repeat(32), "c1", "large.pdf", 1001L, null, "large.pdf", at);
+        jdbc.update(attachment, run, "f2", "ab".repeat(32), "c1", "gone.pdf", null, null, "gone.pdf", at);
+        jdbc.update(attachment, run, "f3", "ab".repeat(32), "c1", "fine.pdf", 10L, "cd".repeat(32), "fine.pdf", at);
+        jdbc.update(
+                "INSERT INTO IMPORT_STG_EVENT (RUN_ID, LEGACY_KEY, ROW_HASH, CASE_KEY, EVENT_AT, KIND)"
+                        + " VALUES (?, ?, ?, ?, ?, ?)",
+                run,
+                "e1",
+                "ab".repeat(32),
+                "c1",
+                at,
+                "NOT_A_KIND");
+    }
+
+    private void extractIssue(long run, ImportIssue.Subject subject, String key, String code) {
+        extractIssues.save(new ImportIssue(
+                run, ImportIssue.Stage.EXTRACT, subject, hash(key), Severity.ERROR, code, null, Instant.now()));
     }
 
     @Test

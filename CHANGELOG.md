@@ -65,6 +65,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   `limits.maxErrorRate`. The run moves to `DRY_RUN` with the attachment scanning mode in force
   (`app.attachments.scanning`, default `clamd`) on `SCAN_MODE`; a dry run may be repeated until the sign-off, each
   replacing the last one's issues, and it writes nothing to the domain.
+- The dry run checks comments, attachments and legacy history events too (WP-26 part q2, docs/design/importer.md §4.3,
+  §7.2, §7.5): `PARENT_NOT_STAGED` when the run staged no case with the row's case key, `WRITTEN_AT_MISSING`,
+  `BODY_MISSING`, `FILE_NAME_MISSING`, `UPLOADED_AT_MISSING`, `AT_MISSING`, `KIND_MISSING`, `KIND_INVALID` and
+  `FIELD_INVALID` (not a kind or field of `CASE_IMPORTED_EVENT`) and `DATE_IN_FUTURE` are ERRORs;
+  `ATTACHMENT_TOO_LARGE` carries the staged size as its detail when it is over `import.attachments.max-bytes`, and
+  `ATTACHMENT_MISSING` marks an attachment with no staged bytes; both are WARNINGs ("skipped by rule") when
+  `limits.acceptSkip` names them, ERRORs otherwise. Each entity has its own `ERROR_RATE_EXCEEDED`, which now counts
+  the rows with an ERROR from the extract or the dry run, leaving out the codes `limits.acceptSkip` accepts.
 - The Oracle source (WP-26 part o, docs/design/importer.md §4.1): a `kind: jdbc` Oracle mapping is test-fetched by
   `validate-mapping` and extracted in one `SET TRANSACTION READ ONLY` transaction, with the session in UTC and ISO
   date, timestamp and number formats; `DATE` and `TIMESTAMP` read as local date-times, `TIMESTAMP WITH TIME ZONE` with

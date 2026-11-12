@@ -79,9 +79,9 @@ class ImportCommandRunner implements ApplicationRunner {
         if ("dry-run".equals(command)) {
             DryRunCommand.Outcome outcome = dryRun.run(runId, mapping());
             LOG.info(
-                    "Import run {}: {} cases checked, {} issues, {} FATAL",
+                    "Import run {}: {} staged rows checked, {} issues, {} FATAL",
                     runId,
-                    outcome.cases(),
+                    outcome.rows(),
                     outcome.issues(),
                     outcome.fatal());
         }
