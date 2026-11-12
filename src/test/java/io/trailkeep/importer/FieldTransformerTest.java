@@ -108,6 +108,25 @@ class FieldTransformerTest {
         assertThat(evaluate("{\"date\": \"case_no\"}")).isEqualTo(failure("BAD_DATE", Severity.ERROR));
     }
 
+    /** A declared format is resolved strictly: an impossible day is an error, never the nearest real one. */
+    @Test
+    void declaredFormatsRefuseImpossibleDaysInsteadOfMovingThem() {
+        assertThat(evaluate("{\"date\": \"feb30\", \"format\": \"yyyy-MM-dd\"}"))
+                .isEqualTo(failure("BAD_DATE", Severity.ERROR));
+        assertThat(evaluate("{\"date\": \"feb30\", \"format\": \"uuuu-MM-dd\"}"))
+                .isEqualTo(failure("BAD_DATE", Severity.ERROR));
+        assertThat(evaluate("{\"timestamp\": \"feb30_time\", \"format\": \"MM/dd/yyyy HH:mm\"}"))
+                .isEqualTo(failure("BAD_TIMESTAMP", Severity.ERROR));
+        assertThat(evaluate("{\"date\": \"feb30\"}")).as("ISO-8601 too").isEqualTo(failure("BAD_DATE", Severity.ERROR));
+        assertThat(value("{\"date\": \"leap_day\", \"format\": \"yyyy-MM-dd\"}"))
+                .isEqualTo(LocalDate.of(2024, 2, 29));
+        assertThat(value("{\"date\": \"quoted_y\", \"format\": \"'y'yyyyMMdd\"}"))
+                .as("a quoted y is literal text")
+                .isEqualTo(LocalDate.of(2019, 3, 1));
+        assertThat(DeclaredFormat.of("yyyy-MM-dd 'year' yy").toString())
+                .isEqualTo(DeclaredFormat.of("uuuu-MM-dd 'year' uu").toString());
+    }
+
     /** 2019-11-03 01:30 happened twice in Chicago; 2019-03-10 02:30 never did. */
     @Test
     void daylightSavingAmbiguityFollowsDstAmbiguity() {
@@ -229,6 +248,10 @@ class FieldTransformerTest {
         row.put("offset_text", "2019-03-04T07:00:00-05:00");
         row.put("with_offset", OffsetDateTime.parse("2019-03-04T07:00:00-05:00"));
         row.put("found_text", "2019-03-01");
+        row.put("feb30", "2026-02-30");
+        row.put("feb30_time", "02/30/2026 09:00");
+        row.put("leap_day", "2024-02-29");
+        row.put("quoted_y", "y20190301");
         row.put("overlap", LocalDateTime.of(2019, 11, 3, 1, 30));
         row.put("gap", LocalDateTime.of(2019, 3, 10, 2, 30));
         row.put("amount_text", " 12.50 ");

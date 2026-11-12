@@ -304,8 +304,7 @@ final class FieldTransformer {
 
     /** A text time: with an offset, without one, or a bare day, by the declared format or ISO-8601. */
     private @Nullable Object parse(String text, @Nullable String format) {
-        DateTimeFormatter formatter =
-                format == null ? DateTimeFormatter.ISO_DATE_TIME : DateTimeFormatter.ofPattern(format, Locale.ROOT);
+        DateTimeFormatter formatter = format == null ? DateTimeFormatter.ISO_DATE_TIME : DeclaredFormat.of(format);
         try {
             TemporalAccessor parsed =
                     formatter.parseBest(text.strip(), OffsetDateTime::from, LocalDateTime::from, LocalDate::from);
