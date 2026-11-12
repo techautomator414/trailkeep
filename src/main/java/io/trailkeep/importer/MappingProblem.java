@@ -58,7 +58,7 @@ record MappingProblem(Code code, String pointer) implements Comparable<MappingPr
         QUERY_DATABASE_LINK,
         /** A source query calling a function outside the vendor's allow-list of pure built-ins. */
         QUERY_FUNCTION_NOT_ALLOWED,
-        /** A JDBC source whose vendor has no adapter yet, so nothing is test-fetched (Oracle 26o, SQL Server 26p). */
+        /** A JDBC source whose vendor has no adapter yet, so nothing is test-fetched (SQL Server, 26p). */
         SOURCE_UNSUPPORTED,
         /** A source URL with another driver's scheme or a parameter outside the allow-list ({@link SourceUrl}). */
         SOURCE_URL_NOT_ALLOWED,

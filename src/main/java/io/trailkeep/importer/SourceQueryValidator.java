@@ -14,6 +14,7 @@ import net.sf.jsqlparser.JSQLParserException;
 import net.sf.jsqlparser.expression.AnalyticExpression;
 import net.sf.jsqlparser.expression.Function;
 import net.sf.jsqlparser.parser.CCJSqlParserUtil;
+import net.sf.jsqlparser.schema.Column;
 import net.sf.jsqlparser.schema.Table;
 import net.sf.jsqlparser.statement.Statement;
 import net.sf.jsqlparser.statement.Statements;
@@ -29,8 +30,11 @@ import org.jspecify.annotations.Nullable;
  * Restricts a mapping's source queries (WP-26 part m, design §4.1, §10; ADR-0014 Part B amendment). A query is parsed
  * with JSqlParser and must be exactly one {@code SELECT} or {@code WITH … SELECT}: no statement separator, no {@code
  * INTO}, no {@code FOR UPDATE} or locking hint, no table function such as {@code OPENROWSET}, no Oracle {@code @dblink}
- * and no function outside the vendor's allow-list of pure built-ins. A query the parser cannot read is refused, never
- * passed. The query is never rewritten; the grants recipe stays the control for which tables it can read.
+ * and no function outside the vendor's allow-list of pure built-ins. Oracle also calls a parameterless function
+ * without parentheses ({@code SOME_PACKAGE.SOME_FUNCTION} reads like a qualified column), so on Oracle every qualifier
+ * of a column must name a table, alias, subquery or {@code WITH} item of the statement (26o). A query the parser cannot
+ * read is refused, never passed. The query is never rewritten; the grants recipe stays the control for which tables
+ * it can read.
  */
 final class SourceQueryValidator {
 
@@ -195,6 +199,9 @@ final class SourceQueryValidator {
         }
         Checker checker = new Checker(vendor);
         checker.check(select);
+        if (vendor == Vendor.ORACLE && !checker.names.containsAll(checker.qualifiers)) {
+            checker.problems.add(Code.QUERY_FUNCTION_NOT_ALLOWED);
+        }
         if (LOCKING_HINT.matcher(select.toString()).find()) {
             checker.problems.add(Code.QUERY_LOCKS);
         }
@@ -212,6 +219,8 @@ final class SourceQueryValidator {
 
         private final Set<String> allowed = new TreeSet<>(COMMON);
         private final Set<Code> problems = new TreeSet<>();
+        private final Set<String> names = new TreeSet<>();
+        private final Set<String> qualifiers = new TreeSet<>();
 
         Checker(Vendor vendor) {
             allowed.addAll(VENDOR.get(vendor));
@@ -241,7 +250,25 @@ final class SourceQueryValidator {
             if (table.getFullyQualifiedName().contains("@")) {
                 problems.add(Code.QUERY_DATABASE_LINK);
             }
+            // Column processing is off (init(false)), so only tables the statement reads arrive here.
+            name(table.getName());
+            name(table.getAlias() == null ? null : table.getAlias().getName());
             return super.visit(table, context);
+        }
+
+        @Override
+        public <S> Void visit(ParenthesedSelect select, S context) {
+            name(select.getAlias() == null ? null : select.getAlias().getName());
+            return super.visit(select, context);
+        }
+
+        /** A column's qualifier: its table part, which on Oracle may be a package called without parentheses. */
+        @Override
+        public <S> Void visit(Column column, S context) {
+            if (column.getTable() != null && column.getTable().getName() != null) {
+                qualifiers.add(normalised(column.getTable().getName()));
+            }
+            return super.visit(column, context);
         }
 
         @Override
@@ -257,6 +284,7 @@ final class SourceQueryValidator {
                 problems.add(Code.QUERY_NOT_SELECT);
                 return null;
             }
+            name(withItem.getAlias() == null ? null : withItem.getAlias().getName());
             return super.visit(withItem, context);
         }
 
@@ -277,6 +305,17 @@ final class SourceQueryValidator {
                 problems.add(Code.QUERY_FUNCTION_NOT_ALLOWED);
             }
             return super.visit(function, context);
+        }
+
+        private void name(@Nullable String name) {
+            if (name != null) {
+                names.add(normalised(name));
+            }
+        }
+
+        /** Oracle folds unquoted names to upper case; a quoted one is compared as written, quotes removed. */
+        private static String normalised(String name) {
+            return name.startsWith("\"") ? name.replace("\"", "") : name.toUpperCase(Locale.ROOT);
         }
     }
 }

@@ -51,6 +51,42 @@ class SourceUrlTest {
                 .isFalse();
     }
 
+    /**
+     * An Oracle URL is an Easy Connect address with TLS and timeout parameters only (26o): no TNS descriptor, whose
+     * SECURITY section names wallet directories, no TNS alias, which needs a {@code tnsnames.ora}, and no property that
+     * loads a provider class, reads a configuration file or writes a trace.
+     */
+    @Test
+    void onlyOracleEasyConnectWithAllowListedParametersIsAllowed() {
+        for (String allowed : new String[] {
+            "jdbc:oracle:thin:@db.invalid:1521/legacy",
+            "jdbc:oracle:thin:@//db.invalid/legacy.example",
+            "jdbc:oracle:thin:@tcps://db.invalid:2484/legacy?ssl_server_dn_match=true"
+                    + "&javax.net.ssl.trustStore=/run/ca.p12&javax.net.ssl.trustStoreType=PKCS12&connect_timeout=10"
+        }) {
+            assertThat(SourceUrl.allowed(Vendor.ORACLE, allowed)).as(allowed).isTrue();
+        }
+        for (String refused : new String[] {
+            "jdbc:oracle:oci:@legacy",
+            "jdbc:oracle:thin:@legacy_alias",
+            "jdbc:oracle:thin:@(DESCRIPTION=(ADDRESS=(PROTOCOL=TCP)(HOST=db.invalid)(PORT=1521))"
+                    + "(CONNECT_DATA=(SERVICE_NAME=legacy)))",
+            "jdbc:oracle:thin:@db.invalid:1521/legacy?oracle.jdbc.provider.accessToken=x.Evil",
+            "jdbc:oracle:thin:@db.invalid:1521/legacy?oracle.jdbc.config.file=/tmp/x.properties",
+            "jdbc:oracle:thin:@db.invalid:1521/legacy?oracle.jdbc.Trace=true",
+            "jdbc:oracle:thin:@db.invalid:1521/legacy?wallet_location=/tmp/wallet",
+            "jdbc:oracle:thin:@db.invalid:1521/legacy?TNS_ADMIN=/tmp",
+            "jdbc:oracle:thin:@tcps://db.invalid:2484/legacy?javax.net.ssl.trustStore=/run/ca.p12"
+                    + "&javax.net.ssl.trustStorePassword=unused",
+            "jdbc:oracle:thin:@db.invalid:1521/legacy/../x"
+        }) {
+            assertThat(SourceUrl.allowed(Vendor.ORACLE, refused)).as(refused).isFalse();
+        }
+        assertThat(SourceUrl.allowed(Vendor.SQLSERVER, "jdbc:sqlserver://db.invalid;databaseName=legacy"))
+                .as("SQL Server's rule arrives with its adapter (26p)")
+                .isFalse();
+    }
+
     @Test
     void validateMappingRefusesSuchUrlsAtTheirPlaceBeforeConnecting() {
         MockEnvironment environment = new MockEnvironment()
