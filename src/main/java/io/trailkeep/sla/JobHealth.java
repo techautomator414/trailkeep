@@ -47,6 +47,24 @@ public abstract class JobHealth implements HealthIndicator {
                 .register(registry);
     }
 
+    /**
+     * The job this indicator watches, its {@code JOB_RUN} row.
+     *
+     * @return the job's name
+     */
+    public final String job() {
+        return job;
+    }
+
+    /**
+     * How long after a success the job is still up; the System screen marks it late after that.
+     *
+     * @return the grace period
+     */
+    public final Duration grace() {
+        return grace;
+    }
+
     @Override
     public Health health() {
         Optional<Instant> last = runs.lastSuccess(job);

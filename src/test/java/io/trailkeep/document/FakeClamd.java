@@ -98,7 +98,8 @@ final class FakeClamd implements AutoCloseable {
                 }
                 commands.add(command.toString(StandardCharsets.US_ASCII));
                 ByteArrayOutputStream bytes = new ByteArrayOutputStream();
-                for (int length = in.readInt(); length > 0; length = in.readInt()) {
+                boolean streams = "zINSTREAM".contentEquals(command.toString(StandardCharsets.US_ASCII));
+                for (int length = streams ? in.readInt() : 0; length > 0; length = in.readInt()) {
                     chunkLengths.add(length);
                     bytes.write(in.readNBytes(length));
                 }

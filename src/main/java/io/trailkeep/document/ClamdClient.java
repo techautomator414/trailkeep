@@ -13,6 +13,7 @@ import java.net.SocketTimeoutException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
@@ -58,6 +59,11 @@ final class ClamdClient implements VirusScanner {
 
     private static final byte[] INSTREAM = "zINSTREAM\0".getBytes(StandardCharsets.US_ASCII);
 
+    private static final byte[] VERSION = "zVERSION\0".getBytes(StandardCharsets.US_ASCII);
+
+    /** The whole {@code VERSION} exchange's limit, in seconds; see {@link #version()}. */
+    static final int STATUS_SECONDS = 3;
+
     private static final Pattern FOUND = Pattern.compile("stream: (\\p{Graph}[\\p{Graph} ]*) FOUND");
 
     /** Closes the socket of an exchange that outlives its deadline. Virtual threads, so it never holds the JVM. */
@@ -90,6 +96,47 @@ final class ClamdClient implements VirusScanner {
 
     @Override
     public ScanVerdict scan(Path file) {
+        return verdict(exchange(out -> stream(file, out), clamd.readTimeout(), clamd.scanTimeout()));
+    }
+
+    /**
+     * The engine's version line from clamd's {@code VERSION} command, for the System screen (WP-25): the ClamAV
+     * release, the signature database version and its date, such as {@code ClamAV 1.4.3/27456/Mon Nov 10 08:00:00
+     * 2026}. It fails closed like a scan, but within {@value #STATUS_SECONDS} seconds for the whole exchange instead of
+     * a scan's read and scan timeouts: the screen asks on every page load, and a clamd that accepts and never answers
+     * must show as unavailable at once, not hold the page for the 30 s a large upload's scan is allowed.
+     *
+     * @return the line
+     * @throws ScannerUnavailableException if clamd cannot be reached or answers anything else
+     */
+    String version() {
+        Duration bound = Duration.ofSeconds(STATUS_SECONDS);
+        String reply = exchange(
+                out -> {
+                    out.write(VERSION);
+                    out.flush();
+                },
+                bound,
+                bound);
+        if (!reply.startsWith("ClamAV ")) {
+            throw new ScannerUnavailableException("clamd gave no version");
+        }
+        return reply;
+    }
+
+    /** What one exchange sends after the TLS handshake. */
+    @FunctionalInterface
+    private interface Request {
+        void write(OutputStream out) throws IOException;
+    }
+
+    /**
+     * Connects over TLS, sends one request and reads clamd's one reply line.
+     *
+     * @param readTimeout how long one read may block
+     * @param limit how long the whole exchange may take; the socket is closed after that
+     */
+    private String exchange(Request request, Duration readTimeout, Duration limit) {
         try (Socket unconnected = sockets.createSocket()) {
             if (!(unconnected instanceof SSLSocket socket)) {
                 throw new IllegalStateException("an SSL socket factory returned a plain socket");
@@ -98,16 +145,16 @@ final class ClamdClient implements VirusScanner {
             tls.setProtocols(PROTOCOLS);
             tls.setEndpointIdentificationAlgorithm("HTTPS");
             socket.setSSLParameters(tls);
-            ScheduledFuture<?> deadline = WATCHDOG.schedule(
-                    () -> closeQuietly(socket), clamd.scanTimeout().toMillis(), TimeUnit.MILLISECONDS);
+            ScheduledFuture<?> deadline =
+                    WATCHDOG.schedule(() -> closeQuietly(socket), limit.toMillis(), TimeUnit.MILLISECONDS);
             try {
                 socket.connect(
                         new InetSocketAddress(host, clamd.port()),
                         Math.toIntExact(clamd.connectTimeout().toMillis()));
-                socket.setSoTimeout(Math.toIntExact(clamd.readTimeout().toMillis()));
+                socket.setSoTimeout(Math.toIntExact(readTimeout.toMillis()));
                 socket.startHandshake();
-                stream(file, socket.getOutputStream());
-                return verdict(readReply(socket.getInputStream()));
+                request.write(socket.getOutputStream());
+                return readReply(socket.getInputStream());
             } finally {
                 deadline.cancel(false);
             }

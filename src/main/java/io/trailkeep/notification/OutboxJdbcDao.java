@@ -51,6 +51,8 @@ class OutboxJdbcDao {
     private static final String REAP = "UPDATE NotificationOutbox o SET o.status = :pending, o.lockedUntil = NULL,"
             + " o.nextAttemptAt = :now WHERE o.status = :sending AND o.lockedUntil < :now";
     private static final String COUNT = "SELECT COUNT(o) FROM NotificationOutbox o WHERE o.status = :status";
+    private static final String OLDEST_PENDING =
+            "SELECT MIN(o.createdAt) FROM NotificationOutbox o WHERE o.status = :status";
 
     private final NamedParameterJdbcTemplate jdbc;
     private final EntityManager entityManager;
@@ -194,6 +196,19 @@ class OutboxJdbcDao {
         return entityManager
                 .createQuery(COUNT, Long.class)
                 .setParameter("status", status)
+                .getSingleResult();
+    }
+
+    /**
+     * When the oldest mail still waiting to be sent was queued.
+     *
+     * @return the instant, or {@code null} when nothing is waiting
+     */
+    @Nullable
+    Instant oldestPending() {
+        return entityManager
+                .createQuery(OLDEST_PENDING, Instant.class)
+                .setParameter("status", OutboxStatus.PENDING)
                 .getSingleResult();
     }
 
