@@ -79,7 +79,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   under `onUnrepresentableAcl: restricted` counts as restricted), legacy-ACL cases per handling, holds per reason
   (legacy legal hold, past retention), loadable attachments and their bytes, and attachments skipped by rule with their
   bytes per code. In `external` scanning mode it adds the number and total size of the attachments that will be stored
-  `NOT_SCANNED`, and a `NOT_SCANNED` WARNING carrying that number, which the sign-off must acknowledge.
+  `NOT_SCANNED`, and a `NOT_SCANNED` WARNING carrying that number, which the sign-off must acknowledge. A dry run
+  that starts deletes the last one's issues and figures and sets the run back to `EXTRACTED` without a scanning mode,
+  so `DRY_RUN` always means a dry run that completed.
 - The Oracle source (WP-26 part o, docs/design/importer.md §4.1): a `kind: jdbc` Oracle mapping is test-fetched by
   `validate-mapping` and extracted in one `SET TRANSACTION READ ONLY` transaction, with the session in UTC and ISO
   date, timestamp and number formats; `DATE` and `TIMESTAMP` read as local date-times, `TIMESTAMP WITH TIME ZONE` with

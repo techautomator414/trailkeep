@@ -24,6 +24,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ConfigurableApplicationContext;
 
 /**
@@ -45,6 +46,9 @@ abstract class AbstractDryRunIT extends ExtractJobSupport {
 
     @Autowired
     private ImportIssueRepository extractIssues;
+
+    @Value("${app.db.import-user}")
+    private String importUser = "";
 
     private long team;
     private long caseType;
@@ -224,6 +228,40 @@ abstract class AbstractDryRunIT extends ExtractJobSupport {
     private void extractIssue(long run, ImportIssue.Subject subject, String key, String code) {
         extractIssues.save(new ImportIssue(
                 run, ImportIssue.Stage.EXTRACT, subject, hash(key), Severity.ERROR, code, null, Instant.now()));
+    }
+
+    @Test
+    void dryRunFailingAfterItsFirstPageLeavesTheRunExtractedWithoutFigures(@TempDir Path directory) throws Exception {
+        Path mapping = mapping(directory, MAPPING);
+        long run = extractedRun(mapping);
+        List<Object[]> rows = new ArrayList<>();
+        for (int i = 1; i <= 500; i++) {
+            rows.add(row(run, String.format("c%04d", i), "Synthetic open case", "OPEN", null));
+        }
+        // On the second page: the first issue to write.
+        rows.add(row(run, "z1", null, "OPEN", null));
+        jdbc.batchUpdate(INSERT, rows);
+        dryRun(run, mapping).close();
+        assertThat(jdbc.queryForObject("SELECT STATUS FROM IMPORT_RUN WHERE ID = ?", String.class, run))
+                .isEqualTo("DRY_RUN");
+        assertThat(figures(run)).isNotEmpty();
+
+        // The import user can no longer write issues, so the repeat fails writing its second page.
+        jdbc.update("REVOKE INSERT ON IMPORT_ISSUE FROM " + importUser);
+        try {
+            assertThatThrownBy(() -> dryRun(run, mapping)).isNotNull();
+        } finally {
+            jdbc.update("GRANT INSERT ON IMPORT_ISSUE TO " + importUser);
+        }
+
+        assertThat(jdbc.queryForMap("SELECT STATUS, SCAN_MODE FROM IMPORT_RUN WHERE ID = ?", run))
+                .as("DRY_RUN means a dry run that completed")
+                .containsEntry("STATUS", "EXTRACTED")
+                .containsEntry("SCAN_MODE", null);
+        assertThat(figures(run))
+                .as("no figures from a dry run that did not finish")
+                .isEmpty();
+        assertThat(dryRunIssues(run)).isEmpty();
     }
 
     @Test

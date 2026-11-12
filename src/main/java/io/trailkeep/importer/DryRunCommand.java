@@ -144,7 +144,13 @@ class DryRunCommand {
                 mapping.at("/visibility/onUnrepresentableAcl").asString("restricted"));
         ImportRun.ScanMode mode =
                 Binder.get(environment).bind(SCANNING, ImportRun.ScanMode.class).orElse(ImportRun.ScanMode.CLAMD);
-        transactions.executeWithoutResult(status -> issues.deleteByRunIdAndStage(runId, ImportIssue.Stage.DRY_RUN));
+        transactions.executeWithoutResult(status -> {
+            issues.deleteByRunIdAndStage(runId, ImportIssue.Stage.DRY_RUN);
+            figures.deleteByRunId(runId);
+            ImportRun run = load(runId);
+            run.dryRunStarting(now);
+            runs.save(run);
+        });
         ChildRules children =
                 new ChildRules(mapping, properties.attachments().maxBytes().toBytes(), now);
         Outcome checked = checkRows(
@@ -161,7 +167,6 @@ class DryRunCommand {
             summary.issues((Subject) count[0], (Severity) count[1], (String) count[2], (Long) count[3]);
         }
         transactions.executeWithoutResult(status -> {
-            figures.deleteByRunId(runId);
             summary.figures(runId, mode).forEach(figures::save);
             ImportRun run = load(runId);
             run.dryRunDone(mode, now);
