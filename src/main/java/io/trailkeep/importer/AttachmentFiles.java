@@ -31,8 +31,9 @@ import tools.jackson.databind.JsonNode;
  * followed, must lie under the root's when the file is opened. A file over {@code import.attachments.max-bytes} keeps
  * its size and is never read; the dry run reports it ({@code ATTACHMENT_TOO_LARGE}, before any scan). A content query
  * (26n2) is run by the source in its own snapshot with the attachment's key as its bind variables, unless the mapped
- * size is already over the cap, and its one value is written to the run's {@link ContentArea}. Every problem is an
- * issue code, never a path or a value.
+ * size is already over the cap, and its one value is written to the run's {@link ContentArea}; so are a files
+ * source's inline bytes ({@code content: { binary: hex | base64, column }}, 26l2), the cap checked before writing.
+ * Every problem is an issue code, never a path or a value.
  */
 final class AttachmentFiles {
 
@@ -66,11 +67,11 @@ final class AttachmentFiles {
      * @param mapping the validated mapping
      * @param source the open source, which resolves content ids
      * @param maxBytes {@code import.attachments.max-bytes}
-     * @param contentArea {@code import.content-area}, needed by a content query
-     * @param runId the run, whose content area a content query writes
+     * @param contentArea {@code import.content-area}, needed by a content query or inline bytes
+     * @param runId the run, whose content area they write
      * @return them
      * @throws SourceException {@code ATTACHMENTS_ROOT_UNREADABLE} if {@code attachments.root} is not a readable folder,
-     *     {@code CONTENT_AREA_UNWRITABLE} if a content query has no content area to write
+     *     {@code CONTENT_AREA_UNWRITABLE} if a content query or inline bytes have no content area to write
      */
     static AttachmentFiles of(
             JsonNode mapping, SourceRows source, long maxBytes, @Nullable Path contentArea, long runId) {
@@ -87,7 +88,10 @@ final class AttachmentFiles {
         return new AttachmentFiles(
                 attachment,
                 real,
-                attachment.at("/fields/content").has("query") ? ContentArea.open(contentArea, runId) : null,
+                attachment.at("/fields/content").has("query")
+                                || attachment.at("/fields/content").has("binary")
+                        ? ContentArea.open(contentArea, runId)
+                        : null,
                 mapping.at("/attachments/stripPrefix").asString(""),
                 maxBytes,
                 source);
@@ -131,16 +135,21 @@ final class AttachmentFiles {
     }
 
     /**
-     * A content query's one value into the content area. A mapped size over the cap means the bytes are never fetched;
-     * a value over the cap once fetched keeps its size and is not written. A failed query stops the extract: on
-     * PostgreSQL it ends the snapshot's transaction, so no later query could read the same point.
+     * Inline bytes, or a content query's one value, into the content area. A mapped size over the cap means the bytes
+     * are never fetched; a value over the cap once fetched keeps its size and is not written. A failed query stops the
+     * extract: on PostgreSQL it ends the snapshot's transaction, so no later query could read the same point.
      */
     private void fetch(
             ContentArea area,
             Map<String, @Nullable Object> row,
             Map<String, @Nullable Object> values,
             List<Issue> issues) {
-        if (values.get("size") instanceof Long size && size > maxBytes) {
+        if (values.get("content") instanceof byte[] bytes) {
+            values.put("content", null);
+            store(area, bytes, values);
+            return;
+        }
+        if (!content.has("query") || (values.get("size") instanceof Long size && size > maxBytes)) {
             return;
         }
         List<@Nullable Object> key = new ArrayList<>();
@@ -148,14 +157,18 @@ final class AttachmentFiles {
         for (JsonNode column : columns.isArray() ? columns : List.of(columns)) {
             key.add(row.get(column.asString().toLowerCase(Locale.ROOT)));
         }
-        value(source.contentRows(content.get("query").asString(), key), issues).ifPresent(bytes -> {
-            values.put("size", (long) bytes.length);
-            if (bytes.length <= maxBytes) {
-                String sha256 = area.write(bytes);
-                values.put("content", sha256);
-                values.put("sha256", sha256);
-            }
-        });
+        value(source.contentRows(content.get("query").asString(), key), issues)
+                .ifPresent(bytes -> store(area, bytes, values));
+    }
+
+    /** Bytes into the content area under their SHA-256, the cap checked first: over it, only the size is kept. */
+    private void store(ContentArea area, byte[] bytes, Map<String, @Nullable Object> values) {
+        values.put("size", (long) bytes.length);
+        if (bytes.length <= maxBytes) {
+            String sha256 = area.write(bytes);
+            values.put("content", sha256);
+            values.put("sha256", sha256);
+        }
     }
 
     /** A content query's one binary value, or none with an issue. */

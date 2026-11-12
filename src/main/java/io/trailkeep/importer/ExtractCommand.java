@@ -72,8 +72,8 @@ class ExtractCommand {
      * @param runId the run
      * @param file the mapping file, unchanged since {@code validate-mapping}
      * @return the number of rows staged
-     * @throws IllegalStateException if the run is not validated, the file changed, the source or a lookup file is not
-     *     supported yet, or a row had a FATAL issue; the last two are recorded on the run
+     * @throws IllegalStateException if the run is not validated, the file or a lookup file changed, the source is not
+     *     supported, or a row had a FATAL issue; the last two are recorded on the run
      */
     long run(long runId, Path file) {
         byte[] content = ValidateMappingCommand.read(file);
@@ -81,15 +81,16 @@ class ExtractCommand {
         if (found.getStatus() != ImportRun.Status.VALIDATED || found.getStagingPurgedAt() != null) {
             throw new IllegalStateException("Import run " + runId + " is " + found.getStatus() + ", not validated");
         }
-        if (!found.hasMappingHash(ValidateMappingCommand.sha256(content))) {
-            throw new IllegalStateException("The mapping file changed after validate-mapping; validate it again");
+        JsonNode mapping = yaml.readTree(content);
+        LookupFiles lookups = LookupFiles.read(file, mapping);
+        // A lookup file that no longer reads is a changed file too: validate-mapping says why.
+        if (!lookups.problems().isEmpty() || !found.hasMappingHash(lookups.hash(content))) {
+            throw new IllegalStateException(
+                    "The mapping file or a lookup file changed after validate-mapping; validate it again");
         }
-        MappingContext context = MappingContext.of(yaml.readTree(content), properties.hashKeySpec());
+        MappingContext context = MappingContext.of(mapping, properties.hashKeySpec(), lookups.values());
         transactions.executeWithoutResult(status ->
                 issues.deleteByRunIdAndStageAndSubject(runId, ImportIssue.Stage.EXTRACT, ImportIssue.Subject.MAPPING));
-        if (context.hasLookupFiles()) {
-            throw refused(runId, ImportIssue.Subject.MAPPING, new SourceException("LOOKUP_FILE_UNSUPPORTED", null));
-        }
         SourceRows.Factory factory = sources.stream()
                 .filter(candidate -> candidate.supports(context.mapping()))
                 .findFirst()

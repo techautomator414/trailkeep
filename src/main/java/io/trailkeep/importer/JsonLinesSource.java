@@ -113,7 +113,7 @@ final class JsonLinesSource implements SourceRows.Factory {
                     }
                 }
             } catch (CharacterCodingException undecodable) {
-                throw new SourceException("SOURCE_ENCODING", line + 1);
+                throw new SourceException("SOURCE_ENCODING", CsvSource.undecodableLine(root, name, charset));
             } catch (IOException unreadable) {
                 throw new SourceException("SOURCE_FILE_UNREADABLE", null);
             }

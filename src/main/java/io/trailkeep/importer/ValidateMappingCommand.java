@@ -14,15 +14,17 @@ import java.util.List;
 import java.util.stream.Stream;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionTemplate;
+import tools.jackson.dataformat.yaml.YAMLMapper;
 
 /**
  * {@code validate-mapping} for one run (design §3 step 1): the structural and query checks (26b, 26m), then, for a
  * file that passed them, the source itself: a one-row test fetch of every query as the source account for a JDBC
- * source (26n), the manifest and files for a files source (26n2, {@link FileSourceCheck}). The problems
- * replace the run's earlier {@code VALIDATE} issues, each a {@code FATAL} issue about the mapping; a mapping with none
- * moves the run to {@code VALIDATED} with the file's SHA-256 as its mapping hash, which the sign-off and the load
- * compare against later (§3); a mapping with problems puts it back to {@code REQUESTED} with no hash, so an earlier
- * pass never stands beside a failed file. The file holds no legacy data, so a plain hash is enough.
+ * source (26n), the manifest and files for a files source (26n2, {@link FileSourceCheck}), and the lookup files of
+ * either (26l2, {@link LookupFiles}). The problems replace the run's earlier {@code VALIDATE} issues, each a {@code
+ * FATAL} issue about the mapping; a mapping with none moves the run to {@code VALIDATED} with the SHA-256 over the file
+ * and its lookup files as its mapping hash, which the extract, the sign-off and the load compare against later (§3); a
+ * mapping with problems puts it back to {@code REQUESTED} with no hash, so an earlier pass never stands beside a failed
+ * file.
  */
 @Component
 class ValidateMappingCommand {
@@ -33,6 +35,7 @@ class ValidateMappingCommand {
     private final ImportIssueRepository issues;
     private final TransactionTemplate transactions;
     private final InstantSource clock;
+    private final YAMLMapper yaml = YAMLMapper.builder().build();
 
     ValidateMappingCommand(
             MappingValidator validator,
@@ -62,9 +65,12 @@ class ValidateMappingCommand {
         List<MappingProblem> found = content.length == 0 && size(mapping) > MappingValidator.MAX_BYTES
                 ? List.of(new MappingProblem(MappingProblem.Code.MAPPING_TOO_LARGE, ""))
                 : validator.validate(mapping, content);
-        // Outside the run's transaction: the test fetch is network I/O against the source, the file check reads files.
+        // Outside the run's transaction: the test fetch is network I/O against the source, the file checks read files.
+        LookupFiles lookups =
+                LookupFiles.read(mapping, found.isEmpty() ? yaml.readTree(content) : yaml.createObjectNode());
         List<MappingProblem> problems = found.isEmpty()
-                ? Stream.concat(testFetch.check(content).stream(), FileSourceCheck.check(mapping, content).stream())
+                ? Stream.of(testFetch.check(content), FileSourceCheck.check(mapping, content), lookups.problems())
+                        .flatMap(List::stream)
                         .toList()
                 : found;
         transactions.executeWithoutResult(status -> {
@@ -86,7 +92,7 @@ class ValidateMappingCommand {
                         clock.instant()));
             }
             if (problems.isEmpty()) {
-                run.mappingValidated(sha256(content), clock.instant());
+                run.mappingValidated(lookups.hash(content), clock.instant());
             } else {
                 run.mappingRejected(clock.instant());
             }

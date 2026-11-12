@@ -102,13 +102,43 @@ abstract class AbstractExtractIT extends ExtractJobSupport {
         }
     }
 
+    /**
+     * A lookup read from a CSV file under the mapping's directory (26l2) stages exactly like its inline twin, and the
+     * run's mapping hash covers the file: one edited after {@code validate-mapping} stops the extract before it reads.
+     */
+    @Test
+    void lookupFromFileStagesLikeItsInlineTwinAndAnEditedFileStopsTheExtract(@TempDir Path directory) throws Exception {
+        Path inline = mapping(directory, MAPPING);
+        Files.writeString(directory.resolve("status.csv"), "legacy,status\nOpen,OPEN\nClosed,CLOSED\n");
+        Path fromFile = mapping(
+                directory,
+                MAPPING.replace(
+                        "status: { \"Open\": OPEN, \"Closed\": CLOSED }",
+                        "status: { file: status.csv, key: legacy, value: status }"));
+        long twin = validatedRun(inline);
+        long run = validatedRun(fromFile);
+
+        extract(twin, inline, new MemorySource("memory-fp-1", null)).close();
+        extract(run, fromFile, new MemorySource("memory-fp-1", null)).close();
+
+        String hashes = "SELECT LEGACY_KEY, STATUS, ROW_HASH FROM IMPORT_STG_CASE WHERE RUN_ID = ? ORDER BY LEGACY_KEY";
+        assertThat(jdbc.queryForList(hashes, run)).hasSize(3).isEqualTo(jdbc.queryForList(hashes, twin));
+        assertThat(issues(run)).containsExactlyInAnyOrderElementsOf(issues(twin));
+
+        long edited = validatedRun(fromFile);
+        Files.writeString(directory.resolve("status.csv"), "legacy,status\nOpen,CLOSED\nClosed,CLOSED\n");
+        assertThatThrownBy(() -> extract(edited, fromFile, new MemorySource("memory-fp-1", null)))
+                .hasMessage("The mapping file or a lookup file changed after validate-mapping; validate it again");
+        assertThat(staged(edited)).containsExactly(0, 0, 0, 0, 0);
+    }
+
     @Test
     void extractRefusesWhatItCannotStageSoundly(@TempDir Path directory) throws Exception {
         Path mapping = mapping(directory, MAPPING);
         long changed = validatedRun(mapping);
         Files.writeString(mapping, MAPPING.replace("batchSize: 2", "batchSize: 3"));
         assertThatThrownBy(() -> extract(changed, mapping, new MemorySource("memory-fp-1", null)))
-                .hasMessage("The mapping file changed after validate-mapping; validate it again");
+                .hasMessage("The mapping file or a lookup file changed after validate-mapping; validate it again");
 
         Path elsewhere = mapping(directory, MAPPING.replace("id: memory1", "id: legacy9"));
         long unsupported = validatedRun(elsewhere);
