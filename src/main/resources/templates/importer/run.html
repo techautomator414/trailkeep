@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- One import run (WP-26 part s): its facts, its issues per class (fatal first) and the figures of its last completed
+     dry run (IMPORT_RUN_SUMMARY, design §3 R8): codes, times and counts only, teams by name, times in app.timezone. -->
+<html lang="en" xmlns:th="http://www.thymeleaf.org" th:replace="~{web/layout :: page(~{::title}, ~{::main})}">
+<head><title th:text="#{tk.imports.run(${line.id})} + ' · ' + ${@branding.name()}">Import run 12</title></head>
+<body>
+<main id="main" class="container tk-main" tabindex="-1">
+  <h1 th:text="#{tk.imports.run(${line.id})}">Import run 12</h1>
+  <p><a th:href="@{/admin/import-runs}" th:text="#{tk.imports.all}">All import runs</a></p>
+  <dl class="row">
+    <dt class="col-sm-4" th:text="#{tk.imports.kind}">Kind</dt>
+    <dd class="col-sm-8" th:text="#{'tk.system.import.kind.' + ${line.kind}}">import</dd>
+    <dt class="col-sm-4" th:text="#{tk.system.import.status}">Status</dt>
+    <dd class="col-sm-8" th:text="#{'tk.system.import.status.' + ${line.status}}">Extracted</dd>
+    <dt class="col-sm-4" th:text="#{tk.system.import.requested}">Requested</dt>
+    <dd class="col-sm-8" th:text="#{tk.imports.by(${#temporals.format(line.requested, 'yyyy-MM-dd HH:mm')},
+        ${requestedBy})}">2026-11-11 09:00 by Person</dd>
+    <dt class="col-sm-4" th:text="#{tk.system.import.updated}">Last change</dt>
+    <dd class="col-sm-8" th:text="${#temporals.format(line.updated, 'yyyy-MM-dd HH:mm')}">2026-11-11 09:30</dd>
+    <dt class="col-sm-4" th:text="#{tk.imports.staged}">Rows staged</dt>
+    <dd class="col-sm-8" th:text="${r.rowsStaged}">0</dd>
+    <dt class="col-sm-4" th:text="#{tk.system.import.rows}">Rows loaded</dt>
+    <dd class="col-sm-8" th:text="${r.summary.rowsLoaded != null} ? ${r.summary.rowsLoaded}
+        : #{tk.system.import.rows.none}">Not loaded yet</dd>
+    <dt class="col-sm-4" th:text="#{tk.imports.scan}">Scanning mode at the dry run</dt>
+    <dd class="col-sm-8" th:text="${r.scanMode != null} ? #{'tk.imports.scan.' + ${r.scanMode}}
+        : #{tk.imports.scan.none}">No completed dry run</dd>
+    <dt class="col-sm-4" th:text="#{tk.imports.approved}">Signed off</dt>
+    <dd class="col-sm-8" th:text="${approvedBy != null} ? #{tk.imports.by(${#temporals.format(approvedAt,
+        'yyyy-MM-dd HH:mm')}, ${approvedBy})} : #{tk.imports.approved.none}">Not signed off</dd>
+  </dl>
+  <h2 th:text="#{tk.imports.issues}">Issues</h2>
+  <p th:if="${r.issues.isEmpty()}" th:text="#{tk.imports.issues.none}">No issues.</p>
+  <table th:unless="${r.issues.isEmpty()}" class="table">
+    <caption th:text="#{tk.imports.issues.caption}">Issues per class, fatal first</caption>
+    <thead><tr>
+      <th scope="col" th:text="#{tk.imports.code}">Code</th>
+      <th scope="col" th:text="#{tk.imports.entity}">Entity</th>
+      <th scope="col" th:text="#{tk.imports.severity}">Severity</th>
+      <th scope="col" th:text="#{tk.imports.count}">Count</th>
+    </tr></thead>
+    <tbody>
+    <tr th:each="i : ${r.issues}">
+      <th scope="row"><code th:text="${i.code}">NOT_SCANNED</code></th>
+      <td th:text="${#messages.msgOrNull('tk.imports.dim.' + i.entity) ?: i.entity}">Attachments</td>
+      <td th:text="#{'tk.imports.severity.' + ${i.severity}}">Warning</td>
+      <td th:text="${i.count}">3</td>
+    </tr>
+    </tbody>
+  </table>
+  <h2 th:text="#{tk.imports.figures}">Dry-run figures</h2>
+  <p th:if="${figures.isEmpty()}" th:text="#{tk.imports.figures.none}">No dry run has completed for this run.</p>
+  <p th:if="${r.forecastDay != null}" th:text="#{tk.imports.forecast(${#temporals.format(r.forecastDay,
+      'yyyy-MM-dd')})}">SLA forecast for 2026-12-01.</p>
+  <table th:unless="${figures.isEmpty()}" class="table">
+    <caption th:text="#{tk.imports.figures.caption}">Figures of the last completed dry run</caption>
+    <thead><tr>
+      <th scope="col" th:text="#{tk.imports.metric}">Figure</th>
+      <th scope="col" th:text="#{tk.imports.dimension}">For</th>
+      <th scope="col" th:text="#{tk.imports.count}">Count</th>
+    </tr></thead>
+    <tbody>
+    <tr th:each="f : ${figures}">
+      <th scope="row" th:text="${#messages.msgOrNull('tk.imports.metric.' + f.metric) ?: f.metric}">Cases</th>
+      <td th:text="${f.team != null} ? ${f.team} : (${f.dimension == null} ? #{tk.imports.total}
+          : (${#messages.msgOrNull('tk.imports.dim.' + f.dimension)} ?: ${f.dimension}))">Open</td>
+      <td th:text="${f.value}">12</td>
+    </tr>
+    </tbody>
+  </table>
+</main>
+</body>
+</html>

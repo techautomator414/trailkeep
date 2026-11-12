@@ -33,8 +33,8 @@ import org.springframework.transaction.annotation.Transactional;
  * last success in {@code app.timezone} and its state against its health indicator (on time, late, never run, or not
  * watched, as the purge is), the outbox's waiting and failed counts with the oldest waiting time, and the scanner (here
  * unavailable: the test profile points clamd at a closed port) and the last import run (none, the only one, or the
- * later requested of two); an Analyst gets 403 and nothing else is shown; anonymous requests go to the identity
- * provider. Rows are rolled back after each test.
+ * later requested of two, linking to its page on the Import runs screen and to all runs); an Analyst gets 403 and
+ * nothing else is shown; anonymous requests go to the identity provider. Rows are rolled back after each test.
  */
 // "IT" is the Failsafe suffix Part B mandates for integration tests, not an abbreviation.
 @SuppressWarnings("checkstyle:AbbreviationAsWordInName")
@@ -122,7 +122,10 @@ class SystemControllerIT {
     @Test
     @WithAppUser(id = SYSTEM_ADMIN, globalRole = GlobalRole.SYSTEM_ADMIN)
     void noImportRunSaysSo() throws Exception {
-        assertThat(html()).contains("<h2>Last import run</h2><p>No import has been run.</p>");
+        assertThat(html())
+                .contains("<h2>Last import run</h2><p>No import has been run.</p>")
+                .contains("<p><a href=\"/admin/import-runs\">All import runs</a></p>")
+                .doesNotContain("Open import run");
     }
 
     @Test
@@ -138,6 +141,7 @@ class SystemControllerIT {
                 .contains("<dd class=\"col-sm-8\">"
                         + MINUTE.format(requested.plus(Duration.ofMinutes(30)).atZone(ZoneOffset.UTC)) + "</dd>")
                 .contains("<dd class=\"col-sm-8\">Not loaded yet</dd>")
+                .contains("<p><a href=\"/admin/import-runs/987201\">Open import run 987201</a></p>")
                 .doesNotContain("No import has been run.", "synthetic-source");
     }
 

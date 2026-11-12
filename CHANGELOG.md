@@ -100,6 +100,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   it (`CaseImportService.slaForecast`, every policy read once), and `SLA_FORECAST_DAY`, the day forecast for. The
   optional `import.go-live` (a date in `app.timezone`) sets that day; unset or past, the forecast is for the dry run's
   own time.
+- The Import runs screen, read-only (WP-26 part s1, docs/design/importer.md §3, R8): `/admin/import-runs` lists every
+  run, most recently requested first, 20 to a page, and `/admin/import-runs/{id}` shows one run: who requested it and
+  when, its status, the rows staged and loaded, the scanning mode its last completed dry run recorded, who signed it
+  off and when, its issues per class (entity, severity and code, fatal first, from every stage) and the figures of its
+  last completed dry run from `IMPORT_RUN_SUMMARY`, teams by name and the SLA forecast day as a date. System Admins and
+  Compliance Admins only (403 for anyone else, 404 for an unknown run); codes, times and counts only, never the source
+  id, a key hash or a legacy value. `ImportRunService` gains `runs` and `run`, and a signed-off dry run now reads as
+  `APPROVED` there and on the System screen, whose "Last import run" links to the run's page and to all runs.
 - The Oracle source (WP-26 part o, docs/design/importer.md §4.1): a `kind: jdbc` Oracle mapping is test-fetched by
   `validate-mapping` and extracted in one `SET TRANSACTION READ ONLY` transaction, with the session in UTC and ISO
   date, timestamp and number formats; `DATE` and `TIMESTAMP` read as local date-times, `TIMESTAMP WITH TIME ZONE` with

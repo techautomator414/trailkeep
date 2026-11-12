@@ -71,6 +71,9 @@
     <dd class="col-sm-8" th:text="${lastImport.rowsLoaded != null} ? ${lastImport.rowsLoaded}
         : #{tk.system.import.rows.none}">Not loaded yet</dd>
   </dl>
+  <p th:if="${lastImport != null}"><a th:href="@{/admin/import-runs/{id}(id=${lastImport.id})}"
+      th:text="#{tk.system.import.open(${lastImport.id})}">Open import run 12</a></p>
+  <p><a th:href="@{/admin/import-runs}" th:text="#{tk.system.import.all}">All import runs</a></p>
   <h2 id="tk-test-mail" th:text="#{tk.system.test}">Send me a test</h2>
   <p th:if="${testOutcome != null}" class="alert alert-info" data-tk-toast
      th:text="#{'tk.system.test.outcome.' + ${testOutcome}}">Queued.</p>
