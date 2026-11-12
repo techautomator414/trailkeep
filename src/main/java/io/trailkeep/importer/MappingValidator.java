@@ -104,6 +104,7 @@ final class MappingValidator {
             checkKeys(root, problems);
             checkFields(root.path("entities"), "/entities", root.path("lookups"), problems);
             problems.addAll(new CompiledFormats().compileAll(root));
+            checkQueries(root, problems);
             for (JsonNode code : root.path("limits").path("acceptSkip")) {
                 if (!SKIPPABLE.contains(code.asString())) {
                     problems.add(new MappingProblem(Code.ACCEPT_SKIP_NOT_ALLOWED, "/limits/acceptSkip"));
@@ -156,6 +157,34 @@ final class MappingValidator {
             return !path.isAbsolute() && root.resolve(path).normalize().startsWith(root);
         } catch (InvalidPathException malformed) {
             return false;
+        }
+    }
+
+    /** Every source query of a JDBC mapping, through {@link SourceQueryValidator} for the source's vendor (§4.1). */
+    private static void checkQueries(JsonNode mapping, Set<MappingProblem> problems) {
+        if (!"jdbc".equals(mapping.at("/source/kind").asString(""))) {
+            return;
+        }
+        // The schema allows exactly these three names for a jdbc source.
+        SourceQueryValidator.Vendor vendor =
+                switch (mapping.at("/source/vendor").asString("")) {
+                    case "oracle" -> SourceQueryValidator.Vendor.ORACLE;
+                    case "postgresql" -> SourceQueryValidator.Vendor.POSTGRESQL;
+                    default -> SourceQueryValidator.Vendor.SQLSERVER;
+                };
+        List<String> pointers = new ArrayList<>(List.of("/people/query", "/entities/attachment/fields/content/query"));
+        mapping.path("entities").propertyNames().forEach(name -> {
+            pointers.add("/entities/" + name + "/query");
+            pointers.add("/entities/" + name + "/countQuery");
+        });
+        for (String pointer : pointers) {
+            JsonNode query = mapping.at(pointer);
+            if (query.isString()) {
+                for (MappingProblem.Code code :
+                        SourceQueryValidator.validate(query.asString(), vendor).problems()) {
+                    problems.add(new MappingProblem(code, pointer));
+                }
+            }
         }
     }
 
