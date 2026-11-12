@@ -306,6 +306,35 @@ class ImportRun {
         this.updatedAt = at;
     }
 
+    int getVersion() {
+        return version;
+    }
+
+    /**
+     * Whether a Compliance Admin may sign the run off (WP-26 part s2, design §3 step 4): an import run whose last dry
+     * run completed, with its staging, not signed off yet. The caller also checks it has no FATAL issue.
+     *
+     * @return true when it may be signed off
+     */
+    boolean awaitsSignOff() {
+        return kind == Kind.IMPORT && status == Status.DRY_RUN && approvedBy == null && stagingPurgedAt == null;
+    }
+
+    /**
+     * Records the sign-off: only the runtime user's columns change ({@link DynamicUpdate}), and the version guards it
+     * against a dry run that started meanwhile.
+     *
+     * @param by the Compliance Admin's {@code APP_USER} id
+     * @param acknowledged the WARNING classes acknowledged, comma-separated, or {@code null} when there were none
+     * @param at when
+     */
+    void signedOff(long by, @Nullable String acknowledged, Instant at) {
+        this.approvedBy = by;
+        this.approvedAt = at;
+        this.acknowledgedWarnings = acknowledged;
+        this.updatedAt = at;
+    }
+
     /**
      * Records that the run's staging was deleted.
      *

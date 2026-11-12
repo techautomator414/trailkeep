@@ -1,0 +1,23 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- The run request form (WP-26 part s2), in the list's dialog and on its own page. -->
+<form th:fragment="form(sourceId, invalid, dialog)" method="post" th:action="@{/admin/import-runs}"
+      xmlns:th="http://www.thymeleaf.org">
+  <div class="mb-3">
+    <label class="form-label" for="tk-source-id" th:text="#{tk.imports.source}">Source id</label>
+    <input class="form-control" id="tk-source-id" name="sourceId" type="text" required maxlength="16"
+           autocomplete="off" spellcheck="false" th:value="${sourceId}"
+           th:attr="aria-invalid=${invalid},
+                    aria-describedby=${invalid} ? 'tk-source-error tk-source-hint' : 'tk-source-hint',
+                    data-tk-dialog-focus=${dialog} ? 'true' : null">
+    <div th:if="${invalid}" class="invalid-feedback d-block" id="tk-source-error"
+         th:text="#{tk.imports.source.error}">Use 1 to 16 lowercase letters, digits or hyphens.</div>
+    <div class="form-text" id="tk-source-hint" th:text="#{tk.imports.source.hint}">The mapping file's source.id: 1
+      to 16 lowercase letters, digits or hyphens.</div>
+  </div>
+  <div class="tk-dialog-actions">
+    <button class="btn btn-primary" type="submit" th:text="#{tk.imports.request.submit}">Request run</button>
+    <a class="btn btn-outline-secondary" th:href="@{/admin/import-runs}"
+       th:attr="data-tk-dialog-close=${dialog} ? 'true' : null"
+       th:text="#{tk.edit.cancel}">Cancel</a>
+  </div>
+</form>

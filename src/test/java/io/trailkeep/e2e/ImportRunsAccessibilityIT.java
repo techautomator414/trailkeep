@@ -41,6 +41,14 @@ import org.springframework.test.context.DynamicPropertySource;
  * and Enter on "Open import run" open the latest, which has no dry run yet, Tab and Enter on "All import runs" go back
  * to the list, and Tab and Enter on the other run open it with its issues and figures. axe finds 0 violations on the
  * empty list, the list, and both run pages, with no CSP problem.
+ *
+ * <p>The run request and the sign-off (part s2): Tab and Enter on "Request an import run" open the native dialog with
+ * focus in the source id; a malformed id comes back as the request page with the error summarized, and a corrected one
+ * opens the run. On a completed dry run, Space ticks one warning class and Enter on "Sign off" comes back with the
+ * missing acknowledgement summarized; a dry run that ran again meanwhile makes the form stale, which comes back as a
+ * conflict with Reload; after Reload, ticking every class and Enter signs the run off. axe finds 0 violations in the
+ * open dialog, the refused request, the new run, the sign-off form, the refused sign-off, the conflict and the
+ * signed-off run.
  */
 // "IT" is the Failsafe suffix Part B mandates for integration tests, not an abbreviation.
 @SuppressWarnings("checkstyle:AbbreviationAsWordInName")
@@ -115,7 +123,7 @@ class ImportRunsAccessibilityIT {
         for (String table : List.of("IMPORT_ISSUE", "IMPORT_RUN_SUMMARY")) {
             jdbc.update("DELETE FROM " + table + " WHERE RUN_ID IN (?, ?)", DRY_RUN, VALIDATED);
         }
-        jdbc.update("DELETE FROM IMPORT_RUN WHERE ID IN (?, ?)", DRY_RUN, VALIDATED);
+        jdbc.update("DELETE FROM IMPORT_RUN WHERE ID IN (?, ?) OR SOURCE_ID = 'legacy-k1'", DRY_RUN, VALIDATED);
         jdbc.update("DELETE FROM APP_USER WHERE ID = ?", requester);
     }
 
@@ -162,6 +170,78 @@ class ImportRunsAccessibilityIT {
         assertThat(page.textContent("main")).contains("NOT_SCANNED", "External: attachments are stored as not scanned");
     }
 
+    @Test
+    void runsAreRequestedAndSignedOffFromTheKeyboard() {
+        page.navigate(KEYCLOAK.app("/admin/import-runs"));
+        page.locator("#main").focus();
+        tabTo("Request an import run", 3);
+        page.keyboard().press("Enter");
+        assertThat(page.evaluate("() => document.getElementById('tk-request-dialog').open"))
+                .isEqualTo(true);
+        assertThat(page.evaluate("() => document.activeElement.id")).isEqualTo("tk-source-id");
+        assertClean("Import runs");
+
+        page.keyboard().type("Legacy K1");
+        page.keyboard().press("Enter");
+        page.locator("[data-tk-error-summary]").waitFor();
+        assertClean("Request an import run");
+        tabToId("tk-source-id", 5);
+        page.keyboard().press("Control+A");
+        page.keyboard().type("legacy-k1");
+        page.keyboard().press("Enter");
+        page.waitForURL(url -> url.matches(".*/admin/import-runs/\\d+$"));
+        assertThat(page.textContent("main")).contains("Requested", "No completed dry run");
+        assertClean(String.valueOf(page.textContent("h1")).strip());
+
+        seed();
+        page.navigate(KEYCLOAK.app("/admin/import-runs/" + DRY_RUN));
+        assertClean("Import run " + DRY_RUN);
+        page.locator("#main").focus();
+        tabToId("tk-ack-0", 40);
+        page.keyboard().press("Space");
+        tabTo("Sign off import run " + DRY_RUN, 2);
+        page.keyboard().press("Enter");
+        page.waitForURL(url -> url.endsWith("/sign-off"));
+        assertClean("Import run " + DRY_RUN);
+        assertThat(page.textContent("main")).contains("Not signed off: acknowledge every warning class.");
+
+        // Someone runs the dry run again meanwhile: the form is stale, so it comes back as a conflict with Reload.
+        jdbc.update("UPDATE IMPORT_RUN SET VERSION = VERSION + 1 WHERE ID = ?", DRY_RUN);
+        page.locator("#main").focus();
+        tabToId("tk-ack-1", 40);
+        page.keyboard().press("Space");
+        tabTo("Sign off import run " + DRY_RUN, 2);
+        page.keyboard().press("Enter");
+        page.locator("#tk-conflict-title").waitFor();
+        assertClean("Import run " + DRY_RUN);
+        assertThat(page.locator("form[action$='/sign-off']").count()).isZero();
+        tabTo("Reload", 40);
+        page.keyboard().press("Enter");
+        page.waitForURL(url -> url.endsWith("/admin/import-runs/" + DRY_RUN));
+
+        page.locator("#main").focus();
+        tabToId("tk-ack-0", 40);
+        page.keyboard().press("Space");
+        tabToId("tk-ack-1", 1);
+        page.keyboard().press("Space");
+        tabTo("Sign off import run " + DRY_RUN, 1);
+        page.keyboard().press("Enter");
+        page.locator("text=This run is signed off.").waitFor();
+        assertClean("Import run " + DRY_RUN);
+        assertThat(page.textContent("main")).contains("Signed off, waiting to load", "This run is signed off.");
+    }
+
+    /** Presses Tab until the element with the given id has the focus. */
+    private void tabToId(String id, int presses) {
+        for (int i = 1; i <= presses; i++) {
+            page.keyboard().press("Tab");
+            if (id.equals(page.evaluate("() => document.activeElement.id"))) {
+                return;
+            }
+        }
+        throw new AssertionError("Tab never reached #" + id);
+    }
+
     /** From a page, Tab to the link with this name and follow it with Enter. */
     private void follow(String from, String link, String to) {
         page.navigate(KEYCLOAK.app(from));
@@ -181,6 +261,12 @@ class ImportRunsAccessibilityIT {
                 "INSERT INTO IMPORT_ISSUE (ID, RUN_ID, STAGE, ENTITY, SEVERITY, CODE, DETAIL, CREATED_AT)"
                         + " VALUES (?, ?, 'DRY_RUN', 'ATTACHMENT', 'WARNING', 'NOT_SCANNED', 2, ?)",
                 DRY_RUN,
+                DRY_RUN,
+                Timestamp.from(at));
+        jdbc.update(
+                "INSERT INTO IMPORT_ISSUE (ID, RUN_ID, STAGE, ENTITY, SEVERITY, CODE, CREATED_AT)"
+                        + " VALUES (?, ?, 'DRY_RUN', 'PERSON', 'WARNING', 'AMBIGUOUS_PERSON', ?)",
+                DRY_RUN + 1,
                 DRY_RUN,
                 Timestamp.from(at));
         jdbc.update(

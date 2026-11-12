@@ -6,7 +6,9 @@ import io.trailkeep.shared.DomainException;
 
 /**
  * A refused Import runs request, rendered by the shell's {@code ErrorAdvice}: {@code FORBIDDEN} 403 for anyone but a
- * System Admin or a Compliance Admin, {@code NOT_FOUND} 404 for an unknown run.
+ * System Admin or a Compliance Admin (and, for a sign-off, anyone but a Compliance Admin), {@code NOT_FOUND} 404 for an
+ * unknown run, {@code CONFLICT} 409 for a sign-off of a run that changed or may not be signed off, {@code INVALID} 422
+ * for a malformed source id or a WARNING class left unacknowledged.
  */
 public final class ImportRunException extends DomainException {
 
