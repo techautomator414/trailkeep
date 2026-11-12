@@ -1,0 +1,263 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://trailkeep.example.invalid/importer/mapping-v1.schema.json",
+  "$comment": "SPDX-License-Identifier: Apache-2.0. Copyright 2026 Charlie Genova and contributors. The importer's mapping file, version 1 (docs/design/importer.md section 6). Unknown keys fail everywhere. Placeholders, paths, key arity and acceptSkip are checked by MappingValidator after this schema.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "source", "limits", "entities", "people"],
+  "properties": {
+    "version": { "const": 1 },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "timezone"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z0-9-]{1,16}$" },
+        "kind": { "enum": ["jdbc", "files"] },
+        "vendor": { "enum": ["sqlserver", "oracle", "postgresql"] },
+        "url": { "type": "string", "minLength": 1, "maxLength": 1000 },
+        "user": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "timezone": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "dstAmbiguity": { "enum": ["earlier", "later", "reject"], "default": "reject" },
+        "manifest": { "$ref": "#/$defs/relativePath" },
+        "encoding": { "enum": ["UTF-8", "UTF-16LE", "UTF-16BE", "windows-1252", "ISO-8859-1"] }
+      },
+      "if": { "properties": { "kind": { "const": "jdbc" } } },
+      "then": { "required": ["vendor", "url", "user"] },
+      "else": { "not": { "anyOf": [{ "required": ["vendor"] }, { "required": ["url"] }, { "required": ["user"] }] } }
+    },
+    "limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["maxErrorRate"],
+      "properties": {
+        "maxErrorRate": { "type": "number", "minimum": 0, "maximum": 1 },
+        "acceptSkip": { "type": "array", "uniqueItems": true, "items": { "type": "string", "pattern": "^[A-Z_]{1,40}$" } },
+        "batchSize": { "type": "integer", "minimum": 1, "maximum": 10000 },
+        "attachmentMaxBytes": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "lookups": {
+      "type": "object",
+      "propertyNames": { "pattern": "^[a-zA-Z][a-zA-Z0-9_]{0,63}$" },
+      "additionalProperties": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["file", "key", "value"],
+            "properties": {
+              "file": { "$ref": "#/$defs/relativePath" },
+              "key": { "$ref": "#/$defs/column" },
+              "value": { "$ref": "#/$defs/column" }
+            }
+          },
+          {
+            "type": "object",
+            "not": { "required": ["file"] },
+            "additionalProperties": { "type": ["string", "number", "boolean"] }
+          }
+        ]
+      }
+    },
+    "entities": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["case"],
+      "properties": {
+        "case": {
+          "allOf": [{ "$ref": "#/$defs/entity" }],
+          "properties": {
+            "fields": {
+              "propertyNames": {
+                "enum": ["legacyNumber", "title", "description", "subject", "caseTypeKey", "teamKey", "ownerKey",
+                  "priority", "sensitivity", "legacyAcl", "status", "identifiedOn", "openedAt", "closedAt",
+                  "closureOutcome", "closureSummary", "legalHold"]
+              },
+              "required": ["title", "description", "caseTypeKey", "teamKey", "status", "openedAt", "identifiedOn"]
+            }
+          },
+          "not": { "required": ["parent"] }
+        },
+        "comment": {
+          "allOf": [{ "$ref": "#/$defs/entity" }],
+          "required": ["parent"],
+          "properties": {
+            "fields": {
+              "propertyNames": { "enum": ["authorKey", "authorName", "writtenAt", "body"] },
+              "required": ["writtenAt", "body"]
+            }
+          }
+        },
+        "attachment": {
+          "allOf": [{ "$ref": "#/$defs/entity" }],
+          "required": ["parent"],
+          "properties": {
+            "fields": {
+              "propertyNames": { "enum": ["fileName", "uploadedAt", "uploaderKey", "uploaderName", "sha256", "content"] },
+              "required": ["fileName", "uploadedAt", "content"]
+            }
+          }
+        },
+        "event": {
+          "allOf": [{ "$ref": "#/$defs/entity" }],
+          "required": ["parent"],
+          "properties": {
+            "fields": {
+              "propertyNames": { "enum": ["at", "whoKey", "whoName", "kind", "field", "oldValue", "newValue"] },
+              "required": ["at", "kind"]
+            }
+          }
+        }
+      }
+    },
+    "attachments": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["root"],
+      "properties": {
+        "root": { "type": "string", "pattern": "^/", "maxLength": 500 },
+        "stripPrefix": { "type": "string", "maxLength": 500 }
+      }
+    },
+    "people": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "match", "unmatched"],
+      "properties": {
+        "query": { "$ref": "#/$defs/query" },
+        "file": { "$ref": "#/$defs/relativePath" },
+        "key": { "$ref": "#/$defs/key" },
+        "keyCase": { "enum": ["sensitive", "insensitive"] },
+        "fields": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/$defs/field" },
+          "propertyNames": { "enum": ["displayName", "email", "externalId"] }
+        },
+        "match": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "enum": ["externalId", "email"] }
+        },
+        "unmatched": { "const": "snapshot" }
+      },
+      "oneOf": [{ "required": ["query"] }, { "required": ["file"] }]
+    },
+    "defaults": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "owner": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["byTeam"],
+          "properties": { "byTeam": { "$ref": "#/$defs/relativePath" } }
+        }
+      }
+    },
+    "visibility": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": { "onUnrepresentableAcl": { "enum": ["restricted", "standard", "fail"], "default": "restricted" } }
+    }
+  },
+  "$defs": {
+    "column": { "type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_$#]{0,127}$" },
+    "relativePath": { "type": "string", "minLength": 1, "maxLength": 500 },
+    "query": { "type": "string", "minLength": 1, "maxLength": 20000 },
+    "key": {
+      "oneOf": [
+        { "$ref": "#/$defs/column" },
+        { "type": "array", "minItems": 1, "maxItems": 8, "uniqueItems": true, "items": { "$ref": "#/$defs/column" } }
+      ]
+    },
+    "entity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "fields"],
+      "properties": {
+        "query": { "$ref": "#/$defs/query" },
+        "countQuery": { "$ref": "#/$defs/query" },
+        "file": { "$ref": "#/$defs/relativePath" },
+        "key": { "$ref": "#/$defs/key" },
+        "keyCase": { "enum": ["sensitive", "insensitive"] },
+        "parent": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["entity", "columns"],
+          "properties": {
+            "entity": { "const": "case" },
+            "columns": {
+              "type": "array", "minItems": 1, "maxItems": 8, "items": { "$ref": "#/$defs/column" }
+            }
+          }
+        },
+        "fields": { "type": "object", "additionalProperties": { "$ref": "#/$defs/field" } }
+      },
+      "oneOf": [{ "required": ["query"] }, { "required": ["file"] }]
+    },
+    "field": {
+      "oneOf": [
+        { "$ref": "#/$defs/column" },
+        {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": false,
+          "properties": {
+            "column": { "$ref": "#/$defs/column" },
+            "const": { "type": ["string", "number", "boolean"] },
+            "trim": { "$ref": "#/$defs/operand" },
+            "upper": { "$ref": "#/$defs/operand" },
+            "lower": { "$ref": "#/$defs/operand" },
+            "coalesce": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/operand" } },
+            "concat": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/operand" } },
+            "separator": { "type": "string", "maxLength": 20 },
+            "lookup": { "type": "string", "pattern": "^[a-zA-Z][a-zA-Z0-9_]{0,63}$" },
+            "from": { "$ref": "#/$defs/operand" },
+            "onMissing": { "enum": ["fail", "default", "issue"] },
+            "default": { "type": ["string", "number", "boolean"] },
+            "when": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["column"],
+              "properties": {
+                "column": { "$ref": "#/$defs/column" },
+                "equals": { "type": ["string", "number", "boolean"] },
+                "in": { "type": "array", "minItems": 1, "items": { "type": ["string", "number", "boolean"] } },
+                "matches": { "type": "string", "maxLength": 500 },
+                "notBlank": { "type": "boolean" }
+              },
+              "minProperties": 2
+            },
+            "then": { "type": ["string", "number", "boolean"] },
+            "else": { "type": ["string", "number", "boolean"] },
+            "regexExtract": { "$ref": "#/$defs/operand" },
+            "pattern": { "type": "string", "maxLength": 500 },
+            "group": { "type": "integer", "minimum": 0, "maximum": 9 },
+            "timestamp": { "$ref": "#/$defs/operand" },
+            "date": { "$ref": "#/$defs/operand" },
+            "format": { "type": "string", "maxLength": 100 },
+            "number": { "$ref": "#/$defs/operand" },
+            "binary": { "enum": ["hex", "base64"] },
+            "maxLength": { "type": "integer", "minimum": 1 },
+            "onOverflow": { "enum": ["fail", "truncateWithIssue", "continueInComment"] },
+            "text": { "$ref": "#/$defs/operand" },
+            "hash": { "$ref": "#/$defs/operand" },
+            "query": { "$ref": "#/$defs/query" },
+            "size": { "$ref": "#/$defs/column" },
+            "path": { "$ref": "#/$defs/column" },
+            "contentId": { "$ref": "#/$defs/column" }
+          }
+        }
+      ]
+    },
+    "operand": {
+      "oneOf": [
+        { "type": "string", "maxLength": 20000 },
+        { "type": "number" },
+        { "type": "object", "$ref": "#/$defs/field" }
+      ]
+    }
+  }
+}

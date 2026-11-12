@@ -180,6 +180,35 @@ class ImportRun {
         return stagingPurgedAt;
     }
 
+    /** Whether {@code validate-mapping} may run: an import run nobody has extracted for yet. */
+    boolean awaitsMapping() {
+        return kind == Kind.IMPORT && (status == Status.REQUESTED || status == Status.VALIDATED);
+    }
+
+    /**
+     * Records a mapping file that passed {@code validate-mapping}.
+     *
+     * @param hash the SHA-256 of the file, in hex
+     * @param at when
+     */
+    void mappingValidated(String hash, Instant at) {
+        this.status = Status.VALIDATED;
+        this.mappingHash = hash;
+        this.updatedAt = at;
+    }
+
+    /**
+     * Records a mapping file that failed {@code validate-mapping}: whatever passed before no longer stands, so the run
+     * is back to {@code REQUESTED} with no mapping hash.
+     *
+     * @param at when
+     */
+    void mappingRejected(Instant at) {
+        this.status = Status.REQUESTED;
+        this.mappingHash = null;
+        this.updatedAt = at;
+    }
+
     @Override
     public boolean equals(@Nullable Object other) {
         return this == other || (other instanceof ImportRun that && id != null && id.equals(that.id));

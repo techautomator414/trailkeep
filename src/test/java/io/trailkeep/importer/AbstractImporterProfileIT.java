@@ -9,20 +9,27 @@ import io.trailkeep.TrailkeepApplication;
 import io.trailkeep.testsupport.CaseSeed;
 import io.trailkeep.testsupport.RequiresDocker;
 import io.trailkeep.testsupport.TestDatabaseUsers;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.security.MessageDigest;
 import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.WebApplicationType;
 import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.ConfigurableApplicationContext;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.orm.jpa.persistenceunit.ManagedClassNameFilter;
 import org.springframework.orm.jpa.persistenceunit.PersistenceManagedTypes;
@@ -127,6 +134,60 @@ abstract class AbstractImporterProfileIT {
         assertThatThrownBy(() -> start(importUser, true, "--import.command=status"))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessage("import.run is required");
+    }
+
+    /**
+     * {@code validate-mapping} as the import user (WP-26 part b): a sound mapping validates the run with the file's
+     * SHA-256; a broken one records a FATAL issue, fails the Job and puts the run back to {@code REQUESTED} with no
+     * hash; the corrected file replaces the issue and validates the run again. This proves the import user's grants on
+     * both tables.
+     */
+    @Test
+    void validateMappingValidatesASoundMappingAndRevokesThatWhenTheFileBreaks(@TempDir Path directory)
+            throws Exception {
+        long run = runs.save(new ImportRun(ImportRun.Kind.IMPORT, "legacy1", new CaseSeed(jdbc).user(), NOW))
+                .getId();
+        String example =
+                new ClassPathResource("importer/example-mapping.yaml").getContentAsString(StandardCharsets.UTF_8);
+        Path mapping = directory.resolve("mapping.yaml");
+        String hash = HexFormat.of()
+                .formatHex(MessageDigest.getInstance("SHA-256").digest(example.getBytes(StandardCharsets.UTF_8)));
+        Files.writeString(mapping, example);
+        validateMapping(run, mapping).close();
+        assertThat(statusAndHash(run)).containsExactly("VALIDATED", hash);
+
+        Files.writeString(mapping, example.replace("FROM dbo.notes", "FROM ${import.source.schema}.notes"));
+        assertThatThrownBy(() -> validateMapping(run, mapping))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("The mapping has 1 problems; run " + run + " lists them as issues");
+        assertThat(jdbc.queryForList(
+                        "SELECT SEVERITY, CODE FROM IMPORT_ISSUE WHERE RUN_ID = ? AND STAGE = 'VALIDATE'", run))
+                .singleElement()
+                .satisfies(row -> assertThat(row.values()).containsExactly("FATAL", "PLACEHOLDER_NOT_ALLOWED"));
+        assertThat(statusAndHash(run)).as("the earlier pass no longer stands").containsExactly("REQUESTED", null);
+
+        Files.writeString(mapping, example);
+        validateMapping(run, mapping).close();
+        assertThat(jdbc.queryForObject(
+                        "SELECT COUNT(*) FROM IMPORT_ISSUE WHERE RUN_ID = ? AND STAGE = 'VALIDATE'",
+                        Integer.class,
+                        run))
+                .isZero();
+        assertThat(statusAndHash(run)).containsExactly("VALIDATED", hash);
+    }
+
+    private List<@Nullable Object> statusAndHash(long run) {
+        return new ArrayList<>(jdbc.queryForMap("SELECT STATUS, MAPPING_HASH FROM IMPORT_RUN WHERE ID = ?", run)
+                .values());
+    }
+
+    private ConfigurableApplicationContext validateMapping(long run, Path mapping) throws SQLException {
+        return start(
+                importUser,
+                true,
+                "--import.command=validate-mapping",
+                "--import.run=" + run,
+                "--import.mapping=" + mapping);
     }
 
     private long runWithIssues() {

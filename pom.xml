@@ -68,6 +68,7 @@
          up to 2026-11-03, including GHSA-47x2-9gq9-jg3m (denial of service via repeated allowed attributes), which
          applies to every policy; the later advisories concern SVG, srcset and ping, which the policy never allows. -->
     <commonmark.version>0.32.0</commonmark.version>
+    <json-schema-validator.version>3.0.6</json-schema-validator.version>
     <owasp-java-html-sanitizer.version>20261103.2</owasp-java-html-sanitizer.version>
     <!-- Upload type detection (WP-14, BUILD_PLAN 11.1): the core jar only, never the parser bundle. The 3.x line,
          because tika-core 4.x pulls in commonmark extensions a magic-byte detector does not need. -->
@@ -214,6 +215,20 @@
       <groupId>org.apache.tika</groupId>
       <artifactId>tika-core</artifactId>
       <version>${tika.version}</version>
+    </dependency>
+    <dependency>
+      <!-- Parses the importer's mapping file (WP-26 part b, ADR-0014 "Dependencies"); Boot manages the Jackson 3
+           line. Apache-2.0. -->
+      <groupId>tools.jackson.dataformat</groupId>
+      <artifactId>jackson-dataformat-yaml</artifactId>
+    </dependency>
+    <dependency>
+      <!-- Validates the mapping file against importer/mapping-v1.schema.json (WP-26 part b, ADR-0014); the 3.x line
+           builds on Jackson 3, as ADR-0014 requires. 3.0.6 is the newest release built on a Jackson no newer than
+           the one Boot manages (3.0.7 to 3.0.9 fail the upper-bound rule). Apache-2.0, as is com.ethlo.time:itu. -->
+      <groupId>com.networknt</groupId>
+      <artifactId>json-schema-validator</artifactId>
+      <version>${json-schema-validator.version}</version>
     </dependency>
     <dependency>
       <!-- Compile-time only, never shipped: tika-core's package-info classes carry bnd's @Version, and without the
