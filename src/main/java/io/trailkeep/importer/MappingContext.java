@@ -12,12 +12,12 @@ import tools.jackson.databind.JsonNode;
 
 /**
  * What every row of one extract is evaluated against (WP-26 part k1a, design §6): the validated mapping, its source
- * id, inline lookups, time zone and daylight-saving rule, {@code import.hash-key}, and the mapping's patterns and
+ * id, lookups, time zone and daylight-saving rule, {@code import.hash-key}, and the mapping's patterns and
  * formats compiled once.
  *
  * @param mapping the validated mapping
  * @param sourceId {@code source.id}, the prefix of every {@code LEGACY_REF}
- * @param lookups the inline lookups, by name and legacy value
+ * @param lookups the lookups, inline and from files, by name and legacy value
  * @param zone {@code source.timezone}
  * @param dst {@code source.dstAmbiguity}
  * @param hashKey {@code import.hash-key}
@@ -37,10 +37,11 @@ record MappingContext(
      *
      * @param mapping the mapping
      * @param hashKey {@code import.hash-key}
-     * @return its context; lookups read from files are not among its lookups (see {@link #hasLookupFiles})
+     * @param fileLookups the lookups read from files ({@link LookupFiles}), by name and legacy value
+     * @return its context
      */
-    static MappingContext of(JsonNode mapping, SecretKey hashKey) {
-        Map<String, Map<String, String>> lookups = new HashMap<>();
+    static MappingContext of(JsonNode mapping, SecretKey hashKey, Map<String, Map<String, String>> fileLookups) {
+        Map<String, Map<String, String>> lookups = new HashMap<>(fileLookups);
         for (Map.Entry<String, JsonNode> lookup : mapping.path("lookups").properties()) {
             Map<String, String> values = new HashMap<>();
             if (!lookup.getValue().has("file")) {
@@ -48,8 +49,8 @@ record MappingContext(
                         .properties()
                         .forEach(entry ->
                                 values.put(entry.getKey(), entry.getValue().asString()));
+                lookups.put(lookup.getKey(), Map.copyOf(values));
             }
-            lookups.put(lookup.getKey(), Map.copyOf(values));
         }
         return new MappingContext(
                 mapping,
@@ -60,14 +61,5 @@ record MappingContext(
                         mapping.at("/source/dstAmbiguity").asString("reject").toUpperCase(Locale.ROOT)),
                 hashKey,
                 new CompiledFormats());
-    }
-
-    /**
-     * Whether a lookup is read from a CSV file, which the CSV source (26l) brings.
-     *
-     * @return true when any lookup names a file
-     */
-    boolean hasLookupFiles() {
-        return mapping.path("lookups").valueStream().anyMatch(lookup -> lookup.has("file"));
     }
 }

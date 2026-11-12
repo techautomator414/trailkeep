@@ -190,9 +190,9 @@ class ImportRun {
     }
 
     /**
-     * Whether the run was validated with this mapping file.
+     * Whether the run was validated with this mapping file and these lookup files.
      *
-     * @param hash the file's SHA-256
+     * @param hash their mapping hash ({@link LookupFiles#hash})
      * @return true if it is the validated file
      */
     boolean hasMappingHash(String hash) {
@@ -246,7 +246,7 @@ class ImportRun {
     /**
      * Records a mapping file that passed {@code validate-mapping}.
      *
-     * @param hash the SHA-256 of the file, in hex
+     * @param hash the mapping hash over the file and its lookup files ({@link LookupFiles#hash}), in hex
      * @param at when
      */
     void mappingValidated(String hash, Instant at) {

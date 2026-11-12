@@ -27,6 +27,7 @@ import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.jdbc.core.JdbcTemplate;
+import tools.jackson.dataformat.yaml.YAMLMapper;
 
 /**
  * What every {@code extract} IT needs (WP-26 part k1b, 26n2): the mapping used throughout, runs seeded as validated by
@@ -121,13 +122,15 @@ abstract class ExtractJobSupport {
         return file;
     }
 
-    /** A run that passed {@code validate-mapping} with this file, as the schema owner seeds it. */
+    /** A run that passed {@code validate-mapping} with this file and its lookup files, as the schema owner seeds it. */
     long validatedRun(Path mapping) throws Exception {
         long run = runs.save(new ImportRun(ImportRun.Kind.IMPORT, "memory1", new CaseSeed(jdbc).user(), Instant.now()))
                 .getId();
+        byte[] content = Files.readAllBytes(mapping);
         jdbc.update(
                 "UPDATE IMPORT_RUN SET STATUS = 'VALIDATED', MAPPING_HASH = ? WHERE ID = ?",
-                ValidateMappingCommand.sha256(Files.readAllBytes(mapping)),
+                LookupFiles.read(mapping, YAMLMapper.builder().build().readTree(content))
+                        .hash(content),
                 run);
         seeded.add(run);
         return run;

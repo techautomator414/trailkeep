@@ -215,37 +215,9 @@ final class CsvSource implements SourceRows.Factory {
             return switch (failure) {
                 case CSVException malformed -> new SourceException("ROW_UNREADABLE", line);
                 case CharacterCodingException undecodable ->
-                    new SourceException("SOURCE_ENCODING", undecodableLine(name));
+                    new SourceException("SOURCE_ENCODING", undecodableLine(root, name, charset));
                 case null, default -> new SourceException("SOURCE_FILE_UNREADABLE", null);
             };
-        }
-
-        /**
-         * The line of a file's first undecodable byte. The reader decodes ahead of the parser, so the parser's line
-         * says little; the file is decoded again, counting line feeds up to that byte.
-         */
-        private long undecodableLine(String name) {
-            CharsetDecoder decoder = reporting(charset);
-            ByteBuffer bytes = ByteBuffer.allocate(BUFFER);
-            CharBuffer chars = CharBuffer.allocate(BUFFER);
-            long line = 1;
-            try (InputStream in = Files.newInputStream(FileManifest.open(root, name), LinkOption.NOFOLLOW_LINKS)) {
-                while (true) {
-                    int read = in.read(bytes.array(), bytes.position(), bytes.remaining());
-                    bytes.position(bytes.position() + Math.max(read, 0)).flip();
-                    boolean failed = decoder.decode(bytes, chars, read < 0).isError();
-                    for (chars.flip(); chars.hasRemaining(); ) {
-                        line += chars.get() == '\n' ? 1 : 0;
-                    }
-                    if (failed || read < 0) {
-                        return line;
-                    }
-                    chars.clear();
-                    bytes.compact();
-                }
-            } catch (IOException unreadable) {
-                return line;
-            }
         }
 
         @Override
@@ -256,6 +228,40 @@ final class CsvSource implements SourceRows.Factory {
         @Override
         public void close() {
             // Each file is closed when its entity has been read.
+        }
+    }
+
+    /**
+     * The line of a file's first undecodable byte. A reader decodes ahead of whatever reads lines or records from it,
+     * so their line says little; the file is decoded again, counting line feeds up to that byte. The JSON Lines source
+     * reports its {@code SOURCE_ENCODING} line this way too.
+     *
+     * @param root the mapping's directory, as a real path
+     * @param name the file's name under it
+     * @param charset {@code source.encoding}
+     * @return the line, from 1
+     */
+    static long undecodableLine(Path root, String name, Charset charset) {
+        CharsetDecoder decoder = reporting(charset);
+        ByteBuffer bytes = ByteBuffer.allocate(BUFFER);
+        CharBuffer chars = CharBuffer.allocate(BUFFER);
+        long line = 1;
+        try (InputStream in = Files.newInputStream(FileManifest.open(root, name), LinkOption.NOFOLLOW_LINKS)) {
+            while (true) {
+                int read = in.read(bytes.array(), bytes.position(), bytes.remaining());
+                bytes.position(bytes.position() + Math.max(read, 0)).flip();
+                boolean failed = decoder.decode(bytes, chars, read < 0).isError();
+                for (chars.flip(); chars.hasRemaining(); ) {
+                    line += chars.get() == '\n' ? 1 : 0;
+                }
+                if (failed || read < 0) {
+                    return line;
+                }
+                chars.clear();
+                bytes.compact();
+            }
+        } catch (IOException unreadable) {
+            return line;
         }
     }
 
@@ -293,7 +299,7 @@ final class CsvSource implements SourceRows.Factory {
     }
 
     /** A decoder that refuses bytes the encoding cannot decode instead of replacing them. */
-    private static CharsetDecoder reporting(Charset charset) {
+    static CharsetDecoder reporting(Charset charset) {
         return charset.newDecoder()
                 .onMalformedInput(CodingErrorAction.REPORT)
                 .onUnmappableCharacter(CodingErrorAction.REPORT);

@@ -33,7 +33,8 @@ import tools.jackson.databind.node.JsonNodeFactory;
  * its staging column, and the keyed hash of the canonical row. Pure, like the transforms: a row stages the same way
  * whichever source it came from. A row whose key cannot be built is not staged; a field that fails is staged empty.
  * Both leave issue codes, never values (§10). An attachment's file, when one is given, is hashed in place before the
- * row hash (26k2, {@link AttachmentFiles}), so a changed file changes the row.
+ * row hash (26k2, {@link AttachmentFiles}), and its inline bytes are written to the content area (26l2), so a changed
+ * file changes the row.
  */
 final class RowStager {
 
@@ -45,7 +46,8 @@ final class RowStager {
         PERSON_KEY,
         INSTANT,
         DATE,
-        FLAG
+        FLAG,
+        CONTENT
     }
 
     /** The fields staged as something other than text; field names are unique across the entities. */
@@ -61,7 +63,8 @@ final class RowStager {
             Map.entry("ownerKey", Type.PERSON_KEY),
             Map.entry("authorKey", Type.PERSON_KEY),
             Map.entry("uploaderKey", Type.PERSON_KEY),
-            Map.entry("whoKey", Type.PERSON_KEY));
+            Map.entry("whoKey", Type.PERSON_KEY),
+            Map.entry("content", Type.CONTENT));
 
     /**
      * One row, staged or not.
@@ -221,6 +224,9 @@ final class RowStager {
                         : CanonicalKey.of(
                                 Collections.singletonList(value),
                                 insensitive(context.mapping().path("people")));
+            // Inline bytes go to the content area when this stager has one; else, like any other bytes, they are
+            // refused.
+            case CONTENT -> value instanceof byte[] && files != null ? value : text(value, issues);
             case TEXT -> text(value, issues);
         };
     }
@@ -266,8 +272,7 @@ final class RowStager {
         return switch (value) {
             case null -> null;
             case BigDecimal number -> number.toPlainString();
-            // Bytes are content; a text column never holds them (the content area does: content queries, 26l's inline
-            // bytes).
+            // Bytes are content; a text column never holds them (the content area does: content queries, inline bytes).
             case byte[] bytes -> {
                 issues.add(new Issue("BINARY_NOT_TEXT", Severity.ERROR));
                 yield null;

@@ -87,7 +87,13 @@ record MappingProblem(Code code, String pointer) implements Comparable<MappingPr
         /** {@code attachments.root} is not a readable folder. */
         ATTACHMENTS_ROOT_UNREADABLE,
         /** {@code source.csv} declares characters that clash: a delimiter that is the quote or holds a line break. */
-        CSV_DIALECT_INVALID
+        CSV_DIALECT_INVALID,
+        /** A lookup file over the mapping's own size cap. */
+        LOOKUP_FILE_TOO_LARGE,
+        /** A lookup file without its key or value column, with a short row, a null key or value, or a key twice. */
+        LOOKUP_FILE_INVALID,
+        /** A lookup file holds a byte {@code source.encoding} cannot decode. */
+        SOURCE_ENCODING
     }
 
     @Override

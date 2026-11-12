@@ -97,11 +97,14 @@ class JsonLinesSourceTest {
                     .hasMessageNotContaining("Synthetic")
                     .hasNoCause();
         }
+        // The reader decodes ahead of the lines it hands out, so the line is the undecodable byte's own (26l2).
         Files.write(directory.resolve("export/cases.jsonl"), new byte[] {'{', '}', '\n', (byte) 0xC3, '\n'});
         assertThatThrownBy(() -> read(MAPPING))
-                .isInstanceOfSatisfying(
-                        SourceException.class,
-                        failure -> assertThat(failure.code()).isEqualTo("SOURCE_ENCODING"));
+                .isInstanceOfSatisfying(SourceException.class, failure -> {
+                    assertThat(failure.code()).isEqualTo("SOURCE_ENCODING");
+                    assertThat(failure.detail()).isEqualTo(2L);
+                })
+                .hasNoCause();
     }
 
     @Test

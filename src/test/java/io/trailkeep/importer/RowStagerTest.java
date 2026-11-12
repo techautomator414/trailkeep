@@ -50,7 +50,7 @@ class RowStagerTest {
                               "fields": {"fileName": "name", "content": {"path": "path", "size": "bytes"}}}}}
             """);
 
-    private final MappingContext context = MappingContext.of(MAPPING, KEY);
+    private final MappingContext context = MappingContext.of(MAPPING, KEY, Map.of());
 
     @Test
     void caseRowIsKeyedTypedAndHashed() {

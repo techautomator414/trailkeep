@@ -37,6 +37,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   (`CSV_DIALECT_INVALID` at `/source/csv`). A CSV export stages the same canonical rows as its JSON Lines twin (tested
   on both databases). CSV mappings are no longer `SOURCE_UNSUPPORTED`; a files mapping mixing CSV with JSON Lines still
   is.
+- Lookup files and inline attachment bytes (WP-26 part l2, docs/design/importer.md §6.1, §4.3). A lookup may now be
+  `{ file, key, value }`: a CSV file under the mapping's directory whose header row names the key and value columns,
+  parsed in the mapping's `source.csv` dialect and `source.encoding` (BOM consumed). It obeys the mapping's own rules:
+  its real path must lie under the mapping file's directory, it is opened without following links, and it is refused
+  over the mapping's 1 MiB cap. `validate-mapping` checks every lookup file and records its problem as a code at
+  `/lookups/<name>/file` (`SOURCE_FILE_MISSING`, `SOURCE_FILE_UNREADABLE`, `PATH_OUTSIDE_ROOT`,
+  `LOOKUP_FILE_TOO_LARGE`, `LOOKUP_FILE_INVALID` for a missing column, a short row, a null key or value or a key
+  twice, `SOURCE_ENCODING`, `CSV_DIALECT_INVALID`); `LOOKUP_FILE_UNSUPPORTED` is gone. The run's `MAPPING_HASH` is now
+  the SHA-256 over the mapping file and then each lookup file in lookup-name order, every part preceded by its length,
+  so `extract` refuses a run whose lookup file was edited after `validate-mapping` exactly as it refuses an edited
+  mapping, and the sign-off and the load compare the same hash. A files source's inline attachment bytes
+  (`content: { binary: hex | base64, column }`) are written into the run's content area under their SHA-256, the
+  `import.attachments.max-bytes` cap checked before writing (over it, only the size is staged), with no
+  `attachments` block needed. `SOURCE_ENCODING` from a JSON Lines file now carries the undecodable byte's own line, as
+  for CSV.
 - The Oracle source (WP-26 part o, docs/design/importer.md §4.1): a `kind: jdbc` Oracle mapping is test-fetched by
   `validate-mapping` and extracted in one `SET TRANSACTION READ ONLY` transaction, with the session in UTC and ISO
   date, timestamp and number formats; `DATE` and `TIMESTAMP` read as local date-times, `TIMESTAMP WITH TIME ZONE` with

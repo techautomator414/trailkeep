@@ -12,6 +12,7 @@ import io.trailkeep.importer.staging.StagedComment;
 import io.trailkeep.testsupport.CaseSeed;
 import io.trailkeep.testsupport.RequiresDocker;
 import io.trailkeep.testsupport.TestDatabaseUsers;
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -224,11 +225,11 @@ abstract class AbstractImporterProfileIT {
     }
 
     /**
-     * {@code validate-mapping} as the import user (WP-26 part b): a sound mapping validates the run with the file's
-     * SHA-256; a broken one records a FATAL issue, fails the Job and puts the run back to {@code REQUESTED} with no
-     * hash; the corrected file replaces the issue and validates the run again. This proves the import user's grants on
-     * both tables. The example's vendor is set to PostgreSQL so its queries are test-fetched from {@link
-     * ExampleLegacySource} (26n).
+     * {@code validate-mapping} as the import user (WP-26 part b): a sound mapping validates the run with the SHA-256
+     * over the file and its lookup file (26l2); a broken file or lookup file records a FATAL issue, fails the Job and
+     * puts the run back to {@code REQUESTED} with no hash; the corrected file replaces the issue and validates the run
+     * again. This proves the import user's grants on both tables. The example's vendor is set to PostgreSQL so its
+     * queries are test-fetched from {@link ExampleLegacySource} (26n).
      */
     @Test
     void validateMappingValidatesASoundMappingAndRevokesThatWhenTheFileBreaks(@TempDir Path directory)
@@ -239,11 +240,23 @@ abstract class AbstractImporterProfileIT {
                 .getContentAsString(StandardCharsets.UTF_8)
                 .replace("vendor: sqlserver", "vendor: postgresql");
         Path mapping = directory.resolve("mapping.yaml");
-        String hash = HexFormat.of()
-                .formatHex(MessageDigest.getInstance("SHA-256").digest(example.getBytes(StandardCharsets.UTF_8)));
+        Path teams = Files.createDirectories(directory.resolve("lookups")).resolve("teams.csv");
+        String lookup = "legacy_unit,trailkeep_team\nUnit 1,team-a\n";
+        Files.writeString(teams, lookup);
+        String hash = compositeHash(example, lookup);
         Files.writeString(mapping, example);
         validateMapping(run, mapping).close();
         assertThat(statusAndHash(run)).containsExactly("VALIDATED", hash);
+
+        Files.writeString(teams, lookup + "Unit 1,team-b\n");
+        assertThatThrownBy(() -> validateMapping(run, mapping))
+                .as("a lookup file is checked like the mapping (26l2)")
+                .hasMessage("The mapping has 1 problems; run " + run + " lists them as issues");
+        assertThat(jdbc.queryForList(
+                        "SELECT SEVERITY, CODE FROM IMPORT_ISSUE WHERE RUN_ID = ? AND STAGE = 'VALIDATE'", run))
+                .singleElement()
+                .satisfies(row -> assertThat(row.values()).containsExactly("FATAL", "LOOKUP_FILE_INVALID"));
+        Files.writeString(teams, lookup);
 
         Files.writeString(mapping, example.replace("FROM dbo.notes", "FROM ${import.source.schema}.notes"));
         assertThatThrownBy(() -> validateMapping(run, mapping))
@@ -263,6 +276,17 @@ abstract class AbstractImporterProfileIT {
                         run))
                 .isZero();
         assertThat(statusAndHash(run)).containsExactly("VALIDATED", hash);
+    }
+
+    /** SHA-256 over the mapping, then the lookup file, each preceded by its length as eight bytes (26l2). */
+    private static String compositeHash(String mapping, String lookup) throws Exception {
+        MessageDigest sha256 = MessageDigest.getInstance("SHA-256");
+        for (String part : List.of(mapping, lookup)) {
+            byte[] bytes = part.getBytes(StandardCharsets.UTF_8);
+            sha256.update(ByteBuffer.allocate(Long.BYTES).putLong(bytes.length).array());
+            sha256.update(bytes);
+        }
+        return HexFormat.of().formatHex(sha256.digest());
     }
 
     private List<@Nullable Object> statusAndHash(long run) {
