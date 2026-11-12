@@ -31,7 +31,8 @@ import tools.jackson.databind.JsonNode;
  *       status, opening time and identification date, and for a closed case its closing time and outcome;
  *   <li>a status other than {@code OPEN} or {@code CLOSED} ({@code STATUS_INVALID}), a closing time on an open case
  *       ({@code CLOSED_AT_ON_OPEN_CASE}), a case closed before it opened ({@code CLOSED_BEFORE_OPENED}), a date in the
- *       future ({@code DATE_IN_FUTURE}), a priority or sensitivity Trailkeep does not have: ERROR;
+ *       future ({@code DATE_IN_FUTURE}), a priority or sensitivity Trailkeep does not have, a title or subject longer
+ *       than the case's column holds ({@code TITLE_TOO_LONG}, {@code SUBJECT_TOO_LONG}): ERROR;
  *   <li>a team no Trailkeep team is named after ({@code TEAM_UNKNOWN}, FATAL: the mapping is wrong, §7.1), or an
  *       inactive one ({@code TEAM_INACTIVE}, ERROR);
  *   <li>a case type no Trailkeep type is named after ({@code CASE_TYPE_UNKNOWN}, FATAL), or an inactive one for an open
@@ -49,6 +50,11 @@ final class CaseRules {
     private static final Set<String> PRIORITIES = names(CasePriority.values());
 
     private static final Set<String> SENSITIVITIES = names(Sensitivity.values());
+
+    /** {@code CASE_RECORD.TITLE} and {@code SUBJECT_TEXT} (V4), in characters, as {@code CaseFields} declares. */
+    private static final int MAX_TITLE = 200;
+
+    private static final int MAX_SUBJECT = 1000;
 
     private final Map<String, Boolean> teams;
     private final Map<String, ImportCaseType> caseTypes;
@@ -133,6 +139,17 @@ final class CaseRules {
         if (aclFails && Boolean.TRUE.equals(row.getLegacyAcl())) {
             issues.add(error("ACL_UNREPRESENTABLE"));
         }
+        if (longer(row.getTitle(), MAX_TITLE)) {
+            issues.add(error("TITLE_TOO_LONG"));
+        }
+        if (longer(row.getSubjectText(), MAX_SUBJECT)) {
+            issues.add(error("SUBJECT_TOO_LONG"));
+        }
+    }
+
+    /** Whether a text has more characters (code points, as both databases count them) than a column holds. */
+    private static boolean longer(@Nullable String text, int max) {
+        return text != null && text.codePointCount(0, text.length()) > max;
     }
 
     private void team(@Nullable String key, List<Issue> issues) {

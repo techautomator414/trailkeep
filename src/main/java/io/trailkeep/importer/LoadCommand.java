@@ -17,6 +17,7 @@ import io.trailkeep.importer.staging.StagedPerson;
 import io.trailkeep.importer.staging.StagedRow;
 import io.trailkeep.importer.staging.StagingStore;
 import io.trailkeep.shared.CaseStatus;
+import io.trailkeep.shared.DomainException;
 import io.trailkeep.shared.Sensitivity;
 import io.trailkeep.shared.config.AppProperties;
 import io.trailkeep.user.ImportPeopleService;
@@ -36,7 +37,6 @@ import java.util.stream.Collectors;
 import javax.crypto.SecretKey;
 import org.jspecify.annotations.Nullable;
 import org.springframework.context.annotation.Profile;
-import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.JsonNode;
@@ -50,13 +50,16 @@ import tools.jackson.dataformat.yaml.YAMLMapper;
  * validated and dry-run with: the sign-off checks the first two already, and the load checks all three again. It
  * writes only cases the ledger does not hold for the run's source, so a crashed load resumes at the next case and a
  * load after {@code LOADED} writes nothing, and it skips every case with an ERROR from the extract or the dry run.
- * Owners are chosen as the dry run forecast them ({@link PeopleMatcher}). A case the import APIs refuse stops the
- * load, closed: the run is {@code FAILED}, and the next load resumes at that case.
+ * Owners are chosen as the dry run forecast them ({@link PeopleMatcher}). Every other case is checked again against
+ * the rules and the reference data of the load's moment ({@link CaseRules}): a case they refuse now, whose team has
+ * no eligible owner now, or that the import APIs refuse as invalid, is written nowhere but as a {@code LOAD} issue
+ * (an ERROR with its code and the case's keyed hash), and the load goes on. The next load drops those issues and
+ * tries their cases again. Anything else a case's transaction cannot do stops the load, closed: the run is {@code
+ * FAILED}, and the next load resumes at that case.
  *
- * <p>The run lock: a load claims the run by moving it to {@code LOADING} with a conditional update on its version,
- * and every case's transaction checks that version and moves it on, so of two loads only one writes, on any number
- * of nodes. A load that died leaves {@code LOADING} behind; once it has not moved for {@link #LEASE}, the next load
- * takes it over. The load ends {@code LOADED}, or {@code FAILED} on an error.
+ * <p>The run lock ({@link LoadRunLock}) keeps one load per run, and one loading run per source, on any number of
+ * nodes; a load that died is taken over once it has not moved its run for {@link #LEASE}. The load ends {@code
+ * LOADED}, or {@code FAILED} on an error.
  */
 @Component
 @Profile("importer")
@@ -82,8 +85,13 @@ class LoadCommand {
         /** The mapping file or a lookup file is not the one it was validated and dry-run with. */
         MAPPING_CHANGED,
         /** Another load holds it, or claimed it first. */
-        RUN_LOCKED
+        RUN_LOCKED,
+        /** A live load holds another run of its source (design §8.2). */
+        SOURCE_LOADING
     }
+
+    /** The {@code LOAD} issue code of a case the import APIs refuse as invalid. */
+    static final String CASE_REFUSED = "CASE_REFUSED";
 
     /** {@code load} refused to start. */
     static final class RefusedException extends IllegalStateException {
@@ -107,12 +115,14 @@ class LoadCommand {
      *
      * @param loaded the cases it wrote
      * @param skipped the cases it left: in the ledger already, or with an ERROR from the extract or the dry run
+     * @param refused the cases refused now, each a {@code LOAD} issue
      */
-    record Outcome(long loaded, long skipped) {}
+    record Outcome(long loaded, long skipped, long refused) {}
 
-    /** One load's run, settings and reference data. */
+    /** One load's run, its hold on it, settings and reference data. */
     private record Pass(
             Loaded run,
+            LoadRunLock lock,
             CaseImportService.ImportRun audited,
             long importer,
             SecretKey hashKey,
@@ -122,11 +132,11 @@ class LoadCommand {
             Map<String, ImportCaseType> caseTypes,
             PeopleMatcher people) {}
 
-    /** How far a load got, and the run version it holds. */
+    /** How far a load got. */
     private static final class Progress {
-        private int version;
         private long loaded;
         private long skipped;
+        private long refused;
     }
 
     private final StagingStore staging;
@@ -204,6 +214,7 @@ class LoadCommand {
                 caseImports.caseTypes().stream().collect(Collectors.toMap(ImportCaseType::name, Function.identity()));
         Pass pass = new Pass(
                 new Loaded(runId, found.getSourceId(), hash),
+                new LoadRunLock(runs, transactions, clock, runId),
                 new CaseImportService.ImportRun(runId, approver),
                 people.principals().importer(),
                 properties.hashKeySpec(),
@@ -218,42 +229,21 @@ class LoadCommand {
                 caseTypes,
                 new PeopleMatcher(people, caseImports, mapping, lookups.defaultOwners()));
         Progress progress = new Progress();
-        progress.version = claim(runId, now);
+        // The last attempt's LOAD issues go with the claim, so the cases they name are tried again.
+        pass.lock().claim(found.getSourceId(), now, () -> issues.deleteByRunIdAndStage(runId, ImportIssue.Stage.LOAD));
         try {
             pages(StagedPerson.class, runId, page -> page.forEach(pass.people()::person));
             pages(StagedCase.class, runId, page -> loadPage(pass, progress, page));
-            end(runId, progress, false);
+            pass.lock().end(false);
         } catch (RuntimeException e) {
             try {
-                end(runId, progress, true);
+                pass.lock().end(true);
             } catch (RuntimeException notMarked) {
                 e.addSuppressed(notMarked);
             }
             throw new IllegalStateException("Import run " + runId + ": the load stopped; the next load resumes it", e);
         }
-        return new Outcome(progress.loaded, progress.skipped);
-    }
-
-    /**
-     * Claims the run, unless a live load holds it; a load that loses the race to claim it is refused too.
-     *
-     * @return the run's version once claimed
-     */
-    private int claim(long runId, Instant now) {
-        ImportRun claimed;
-        try {
-            claimed = transactions.execute(status -> {
-                ImportRun run = load(runId);
-                if (run.loadingSince(now.minus(LEASE))) {
-                    throw new RefusedException(runId, Refusal.RUN_LOCKED);
-                }
-                run.loadMoved(ImportRun.Status.LOADING, 0, now);
-                return runs.save(run);
-            });
-        } catch (OptimisticLockingFailureException raced) {
-            throw new RefusedException(runId, Refusal.RUN_LOCKED);
-        }
-        return Objects.requireNonNull(claimed, "claimed").getVersion();
+        return new Outcome(progress.loaded, progress.skipped, progress.refused);
     }
 
     /** One page of staged cases: those the ledger holds or with an ERROR are skipped, the others loaded one by one. */
@@ -269,65 +259,94 @@ class LoadCommand {
                 Set.copyOf(issues.keyHashesWith(pass.run().runId(), Subject.CASE, Severity.ERROR, hashes.values()));
         for (StagedCase row : page) {
             String key = row.getKey().legacyKey();
-            if (done.contains(key) || failed.contains(hashes.get(key))) {
+            String keyHash = Objects.requireNonNull(hashes.get(key), "hashed");
+            if (done.contains(key) || failed.contains(keyHash)) {
                 progress.skipped++;
-            } else {
-                loadCase(pass, progress, row);
-                progress.loaded++;
+                continue;
             }
+            String refusal = loadCase(pass, row);
+            if (refusal == null) {
+                progress.loaded++;
+                continue;
+            }
+            // Recorded in a transaction that moves the run on, as a loaded case's does.
+            pass.lock()
+                    .write(
+                            0,
+                            () -> issues.save(new ImportIssue(
+                                    pass.run().runId(),
+                                    ImportIssue.Stage.LOAD,
+                                    Subject.CASE,
+                                    keyHash,
+                                    Severity.ERROR,
+                                    refusal,
+                                    null,
+                                    pass.now())));
+            progress.refused++;
         }
     }
 
     /**
      * Loads one case in its own transaction: the case, its closure when closed, its ledger row and the run's count,
-     * which also proves this load still holds the run.
+     * which also proves this load still holds the run. A case the rules or the import APIs refuse is not written.
+     *
+     * @return {@code null} once loaded, else the code of what refused it
      */
-    private void loadCase(Pass pass, Progress progress, StagedCase row) {
-        TeamSummary team = Objects.requireNonNull(pass.teams().get(row.getTeamKey()), "dry-run checked");
+    private @Nullable String loadCase(Pass pass, StagedCase row) {
+        List<FieldTransformer.Issue> problems = pass.rules().check(row);
+        if (!problems.isEmpty()) {
+            return problems.getFirst().code();
+        }
+        TeamSummary team = Objects.requireNonNull(pass.teams().get(row.getTeamKey()), "checked");
         PeopleMatcher.Owner owner = pass.people().owner(row, team.id(), team.name(), pass.importer());
-        String description = Objects.requireNonNull(row.getDescription(), "dry-run checked");
-        if (owner == null || description.length() > MAX_DESCRIPTION) {
-            // The keyed hash names the case as its issues do; a description continued in a comment loads with 26u.
-            throw new IllegalStateException("Import run " + pass.run().runId() + ": case "
-                    + KeyedHash.hex(pass.hashKey(), row.getKey().legacyKey())
-                    + " has no eligible owner or a long description");
+        if (owner == null) {
+            return "DEFAULT_OWNER_MISSING";
+        }
+        String description = Objects.requireNonNull(row.getDescription(), "checked");
+        if (description.length() > MAX_DESCRIPTION) {
+            // The rest continues in a comment, which the comment load brings (26u); until then the case waits.
+            return "DESCRIPTION_CONTINUED";
         }
         ImportedCase imported = imported(pass, row, team.id(), owner, description);
-        transactions.executeWithoutResult(status -> {
-            ImportRun run = held(pass.run().runId(), progress);
-            CaseImportService.Created created = caseImports.importCase(pass.audited(), imported);
-            Instant closedAt = imported.closedAt();
-            if (closedAt != null) {
-                closures.importClosure(new ImportedClosure(
+        try {
+            pass.lock().write(1, () -> {
+                CaseImportService.Created created = caseImports.importCase(pass.audited(), imported);
+                Instant closedAt = imported.closedAt();
+                if (closedAt != null) {
+                    closures.importClosure(new ImportedClosure(
+                            created.caseId(),
+                            Objects.requireNonNull(row.getClosureOutcome(), "checked"),
+                            row.getClosureSummary(),
+                            closedAt,
+                            pass.run().runId(),
+                            pass.audited().approverId()));
+                }
+                ledger.save(ImportLedgerEntry.ofCase(
+                        pass.run(),
+                        row.getKey().legacyKey(),
+                        row.getRowHash(),
                         created.caseId(),
-                        Objects.requireNonNull(row.getClosureOutcome(), "dry-run checked"),
-                        row.getClosureSummary(),
+                        imported.status().name(),
                         closedAt,
-                        pass.run().runId(),
-                        pass.audited().approverId()));
+                        pass.now()));
+            });
+        } catch (DomainException refused) {
+            if (refused.kind() != DomainException.Kind.INVALID) {
+                throw refused;
             }
-            ledger.save(ImportLedgerEntry.ofCase(
-                    pass.run(),
-                    row.getKey().legacyKey(),
-                    row.getRowHash(),
-                    created.caseId(),
-                    imported.status().name(),
-                    closedAt,
-                    pass.now()));
-            run.loadMoved(ImportRun.Status.LOADING, 1, clock.instant());
-            runs.save(run);
-        });
-        progress.version++;
+            return CASE_REFUSED;
+        }
+        return null;
     }
 
     private static ImportedCase imported(
             Pass pass, StagedCase row, long teamId, PeopleMatcher.Owner owner, String description) {
-        ImportCaseType type = Objects.requireNonNull(pass.caseTypes().get(row.getCaseTypeKey()), "dry-run checked");
+        ImportCaseType type = Objects.requireNonNull(pass.caseTypes().get(row.getCaseTypeKey()), "checked");
         CaseFields fields = new CaseFields(
                 type.id(),
-                Objects.requireNonNull(row.getTitle(), "dry-run checked"),
+                Objects.requireNonNull(row.getTitle(), "checked"),
                 row.getPriority() == null ? CasePriority.NORMAL : CasePriority.valueOf(row.getPriority()),
-                Objects.requireNonNull(row.getIdentifiedOn(), "dry-run checked"),
+                Objects.requireNonNull(row.getIdentifiedOn(), "checked"),
                 teamId,
                 owner.userId(),
                 row.getSubjectText(),
@@ -338,27 +357,9 @@ class LoadCommand {
                 pass.run().sourceId() + ":" + row.getKey().legacyKey(),
                 row.getLegacyNumber(),
                 owner.nameSnapshot(),
-                CaseStatus.valueOf(Objects.requireNonNull(row.getStatus(), "dry-run checked")),
-                Objects.requireNonNull(row.getOpenedAt(), "dry-run checked"),
+                CaseStatus.valueOf(Objects.requireNonNull(row.getStatus(), "checked")),
+                Objects.requireNonNull(row.getOpenedAt(), "checked"),
                 row.getClosedAt());
-    }
-
-    /** The run, provided this load still holds it: its version is the one this load last wrote. */
-    private ImportRun held(long runId, Progress progress) {
-        ImportRun run = load(runId);
-        if (run.getVersion() != progress.version) {
-            throw new RefusedException(runId, Refusal.RUN_LOCKED);
-        }
-        return run;
-    }
-
-    /** Ends the load, {@code LOADED} or {@code FAILED}, provided it still holds the run. */
-    private void end(long runId, Progress progress, boolean failed) {
-        transactions.executeWithoutResult(status -> {
-            ImportRun run = held(runId, progress);
-            run.loadMoved(failed ? ImportRun.Status.FAILED : ImportRun.Status.LOADED, 0, clock.instant());
-            runs.save(run);
-        });
     }
 
     private <T extends StagedRow> void pages(Class<T> type, long runId, Consumer<List<T>> each) {
