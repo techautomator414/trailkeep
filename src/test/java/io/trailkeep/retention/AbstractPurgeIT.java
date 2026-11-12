@@ -40,7 +40,8 @@ import org.springframework.transaction.support.TransactionTemplate;
 /**
  * The purge, once per vendor (WP-24 part c), run as the {@code TRAILKEEP_PURGE} user itself over its own connection,
  * so every statement is proven against the purge user's grants and nothing more. On committed rows ({@link
- * PurgeFixture}): an archived case past its {@code PURGE_AFTER} with a comment and its pin, an update request answered
+ * PurgeFixture}): an archived case past its {@code PURGE_AFTER} with a comment and its pin, a row of imported legacy
+ * history, an update request answered
  * by that comment, an attachment and its chunk, search text, a closure request and the reopen that names it, and mail
  * about it, becomes a tombstone (description and subject cleared, {@code PURGED_AT} set, title and number kept, a new
  * version) with all of that deleted and one {@code CASE_PURGED} audit row of counts only, while its audit row, ledger
@@ -127,6 +128,7 @@ abstract class AbstractPurgeIT {
                 .containsEntry("chunks", 1)
                 .containsEntry("reopens", 1);
         assertThat(counts).containsEntry("closureRequests", 1).containsEntry("updateRequests", 1);
+        assertThat(counts).containsEntry("importedEvents", 1);
         Map<String, Object> tombstone =
                 jdbc.queryForMap("SELECT TITLE, DESCRIPTION, SUBJECT_TEXT, VERSION FROM CASE_RECORD WHERE ID = ?", due);
         assertThat(tombstone.get("TITLE")).isEqualTo("Seed case " + due);
@@ -145,12 +147,12 @@ abstract class AbstractPurgeIT {
         assertThat(purged).containsEntry("ORIGIN", "SCHEDULER").containsEntry("ACTOR_ID", null);
         assertThat(purged).containsEntry("ENTITY_TYPE", "CASE").containsEntry("OLD_VALUES_JSON", null);
         assertThat(purged.get("NEW_VALUES_JSON"))
-                .isEqualTo("{\"comments\":1,\"pins\":1,\"attachments\":1,\"updateRequests\":1,"
+                .isEqualTo("{\"comments\":1,\"pins\":1,\"importedEvents\":1,\"attachments\":1,\"updateRequests\":1,"
                         + "\"closureRequests\":1,\"reopens\":1,\"mail\":1}");
         assertThat(fixture.count("SELECT LAST_ITEMS FROM JOB_RUN WHERE JOB_NAME = ?", PurgeJob.JOB))
                 .isGreaterThanOrEqualTo(1);
         for (long id : List.of(held, notYet, closed)) {
-            assertThat(fixture.contentRows(id)).as("case %s", id).isEqualTo(9);
+            assertThat(fixture.contentRows(id)).as("case %s", id).isEqualTo(10);
             assertThat(fixture.historyRows(id)).as("case %s", id).isEqualTo(4);
             assertThat(jdbc.queryForObject("SELECT PURGED_AT FROM CASE_RECORD WHERE ID = ?", Timestamp.class, id))
                     .isNull();
@@ -189,7 +191,7 @@ abstract class AbstractPurgeIT {
         jdbc.update("UPDATE CASE_RECORD SET LEGAL_HOLD = ? WHERE ID = ?", true, id);
 
         assertThat(purge.purge(List.of(id), now)).isEmpty();
-        assertThat(fixture.contentRows(id)).isEqualTo(9);
+        assertThat(fixture.contentRows(id)).isEqualTo(10);
         assertThat(fixture.historyRows(id)).isEqualTo(4);
     }
 

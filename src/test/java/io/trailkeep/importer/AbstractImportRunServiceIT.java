@@ -44,6 +44,7 @@ abstract class AbstractImportRunServiceIT {
         // Every table that references IMPORT_RUN first, children before parents, so runs other importer ITs left in
         // the shared test database never block the delete.
         for (String table : List.of(
+                "CASE_IMPORTED_EVENT",
                 "IMPORT_STG_EVENT",
                 "IMPORT_STG_ATTACHMENT",
                 "IMPORT_STG_COMMENT",

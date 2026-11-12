@@ -19,7 +19,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
  * Committed rows for {@link AbstractPurgeIT}, written and removed as the schema owner: a user, an approver, a team, a
- * case type, cases in any status with nine rows of content and four of history each, report runs and their mail.
+ * case type, cases in any status with ten rows of content and four of history each, report runs and their mail.
  */
 final class PurgeFixture {
 
@@ -30,6 +30,7 @@ final class PurgeFixture {
             "CASE_COMMENT_PIN",
             "UPDATE_REQUEST",
             "CASE_COMMENT",
+            "CASE_IMPORTED_EVENT",
             "CASE_ATTACHMENT",
             "CASE_SEARCH",
             "CASE_REOPEN",
@@ -44,6 +45,7 @@ final class PurgeFixture {
     private final long team;
     private final long caseType;
     private long schedule;
+    private long importRun;
 
     PurgeFixture(JdbcTemplate jdbc, Instant now) {
         this.jdbc = jdbc;
@@ -130,7 +132,29 @@ final class PurgeFixture {
                 Timestamp.from(now),
                 closure);
         mail(caseId, null);
+        importedEvent(caseId);
         history(caseId);
+    }
+
+    /** One row of imported legacy history (V16), from this fixture's one import run. */
+    private void importedEvent(long caseId) {
+        if (importRun == 0) {
+            importRun = NEXT.incrementAndGet();
+            jdbc.update(
+                    "INSERT INTO IMPORT_RUN (ID, KIND, SOURCE_ID, STATUS, REQUESTED_BY, REQUESTED_AT, UPDATED_AT)"
+                            + " VALUES (?, 'IMPORT', 'synthetic', 'LOADED', ?, ?, ?)",
+                    importRun,
+                    user,
+                    Timestamp.from(now),
+                    Timestamp.from(now));
+        }
+        jdbc.update(
+                "INSERT INTO CASE_IMPORTED_EVENT (ID, CASE_ID, AT_TS, KIND, FIELD_NAME, OLD_VALUE, NEW_VALUE, RUN_ID)"
+                        + " VALUES (?, ?, ?, 'STATUS_CHANGE', 'status', 'New', 'Done', ?)",
+                NEXT.incrementAndGet(),
+                caseId,
+                Timestamp.from(now),
+                importRun);
     }
 
     /** The history that outlives the purge: an audit row, a ledger row, a legal hold event and an in-app alert. */
@@ -231,6 +255,7 @@ final class PurgeFixture {
                 "CASE_COMMENT_PIN",
                 "UPDATE_REQUEST",
                 "CASE_COMMENT",
+                "CASE_IMPORTED_EVENT",
                 "CASE_SEARCH",
                 "CASE_REOPEN",
                 "CLOSURE_REQUEST",
@@ -257,6 +282,7 @@ final class PurgeFixture {
                 team);
         jdbc.update("DELETE FROM REPORT_RUN WHERE TEAM_ID = ?", team);
         jdbc.update("DELETE FROM REPORT_SCHEDULE WHERE TEAM_ID = ?", team);
+        jdbc.update("DELETE FROM IMPORT_RUN WHERE ID = ?", importRun);
         jdbc.update("DELETE FROM APP_USER_TEAM WHERE TEAM_ID = ?", team);
         jdbc.update("DELETE FROM TEAM WHERE ID = ?", team);
         Long policy = jdbc.queryForObject("SELECT SLA_POLICY_ID FROM CASE_TYPE WHERE ID = ?", Long.class, caseType);

@@ -169,7 +169,7 @@ abstract class AbstractDatabaseGrantsIT {
     void theImportUserMayDrawFromTheImporterSequencesAndOnlySeeTheOthers() throws SQLException {
         for (String sequence :
                 Stream.concat(SEQUENCES.stream(), IMPORTER_SEQUENCES.stream()).toList()) {
-            Outcome expected = sequence.startsWith("SEQ_IMPORT_")
+            Outcome expected = sequence.startsWith("SEQ_IMPORT_") || IMPORTER_SEQUENCES.contains(sequence)
                     ? Outcome.ALLOWED
                     : "SEQ_CASE_NUMBER".equals(sequence) ? Outcome.DENIED : drawnBySeeing();
             assertThat(draw(importUser, sequence)).as(sequence).isEqualTo(expected);

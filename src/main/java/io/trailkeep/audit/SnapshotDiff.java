@@ -17,8 +17,22 @@ final class SnapshotDiff {
     private final AuditHmac hmac;
     private final JsonMapper json = JsonMapper.builder().build();
 
+    /**
+     * A redacted value as this class stores one: its HMAC-SHA-256 under the audit key, in hex, and its length in code
+     * points.
+     *
+     * @param hmac the HMAC
+     * @param length the length
+     */
+    record Redaction(String hmac, int length) {}
+
     SnapshotDiff(AuditHmac hmac) {
         this.hmac = hmac;
+    }
+
+    /** Redacts one value, as {@link #diff} redacts a {@link Redacted} component; imported history stores the same. */
+    Redaction redact(String text) {
+        return new Redaction(hmac.hex(text), text.codePointCount(0, text.length()));
     }
 
     <T extends Record> AuditChanges diff(@Nullable T before, @Nullable T after) {
@@ -63,10 +77,10 @@ final class SnapshotDiff {
             return null;
         }
         if (redacted) {
-            String text = String.valueOf(value);
+            Redaction redaction = redact(String.valueOf(value));
             Map<String, Object> digest = new LinkedHashMap<>();
-            digest.put("hmac", hmac.hex(text));
-            digest.put("length", text.codePointCount(0, text.length()));
+            digest.put("hmac", redaction.hmac());
+            digest.put("length", redaction.length());
             return digest;
         }
         if (value instanceof Number || value instanceof Boolean || value instanceof String) {

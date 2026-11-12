@@ -11,6 +11,7 @@ import com.tngtech.archunit.core.importer.ImportOption;
 import com.tngtech.archunit.lang.ArchRule;
 import com.tngtech.archunit.lang.CompositeArchRule;
 import com.tngtech.archunit.lang.EvaluationResult;
+import io.trailkeep.audit.ImportedHistoryService;
 import io.trailkeep.casefile.CaseImportService;
 import io.trailkeep.closure.ClosureImportService;
 import io.trailkeep.document.AttachmentImportService;
@@ -27,7 +28,8 @@ class ImportOnlyApiRulesTest {
     static final ArchRule IMPORT_APIS_CALLED_ONLY_BY_THE_IMPORTER = CompositeArchRule.of(
                     onlyTheImporterAnd("io.trailkeep.document..", AttachmentImportService.class))
             .and(onlyTheImporterAnd("io.trailkeep.closure..", ClosureImportService.class))
-            .and(onlyTheImporterAnd("io.trailkeep.casefile..", CaseImportService.class));
+            .and(onlyTheImporterAnd("io.trailkeep.casefile..", CaseImportService.class))
+            .and(onlyTheImporterAnd("io.trailkeep.audit..", ImportedHistoryService.class));
 
     private static ArchRule onlyTheImporterAnd(String module, Class<?> api) {
         return noClasses()
@@ -58,6 +60,8 @@ class ImportOnlyApiRulesTest {
                 .anySatisfy(
                         detail -> assertThat(detail).contains("ImportApiOutsideImporter", "AttachmentImportService"))
                 .anySatisfy(detail -> assertThat(detail).contains("ImportApiOutsideImporter", "ClosureImportService"))
-                .anySatisfy(detail -> assertThat(detail).contains("ImportApiOutsideImporter", "CaseImportService"));
+                .anySatisfy(detail -> assertThat(detail).contains("ImportApiOutsideImporter", "CaseImportService"))
+                .anySatisfy(
+                        detail -> assertThat(detail).contains("ImportApiOutsideImporter", "ImportedHistoryService"));
     }
 }

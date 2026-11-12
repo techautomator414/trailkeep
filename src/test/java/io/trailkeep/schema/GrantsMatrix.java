@@ -28,8 +28,8 @@ final class GrantsMatrix {
     /**
      * Identity (V1), audit (V2), admin (V3), case (V4), comment (V4.1), pin (V4.2), attachment (V4.3), saved view
      * (V4.7), outbox (V4.8), alert (V4.9), update request (V4.10), closure (V5), reopen (V5.1), SLA job (V6), report
-     * delivery (V7), legal hold history (V8), preference (V9), import run (V10) and import staging (V13) tables, and
-     * the column each probe touches: the first key column.
+     * delivery (V7), legal hold history (V8), preference (V9), import run (V10), import staging (V13) and imported
+     * history (V16) tables, and the column each probe touches: the first key column.
      */
     static final Map<String, String> TABLES = Map.ofEntries(
             Map.entry("APP_USER", "ID"),
@@ -71,7 +71,8 @@ final class GrantsMatrix {
             Map.entry("IMPORT_STG_COMMENT", "RUN_ID"),
             Map.entry("IMPORT_STG_ATTACHMENT", "RUN_ID"),
             Map.entry("IMPORT_STG_EVENT", "RUN_ID"),
-            Map.entry("IMPORT_RUN_CHECKPOINT", "RUN_ID"));
+            Map.entry("IMPORT_RUN_CHECKPOINT", "RUN_ID"),
+            Map.entry("CASE_IMPORTED_EVENT", "ID"));
 
     /** What the runtime user may do; anything absent is denied. */
     static final Map<String, Set<Privilege>> APP_USER_GRANTS = Map.ofEntries(
@@ -123,13 +124,15 @@ final class GrantsMatrix {
             // Requested on the Import runs screen; UPDATE of the sign-off columns only (see the column test).
             Map.entry("IMPORT_RUN", EnumSet.of(Privilege.SELECT, Privilege.INSERT)),
             Map.entry("IMPORT_ISSUE", EnumSet.of(Privilege.SELECT)),
-            Map.entry("IMPORT_RUN_SUMMARY", EnumSet.of(Privilege.SELECT)));
+            Map.entry("IMPORT_RUN_SUMMARY", EnumSet.of(Privilege.SELECT)),
+            // Legacy history: read by the History tab, written only by the importer, removed only by purge (V16).
+            Map.entry("CASE_IMPORTED_EVENT", EnumSet.of(Privilege.SELECT)));
 
     /** The purge user (WP-24 part c): deletes purged content and old runs, audits each tombstone, records its run. */
     static final Map<String, Set<Privilege>> PURGE_USER_GRANTS = Stream.of(
                     ("NOTIFICATION_OUTBOX CASE_COMMENT_PIN UPDATE_REQUEST CASE_COMMENT CASE_ATTACHMENT_CHUNK"
                                     + " CASE_ATTACHMENT CASE_SEARCH CASE_REOPEN CLOSURE_REQUEST REPORT_RUN CASE_RECORD"
-                                    + " AUDIT_EVENT JOB_RUN")
+                                    + " AUDIT_EVENT JOB_RUN CASE_IMPORTED_EVENT")
                             .split(" "))
             .collect(Collectors.toUnmodifiableMap(Function.identity(), table -> switch (table) {
                 case "CASE_RECORD" -> EnumSet.of(Privilege.SELECT);
@@ -154,6 +157,8 @@ final class GrantsMatrix {
             .collect(Collectors.toUnmodifiableMap(Function.identity(), table -> switch (table) {
                 // UPDATE of the status, hash, scanning-mode, count and expiry columns only (see the column test).
                 case "IMPORT_RUN" -> EnumSet.of(Privilege.SELECT, Privilege.INSERT);
+                // Insert-only, like the comments it sits beside (V16).
+                case "CASE_IMPORTED_EVENT" -> EnumSet.of(Privilege.SELECT, Privilege.INSERT);
                 // Staging (V13) is written, read and deleted by the import user alone; nobody else may even read it.
                 case "IMPORT_ISSUE",
                         "IMPORT_RUN_SUMMARY",
@@ -190,7 +195,8 @@ final class GrantsMatrix {
             "SEQ_IMPORT_RUN");
 
     /** The sequences only the importer draws from; the runtime user may only see them, for validate. */
-    static final List<String> IMPORTER_SEQUENCES = List.of("SEQ_IMPORT_ISSUE", "SEQ_IMPORT_RUN_SUMMARY");
+    static final List<String> IMPORTER_SEQUENCES =
+            List.of("SEQ_IMPORT_ISSUE", "SEQ_IMPORT_RUN_SUMMARY", "SEQ_CASE_IMPORTED_EVENT");
 
     private GrantsMatrix() {}
 }
