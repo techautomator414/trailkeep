@@ -122,6 +122,7 @@ abstract class AbstractImporterProfileIT {
 
     @Test
     void theWebApplicationStartsAsTheRuntimeUserWithoutTheStagingEntities() throws SQLException {
+        runWithIssues();
         try (ConfigurableApplicationContext web = start(appUser, false)) {
             ManagedClassNameFilter filter = web.getBean(ManagedClassNameFilter.class);
 
@@ -132,6 +133,9 @@ abstract class AbstractImporterProfileIT {
                     .contains(ImportRun.class.getName())
                     .noneMatch(name -> name.startsWith(StagingEntityFilter.STAGING_PACKAGE));
             assertThat(web.getBeanNamesForType(ImportCommandRunner.class)).isEmpty();
+            assertThat(web.getBean(ImportRunService.class).latest())
+                    .as("the read API is wired in the web application and the runtime user may SELECT the runs")
+                    .isPresent();
         }
     }
 
