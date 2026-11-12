@@ -3,7 +3,8 @@
 #
 # Gates that need secrets or more time than a fork PR gets (IMPLEMENTATION_PLAN Part G, "main" column):
 # SonarCloud, OWASP Dependency-Check, CycloneDX SBOM + Trivy, container build + Trivy + Dockle + kube-linter, and the
-# Oracle integration matrix. ci.yml (compile, tests, gitleaks, Semgrep) also runs on every push to main.
+# Oracle integration matrix and the SQL Server source ITs. ci.yml (compile, tests, gitleaks, Semgrep) also runs on
+# every push to main.
 # nightly.yml and release.yml call this workflow, so the three columns cannot drift apart.
 #
 # Secret-gated jobs succeed with a notice when their secret is absent (forks, or before the maintainer adds it).
@@ -325,5 +326,39 @@ jobs:
           path: |
             target/surefire-reports
             target/failsafe-reports
+          if-no-files-found: ignore
+          retention-days: 30
+
+  sqlserver-it:
+    # The importer's SQL Server source ITs (WP-26 part p, design §11), tagged sqlserver, against a SQL Server
+    # Developer edition container as the legacy database. Main, nightly and release tags only, like Oracle, because the
+    # image is large; the sqlserver-it profile runs only those ITs, so no other suite runs twice.
+    name: sqlserver-it (importer source)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Temurin 21
+        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      - name: Run the SQL Server source ITs
+        run: ./mvnw -B -ntp -Psqlserver-it test-compile failsafe:integration-test@sqlserver failsafe:verify@sqlserver
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: sqlserver-it-reports
+          path: target/failsafe-reports/sqlserver
           if-no-files-found: ignore
           retention-days: 30

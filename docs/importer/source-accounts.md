@@ -10,8 +10,8 @@ read. The importer's query validator is the control over which functions a query
 defence in depth, never relied on alone.
 
 **Prefer a copy.** Run the import against a restored copy or a snapshot of the legacy database, not against
-production. A long extract holds a snapshot open, which blocks vacuum on PostgreSQL. On a copy the administrator can
-also revoke what production cannot spare.
+production. A long extract holds a snapshot open, which blocks vacuum on PostgreSQL, needs undo on Oracle and fills
+tempdb's version store on SQL Server. On a copy the administrator can also revoke what production cannot spare.
 
 The account's password is given to the importer Job as a Secret file, read as `import.source.password`. It never appears in the mapping file. `validate-mapping` connects as this account to test-fetch every query, so a missing grant shows up there as `SOURCE_PERMISSION_DENIED` at the query's place.
 
@@ -98,4 +98,71 @@ account:
 
 ## SQL Server
 
-The recipe and its test arrive with the SQL Server adapter (WP-26 part p).
+The importer reads in one `SNAPSHOT` transaction, so every query of a run sees the database as it was at the first
+read. That needs row versioning, which the database's administrator turns on (on a restored copy it costs nothing):
+
+```sql
+ALTER DATABASE <legacy database> SET ALLOW_SNAPSHOT_ISOLATION ON;
+```
+
+`READ_COMMITTED_SNAPSHOT` alone is not enough: it versions each statement, not the transaction. Without
+`ALLOW_SNAPSHOT_ISOLATION` every query fails (`SOURCE_QUERY_FAILED`) and nothing is read. Row versions are held in
+tempdb's version store for the whole extract; a database snapshot (`CREATE DATABASE … AS SNAPSHOT OF …`), a restored
+copy or a readable secondary (`ApplicationIntent=ReadOnly`) keeps that load off production. The snapshot transaction
+takes no shared locks, so the extract never blocks the legacy application's writes. The run's fingerprint records the
+server, database, session and start; the transaction dies with the session, so an extract that crashed starts over.
+
+**SQL Server has no read-only transaction.** The grants below are what keep the account from writing, so grant
+nothing else.
+
+Connect with `jdbc:sqlserver://host:1433;databaseName=<legacy database>;encrypt=strict;hostNameInCertificate=host`
+(TDS 8.0, SQL Server 2022 or later; older servers `encrypt=true`) and verify the server against the mounted CA with
+`serverCertificate` or a password-less `trustStore`. `trustServerCertificate` is accepted only as `false`. The importer
+refuses, before connecting, any property outside its allow-list of database, TLS, timeout and routing settings
+(names compared without case, as the driver does) and any value in braces: driver properties can name classes to
+instantiate (`socketFactoryClass`, `trustManagerClass`, `accessTokenCallbackClass`), load native or Kerberos code
+(`integratedSecurity`, `authenticationScheme`), read key stores (`keyStoreLocation`) or carry a password, which never
+goes in the URL. The account is therefore a SQL login.
+
+Replace `legacy` with the database the mapping reads, `dbo` with its schema, and `trailkeep_source` with the account
+name.
+
+```sql
+CREATE LOGIN trailkeep_source WITH PASSWORD = '<from your secret store>', CHECK_POLICY = ON;
+USE legacy;
+CREATE USER trailkeep_source FOR LOGIN trailkeep_source;
+-- Only the tables or views the mapping's queries read; never db_datareader, never a schema-wide GRANT SELECT.
+GRANT SELECT ON dbo.cases TO trailkeep_source;
+GRANT SELECT ON dbo.notes TO trailkeep_source;
+GRANT SELECT ON dbo.files TO trailkeep_source;
+GRANT SELECT ON dbo.users TO trailkeep_source;
+```
+
+Grant nothing else: no `EXECUTE`, no role membership, no linked-server login mapping. Every account is a member of
+`public`, which holds `EXECUTE` on some system objects and whatever the legacy database granted it. Check that nothing
+of the legacy database's own is granted to `public`; this must return no rows, or revoke what it lists (on a restored
+copy if production cannot spare it):
+
+```sql
+SELECT o.name, p.permission_name FROM sys.database_permissions p
+JOIN sys.objects o ON o.object_id = p.major_id
+WHERE p.grantee_principal_id = DATABASE_PRINCIPAL_ID('public') AND o.is_ms_shipped = 0;
+```
+
+Calls are controlled by the importer's validator: it refuses any function outside its allow-list of pure built-ins,
+qualified (`dbo.fn(...)`) or not, table functions (`OPENQUERY`, `OPENROWSET`, a legacy table-valued function), a
+four-part name (a linked server), `NEXT VALUE FOR` (a sequence advances outside any transaction), and table hints that
+lock or step outside the snapshot (`UPDLOCK`, `XLOCK`, `HOLDLOCK`, `TABLOCKX`, `NOLOCK`, `READPAST` and the like). An
+unqualified synonym reads like a table, so it is the recipe's job: SQL Server checks the grant on the object behind
+it.
+
+What the recipe achieves is tested against a SQL Server 2022 Developer edition container (`SqlServerSourceIT`, run on
+`main`, nightly and release tags). The account:
+
+- can read the granted tables, every row of one snapshot, without holding a lock that blocks a writer;
+- cannot insert, update or delete, or create a table;
+- cannot execute a procedure or call a legacy scalar or table-valued function, qualified or not;
+- cannot read a table it was not granted, directly or through an unqualified synonym;
+- cannot advance a sequence;
+- and the validator refuses each locking or snapshot-escaping hint, a legacy function call, a table function, a
+  linked server and `NEXT VALUE FOR`; the `public` check above finds a grant to `public`.
