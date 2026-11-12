@@ -140,6 +140,16 @@ abstract class AbstractCaseSearchIT {
                         lower("Synthetic edited title\n" + DESCRIPTION + "\nSynthetic comment with a *findable* word"));
     }
 
+    /** An imported case keeps its legacy number in the search text through an edit (WP-26 part d, design §7.1 R5). */
+    @Test
+    void anImportedCaseIsStillFoundByItsLegacyNumberAfterAnEdit() {
+        jdbc.update("UPDATE CASE_RECORD SET LEGACY_NUMBER = 'LEG-2019-0042' WHERE ID = ?", caseId());
+
+        edit("Synthetic edited title");
+
+        assertThat(searchText()).isEqualTo(lower("Synthetic edited title\nLEG-2019-0042\n" + DESCRIPTION));
+    }
+
     @Test
     void twoConcurrentCommentsBothAppear() throws Exception {
         CountDownLatch appended = new CountDownLatch(1);

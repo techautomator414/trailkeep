@@ -21,6 +21,7 @@ import io.trailkeep.testsupport.WithAppUser;
 import io.trailkeep.user.GlobalRole;
 import io.trailkeep.user.TeamRole;
 import io.trailkeep.user.UserPermissions;
+import jakarta.persistence.EntityManager;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.Map;
@@ -68,6 +69,9 @@ class CaseControllerIT {
     @Autowired
     private CaseService cases;
 
+    @Autowired
+    private EntityManager entityManager;
+
     private CaseNumber standard;
     private CaseNumber restricted;
 
@@ -100,6 +104,28 @@ class CaseControllerIT {
                 .andExpect(content().string(containsString("Restricted")))
                 .andExpect(content().string(containsString("Synthetic Analyst")))
                 .andExpect(content().string(containsString("Synthetic Case Team")));
+    }
+
+    /** An imported case shows its legacy number and unmatched legacy owner (WP-26 part d); a native case neither. */
+    @Test
+    @WithAppUser(id = ANALYST, team = TEAM, teamRole = TeamRole.ANALYST)
+    void anImportedCaseShowsItsLegacyNumberAndLegacyOwner() throws Exception {
+        entityManager.flush();
+        jdbc.update(
+                "UPDATE CASE_RECORD SET LEGACY_REF = 'legacy-a:42', LEGACY_NUMBER = 'LEG-2019-0042',"
+                        + " OWNER_NAME_SNAPSHOT = 'Synthetic Legacy Owner' WHERE CASE_NUMBER = ?",
+                standard.toString());
+        entityManager.clear();
+
+        mvc.perform(get("/cases/{number}", standard.toString()))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("<dt>Legacy number</dt><dd>LEG-2019-0042</dd>")))
+                .andExpect(content().string(containsString("<dt>Legacy owner</dt><dd>Synthetic Legacy Owner</dd>")))
+                .andExpect(content().string(not(containsString("legacy-a:42"))));
+        mvc.perform(get("/cases/{number}", restricted.toString()))
+                .andExpect(status().isOk())
+                .andExpect(content().string(not(containsString("Legacy number"))))
+                .andExpect(content().string(not(containsString("Legacy owner"))));
     }
 
     @Test
