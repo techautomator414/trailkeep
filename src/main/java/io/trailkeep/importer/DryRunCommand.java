@@ -32,7 +32,6 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import javax.crypto.SecretKey;
 import org.jspecify.annotations.Nullable;
-import org.springframework.boot.context.properties.bind.Binder;
 import org.springframework.context.annotation.Profile;
 import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
@@ -57,9 +56,6 @@ class DryRunCommand {
 
     /** Staged cases read per page, each page's issues written in one transaction. */
     private static final int PAGE = 500;
-
-    /** The property the attachment intake reads its scanning mode from (ADR-0013). */
-    private static final String SCANNING = "app.attachments.scanning";
 
     /**
      * What a dry run found.
@@ -122,7 +118,8 @@ class DryRunCommand {
      * @param runId the run
      * @param file the mapping file, unchanged since {@code validate-mapping}, as are its lookup files
      * @return what it found
-     * @throws IllegalStateException if the run is not extracted, is signed off or purged, or a file changed
+     * @throws IllegalStateException if the run is not extracted, is signed off or purged, or a file changed, or in
+     *     {@code clamd} mode clamd's declared stream limit is unset or below the importer's cap
      */
     Outcome run(long runId, Path file) {
         byte[] content = ValidateMappingCommand.read(file);
@@ -137,6 +134,8 @@ class DryRunCommand {
             throw new IllegalStateException(
                     "The mapping file or a lookup file changed after validate-mapping; validate it again");
         }
+        ImportRun.ScanMode mode = ScanModeInForce.read(environment);
+        ScanModeInForce.checkStreamMax(mode, properties.attachments());
         Instant now = clock.instant();
         List<TeamSummary> teams = directory.allTeams();
         CaseRules rules = new CaseRules(
@@ -147,8 +146,6 @@ class DryRunCommand {
                 app.timezone());
         PeopleMatcher matcher = new PeopleMatcher(people, caseImports, mapping, lookups.defaultOwners());
         DryRunSummary summary = summary(rules, teams, mapping, matcher, now);
-        ImportRun.ScanMode mode =
-                Binder.get(environment).bind(SCANNING, ImportRun.ScanMode.class).orElse(ImportRun.ScanMode.CLAMD);
         transactions.executeWithoutResult(status -> {
             issues.deleteByRunIdAndStage(runId, ImportIssue.Stage.DRY_RUN);
             figures.deleteByRunId(runId);

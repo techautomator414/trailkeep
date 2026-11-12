@@ -226,13 +226,17 @@ abstract class AbstractDryRunIT extends DryRunSupport {
     }
 
     @Test
-    void dryRunRefusesRunNotExtractedOrWhoseMappingChanged(@TempDir Path directory) throws Exception {
+    void dryRunRefusesRunNotExtractedOrWhoseMappingOrStreamLimitIsWrong(@TempDir Path directory) throws Exception {
         Path mapping = mapping(directory, MAPPING);
         long validated = validatedRun(mapping);
         assertThatThrownBy(() -> dryRun(validated, mapping))
                 .hasMessage("Import run " + validated + " is VALIDATED, not extracted and awaiting its sign-off");
 
         long extracted = extractedRun(mapping);
+        assertThatThrownBy(() -> dryRun(extracted, mapping, "--import.attachments.clamd-stream-max=24MB"))
+                .as("clamd's declared stream limit is below the importer's cap")
+                .hasMessage("In clamd scanning mode, import.attachments.clamd-stream-max must declare clamd's"
+                        + " StreamMaxLength and be at least import.attachments.max-bytes");
         Files.writeString(mapping, MAPPING.replace("batchSize: 2", "batchSize: 3"));
         assertThatThrownBy(() -> dryRun(extracted, mapping))
                 .hasMessage("The mapping file or a lookup file changed after validate-mapping; validate it again");

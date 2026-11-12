@@ -61,6 +61,9 @@ abstract class AbstractImporterProfileIT {
 
     private static final Instant NOW = Instant.parse("2026-11-10T12:00:00Z");
 
+    /** A clamd stream limit below the importer's 25 MB cap (design §4.3 "Size"). */
+    private static final String BELOW_THE_CAP = "--import.attachments.clamd-stream-max=1MB";
+
     @Autowired
     private TestDatabaseUsers users;
 
@@ -188,7 +191,8 @@ abstract class AbstractImporterProfileIT {
         long expired = stagedRun(Instant.parse("2026-01-01T00:00:00Z"));
         long current = stagedRun(Instant.parse("2099-01-01T00:00:00Z"));
 
-        start(importUser, true, "--import.command=status", "--import.run=" + current)
+        // A clamd stream limit below the importer's cap stops dry-run and load only, never these commands.
+        start(importUser, true, "--import.command=status", "--import.run=" + current, BELOW_THE_CAP)
                 .close();
 
         assertThat(stagedRows(expired))
@@ -198,7 +202,7 @@ abstract class AbstractImporterProfileIT {
         assertThat(purgedAt(expired)).isNotNull();
         assertThat(purgedAt(current)).isNull();
 
-        start(importUser, true, "--import.command=purge-staging", "--import.run=" + current)
+        start(importUser, true, "--import.command=purge-staging", "--import.run=" + current, BELOW_THE_CAP)
                 .close();
 
         assertThat(stagedRows(current)).isZero();

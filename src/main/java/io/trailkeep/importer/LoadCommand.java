@@ -37,6 +37,7 @@ import java.util.stream.Collectors;
 import javax.crypto.SecretKey;
 import org.jspecify.annotations.Nullable;
 import org.springframework.context.annotation.Profile;
+import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.JsonNode;
@@ -46,8 +47,9 @@ import tools.jackson.dataformat.yaml.YAMLMapper;
  * {@code load} (WP-26 part t, design §3 step 5, §8.2): writes the signed-off run's staged cases into Trailkeep through
  * {@code casefile}'s and {@code closure}'s import APIs, one case per transaction with its closure, its import ledger
  * row and the run's count, so a case is either fully in or absent. It refuses to start, each refusal its own code,
- * unless the run is signed off, has no FATAL issue and is loaded with the mapping file and lookup files it was
- * validated and dry-run with: the sign-off checks the first two already, and the load checks all three again. It
+ * unless the run is signed off, has no FATAL issue, is loaded with the mapping file and lookup files it was validated
+ * and dry-run with, and the attachment scanning mode in force is the one its dry run recorded ({@link ScanModeInForce},
+ * R1): the sign-off checks the first two already, and the load checks them all again. It
  * writes only cases the ledger does not hold for the run's source, so a crashed load resumes at the next case and a
  * load after {@code LOADED} writes nothing, and it skips every case with an ERROR from the extract or the dry run.
  * Owners are chosen as the dry run forecast them ({@link PeopleMatcher}). Every other case is checked again against
@@ -84,6 +86,8 @@ class LoadCommand {
         FATAL_ISSUES,
         /** The mapping file or a lookup file is not the one it was validated and dry-run with. */
         MAPPING_CHANGED,
+        /** The attachment scanning mode in force is not the one its dry run recorded and its sign-off approved (R1). */
+        SCAN_MODE_CHANGED,
         /** Another load holds it, or claimed it first. */
         RUN_LOCKED,
         /** A live load holds another run of its source (design §8.2). */
@@ -149,6 +153,7 @@ class LoadCommand {
     private final UserDirectoryService directory;
     private final ImportPeopleService people;
     private final ImportProperties properties;
+    private final Environment environment;
     private final AppProperties app;
     private final InstantSource clock;
     private final YAMLMapper yaml = YAMLMapper.builder().build();
@@ -164,6 +169,7 @@ class LoadCommand {
             UserDirectoryService directory,
             ImportPeopleService people,
             ImportProperties properties,
+            Environment environment,
             AppProperties app,
             InstantSource clock) {
         this.staging = staging;
@@ -176,6 +182,7 @@ class LoadCommand {
         this.directory = directory;
         this.people = people;
         this.properties = properties;
+        this.environment = environment;
         this.app = app;
         this.clock = clock;
     }
@@ -187,6 +194,8 @@ class LoadCommand {
      * @param file the mapping file, unchanged since {@code validate-mapping}, as are its lookup files
      * @return what it did
      * @throws RefusedException if the run may not be loaded now, before anything is written
+     * @throws IllegalStateException in {@code clamd} mode, if clamd's declared stream limit is unset or below the
+     *     importer's cap, before anything is written
      */
     Outcome run(long runId, Path file) {
         ImportRun found = load(runId);
@@ -207,6 +216,7 @@ class LoadCommand {
         if (!lookups.problems().isEmpty() || !found.hasMappingHash(hash)) {
             throw new RefusedException(runId, Refusal.MAPPING_CHANGED);
         }
+        checkScanMode(found);
         Instant now = clock.instant();
         Map<String, TeamSummary> teams =
                 directory.allTeams().stream().collect(Collectors.toMap(TeamSummary::name, Function.identity()));
@@ -244,6 +254,18 @@ class LoadCommand {
             throw new IllegalStateException("Import run " + runId + ": the load stopped; the next load resumes it", e);
         }
         return new Outcome(progress.loaded, progress.skipped, progress.refused);
+    }
+
+    /**
+     * Refuses unless the scanning mode in force is the one the run's dry run recorded, which a run dry-run before the
+     * mode was recorded lacks, so that counts as changed; then, in {@code clamd} mode, checks clamd's stream limit.
+     */
+    private void checkScanMode(ImportRun found) {
+        ImportRun.ScanMode mode = ScanModeInForce.read(environment);
+        if (mode != found.getScanMode()) {
+            throw new RefusedException(found.getId(), Refusal.SCAN_MODE_CHANGED);
+        }
+        ScanModeInForce.checkStreamMax(mode, properties.attachments());
     }
 
     /** One page of staged cases: those the ledger holds or with an ERROR are skipped, the others loaded one by one. */

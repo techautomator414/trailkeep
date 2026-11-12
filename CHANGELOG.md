@@ -146,6 +146,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   so two claims take turns. The log line counts refused cases. The case rules (dry run and load) gain
   `TITLE_TOO_LONG` and `SUBJECT_TOO_LONG` (ERROR): a title over 200 or a subject over 1000 characters, which the
   case's columns cannot hold, is reported before the sign-off instead of stopping the load.
+- `load` refuses a changed attachment scanning mode, and `dry-run` and `load` need clamd's stream limit declared
+  (WP-26 part u-a, docs/design/importer.md §3, §4.3, R1, R13). `load` reads the mode in force exactly where the dry run
+  and the attachment intake read it (`app.attachments.scanning`) and refuses to start (`SCAN_MODE_CHANGED`) unless it
+  equals the mode the dry run recorded and the sign-off approved; a run with no recorded mode counts as changed. New
+  setting `import.attachments.clamd-stream-max`: clamd's `StreamMaxLength`, which the importer cannot read, as the
+  deployment declares it. In clamd mode `dry-run` and `load` refuse to start, before writing anything, when it is unset
+  or below `import.attachments.max-bytes`; `status` and `purge-staging` never check it. The importer Job manifest
+  declares 100MB, the default of the ClamAV in `deploy/base`.
 - The Oracle source (WP-26 part o, docs/design/importer.md §4.1): a `kind: jdbc` Oracle mapping is test-fetched by
   `validate-mapping` and extracted in one `SET TRANSACTION READ ONLY` transaction, with the session in UTC and ISO
   date, timestamp and number formats; `DATE` and `TIMESTAMP` read as local date-times, `TIMESTAMP WITH TIME ZONE` with

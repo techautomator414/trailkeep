@@ -44,6 +44,11 @@ spec:
               value: prod,importer
             - name: SPRING_MAIN_WEB_APPLICATION_TYPE
               value: none
+            # clamd's StreamMaxLength, which the importer cannot read (docs/design/importer.md §4.3 "Size"): the
+            # default of the ClamAV in deploy/base. In clamd mode dry-run and load refuse to start without it or when
+            # it is below import.attachments.max-bytes; change it with clamd's setting.
+            - name: IMPORT_ATTACHMENTS_CLAMDSTREAMMAX
+              value: 100MB
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true

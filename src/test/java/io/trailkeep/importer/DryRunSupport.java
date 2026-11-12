@@ -77,8 +77,13 @@ abstract class DryRunSupport extends ExtractJobSupport {
     }
 
     ConfigurableApplicationContext dryRun(long run, Path mapping, String... more) throws SQLException {
+        return command("dry-run", run, mapping, more);
+    }
+
+    /** Starts an importer command that reads the mapping and the hash key, with any further arguments. */
+    ConfigurableApplicationContext command(String command, long run, Path mapping, String... more) throws SQLException {
         List<String> args = new ArrayList<>(List.of(
-                "--import.command=dry-run",
+                "--import.command=" + command,
                 "--import.run=" + run,
                 "--import.mapping=" + mapping,
                 "--import.hash-key=" + Base64.getEncoder().encodeToString(HASH_KEY)));
