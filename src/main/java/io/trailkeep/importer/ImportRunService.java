@@ -2,15 +2,19 @@
 // Copyright 2026 Charlie Genova and contributors
 package io.trailkeep.importer;
 
+import io.trailkeep.casefile.CaseService.Actor;
+import io.trailkeep.shared.Paged;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.util.List;
 import java.util.Optional;
 import org.jspecify.annotations.Nullable;
 
 /**
- * The importer's read API for other modules (first used by the System screen, WP-25 part d). It reads {@code
- * IMPORT_RUN}, on which the runtime user holds SELECT, so it works in the web application as well as in the
- * {@code importer} profile. It returns codes, times and counts only: never a source id, a mapping or anything taken
- * from legacy data. The Import runs screen (WP-26 part s) extends this interface rather than adding another.
+ * The importer's API for other modules: the System screen (WP-25 part d) and the Import runs screen (WP-26 part s). It
+ * reads {@code IMPORT_RUN}, {@code IMPORT_ISSUE} and {@code IMPORT_RUN_SUMMARY}, on which the runtime user holds
+ * SELECT, so it works in the web application as well as in the {@code importer} profile. It returns codes, times and
+ * counts only: never a source id, a mapping, a key hash or anything taken from legacy data.
  */
 public interface ImportRunService {
 
@@ -20,7 +24,8 @@ public interface ImportRunService {
      * @param id the run's id
      * @param kind {@code IMPORT} or {@code RELINK}
      * @param status where it is: {@code REQUESTED}, {@code VALIDATED}, {@code EXTRACTED}, {@code DRY_RUN}, {@code
-     *     APPROVED}, {@code LOADING}, {@code LOADED}, {@code RECONCILED} or {@code FAILED}
+     *     APPROVED} (also a {@code DRY_RUN} a Compliance Admin has signed off), {@code LOADING}, {@code LOADED},
+     *     {@code RECONCILED} or {@code FAILED}
      * @param requestedAt when it was requested
      * @param updatedAt when its status or sign-off last changed
      * @param rowsLoaded the rows loaded so far, once loading has started; {@code null} before that
@@ -34,9 +39,98 @@ public interface ImportRunService {
             @Nullable Long rowsLoaded) {}
 
     /**
+     * How many of a run's issues share an entity, a severity and a code: one class of issue.
+     *
+     * @param entity {@code MAPPING}, {@code PERSON}, {@code CASE}, {@code COMMENT}, {@code ATTACHMENT} or {@code EVENT}
+     * @param severity {@code FATAL}, {@code ERROR} or {@code WARNING}
+     * @param code the issue code
+     * @param count how many, from every stage so far
+     */
+    record IssueCount(String entity, String severity, String code, long count) {}
+
+    /**
+     * One figure of the last completed dry run ({@code IMPORT_RUN_SUMMARY}, design §3 R8).
+     *
+     * @param metric what is counted, such as {@code CASES} or {@code PEOPLE_MATCHED}
+     * @param dimension what it is broken down by (an entity, a status, a role, a code or an SLA state), or {@code
+     *     null} for a total; for a figure per team it is the team id, also given as {@code teamId}
+     * @param teamId the Trailkeep team the figure is for, or {@code null} if it is not per team
+     * @param value the number
+     */
+    record Figure(
+            String metric,
+            @Nullable String dimension,
+            @Nullable Long teamId,
+            long value) {}
+
+    /**
+     * One run with everything the Import runs screen shows about it.
+     *
+     * @param summary the run as the list shows it
+     * @param requestedBy the {@code APP_USER} id of whoever requested it
+     * @param approvedBy the {@code APP_USER} id of the Compliance Admin who signed it off, or {@code null}
+     * @param approvedAt when it was signed off, or {@code null}
+     * @param scanMode the scanning mode recorded by its last completed dry run ({@code CLAMD} or {@code EXTERNAL}), or
+     *     {@code null} before one
+     * @param rowsStaged rows extracted into staging
+     * @param issues its issues per class: fatal first, then by entity and code
+     * @param figures its dry-run figures by metric and dimension, without the issue counts and the forecast day
+     * @param forecastDay the day the SLA forecast is for, or {@code null} without one
+     */
+    record RunDetail(
+            RunSummary summary,
+            long requestedBy,
+            @Nullable Long approvedBy,
+            @Nullable Instant approvedAt,
+            @Nullable String scanMode,
+            long rowsStaged,
+            List<IssueCount> issues,
+            List<Figure> figures,
+            @Nullable LocalDate forecastDay) {
+
+        /**
+         * Copies the lists, so the record holds nothing mutable.
+         *
+         * @param summary the run as the list shows it
+         * @param requestedBy who requested it
+         * @param approvedBy who signed it off, or {@code null}
+         * @param approvedAt when, or {@code null}
+         * @param scanMode the recorded scanning mode, or {@code null}
+         * @param rowsStaged rows extracted into staging
+         * @param issues its issues per class
+         * @param figures its dry-run figures
+         * @param forecastDay the SLA forecast day, or {@code null}
+         */
+        public RunDetail {
+            issues = List.copyOf(issues);
+            figures = List.copyOf(figures);
+        }
+    }
+
+    /**
      * The most recently requested run, by request time and then by id.
      *
      * @return the run, or empty if none was ever requested
      */
     Optional<RunSummary> latest();
+
+    /**
+     * One page of runs, most recently requested first, 20 to a page.
+     *
+     * @param actor who asks: a System Admin or a Compliance Admin
+     * @param page the page, from 1; a page past the last shows the last
+     * @return the page
+     * @throws ImportRunException {@code FORBIDDEN} for anyone else
+     */
+    Paged<RunSummary> runs(Actor actor, int page);
+
+    /**
+     * One run.
+     *
+     * @param actor who asks: a System Admin or a Compliance Admin
+     * @param id the run's id
+     * @return the run
+     * @throws ImportRunException {@code FORBIDDEN} for anyone else, then {@code NOT_FOUND} for an unknown run
+     */
+    RunDetail run(Actor actor, long id);
 }

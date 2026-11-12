@@ -234,6 +234,14 @@
     TEST_MAIL_QUEUED is audited with the template id only, and one test per person per 5 minutes, from the audit
     trail. The redirect is the fixed path /admin/system plus an enum name. Covered by TestMailControllerIT. Approved
     in the security-reviewer role on #145.
+    ImportRunController (WP-26 part s1): behind login; GET /admin/import-runs and GET /admin/import-runs/{id} only, no
+    state change. The controller takes nothing from the request but the page and the run id (both parsed
+    leniently: an unreadable page is the first, an unreadable id names no run); it refuses (403) anyone without the
+    System Admin or Compliance Admin global role, permissions rebuilt from the database per request, before it reads
+    anything, then answers 404 for an unknown run. It shows codes, times, counts, team names and the requester's and
+    approver's display names through th:text, never a source id, a mapping, a key hash or a legacy value. Covered by
+    ImportRunServiceIT, OracleImportRunServiceIT, ImportRunControllerIT and ImportRunsAccessibilityIT.
+    Needs security-reviewer approval.
     Approved in the security-reviewer role on #20. Listed by class, never by pattern alone, so each new controller
     is reviewed the same way.
   -->
@@ -266,6 +274,7 @@
       <Class name="io.trailkeep.web.PreferencesController"/>
       <Class name="io.trailkeep.web.SystemController"/>
       <Class name="io.trailkeep.web.TestMailController"/>
+      <Class name="io.trailkeep.web.ImportRunController"/>
     </Or>
   </Match>
   <!--
