@@ -30,6 +30,7 @@ class ImportCommandRunner implements ApplicationRunner {
     private final ImportProperties properties;
     private final ImportStatusReader statuses;
     private final ValidateMappingCommand validateMapping;
+    private final ExtractCommand extract;
     private final StagingPurger purger;
     private final InstantSource clock;
 
@@ -37,11 +38,13 @@ class ImportCommandRunner implements ApplicationRunner {
             ImportProperties properties,
             ImportStatusReader statuses,
             ValidateMappingCommand validateMapping,
+            ExtractCommand extract,
             StagingPurger purger,
             InstantSource clock) {
         this.properties = properties;
         this.statuses = statuses;
         this.validateMapping = validateMapping;
+        this.extract = extract;
         this.purger = purger;
         this.clock = clock;
     }
@@ -49,7 +52,7 @@ class ImportCommandRunner implements ApplicationRunner {
     @Override
     public void run(ApplicationArguments args) {
         String command = properties.command();
-        if (!"status".equals(command) && !"validate-mapping".equals(command) && !"purge-staging".equals(command)) {
+        if (!List.of("status", "validate-mapping", "extract", "purge-staging").contains(command)) {
             throw new IllegalStateException("Unknown or not yet available import command: " + command);
         }
         Long run = properties.run();
@@ -66,6 +69,9 @@ class ImportCommandRunner implements ApplicationRunner {
             validateMapping(runId);
             return;
         }
+        if ("extract".equals(command)) {
+            LOG.info("Import run {}: {} rows staged", runId, extract.run(runId, mapping()));
+        }
         if ("purge-staging".equals(command)) {
             purger.purge(runId, clock.instant());
             LOG.info("Import run {}: staging purged", runId);
@@ -73,12 +79,16 @@ class ImportCommandRunner implements ApplicationRunner {
         LOG.info("Import status: {}", statuses.status(runId, clock.instant()));
     }
 
-    private void validateMapping(long run) {
+    private Path mapping() {
         Path mapping = properties.mapping();
         if (mapping == null) {
             throw new IllegalStateException("import.mapping is required");
         }
-        List<MappingProblem> problems = validateMapping.run(run, mapping);
+        return mapping;
+    }
+
+    private void validateMapping(long run) {
+        List<MappingProblem> problems = validateMapping.run(run, mapping());
         for (MappingProblem problem : problems) {
             LOG.warn("Import run {} mapping: {} at {}", run, problem.code().name(), shown(problem));
         }

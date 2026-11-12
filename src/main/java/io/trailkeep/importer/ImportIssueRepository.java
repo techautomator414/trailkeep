@@ -17,4 +17,9 @@ interface ImportIssueRepository extends Repository<ImportIssue, Long> {
     @Modifying
     @Query("delete from ImportIssue i where i.runId = :runId and i.stage = :stage")
     int deleteByRunIdAndStage(long runId, ImportIssue.Stage stage);
+
+    /** An entity extracted again replaces that entity's issues of the stage. */
+    @Modifying
+    @Query("delete from ImportIssue i where i.runId = :runId and i.stage = :stage and i.subject = :subject")
+    int deleteByRunIdAndStageAndSubject(long runId, ImportIssue.Stage stage, ImportIssue.Subject subject);
 }
