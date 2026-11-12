@@ -100,4 +100,56 @@ public class StagedCase extends StagedRow {
         this.closureSummary = values.text("closureSummary");
         this.legalHold = values.flag("legalHold");
     }
+
+    public @Nullable String getTitle() {
+        return title;
+    }
+
+    public @Nullable String getDescription() {
+        return description;
+    }
+
+    public @Nullable String getCaseTypeKey() {
+        return caseTypeKey;
+    }
+
+    public @Nullable String getTeamKey() {
+        return teamKey;
+    }
+
+    public @Nullable String getPriority() {
+        return priority;
+    }
+
+    public @Nullable String getSensitivity() {
+        return sensitivity;
+    }
+
+    public @Nullable Boolean getLegacyAcl() {
+        return legacyAcl;
+    }
+
+    public @Nullable String getStatus() {
+        return status;
+    }
+
+    public @Nullable LocalDate getIdentifiedOn() {
+        return identifiedOn;
+    }
+
+    public @Nullable Instant getOpenedAt() {
+        return openedAt;
+    }
+
+    public @Nullable Instant getClosedAt() {
+        return closedAt;
+    }
+
+    public @Nullable String getClosureOutcome() {
+        return closureOutcome;
+    }
+
+    public @Nullable Boolean getLegalHold() {
+        return legalHold;
+    }
 }

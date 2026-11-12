@@ -8,10 +8,12 @@ import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.CriteriaDelete;
 import jakarta.persistence.criteria.CriteriaQuery;
 import jakarta.persistence.criteria.Path;
+import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import org.jspecify.annotations.Nullable;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -130,6 +132,27 @@ public class StagingStore {
                     staged(rowType(entity), runId, keys.subList(from, Math.min(keys.size(), from + KEYS_PER_QUERY))));
         }
         return staged;
+    }
+
+    /**
+     * One page of a run's staged cases in canonical-key order, after a key: the dry run reads them all in pages, each
+     * page by the key it starts after, so no offset is ever scanned.
+     *
+     * @param runId the run
+     * @param after the last key of the previous page; {@code null} for the first page (Oracle reads {@code ''} as null)
+     * @param size the page size
+     * @return up to {@code size} cases with a key above {@code after}
+     */
+    @Transactional(readOnly = true)
+    public List<StagedCase> cases(long runId, @Nullable String after, int size) {
+        CriteriaBuilder criteria = entityManager.getCriteriaBuilder();
+        CriteriaQuery<StagedCase> query = criteria.createQuery(StagedCase.class);
+        Root<StagedCase> row = query.from(StagedCase.class);
+        Path<String> legacyKey = row.get("key").get("legacyKey");
+        Predicate inRun = criteria.equal(row.get("key").get("runId"), runId);
+        query.where(after == null ? inRun : criteria.and(inRun, criteria.greaterThan(legacyKey, after)))
+                .orderBy(criteria.asc(legacyKey));
+        return entityManager.createQuery(query).setMaxResults(size).getResultList();
     }
 
     private <T extends StagedRow> int delete(Class<T> type, long runId) {

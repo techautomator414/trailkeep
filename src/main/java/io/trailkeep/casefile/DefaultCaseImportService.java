@@ -22,7 +22,9 @@ import java.time.Instant;
 import java.time.InstantSource;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.List;
 import java.util.Objects;
+import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -70,6 +72,7 @@ class DefaultCaseImportService implements CaseImportService {
     private final CaseRecordRepository cases;
     private final CaseSearchJdbcDao search;
     private final CaseTypeRepository caseTypes;
+    private final CaseTypeOutcomeRepository outcomes;
     private final SlaPolicyRepository policies;
     private final CaseNumberJdbcDao numbers;
     private final EntityManager entityManager;
@@ -85,6 +88,7 @@ class DefaultCaseImportService implements CaseImportService {
             CaseRecordRepository cases,
             CaseSearchJdbcDao search,
             CaseTypeRepository caseTypes,
+            CaseTypeOutcomeRepository outcomes,
             SlaPolicyRepository policies,
             CaseNumberJdbcDao numbers,
             EntityManager entityManager,
@@ -98,6 +102,7 @@ class DefaultCaseImportService implements CaseImportService {
         this.cases = cases;
         this.search = search;
         this.caseTypes = caseTypes;
+        this.outcomes = outcomes;
         this.policies = policies;
         this.numbers = numbers;
         this.entityManager = entityManager;
@@ -108,6 +113,23 @@ class DefaultCaseImportService implements CaseImportService {
         this.clock = clock;
         this.zone = app.timezone();
         this.prefix = properties.numberPrefix();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<ImportCaseType> caseTypes() {
+        return caseTypes.findAllByOrderByNameAsc().stream()
+                .map(type -> new ImportCaseType(
+                        type.getName(),
+                        type.isActive(),
+                        type.getRetentionYears(),
+                        outcomes
+                                .findByIdCaseTypeIdOrderBySortOrderAsc(
+                                        Objects.requireNonNull(type.getId(), "persisted"))
+                                .stream()
+                                .map(CaseTypeOutcome::outcome)
+                                .collect(Collectors.toUnmodifiableSet())))
+                .toList();
     }
 
     @Override

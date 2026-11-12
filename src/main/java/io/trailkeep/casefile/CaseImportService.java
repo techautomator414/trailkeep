@@ -5,12 +5,14 @@ package io.trailkeep.casefile;
 import io.trailkeep.shared.CaseNumber;
 import io.trailkeep.shared.CaseStatus;
 import java.time.Instant;
+import java.util.List;
+import java.util.Set;
 import org.jspecify.annotations.Nullable;
 
 /**
- * Creates imported cases (WP-26 part e, docs/design/importer.md §7.1, §8.1). Called only by {@code importer}
- * (ArchUnit), never on a request thread. It keeps the rules of {@link CaseService#create} except the relaxations of
- * §8.1 R6, each tested by name:
+ * Creates imported cases (WP-26 part e, docs/design/importer.md §7.1, §8.1), and lists the case types with their
+ * outcomes for the dry run (26q). Called only by {@code importer} (ArchUnit), never on a request thread. It keeps the
+ * rules of {@link CaseService#create} except the relaxations of §8.1 R6, each tested by name:
  *
  * <ol>
  *   <li>the case opens at the legacy {@code OPENED_AT}, not the clock ({@code importedCaseKeepsLegacyOpenedAt});
@@ -83,6 +85,36 @@ public interface CaseImportService {
      *     unknown case
      */
     long importComment(ImportRun run, ImportedComment comment);
+
+    /**
+     * A case type as the dry run checks staged cases against it (WP-26 part q, design §7.1).
+     *
+     * @param name its name, which the mapping's {@code caseTypeKey} names exactly
+     * @param active whether an open case may use it
+     * @param retentionYears how long after closing its cases are archived
+     * @param outcomes the closure outcomes it allows
+     */
+    record ImportCaseType(String name, boolean active, int retentionYears, Set<String> outcomes) {
+
+        /**
+         * Copies the outcomes, so the record holds nothing mutable.
+         *
+         * @param name its name
+         * @param active whether an open case may use it
+         * @param retentionYears how long after closing its cases are archived
+         * @param outcomes the closure outcomes it allows
+         */
+        public ImportCaseType {
+            outcomes = Set.copyOf(outcomes);
+        }
+    }
+
+    /**
+     * Every case type with its outcomes, read-only, for the dry run.
+     *
+     * @return them, by name
+     */
+    List<ImportCaseType> caseTypes();
 
     /**
      * Creates the case with its SLA row and search text, and audits it, in the caller's transaction.
