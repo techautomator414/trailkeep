@@ -24,6 +24,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   `READUNCOMMITTED`, `READPAST`, `READCOMMITTEDLOCK` and `REPEATABLEREAD` hints. SQL Server's permission (229, 230,
   262) and login (18456) errors map to `SOURCE_PERMISSION_DENIED` and `SOURCE_UNAVAILABLE`. `SOURCE_UNSUPPORTED` now
   applies to CSV mappings only. New test dependency: `testcontainers-mssqlserver` (MIT).
+- The CSV and TSV source (WP-26 part l1, docs/design/importer.md §4.2). A `kind: files` mapping whose every entity file
+  ends in `.csv` or `.tsv` is parsed with Apache Commons CSV (new dependency, Apache-2.0) as RFC 4180 under the dialect
+  `source.csv` declares: `delimiter` (a comma, or a tab for `.tsv`), `quote` (`"`, or empty for none), `escape`,
+  `header` (default true; without one the columns are `column1`, `column2`, ...) and `nullToken` (an unquoted field
+  equal to it is null, a quoted one never is). Files are decoded in `source.encoding` by a decoder that refuses
+  undecodable bytes (`SOURCE_ENCODING` with the byte's line), a leading BOM is consumed, and a lone `0x00` field is the
+  empty string, as `bcp` writes one. The manifest works exactly as for JSON Lines (each file hashed and its rows counted
+  while it is read, opened by its real path under the mapping's directory). Every row must have the header's number of
+  fields: a row that does not, or that the parser cannot read, is a FATAL `ROW_UNREADABLE` carrying the line it starts
+  on, never a value or a parser message. `validate-mapping` refuses a dialect the parser cannot use
+  (`CSV_DIALECT_INVALID` at `/source/csv`). A CSV export stages the same canonical rows as its JSON Lines twin (tested
+  on both databases). CSV mappings are no longer `SOURCE_UNSUPPORTED`; a files mapping mixing CSV with JSON Lines still
+  is.
 - The Oracle source (WP-26 part o, docs/design/importer.md §4.1): a `kind: jdbc` Oracle mapping is test-fetched by
   `validate-mapping` and extracted in one `SET TRANSACTION READ ONLY` transaction, with the session in UTC and ISO
   date, timestamp and number formats; `DATE` and `TIMESTAMP` read as local date-times, `TIMESTAMP WITH TIME ZONE` with

@@ -10,15 +10,16 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 /**
  * {@code extract} as the import user (WP-26 part k1b, design §3 step 2, §4.1, §5), mostly from a source held in memory,
- * and end to end from JSON Lines files with their manifest (26k2); every source (26k2, 26l, 26n2) reaches the extract
- * through the same {@link SourceRows}. This class's own context (the schema owner) migrates, seeds the runs and reads
- * staging back.
+ * and end to end from JSON Lines and CSV files with their manifest (26k2, 26l); every source (26k2, 26l, 26n2) reaches
+ * the extract through the same {@link SourceRows}. This class's own context (the schema owner) migrates, seeds the
+ * runs and reads staging back.
  */
 // "IT" is the Failsafe suffix Part B mandates for integration tests, not an abbreviation.
 @SuppressWarnings("checkstyle:AbbreviationAsWordInName")
@@ -169,5 +170,38 @@ abstract class AbstractExtractIT extends ExtractJobSupport {
         assertThat(count("SELECT COUNT(*) FROM IMPORT_RUN_CHECKPOINT WHERE RUN_ID = ?", changed))
                 .as("persons and cases only")
                 .isEqualTo(2);
+    }
+
+    @Test
+    void csvExportStagesTheSameCanonicalRowsAsItsJsonLinesTwin(@TempDir Path directory) throws Exception {
+        List<Long> runs = new ArrayList<>();
+        for (String format : List.of("jsonl", "csv")) {
+            Path folder = Files.createDirectory(directory.resolve(format));
+            byte[] manifest = "csv".equals(format) ? CsvExport.write(folder) : JsonLinesExport.write(folder);
+            String text = MAPPING.replace(".mem", "." + format) + "attachments: { root: \"" + folder.resolve("files")
+                    + "\" }\n";
+            Path mapping = mapping(
+                    folder,
+                    "csv".equals(format)
+                            ? text.replace("manifest: manifest.yaml", "manifest: manifest.yaml, " + CsvExport.DIALECT)
+                            : text);
+            long run = validatedRun(mapping);
+
+            extract(run, mapping, null).close();
+
+            assertThat(jdbc.queryForObject("SELECT SOURCE_FINGERPRINT FROM IMPORT_RUN WHERE ID = ?", String.class, run))
+                    .isEqualTo("manifest:" + ValidateMappingCommand.sha256(manifest));
+            assertThat(issues(run)).isEmpty();
+            runs.add(run);
+        }
+        for (String table :
+                List.of("IMPORT_STG_PERSON", "IMPORT_STG_CASE", "IMPORT_STG_COMMENT", "IMPORT_STG_ATTACHMENT")) {
+            // Test-only reads over the fixed table names of this list.
+            String sql = "SELECT LEGACY_KEY, ROW_HASH FROM " + table + " WHERE RUN_ID = ? ORDER BY LEGACY_KEY";
+            assertThat(jdbc.queryForList(sql, runs.get(1)))
+                    .as(table + ": numbers, nulls and the BOM read the same from either file")
+                    .isNotEmpty()
+                    .isEqualTo(jdbc.queryForList(sql, runs.get(0)));
+        }
     }
 }

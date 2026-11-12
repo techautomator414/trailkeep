@@ -71,6 +71,7 @@
     <json-schema-validator.version>3.0.6</json-schema-validator.version>
     <jsqlparser.version>5.4</jsqlparser.version>
     <re2j.version>1.8</re2j.version>
+    <commons-csv.version>1.14.1</commons-csv.version>
     <owasp-java-html-sanitizer.version>20261103.2</owasp-java-html-sanitizer.version>
     <!-- Upload type detection (WP-14, BUILD_PLAN 11.1): the core jar only, never the parser bundle. The 3.x line,
          because tika-core 4.x pulls in commonmark extensions a magic-byte detector does not need. -->
@@ -98,6 +99,13 @@
         <groupId>com.tngtech.archunit</groupId>
         <artifactId>archunit</artifactId>
         <version>${archunit.version}</version>
+      </dependency>
+      <!-- One commons-io for the whole build: tika-core asks for 2.22.0, commons-csv for 2.20.0, and
+           dependencyConvergence requires them to agree; the newer one wins. Apache-2.0. -->
+      <dependency>
+        <groupId>commons-io</groupId>
+        <artifactId>commons-io</artifactId>
+        <version>2.22.0</version>
       </dependency>
     </dependencies>
   </dependencyManagement>
@@ -239,6 +247,13 @@
       <groupId>com.google.re2j</groupId>
       <artifactId>re2j</artifactId>
       <version>${re2j.version}</version>
+    </dependency>
+    <dependency>
+      <!-- Reads a files source's CSV and TSV exports (WP-26 part l, design §4.2): RFC 4180 with the mapping's declared
+           delimiter, quote, escape and null token. Apache-2.0, as are commons-io and commons-codec, which it needs. -->
+      <groupId>org.apache.commons</groupId>
+      <artifactId>commons-csv</artifactId>
+      <version>${commons-csv.version}</version>
     </dependency>
     <dependency>
       <!-- Parses each source query of an import mapping, so only one plain SELECT with allow-listed functions runs
