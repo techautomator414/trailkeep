@@ -25,6 +25,7 @@ import org.springframework.context.annotation.Profile;
 import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionTemplate;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.dataformat.yaml.YAMLMapper;
 
 /**
@@ -33,7 +34,8 @@ import tools.jackson.dataformat.yaml.YAMLMapper;
  * severity and the keyed hash of the case's key, never a value), and records the attachment scanning mode in force on
  * the run ({@code app.attachments.scanning}, read as the attachment intake reads it), which the sign-off approves and
  * the load must still find (R1). It writes nothing to the domain. A dry run may be repeated until the sign-off: each
- * replaces the last one's issues. The mapping file must be the one {@code validate-mapping} accepted.
+ * replaces the last one's issues. The mapping file and its lookup files must be the ones {@code validate-mapping}
+ * accepted ({@link LookupFiles#hash}).
  */
 @Component
 @Profile("importer")
@@ -93,9 +95,9 @@ class DryRunCommand {
      * Dry-runs an extracted run.
      *
      * @param runId the run
-     * @param file the mapping file, unchanged since {@code validate-mapping}
+     * @param file the mapping file, unchanged since {@code validate-mapping}, as are its lookup files
      * @return what it found
-     * @throws IllegalStateException if the run is not extracted, is signed off or purged, or the file changed
+     * @throws IllegalStateException if the run is not extracted, is signed off or purged, or a file changed
      */
     Outcome run(long runId, Path file) {
         byte[] content = ValidateMappingCommand.read(file);
@@ -104,12 +106,15 @@ class DryRunCommand {
             throw new IllegalStateException(
                     "Import run " + runId + " is " + found.getStatus() + ", not extracted and awaiting its sign-off");
         }
-        if (!found.hasMappingHash(ValidateMappingCommand.sha256(content))) {
-            throw new IllegalStateException("The mapping file changed after validate-mapping; validate it again");
+        JsonNode mapping = yaml.readTree(content);
+        LookupFiles lookups = LookupFiles.read(file, mapping);
+        if (!lookups.problems().isEmpty() || !found.hasMappingHash(lookups.hash(content))) {
+            throw new IllegalStateException(
+                    "The mapping file or a lookup file changed after validate-mapping; validate it again");
         }
         Instant now = clock.instant();
         CaseRules rules = new CaseRules(
-                yaml.readTree(content),
+                mapping,
                 directory.allTeams().stream().collect(Collectors.toMap(TeamSummary::name, TeamSummary::active)),
                 caseImports.caseTypes().stream().collect(Collectors.toMap(ImportCaseType::name, Function.identity())),
                 now,

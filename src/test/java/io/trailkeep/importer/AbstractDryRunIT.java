@@ -110,7 +110,7 @@ abstract class AbstractDryRunIT extends ExtractJobSupport {
         long extracted = extractedRun(mapping);
         Files.writeString(mapping, MAPPING.replace("batchSize: 2", "batchSize: 3"));
         assertThatThrownBy(() -> dryRun(extracted, mapping))
-                .hasMessage("The mapping file changed after validate-mapping; validate it again");
+                .hasMessage("The mapping file or a lookup file changed after validate-mapping; validate it again");
         assertThat(jdbc.queryForObject("SELECT STATUS FROM IMPORT_RUN WHERE ID = ?", String.class, extracted))
                 .isEqualTo("EXTRACTED");
     }
