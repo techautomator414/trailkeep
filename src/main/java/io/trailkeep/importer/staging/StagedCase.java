@@ -117,6 +117,10 @@ public class StagedCase extends StagedRow {
         return teamKey;
     }
 
+    public @Nullable String getOwnerKey() {
+        return ownerKey;
+    }
+
     public @Nullable String getPriority() {
         return priority;
     }

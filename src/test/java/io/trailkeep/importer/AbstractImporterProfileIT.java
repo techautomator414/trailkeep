@@ -226,15 +226,15 @@ abstract class AbstractImporterProfileIT {
 
     /**
      * {@code validate-mapping} as the import user (WP-26 part b): a sound mapping validates the run with the SHA-256
-     * over the file and its lookup file (26l2); a broken file or lookup file records a FATAL issue, fails the Job and
-     * puts the run back to {@code REQUESTED} with no hash; the corrected file replaces the issue and validates the run
-     * again. This proves the import user's grants on both tables. The example's vendor is set to PostgreSQL so its
-     * queries are test-fetched from {@link ExampleLegacySource} (26n).
+     * over the file, its lookup file (26l2) and its default-owner file (26r2); a broken file or lookup file records a
+     * FATAL issue, fails the Job and puts the run back to {@code REQUESTED} with no hash; the corrected file replaces
+     * the issue and validates the run again. This proves the import user's grants on both tables. The example's vendor
+     * is set to PostgreSQL so its queries are test-fetched from {@link ExampleLegacySource} (26n).
      */
     @Test
     void validateMappingValidatesASoundMappingAndRevokesThatWhenTheFileBreaks(@TempDir Path directory)
             throws Exception {
-        long run = runs.save(new ImportRun(ImportRun.Kind.IMPORT, "legacy1", new CaseSeed(jdbc).user(), NOW))
+        final long run = runs.save(new ImportRun(ImportRun.Kind.IMPORT, "legacy1", new CaseSeed(jdbc).user(), NOW))
                 .getId();
         String example = new ClassPathResource("importer/example-mapping.yaml")
                 .getContentAsString(StandardCharsets.UTF_8)
@@ -243,7 +243,9 @@ abstract class AbstractImporterProfileIT {
         Path teams = Files.createDirectories(directory.resolve("lookups")).resolve("teams.csv");
         String lookup = "legacy_unit,trailkeep_team\nUnit 1,team-a\n";
         Files.writeString(teams, lookup);
-        String hash = compositeHash(example, lookup);
+        String owners = "team,owner\nteam-a,owner@example.test\n";
+        Files.writeString(directory.resolve("lookups/default-owners.csv"), owners);
+        String hash = compositeHash(example, lookup, owners);
         Files.writeString(mapping, example);
         validateMapping(run, mapping).close();
         assertThat(statusAndHash(run)).containsExactly("VALIDATED", hash);
@@ -279,9 +281,9 @@ abstract class AbstractImporterProfileIT {
     }
 
     /** SHA-256 over the mapping, then the lookup file, each preceded by its length as eight bytes (26l2). */
-    private static String compositeHash(String mapping, String lookup) throws Exception {
+    private static String compositeHash(String... parts) throws Exception {
         MessageDigest sha256 = MessageDigest.getInstance("SHA-256");
-        for (String part : List.of(mapping, lookup)) {
+        for (String part : parts) {
             byte[] bytes = part.getBytes(StandardCharsets.UTF_8);
             sha256.update(ByteBuffer.allocate(Long.BYTES).putLong(bytes.length).array());
             sha256.update(bytes);
