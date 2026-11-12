@@ -294,6 +294,10 @@ class CaseRecord {
         return purgedAt;
     }
 
+    boolean isImported() {
+        return legacyRef != null;
+    }
+
     @Nullable
     String getLegacyNumber() {
         return legacyNumber;
