@@ -5,6 +5,7 @@ package io.trailkeep.schema;
 import static io.trailkeep.schema.GrantsMatrix.APP_USER_GRANTS;
 import static io.trailkeep.schema.GrantsMatrix.IMPORTER_SEQUENCES;
 import static io.trailkeep.schema.GrantsMatrix.IMPORT_USER_GRANTS;
+import static io.trailkeep.schema.GrantsMatrix.LOAD_SEQUENCES;
 import static io.trailkeep.schema.GrantsMatrix.PURGE_USER_GRANTS;
 import static io.trailkeep.schema.GrantsMatrix.SEQUENCES;
 import static io.trailkeep.schema.GrantsMatrix.TABLES;
@@ -162,16 +163,18 @@ abstract class AbstractDatabaseGrantsIT {
     }
 
     /**
-     * The import user draws from the importer's sequences and may see every other one an entity maps, for validate;
-     * the case number sequence, which no entity maps, it cannot even see.
+     * The import user draws from the importer's sequences and from those of the rows the load writes (WP-26 part t),
+     * and may see every other one an entity maps, for validate.
      */
     @Test
     void theImportUserMayDrawFromTheImporterSequencesAndOnlySeeTheOthers() throws SQLException {
         for (String sequence :
                 Stream.concat(SEQUENCES.stream(), IMPORTER_SEQUENCES.stream()).toList()) {
-            Outcome expected = sequence.startsWith("SEQ_IMPORT_") || IMPORTER_SEQUENCES.contains(sequence)
+            Outcome expected = sequence.startsWith("SEQ_IMPORT_")
+                            || IMPORTER_SEQUENCES.contains(sequence)
+                            || LOAD_SEQUENCES.contains(sequence)
                     ? Outcome.ALLOWED
-                    : "SEQ_CASE_NUMBER".equals(sequence) ? Outcome.DENIED : drawnBySeeing();
+                    : drawnBySeeing();
             assertThat(draw(importUser, sequence)).as(sequence).isEqualTo(expected);
         }
     }

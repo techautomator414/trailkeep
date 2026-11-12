@@ -15,6 +15,7 @@ import jakarta.persistence.Version;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.Instant;
+import java.util.EnumSet;
 import java.util.Objects;
 import org.hibernate.annotations.DynamicUpdate;
 import org.jspecify.annotations.Nullable;
@@ -332,6 +333,48 @@ class ImportRun {
         this.approvedBy = by;
         this.approvedAt = at;
         this.acknowledgedWarnings = acknowledged;
+        this.updatedAt = at;
+    }
+
+    @Nullable
+    Long getApprovedBy() {
+        return approvedBy;
+    }
+
+    /**
+     * Whether {@code load} may start or resume (WP-26 part t): a signed-off import run with its staging that its
+     * sign-off left {@code DRY_RUN}, or a load {@code LOADING}, {@code FAILED} or {@code LOADED}.
+     *
+     * @return true when it may
+     */
+    boolean awaitsLoad() {
+        return kind == Kind.IMPORT
+                && approvedBy != null
+                && stagingPurgedAt == null
+                && EnumSet.of(Status.DRY_RUN, Status.LOADING, Status.FAILED, Status.LOADED)
+                        .contains(status);
+    }
+
+    /**
+     * Whether a live load holds the run: {@code LOADING} and moved on since the lease began; a dead load's is older.
+     *
+     * @param staleBefore now less the lease
+     * @return true while a live load may hold it
+     */
+    boolean loadingSince(Instant staleBefore) {
+        return status == Status.LOADING && !updatedAt.isBefore(staleBefore);
+    }
+
+    /**
+     * A load claims the run, counts a case in that case's transaction, or ends it; each save checks the version.
+     *
+     * @param to the status
+     * @param cases how many more cases are loaded
+     * @param at now, when the lease starts again
+     */
+    void loadMoved(Status to, int cases, Instant at) {
+        this.status = to;
+        this.rowsLoaded += cases;
         this.updatedAt = at;
     }
 

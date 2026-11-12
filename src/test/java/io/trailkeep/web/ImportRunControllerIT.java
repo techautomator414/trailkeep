@@ -69,6 +69,7 @@ class ImportRunControllerIT {
         user(MANAGER, null);
         jdbc.update("INSERT INTO TEAM (ID, NAME) VALUES (?, 'Synthetic Import Team')", TEAM);
         for (String table : List.of(
+                "IMPORT_LEDGER",
                 "CASE_IMPORTED_EVENT",
                 "IMPORT_STG_EVENT",
                 "IMPORT_STG_ATTACHMENT",
