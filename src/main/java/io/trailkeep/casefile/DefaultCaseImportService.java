@@ -164,6 +164,10 @@ class DefaultCaseImportService implements CaseImportService {
         }
         CaseRecord record = cases.findOne(CaseScope.system(), comment.caseNumber())
                 .orElseThrow(() -> new CaseException(Kind.NOT_FOUND, "case not found"));
+        if (!record.isImported()) {
+            // The relaxations are for imported history; a case created in Trailkeep takes comments as anyone posts.
+            throw invalid("only an imported case takes imported comments");
+        }
         long caseId = Objects.requireNonNull(record.getId(), "persisted");
         CaseComment imported =
                 CaseComment.of(caseId, body, comment.authorId(), comment.authorName(), comment.writtenAt());

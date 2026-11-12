@@ -265,6 +265,17 @@ abstract class AbstractCaseImportIT {
                 .satisfies(kind(Kind.NOT_FOUND));
     }
 
+    /** R6 6 is for imported history: a case created in Trailkeep (no legacy ref) takes no imported comment. */
+    @Test
+    void nativeCaseTakesNoImportedComment() {
+        CaseNumber created = new CaseSeed(jdbc).caseRow(team, analyst, Sensitivity.STANDARD, CaseStatus.OPEN);
+
+        assertThatThrownBy(() -> imports.importComment(
+                        RUN, new ImportedComment(created, "Synthetic note", null, "Synthetic", OPENED)))
+                .satisfies(kind(Kind.INVALID))
+                .hasMessageContaining("only an imported case");
+    }
+
     private ImportedCase open(long owner, @Nullable String ownerSnapshot) {
         return new ImportedCase(
                 fields(owner, caseType), ref(), "LEG-2019-0042", ownerSnapshot, CaseStatus.OPEN, OPENED, null);
