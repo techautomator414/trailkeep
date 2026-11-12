@@ -32,7 +32,8 @@ import tools.jackson.databind.node.JsonNodeFactory;
  * attachment or event the canonical key of its case, every mapped field through the closed transform set, typed for
  * its staging column, and the keyed hash of the canonical row. Pure, like the transforms: a row stages the same way
  * whichever source it came from. A row whose key cannot be built is not staged; a field that fails is staged empty.
- * Both leave issue codes, never values (§10).
+ * Both leave issue codes, never values (§10). An attachment's file, when one is given, is hashed in place before the
+ * row hash (26k2, {@link AttachmentFiles}), so a changed file changes the row.
  */
 final class RowStager {
 
@@ -83,6 +84,7 @@ final class RowStager {
     private final MappingContext context;
     private final StagedEntity entity;
     private final JsonNode spec;
+    private final @Nullable AttachmentFiles files;
 
     /**
      * A stager for one entity of a mapping.
@@ -91,8 +93,20 @@ final class RowStager {
      * @param entity the entity
      */
     RowStager(MappingContext context, StagedEntity entity) {
+        this(context, entity, null);
+    }
+
+    /**
+     * A stager for one entity of a mapping that hashes attachment files.
+     *
+     * @param context the mapping
+     * @param entity the entity
+     * @param files the attachment files, for the attachment entity; {@code null} for the others
+     */
+    RowStager(MappingContext context, StagedEntity entity, @Nullable AttachmentFiles files) {
         this.context = context;
         this.entity = entity;
+        this.files = files;
         this.spec = entity == StagedEntity.PERSON
                 ? context.mapping().path("people")
                 : context.mapping().path("entities").path(entity.name().toLowerCase(Locale.ROOT));
@@ -125,16 +139,24 @@ final class RowStager {
             for (Map.Entry<String, JsonNode> field : spec.path("fields").properties()) {
                 values.put(field.getKey(), typed(field.getKey(), field.getValue(), fields, issues));
             }
-            JsonNode size = spec.at("/fields/content/size");
-            if (size.isString()) {
-                values.put("size", size(object("number", size), fields, issues));
-            }
+            content(values, fields, issues);
             if (entity == StagedEntity.COMMENT) {
                 values.put("bodyFormat", spec.at("/fields/body/format").asString("plain"));
             }
         }
         String rowHash = key == null ? "" : rowHash(key, caseKey, values);
         return new Staged(key, keyHash, caseKey, values, rowHash, List.copyOf(issues));
+    }
+
+    /** An attachment's declared size, then its file's size and SHA-256 when its file is read here. */
+    private void content(Map<String, @Nullable Object> values, Context fields, List<Issue> issues) {
+        JsonNode size = spec.at("/fields/content/size");
+        if (size.isString()) {
+            values.put("size", size(object("number", size), fields, issues));
+        }
+        if (files != null) {
+            files.capture(values, issues);
+        }
     }
 
     /**

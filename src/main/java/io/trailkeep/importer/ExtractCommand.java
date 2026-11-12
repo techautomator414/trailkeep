@@ -31,7 +31,9 @@ import tools.jackson.dataformat.yaml.YAMLMapper;
  * rows. A crashed extract that is run again on the same fingerprint deletes the unfinished entity's rows and issues
  * and reads that entity again; on another fingerprint it starts over. The run gets its fingerprint and its staging
  * expiry ({@code import.staging-ttl}) when the extract starts, so abandoned staging expires too, and moves from {@code
- * VALIDATED} to {@code EXTRACTED} with the number of rows staged.
+ * VALIDATED} to {@code EXTRACTED} with the number of rows staged. A source that cannot be read soundly (26k2: a file
+ * that differs from its manifest, a line that is not one object) is a {@code FATAL} issue with a code and at most a
+ * line number, and stops the extract before that entity is checkpointed.
  */
 @Component
 @Profile("importer")
@@ -85,14 +87,16 @@ class ExtractCommand {
         transactions.executeWithoutResult(status ->
                 issues.deleteByRunIdAndStageAndSubject(runId, ImportIssue.Stage.EXTRACT, ImportIssue.Subject.MAPPING));
         if (context.hasLookupFiles()) {
-            throw refused(runId, "LOOKUP_FILE_UNSUPPORTED");
+            throw refused(runId, ImportIssue.Subject.MAPPING, new SourceException("LOOKUP_FILE_UNSUPPORTED", null));
         }
         SourceRows.Factory factory = sources.stream()
                 .filter(candidate -> candidate.supports(context.mapping()))
                 .findFirst()
-                .orElseThrow(() -> refused(runId, "SOURCE_UNSUPPORTED"));
+                .orElseThrow(() ->
+                        refused(runId, ImportIssue.Subject.MAPPING, new SourceException("SOURCE_UNSUPPORTED", null)));
         Path directory = Objects.requireNonNull(file.toAbsolutePath().getParent(), "a file has a directory");
-        try (SourceRows source = factory.open(context.mapping(), directory)) {
+        try (SourceRows source = open(runId, factory, context, directory)) {
+            AttachmentFiles files = attachmentFiles(runId, context, source);
             String fingerprint = source.fingerprint();
             transactions.executeWithoutResult(status -> {
                 ImportRun run = load(runId);
@@ -102,7 +106,7 @@ class ExtractCommand {
                 runs.save(run);
             });
             for (StagedEntity entity : StagedEntity.values()) {
-                extract(runId, context, source, entity);
+                extract(runId, context, source, entity, entity == StagedEntity.ATTACHMENT ? files : null);
             }
         }
         return Objects.requireNonNull(transactions.execute(status -> {
@@ -112,7 +116,12 @@ class ExtractCommand {
         }));
     }
 
-    private void extract(long runId, MappingContext context, SourceRows source, StagedEntity entity) {
+    private void extract(
+            long runId,
+            MappingContext context,
+            SourceRows source,
+            StagedEntity entity,
+            @Nullable AttachmentFiles files) {
         RunCheckpoint.Key checkpoint = new RunCheckpoint.Key(runId, Stage.EXTRACT, entity);
         if (staging.isFinished(checkpoint)) {
             return;
@@ -125,15 +134,19 @@ class ExtractCommand {
         JsonNode spec = entity == StagedEntity.PERSON
                 ? context.mapping().path("people")
                 : context.mapping().path("entities").path(entity.name().toLowerCase(Locale.ROOT));
-        Batch batch = new Batch(runId, entity, new RowStager(context, entity), subject);
+        Batch batch = new Batch(runId, entity, new RowStager(context, entity, files), subject);
         int size = context.mapping().at("/limits/batchSize").asInt(500);
-        if (!spec.isMissingNode()) {
-            source.read(entity, spec, row -> {
-                batch.pending.add(batch.stager.stage(row));
-                if (batch.pending.size() >= size) {
-                    stopOnFatal(runId, transactions.execute(status -> batch.flush()));
-                }
-            });
+        try {
+            if (!spec.isMissingNode()) {
+                source.read(entity, spec, row -> {
+                    batch.pending.add(batch.stager.stage(row));
+                    if (batch.pending.size() >= size) {
+                        stopOnFatal(runId, transactions.execute(status -> batch.flush()));
+                    }
+                });
+            }
+        } catch (SourceException unsound) {
+            throw refused(runId, subject, unsound);
         }
         stopOnFatal(runId, transactions.execute(status -> {
             boolean fatal = batch.flush();
@@ -155,11 +168,40 @@ class ExtractCommand {
         }
     }
 
-    /** Records a FATAL mapping issue the extract cannot get past yet, and fails the Job. */
-    private IllegalStateException refused(long runId, String code) {
-        transactions.executeWithoutResult(status -> issues.save(
-                issue(runId, ImportIssue.Subject.MAPPING, null, new FieldTransformer.Issue(code, Severity.FATAL))));
-        return new IllegalStateException("Import run " + runId + " cannot be extracted yet: " + code);
+    private SourceRows open(long runId, SourceRows.Factory factory, MappingContext context, Path directory) {
+        try {
+            return factory.open(context.mapping(), directory);
+        } catch (SourceException unsound) {
+            throw refused(runId, ImportIssue.Subject.MAPPING, unsound);
+        }
+    }
+
+    private AttachmentFiles attachmentFiles(long runId, MappingContext context, SourceRows source) {
+        try {
+            return AttachmentFiles.of(
+                    context.mapping(),
+                    source,
+                    properties.attachments().maxBytes().toBytes());
+        } catch (SourceException unsound) {
+            throw refused(runId, ImportIssue.Subject.MAPPING, unsound);
+        }
+    }
+
+    /**
+     * Records a FATAL issue the extract cannot get past (the source, or a mapping it cannot read yet) with its numeric
+     * detail, and fails the Job; the rows staged before it stay, unfinished, until the run is purged.
+     */
+    private IllegalStateException refused(long runId, ImportIssue.Subject subject, SourceException failure) {
+        transactions.executeWithoutResult(status -> issues.save(new ImportIssue(
+                runId,
+                ImportIssue.Stage.EXTRACT,
+                subject,
+                null,
+                Severity.FATAL,
+                failure.code(),
+                failure.detail(),
+                clock.instant())));
+        return new IllegalStateException("Import run " + runId + " cannot be extracted: " + failure.code());
     }
 
     private ImportRun load(long runId) {

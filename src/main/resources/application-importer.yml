@@ -18,3 +18,7 @@ spring:
   modulith:
     moments:
       enabled: false
+import:
+  attachments:
+    # The importer's own size cap (docs/design/importer.md §4.3 "Size"): the app's, unless the Job raises it.
+    max-bytes: ${app.attachments.max-bytes}

@@ -9,6 +9,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- The JSON Lines source, its manifest and attachment files hashed in place (WP-26 part k2, docs/design/importer.md
+  §4.2, §4.3). A `kind: files` mapping whose every entity file ends in `.jsonl` is extracted line by line, each line
+  one flat JSON object (columns case-folded, numbers as exact decimals), in `source.encoding` (UTF-8 by default; a BOM
+  is consumed). A files source now needs `source.manifest` (`importer/manifest-v1.schema.json`): every file with its
+  entity, row count and SHA-256, the export's fixed point, and attachment content ids. Each file is hashed and counted
+  while it is read, and one that differs from the manifest stops the extract with a FATAL `MANIFEST_MISMATCH` before
+  its entity is checkpointed; the manifest's SHA-256 is the run's source fingerprint. A line that is not one object is
+  a FATAL `ROW_UNREADABLE` carrying its line number only. Attachments read by `path` (with `attachments.stripPrefix`
+  and backslashes normalised) or `contentId` (through the manifest, whose SHA-256 the file must match) are hashed in
+  place under `attachments.root`, which such a mapping must declare: the real path, symlinks followed, must stay under
+  the root when the file is opened (`PATH_OUTSIDE_ROOT`, as are absolute paths and `..`), a missing file is
+  `ATTACHMENT_MISSING`, and a file over `import.attachments.max-bytes` (default `app.attachments.max-bytes`) is staged
+  with its size and never read. `SOURCE_UNSUPPORTED` now applies to JDBC and CSV mappings only.
 - The last import run on the System screen (WP-25 part d, BUILD_PLAN §3.1): its id, kind, status in words, request
   and last-change times in `app.timezone` and rows loaded once loading has started, or "No import has been run." It
   is read through the importer module's first public read API, `ImportRunService.latest()` (latest by `REQUESTED_AT`

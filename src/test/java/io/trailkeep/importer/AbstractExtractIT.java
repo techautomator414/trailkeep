@@ -36,9 +36,10 @@ import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
- * {@code extract} as the import user (WP-26 part k1b, design §3 step 2, §4.1, §5), from a source held in memory: no
- * source ships with this row, and every real one (26k2, 26l, 26n2) reaches the extract through the same {@link
- * SourceRows}. This class's own context (the schema owner) migrates, seeds the runs and reads staging back.
+ * {@code extract} as the import user (WP-26 part k1b, design §3 step 2, §4.1, §5), mostly from a source held in memory,
+ * and end to end from JSON Lines files with their manifest (26k2); every source (26k2, 26l, 26n2) reaches the extract
+ * through the same {@link SourceRows}. This class's own context (the schema owner) migrates, seeds the runs and reads
+ * staging back.
  */
 // "IT" is the Failsafe suffix Part B mandates for integration tests, not an abbreviation.
 @SuppressWarnings("checkstyle:AbbreviationAsWordInName")
@@ -50,26 +51,26 @@ abstract class AbstractExtractIT {
 
     private static final String MAPPING = """
             version: 1
-            source: { id: memory1, kind: files, timezone: UTC }
+            source: { id: memory1, kind: files, timezone: UTC, manifest: manifest.yaml }
             limits: { maxErrorRate: 0.0, batchSize: 2 }
             lookups:
               status: { "Open": OPEN, "Closed": CLOSED }
-            people: { file: people.jsonl, key: user_id, match: [email], unmatched: snapshot,
+            people: { file: people.mem, key: user_id, match: [email], unmatched: snapshot,
                       fields: { displayName: name, email: mail } }
             entities:
               case:
-                file: cases.jsonl
+                file: cases.mem
                 key: case_id
                 fields: { title: subject, description: details, caseTypeKey: { const: general-review },
                           teamKey: { const: team-a }, status: { lookup: status, from: state }, openedAt: opened,
                           identifiedOn: found_on, ownerKey: owner }
               comment:
-                file: notes.jsonl
+                file: notes.mem
                 key: note_id
                 parent: { entity: case, columns: [case_id] }
                 fields: { authorKey: author, writtenAt: created, body: { text: body, format: plain } }
               attachment:
-                file: files.jsonl
+                file: files.mem
                 key: file_id
                 parent: { entity: case, columns: [case_id] }
                 fields: { fileName: name, content: { path: path, size: bytes } }
@@ -209,7 +210,7 @@ abstract class AbstractExtractIT {
         Path elsewhere = mapping(directory, MAPPING.replace("id: memory1", "id: legacy9"));
         long unsupported = validatedRun(elsewhere);
         assertThatThrownBy(() -> extract(unsupported, elsewhere, new MemorySource("memory-fp-1", null)))
-                .hasMessage("Import run " + unsupported + " cannot be extracted yet: SOURCE_UNSUPPORTED");
+                .hasMessage("Import run " + unsupported + " cannot be extracted: SOURCE_UNSUPPORTED");
         assertThat(issues(unsupported)).containsExactly(List.of("MAPPING", "FATAL", "SOURCE_UNSUPPORTED", ""));
 
         Path noCaseKey = mapping(directory, MAPPING.replace("key: case_id", "key: case_ref"));
@@ -226,6 +227,46 @@ abstract class AbstractExtractIT {
                         start("--import.command=extract", "--import.run=" + fatal, "--import.mapping=" + noCaseKey))
                 .as("no import.hash-key")
                 .hasMessage("import.hash-key must be Base64 of at least 32 bytes to extract");
+    }
+
+    @Test
+    void jsonLinesFilesAreStagedAgainstTheirManifestAndAChangedFileStopsTheExtract(@TempDir Path directory)
+            throws Exception {
+        byte[] manifest = JsonLinesExport.write(directory);
+        Path mapping = mapping(
+                directory,
+                MAPPING.replace(".mem", ".jsonl") + "attachments: { root: \"" + directory.resolve("files") + "\" }\n");
+        long run = validatedRun(mapping);
+
+        extract(run, mapping, null).close();
+
+        assertThat(jdbc.queryForMap(
+                        "SELECT CONTENT_POINTER, SIZE_BYTES, SHA256 FROM IMPORT_STG_ATTACHMENT WHERE RUN_ID = ?", run))
+                .as("hashed in place under attachments.root; the legacy size column yields to the file's")
+                .containsEntry("CONTENT_POINTER", "a/scan.pdf")
+                .containsEntry("SHA256", ValidateMappingCommand.sha256(JsonLinesExport.SCAN))
+                .satisfies(row -> assertThat(number(row, "SIZE_BYTES")).isEqualTo(JsonLinesExport.SCAN.length));
+
+        assertThat(jdbc.queryForMap("SELECT STATUS, SOURCE_FINGERPRINT FROM IMPORT_RUN WHERE ID = ?", run))
+                .containsEntry("STATUS", "EXTRACTED")
+                .containsEntry("SOURCE_FINGERPRINT", "manifest:" + ValidateMappingCommand.sha256(manifest));
+        assertThat(staged(run)).containsExactly(2, 1, 1, 1, 0);
+        assertThat(jdbc.queryForObject(
+                        "SELECT CASE_KEY FROM IMPORT_STG_COMMENT WHERE RUN_ID = ? AND LEGACY_KEY = 'n1'",
+                        String.class,
+                        run))
+                .as("100.0 in one file is the case 100 of another")
+                .isEqualTo("100");
+        assertThat(issues(run)).isEmpty();
+
+        long changed = validatedRun(mapping);
+        Files.writeString(directory.resolve("notes.jsonl"), "{\"note_id\": \"n2\", \"case_id\": 100}\n");
+        assertThatThrownBy(() -> extract(changed, mapping, null))
+                .hasMessage("Import run " + changed + " cannot be extracted: MANIFEST_MISMATCH");
+        assertThat(issues(changed)).containsExactly(List.of("COMMENT", "FATAL", "MANIFEST_MISMATCH", ""));
+        assertThat(count("SELECT COUNT(*) FROM IMPORT_RUN_CHECKPOINT WHERE RUN_ID = ?", changed))
+                .as("persons and cases only")
+                .isEqualTo(2);
     }
 
     private static Path mapping(Path directory, String text) throws Exception {
@@ -246,7 +287,8 @@ abstract class AbstractExtractIT {
         return run;
     }
 
-    private ConfigurableApplicationContext extract(long run, Path mapping, MemorySource source) throws SQLException {
+    private ConfigurableApplicationContext extract(long run, Path mapping, @Nullable MemorySource source)
+            throws SQLException {
         return start(
                 source,
                 "--import.command=extract",

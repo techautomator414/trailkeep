@@ -55,6 +55,16 @@ interface SourceRows extends AutoCloseable {
      */
     void read(StagedEntity entity, JsonNode spec, Consumer<Map<String, @Nullable Object>> rows);
 
+    /**
+     * The file an attachment content id names (design §4.3): a files source resolves it through its manifest.
+     *
+     * @param contentId the content id an attachment row holds
+     * @return its file under {@code attachments.root}, or {@code null} when this source does not know the id
+     */
+    default FileManifest.@Nullable Content content(String contentId) {
+        return null;
+    }
+
     @Override
     void close();
 }

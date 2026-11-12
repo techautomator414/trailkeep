@@ -5,6 +5,29 @@
   "type": "object",
   "additionalProperties": false,
   "required": ["version", "source", "limits", "entities", "people"],
+  "if": {
+    "$comment": "Attachments read by path or content id need the folder they are read from (design section 4.3).",
+    "required": ["entities"],
+    "properties": {
+      "entities": {
+        "required": ["attachment"],
+        "properties": {
+          "attachment": {
+            "required": ["fields"],
+            "properties": {
+              "fields": {
+                "required": ["content"],
+                "properties": {
+                  "content": { "type": "object", "anyOf": [{ "required": ["path"] }, { "required": ["contentId"] }] }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "then": { "required": ["attachments"] },
   "properties": {
     "version": { "const": 1 },
     "source": {
@@ -24,7 +47,10 @@
       },
       "if": { "properties": { "kind": { "const": "jdbc" } } },
       "then": { "required": ["vendor", "url", "user"] },
-      "else": { "not": { "anyOf": [{ "required": ["vendor"] }, { "required": ["url"] }, { "required": ["user"] }] } }
+      "else": {
+        "required": ["manifest"],
+        "not": { "anyOf": [{ "required": ["vendor"] }, { "required": ["url"] }, { "required": ["user"] }] }
+      }
     },
     "limits": {
       "type": "object",
