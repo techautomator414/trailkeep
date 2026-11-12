@@ -67,15 +67,17 @@
 --   IMPORT_RUN            S I (U)    -            run requests; UPDATE of the sign-off columns only (V10)
 --   IMPORT_ISSUE          S          -            codes, numbers and keyed hashes, for the screen (V10)
 --   IMPORT_RUN_SUMMARY    S          -            the sign-off screen's aggregates (V10)
+--   IMPORT_STG_*, IMPORT_RUN_CHECKPOINT -  -       staging: legacy values; the import user's alone (V13)
 --   SEQ_IMPORT_RUN        SELECT     -
 --   SEQ_IMPORT_ISSUE      SELECT     -            needed by Hibernate validate; NEXTVAL comes with it on Oracle
 --   SEQ_IMPORT_RUN_SUMMARY SELECT    -
 --
--- The import user: S I D on IMPORT_ISSUE and IMPORT_RUN_SUMMARY; S I on IMPORT_RUN with UPDATE of the status, hash,
--- scanning-mode, count and staging-expiry columns, never the sign-off. On every other table and sequence an entity
--- maps it has SELECT only, because the dictionary views Hibernate validate reads (ALL_TABLES, ALL_SEQUENCES) list
--- only objects a user holds a privilege on (design §2.1 R3); on a sequence that SELECT is also NEXTVAL. Staging and
--- the import writes come with the importer PRs that use them (design §12).
+-- The import user: S I D on the staging tables (IMPORT_STG_PERSON, _CASE, _COMMENT, _ATTACHMENT, _EVENT and
+-- IMPORT_RUN_CHECKPOINT; V13), which no other user may even read, and on IMPORT_ISSUE and IMPORT_RUN_SUMMARY; S I on
+-- IMPORT_RUN with UPDATE of the status, hash, scanning-mode, count and staging-expiry columns, never the sign-off. On
+-- every other table and sequence an entity maps it has SELECT only, because the dictionary views Hibernate validate
+-- reads (ALL_TABLES, ALL_SEQUENCES) list only objects a user holds a privilege on (design §2.1 R3); on a sequence
+-- that SELECT is also NEXTVAL. The import writes to domain tables come with the importer PRs that use them (§12).
 --
 -- Later migrations add their rows to the cursor below. Fixed rules for them: the app user has no UPDATE or DELETE
 -- on CASE_COMMENT, CASE_ATTACHMENT_CHUNK, AUDIT_EVENT and ALERT_LEDGER, and no DELETE on CASE_ATTACHMENT; it may DELETE only from CASE_COMMENT_PIN, SAVED_VIEW, USER_ALERT,
@@ -160,6 +162,9 @@ DECLARE
     UNION ALL SELECT 'IMPORT_RUN', 'SELECT,INSERT', UPPER('${import_user}') FROM DUAL
     UNION ALL SELECT 'IMPORT_ISSUE', 'SELECT,INSERT,DELETE', UPPER('${import_user}') FROM DUAL
     UNION ALL SELECT 'IMPORT_RUN_SUMMARY', 'SELECT,INSERT,DELETE', UPPER('${import_user}') FROM DUAL
+    UNION ALL SELECT COLUMN_VALUE, 'SELECT,INSERT,DELETE', UPPER('${import_user}') FROM TABLE(SYS.ODCIVARCHAR2LIST(
+      'IMPORT_STG_PERSON', 'IMPORT_STG_CASE', 'IMPORT_STG_COMMENT', 'IMPORT_STG_ATTACHMENT', 'IMPORT_STG_EVENT',
+      'IMPORT_RUN_CHECKPOINT'))
     -- Every other table and sequence an entity maps: SELECT only, for validate (design §2.1 R3).
     UNION ALL SELECT COLUMN_VALUE, 'SELECT', UPPER('${import_user}') FROM TABLE(SYS.ODCIVARCHAR2LIST(
       'APP_USER', 'TEAM', 'APP_USER_TEAM', 'APP_USER_GLOBAL_ROLE', 'AUDIT_EVENT', 'SLA_POLICY', 'CASE_TYPE',
