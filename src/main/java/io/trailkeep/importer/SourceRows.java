@@ -4,6 +4,7 @@ package io.trailkeep.importer;
 
 import io.trailkeep.importer.staging.RunCheckpoint.StagedEntity;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
 import org.jspecify.annotations.Nullable;
@@ -63,6 +64,19 @@ interface SourceRows extends AutoCloseable {
      */
     default FileManifest.@Nullable Content content(String contentId) {
         return null;
+    }
+
+    /**
+     * Runs an attachment's content query (design §4.3) in the source's own fixed point, so the bytes staged are the
+     * bytes of the snapshot the metadata came from.
+     *
+     * @param query the content query
+     * @param key the attachment key's values, bound to the query's variables in order
+     * @return at most two rows, each as column name in lower case to value
+     * @throws SourceException {@code SOURCE_UNSUPPORTED} from a source that runs no queries
+     */
+    default List<Map<String, @Nullable Object>> contentRows(String query, List<@Nullable Object> key) {
+        throw new SourceException("SOURCE_UNSUPPORTED", null);
     }
 
     @Override

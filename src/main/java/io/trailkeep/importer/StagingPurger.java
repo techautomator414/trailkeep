@@ -11,8 +11,8 @@ import org.springframework.transaction.support.TransactionTemplate;
 /**
  * Removes a run's staging (design §5): on {@code purge-staging}, and, before every importer command, for every run
  * whose {@code STAGING_EXPIRES_AT} has passed, signed off or not, so an abandoned run does not keep legacy data. Each
- * run's purge is one transaction with the purge time recorded on the run. The run's content area (files) joins this
- * with the file sources (26l).
+ * run's purge is one transaction with the purge time recorded on the run, and takes the run's content area with it
+ * (26n2), before the purge is recorded.
  */
 @Component
 @Profile("importer")
@@ -21,11 +21,17 @@ class StagingPurger {
     private final StagingStore staging;
     private final ImportRunRepository runs;
     private final TransactionTemplate transactions;
+    private final ImportProperties properties;
 
-    StagingPurger(StagingStore staging, ImportRunRepository runs, TransactionTemplate transactions) {
+    StagingPurger(
+            StagingStore staging,
+            ImportRunRepository runs,
+            TransactionTemplate transactions,
+            ImportProperties properties) {
         this.staging = staging;
         this.runs = runs;
         this.transactions = transactions;
+        this.properties = properties;
     }
 
     /**
@@ -54,6 +60,7 @@ class StagingPurger {
         transactions.executeWithoutResult(status -> {
             ImportRun run = runs.findById(runId).orElseThrow(() -> new IllegalStateException("No import run " + runId));
             staging.purge(runId);
+            ContentArea.delete(properties.contentArea(), runId);
             run.stagingPurged(now);
             runs.save(run);
         });

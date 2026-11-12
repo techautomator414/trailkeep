@@ -14,9 +14,12 @@ import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import org.jspecify.annotations.Nullable;
 import tools.jackson.databind.JsonNode;
 
@@ -26,21 +29,32 @@ import tools.jackson.databind.JsonNode;
  * legacy path loses {@code attachments.stripPrefix} and its backslashes; a content id is looked up in the manifest,
  * whose SHA-256 the file must match. Absolute paths and {@code ..} segments are refused, and the real path, symlinks
  * followed, must lie under the root's when the file is opened. A file over {@code import.attachments.max-bytes} keeps
- * its size and is never read; the dry run reports it ({@code ATTACHMENT_TOO_LARGE}, before any scan). Content queries
- * are the JDBC sources' (26n2). Every problem is an issue code, never a path.
+ * its size and is never read; the dry run reports it ({@code ATTACHMENT_TOO_LARGE}, before any scan). A content query
+ * (26n2) is run by the source in its own snapshot with the attachment's key as its bind variables, unless the mapped
+ * size is already over the cap, and its one value is written to the run's {@link ContentArea}. Every problem is an
+ * issue code, never a path or a value.
  */
 final class AttachmentFiles {
 
+    private final JsonNode attachment;
     private final JsonNode content;
     private final @Nullable Path root;
+    private final @Nullable ContentArea area;
     private final String stripPrefix;
     private final long maxBytes;
     private final SourceRows source;
 
     private AttachmentFiles(
-            JsonNode content, @Nullable Path root, String stripPrefix, long maxBytes, SourceRows source) {
-        this.content = content;
+            JsonNode attachment,
+            @Nullable Path root,
+            @Nullable ContentArea area,
+            String stripPrefix,
+            long maxBytes,
+            SourceRows source) {
+        this.attachment = attachment;
+        this.content = attachment.at("/fields/content");
         this.root = root;
+        this.area = area;
         this.stripPrefix = stripPrefix;
         this.maxBytes = maxBytes;
         this.source = source;
@@ -52,10 +66,14 @@ final class AttachmentFiles {
      * @param mapping the validated mapping
      * @param source the open source, which resolves content ids
      * @param maxBytes {@code import.attachments.max-bytes}
+     * @param contentArea {@code import.content-area}, needed by a content query
+     * @param runId the run, whose content area a content query writes
      * @return them
-     * @throws SourceException {@code ATTACHMENTS_ROOT_UNREADABLE} if {@code attachments.root} is not a readable folder
+     * @throws SourceException {@code ATTACHMENTS_ROOT_UNREADABLE} if {@code attachments.root} is not a readable folder,
+     *     {@code CONTENT_AREA_UNWRITABLE} if a content query has no content area to write
      */
-    static AttachmentFiles of(JsonNode mapping, SourceRows source, long maxBytes) {
+    static AttachmentFiles of(
+            JsonNode mapping, SourceRows source, long maxBytes, @Nullable Path contentArea, long runId) {
         JsonNode root = mapping.at("/attachments/root");
         Path real = null;
         if (root.isString()) {
@@ -65,22 +83,30 @@ final class AttachmentFiles {
                 throw new SourceException("ATTACHMENTS_ROOT_UNREADABLE", null);
             }
         }
+        JsonNode attachment = mapping.at("/entities/attachment");
         return new AttachmentFiles(
-                mapping.at("/entities/attachment/fields/content"),
+                attachment,
                 real,
+                attachment.at("/fields/content").has("query") ? ContentArea.open(contentArea, runId) : null,
                 mapping.at("/attachments/stripPrefix").asString(""),
                 maxBytes,
                 source);
     }
 
     /**
-     * Stages a path or content-id attachment's file: its pointer under the root, its size and its SHA-256.
+     * Stages an attachment's content: a path or content-id file's pointer under the root, or a content query's file in
+     * the content area, with its size and its SHA-256.
      *
+     * @param row the source row, whose key binds a content query
      * @param values the row's staged values; {@code content}, {@code size} and {@code sha256} are replaced
      * @param issues where problems go
      */
-    void capture(Map<String, @Nullable Object> values, List<Issue> issues) {
-        if (root == null || !(values.get("content") instanceof String pointer) || content.has("query")) {
+    void capture(Map<String, @Nullable Object> row, Map<String, @Nullable Object> values, List<Issue> issues) {
+        if (area != null) {
+            fetch(area, row, values, issues);
+            return;
+        }
+        if (root == null || !(values.get("content") instanceof String pointer)) {
             return;
         }
         String relative;
@@ -102,6 +128,50 @@ final class AttachmentFiles {
             values.put("content", root.relativize(file).toString());
             hash(file, expected, values, issues);
         }
+    }
+
+    /**
+     * A content query's one value into the content area. A mapped size over the cap means the bytes are never fetched;
+     * a value over the cap once fetched keeps its size and is not written. A failed query stops the extract: on
+     * PostgreSQL it ends the snapshot's transaction, so no later query could read the same point.
+     */
+    private void fetch(
+            ContentArea area,
+            Map<String, @Nullable Object> row,
+            Map<String, @Nullable Object> values,
+            List<Issue> issues) {
+        if (values.get("size") instanceof Long size && size > maxBytes) {
+            return;
+        }
+        List<@Nullable Object> key = new ArrayList<>();
+        JsonNode columns = attachment.path("key");
+        for (JsonNode column : columns.isArray() ? columns : List.of(columns)) {
+            key.add(row.get(column.asString().toLowerCase(Locale.ROOT)));
+        }
+        value(source.contentRows(content.get("query").asString(), key), issues).ifPresent(bytes -> {
+            values.put("size", (long) bytes.length);
+            if (bytes.length <= maxBytes) {
+                String sha256 = area.write(bytes);
+                values.put("content", sha256);
+                values.put("sha256", sha256);
+            }
+        });
+    }
+
+    /** A content query's one binary value, or none with an issue. */
+    private static Optional<byte[]> value(List<Map<String, @Nullable Object>> rows, List<Issue> issues) {
+        Object value =
+                rows.isEmpty() ? null : rows.getFirst().values().iterator().next();
+        if (rows.size() > 1 || (rows.size() == 1 && rows.getFirst().size() != 1)) {
+            issues.add(new Issue("CONTENT_NOT_ONE_VALUE", Severity.ERROR));
+        } else if (value == null) {
+            issues.add(new Issue("ATTACHMENT_MISSING", Severity.ERROR));
+        } else if (value instanceof byte[] bytes) {
+            return Optional.of(bytes);
+        } else {
+            issues.add(new Issue("CONTENT_NOT_BINARY", Severity.ERROR));
+        }
+        return Optional.empty();
     }
 
     /** The file under the root, or {@code null} with an issue: absolute, {@code ..}, outside, missing. */

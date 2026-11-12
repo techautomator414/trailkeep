@@ -3,9 +3,12 @@
 package io.trailkeep.importer;
 
 import com.networknt.schema.Schema;
+import com.networknt.schema.SchemaRegistry;
+import com.networknt.schema.SpecificationVersion;
 import io.trailkeep.importer.staging.RunCheckpoint.StagedEntity;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
 import java.nio.file.LinkOption;
@@ -14,6 +17,7 @@ import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.function.Function;
+import org.springframework.core.io.ClassPathResource;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.dataformat.yaml.YAMLMapper;
@@ -49,6 +53,20 @@ record FileManifest(String fingerprint, Map<String, Entry> files, Map<String, Co
      * @param sha256 its SHA-256, lower-case hex
      */
     record Content(String file, String sha256) {}
+
+    /**
+     * The manifest's JSON Schema, {@code importer/manifest-v1.schema.json}.
+     *
+     * @return it
+     */
+    static Schema schema() {
+        try (InputStream in = new ClassPathResource("importer/manifest-v1.schema.json").getInputStream()) {
+            return SchemaRegistry.withDefaultDialect(SpecificationVersion.DRAFT_2020_12)
+                    .getSchema(in);
+        } catch (IOException e) {
+            throw new UncheckedIOException("The manifest schema is missing", e);
+        }
+    }
 
     /**
      * Reads and checks the manifest a mapping names.
@@ -127,18 +145,26 @@ record FileManifest(String fingerprint, Map<String, Entry> files, Map<String, Co
      */
     Entry entry(String file, StagedEntity entity) {
         Entry entry = files.get(normalised(file));
-        // The schema's names for the entities.
-        String name = switch (entity) {
+        if (entry == null || !entry.entity().equals(name(entity))) {
+            throw new SourceException("MANIFEST_MISMATCH", null);
+        }
+        return entry;
+    }
+
+    /**
+     * An entity's name in the manifest and under the mapping's {@code entities}.
+     *
+     * @param entity the entity
+     * @return its name, in lower case
+     */
+    static String name(StagedEntity entity) {
+        return switch (entity) {
             case PERSON -> "person";
             case CASE -> "case";
             case COMMENT -> "comment";
             case ATTACHMENT -> "attachment";
             case EVENT -> "event";
         };
-        if (entry == null || !entry.entity().equals(name)) {
-            throw new SourceException("MANIFEST_MISMATCH", null);
-        }
-        return entry;
     }
 
     /**

@@ -11,12 +11,14 @@ import java.security.NoSuchAlgorithmException;
 import java.time.InstantSource;
 import java.util.HexFormat;
 import java.util.List;
+import java.util.stream.Stream;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * {@code validate-mapping} for one run (design §3 step 1): the structural and query checks (26b, 26m), then, for a
- * JDBC source whose file passed them, a one-row test fetch of every query as the source account (26n). The problems
+ * file that passed them, the source itself: a one-row test fetch of every query as the source account for a JDBC
+ * source (26n), the manifest and files for a files source (26n2, {@link FileSourceCheck}). The problems
  * replace the run's earlier {@code VALIDATE} issues, each a {@code FATAL} issue about the mapping; a mapping with none
  * moves the run to {@code VALIDATED} with the file's SHA-256 as its mapping hash, which the sign-off and the load
  * compare against later (§3); a mapping with problems puts it back to {@code REQUESTED} with no hash, so an earlier
@@ -60,8 +62,11 @@ class ValidateMappingCommand {
         List<MappingProblem> found = content.length == 0 && size(mapping) > MappingValidator.MAX_BYTES
                 ? List.of(new MappingProblem(MappingProblem.Code.MAPPING_TOO_LARGE, ""))
                 : validator.validate(mapping, content);
-        // Outside the run's transaction: the test fetch is network I/O against the source.
-        List<MappingProblem> problems = found.isEmpty() ? testFetch.check(content) : found;
+        // Outside the run's transaction: the test fetch is network I/O against the source, the file check reads files.
+        List<MappingProblem> problems = found.isEmpty()
+                ? Stream.concat(testFetch.check(content).stream(), FileSourceCheck.check(mapping, content).stream())
+                        .toList()
+                : found;
         transactions.executeWithoutResult(status -> {
             ImportRun run = runs.findById(runId).orElseThrow(() -> new IllegalStateException("No import run " + runId));
             if (!run.awaitsMapping()) {

@@ -121,7 +121,14 @@
           "properties": {
             "fields": {
               "propertyNames": { "enum": ["fileName", "uploadedAt", "uploaderKey", "uploaderName", "sha256", "content"] },
-              "required": ["fileName", "uploadedAt", "content"]
+              "required": ["fileName", "uploadedAt", "content"],
+              "properties": {
+                "content": {
+                  "$comment": "A content query names its size column, so an attachment over the cap is never fetched (design section 4.3).",
+                  "if": { "required": ["query"] },
+                  "then": { "required": ["size"] }
+                }
+              }
             }
           }
         },

@@ -103,14 +103,9 @@ class AttachmentFilesTest {
     }
 
     @Test
-    void contentQueriesAreLeftToTheirSourceAndAnUnmountedRootStopsTheExtract() {
-        Map<String, @Nullable Object> values = values("cases/7/scan.pdf");
-        assertThat(capture("{ query: \"SELECT content FROM files WHERE id = ?\" }", values, 1024))
-                .isEmpty();
-        assertThat(values).doesNotContainKey("sha256");
-
+    void anUnmountedRootStopsTheExtract() {
         assertThatThrownBy(() -> AttachmentFiles.of(
-                        mapping(path(), root.resolve("unmounted").toString()), new Manifested(), 1024))
+                        mapping(path(), root.resolve("unmounted").toString()), new Manifested(), 1024, null, 1))
                 .hasMessage("ATTACHMENTS_ROOT_UNREADABLE");
     }
 
@@ -124,8 +119,8 @@ class AttachmentFilesTest {
 
     private List<Issue> capture(String content, Map<String, @Nullable Object> values, long maxBytes) {
         List<Issue> issues = new ArrayList<>();
-        AttachmentFiles.of(mapping(content, root.toString()), new Manifested(), maxBytes)
-                .capture(values, issues);
+        AttachmentFiles.of(mapping(content, root.toString()), new Manifested(), maxBytes, null, 1)
+                .capture(Map.of(), values, issues);
         assertThat(issues).allMatch(issue -> issue.severity() == Severity.ERROR);
         return issues;
     }

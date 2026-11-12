@@ -3,14 +3,10 @@
 package io.trailkeep.importer;
 
 import com.networknt.schema.Schema;
-import com.networknt.schema.SchemaRegistry;
-import com.networknt.schema.SpecificationVersion;
 import io.trailkeep.importer.staging.RunCheckpoint.StagedEntity;
 import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.io.UncheckedIOException;
 import java.nio.charset.CharacterCodingException;
 import java.nio.charset.Charset;
 import java.nio.file.Files;
@@ -28,7 +24,6 @@ import java.util.Map;
 import java.util.function.Consumer;
 import org.jspecify.annotations.Nullable;
 import org.springframework.context.annotation.Profile;
-import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Component;
 import tools.jackson.core.JacksonException;
 import tools.jackson.core.StreamReadFeature;
@@ -48,21 +43,12 @@ import tools.jackson.databind.json.JsonMapper;
 @Profile("importer")
 final class JsonLinesSource implements SourceRows.Factory {
 
-    private final Schema manifestSchema;
+    private final Schema manifestSchema = FileManifest.schema();
 
     private final JsonMapper json = JsonMapper.builder()
             .enable(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS, DeserializationFeature.FAIL_ON_TRAILING_TOKENS)
             .enable(StreamReadFeature.STRICT_DUPLICATE_DETECTION)
             .build();
-
-    JsonLinesSource() {
-        try (InputStream in = new ClassPathResource("importer/manifest-v1.schema.json").getInputStream()) {
-            manifestSchema = SchemaRegistry.withDefaultDialect(SpecificationVersion.DRAFT_2020_12)
-                    .getSchema(in);
-        } catch (IOException e) {
-            throw new UncheckedIOException("The manifest schema is missing", e);
-        }
-    }
 
     @Override
     public boolean supports(JsonNode mapping) {

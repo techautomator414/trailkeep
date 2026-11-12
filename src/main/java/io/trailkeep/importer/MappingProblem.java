@@ -11,7 +11,10 @@ package io.trailkeep.importer;
  */
 record MappingProblem(Code code, String pointer) implements Comparable<MappingProblem> {
 
-    /** The structural checks (26b), query checks (26m) and test fetch (26n); their names are the issue codes. */
+    /**
+     * The structural checks (26b), query checks (26m), test fetch (26n) and a files source's manifest check (26n2, with
+     * the extract's codes); their names are the issue codes.
+     */
     enum Code {
         /** Larger than {@link MappingValidator#MAX_BYTES}. */
         MAPPING_TOO_LARGE,
@@ -68,7 +71,21 @@ record MappingProblem(Code code, String pointer) implements Comparable<MappingPr
         /** A query's test fetch ran past the statement timeout. */
         SOURCE_TIMEOUT,
         /** A query's test fetch failed for any other reason: the source holds no such table or column, for example. */
-        SOURCE_QUERY_FAILED
+        SOURCE_QUERY_FAILED,
+        /** A files source names no manifest. */
+        MANIFEST_MISSING,
+        /** The manifest is not readable YAML, fails its schema or lists a file or content id twice. */
+        MANIFEST_INVALID,
+        /** The manifest does not list a mapped file for its entity, or the file's SHA-256 differs from its entry. */
+        MANIFEST_MISMATCH,
+        /** A mapped file or the manifest does not exist, or is not a regular file. */
+        SOURCE_FILE_MISSING,
+        /** A mapped file or the manifest cannot be read. */
+        SOURCE_FILE_UNREADABLE,
+        /** A mapped file's real path, symlinks followed, leaves the mapping file's directory. */
+        PATH_OUTSIDE_ROOT,
+        /** {@code attachments.root} is not a readable folder. */
+        ATTACHMENTS_ROOT_UNREADABLE
     }
 
     @Override
