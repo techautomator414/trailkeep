@@ -29,9 +29,9 @@ import tools.jackson.dataformat.yaml.YAMLMapper;
  * The structural half of {@code validate-mapping} (WP-26 part b, design §3 step 1, §6, §10): the mapping file is read
  * as YAML, checked against {@code importer/mapping-v1.schema.json}, then checked for what a schema cannot say:
  * placeholders only where and as allowed, no credentials, file paths contained in the mapping's directory, child keys
- * that fit the case key, lookups that exist, lengths that fit Trailkeep and only skippable codes in {@code acceptSkip}.
- * Lookup files, queries and the test fetch come with later rows (design §12). Problems name a code and a place, never
- * a value.
+ * that fit the case key, lookups that exist, lengths that fit Trailkeep, only skippable codes in {@code acceptSkip},
+ * and patterns, formats and a time zone that compile (26k1a). Lookup files, queries and the test fetch come with later
+ * rows (design §12). Problems name a code and a place, never a value.
  */
 @Component
 final class MappingValidator {
@@ -103,6 +103,7 @@ final class MappingValidator {
             checkPaths(Objects.requireNonNullElse(absolute.getParent(), absolute), root, problems);
             checkKeys(root, problems);
             checkFields(root.path("entities"), "/entities", root.path("lookups"), problems);
+            problems.addAll(new CompiledFormats().compileAll(root));
             for (JsonNode code : root.path("limits").path("acceptSkip")) {
                 if (!SKIPPABLE.contains(code.asString())) {
                     problems.add(new MappingProblem(Code.ACCEPT_SKIP_NOT_ALLOWED, "/limits/acceptSkip"));
@@ -193,7 +194,7 @@ final class MappingValidator {
     }
 
     /** JSON pointer escaping (RFC 6901). */
-    private static String escape(String key) {
+    static String escape(String key) {
         return key.replace("~", "~0").replace("/", "~1");
     }
 }

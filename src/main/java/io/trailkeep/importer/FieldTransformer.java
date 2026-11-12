@@ -6,8 +6,6 @@ import com.google.re2j.Matcher;
 import com.google.re2j.Pattern;
 import io.trailkeep.importer.ImportIssue.Severity;
 import java.math.BigDecimal;
-import java.nio.charset.StandardCharsets;
-import java.security.GeneralSecurityException;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -25,7 +23,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.function.Function;
-import javax.crypto.Mac;
 import javax.crypto.SecretKey;
 import org.jspecify.annotations.Nullable;
 import tools.jackson.databind.JsonNode;
@@ -64,13 +61,15 @@ final class FieldTransformer {
      * @param zone {@code source.timezone}
      * @param dst {@code source.dstAmbiguity}
      * @param hashKey {@code import.hash-key} as an HMAC-SHA-256 key, for {@code hash}
+     * @param formats the mapping's patterns and formats, compiled once for all its rows
      */
     record Context(
             Map<String, @Nullable Object> row,
             Map<String, Map<String, String>> lookups,
             ZoneId zone,
             DstRule dst,
-            SecretKey hashKey) {}
+            SecretKey hashKey,
+            CompiledFormats formats) {}
 
     /** A string operand that looks like this is a column; anything else is a literal. */
     private static final java.util.regex.Pattern COLUMN = java.util.regex.Pattern.compile("[A-Za-z_][A-Za-z0-9_$#]*");
@@ -247,7 +246,10 @@ final class FieldTransformer {
             }
             return false;
         }
-        return Pattern.compile(when.path("matches").asString("")).matcher(value).find();
+        return context.formats()
+                .pattern(when.path("matches").asString(""))
+                .matcher(value)
+                .find();
     }
 
     private @Nullable String regexExtract(JsonNode spec) {
@@ -255,7 +257,7 @@ final class FieldTransformer {
         if (text == null) {
             return null;
         }
-        Pattern pattern = Pattern.compile(spec.path("pattern").asString(""));
+        Pattern pattern = context.formats().pattern(spec.path("pattern").asString(""));
         Matcher matcher = pattern.matcher(text);
         if (!matcher.find()) {
             issue("REGEX_NO_MATCH", Severity.WARNING);
@@ -304,7 +306,9 @@ final class FieldTransformer {
 
     /** A text time: with an offset, without one, or a bare day, by the declared format or ISO-8601. */
     private @Nullable Object parse(String text, @Nullable String format) {
-        DateTimeFormatter formatter = format == null ? DateTimeFormatter.ISO_DATE_TIME : DeclaredFormat.of(format);
+        DateTimeFormatter formatter = format == null
+                ? DateTimeFormatter.ISO_DATE_TIME
+                : context.formats().format(format);
         try {
             TemporalAccessor parsed =
                     formatter.parseBest(text.strip(), OffsetDateTime::from, LocalDateTime::from, LocalDate::from);
@@ -365,13 +369,7 @@ final class FieldTransformer {
     }
 
     private String hmac(String text) {
-        try {
-            Mac mac = Mac.getInstance("HmacSHA256");
-            mac.init(context.hashKey());
-            return HexFormat.of().formatHex(mac.doFinal(text.getBytes(StandardCharsets.UTF_8)));
-        } catch (GeneralSecurityException e) {
-            throw new IllegalStateException("HmacSHA256 is part of every Java platform", e);
-        }
+        return KeyedHash.hex(context.hashKey(), text);
     }
 
     private static @Nullable Object literal(JsonNode node) {

@@ -42,4 +42,24 @@ public class StagedAttachment extends StagedRow {
 
     /** For JPA. */
     protected StagedAttachment() {}
+
+    /**
+     * A legacy attachment's metadata and content pointer, never its bytes, as the extract staged it.
+     *
+     * @param key its run and canonical key
+     * @param rowHash the keyed hash of its canonical row
+     * @param caseKey its case's canonical key
+     * @param values its mapped fields, typed
+     */
+    public StagedAttachment(StagingKey key, String rowHash, String caseKey, StagedValues values) {
+        super(key, rowHash);
+        this.caseKey = caseKey;
+        this.fileName = values.text("fileName");
+        this.sizeBytes = values.number("size");
+        this.sha256 = values.text("sha256");
+        this.contentPointer = values.text("content");
+        this.uploadedAt = values.instant("uploadedAt");
+        this.uploaderKey = values.text("uploaderKey");
+        this.uploaderName = values.text("uploaderName");
+    }
 }

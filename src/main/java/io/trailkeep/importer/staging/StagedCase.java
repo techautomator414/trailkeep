@@ -72,4 +72,32 @@ public class StagedCase extends StagedRow {
 
     /** For JPA. */
     protected StagedCase() {}
+
+    /**
+     * A legacy case as the extract staged it.
+     *
+     * @param key its run and canonical key
+     * @param rowHash the keyed hash of its canonical row
+     * @param values its mapped fields, typed
+     */
+    public StagedCase(StagingKey key, String rowHash, StagedValues values) {
+        super(key, rowHash);
+        this.legacyNumber = values.text("legacyNumber");
+        this.title = values.text("title");
+        this.description = values.text("description");
+        this.subjectText = values.text("subject");
+        this.caseTypeKey = values.text("caseTypeKey");
+        this.teamKey = values.text("teamKey");
+        this.ownerKey = values.text("ownerKey");
+        this.priority = values.text("priority");
+        this.sensitivity = values.text("sensitivity");
+        this.legacyAcl = values.flag("legacyAcl");
+        this.status = values.text("status");
+        this.identifiedOn = values.date("identifiedOn");
+        this.openedAt = values.instant("openedAt");
+        this.closedAt = values.instant("closedAt");
+        this.closureOutcome = values.text("closureOutcome");
+        this.closureSummary = values.text("closureSummary");
+        this.legalHold = values.flag("legalHold");
+    }
 }

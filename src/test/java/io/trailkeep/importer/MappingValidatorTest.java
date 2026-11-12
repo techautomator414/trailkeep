@@ -101,6 +101,18 @@ class MappingValidatorTest {
     }
 
     @Test
+    void patternsFormatsAndTheZoneMustCompileBeforeAnyExtract() throws IOException {
+        assertThat(validate(example()
+                        .replace("timezone: America/Chicago", "timezone: America/Atlantis")
+                        .replace(
+                                "openedAt: { timestamp: opened }",
+                                "openedAt: { timestamp: opened, format: \"qq-bb\" }")))
+                .containsExactly(
+                        new MappingProblem(Code.BAD_FORMAT, "/entities/case/fields/openedAt/format"),
+                        new MappingProblem(Code.BAD_TIMEZONE, "/source/timezone"));
+    }
+
+    @Test
     void onlySkippableCodesMayBeAcceptedAsSkipped() throws IOException {
         assertThat(validate(example().replace("[ATTACHMENT_TOO_LARGE]", "[ATTACHMENT_TOO_LARGE, OWNER_NOT_FOUND]")))
                 .containsExactly(new MappingProblem(Code.ACCEPT_SKIP_NOT_ALLOWED, "/limits/acceptSkip"));

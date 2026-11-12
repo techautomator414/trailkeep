@@ -23,4 +23,18 @@ public class StagedPerson extends StagedRow {
 
     /** For JPA. */
     protected StagedPerson() {}
+
+    /**
+     * A legacy person as the extract staged it.
+     *
+     * @param key its run and canonical key
+     * @param rowHash the keyed hash of its canonical row
+     * @param values its mapped fields, typed
+     */
+    public StagedPerson(StagingKey key, String rowHash, StagedValues values) {
+        super(key, rowHash);
+        this.displayName = values.text("displayName");
+        this.email = values.text("email");
+        this.externalId = values.text("externalId");
+    }
 }

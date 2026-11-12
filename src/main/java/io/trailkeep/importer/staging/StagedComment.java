@@ -34,4 +34,22 @@ public class StagedComment extends StagedRow {
 
     /** For JPA. */
     protected StagedComment() {}
+
+    /**
+     * A legacy comment as the extract staged it.
+     *
+     * @param key its run and canonical key
+     * @param rowHash the keyed hash of its canonical row
+     * @param caseKey its case's canonical key
+     * @param values its mapped fields, typed
+     */
+    public StagedComment(StagingKey key, String rowHash, String caseKey, StagedValues values) {
+        super(key, rowHash);
+        this.caseKey = caseKey;
+        this.authorKey = values.text("authorKey");
+        this.authorName = values.text("authorName");
+        this.writtenAt = values.instant("writtenAt");
+        this.body = values.text("body");
+        this.bodyFormat = values.text("bodyFormat");
+    }
 }

@@ -27,6 +27,17 @@ public abstract class StagedRow {
     protected StagedRow() {}
 
     /**
+     * A row as the extract writes it.
+     *
+     * @param key its run and canonical key
+     * @param rowHash the keyed hash of its canonical row
+     */
+    protected StagedRow(StagingKey key, String rowHash) {
+        this.key = key;
+        this.rowHash = rowHash;
+    }
+
+    /**
      * The row's key.
      *
      * @return its run and canonical key
