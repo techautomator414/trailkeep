@@ -27,19 +27,20 @@ final class ContentArea {
     }
 
     /**
-     * A run's content area, created if missing.
+     * A run's content area; its folder is made by the first write, so an extract that starts over can empty it first.
      *
      * @param root {@code import.content-area}; {@code null} when the deployment has none
      * @param runId the run
      * @return its content area
-     * @throws SourceException {@code CONTENT_AREA_UNWRITABLE} without a root, or when its folder cannot be made
+     * @throws SourceException {@code CONTENT_AREA_UNWRITABLE} without a root, or when the root is not a folder
      */
     static ContentArea open(@Nullable Path root, long runId) {
         try {
-            if (root == null) {
-                throw new IOException("import.content-area is not set");
+            Path real = root == null ? null : root.toRealPath();
+            if (real == null || !Files.isDirectory(real)) {
+                throw new IOException("import.content-area is not a folder");
             }
-            return new ContentArea(Files.createDirectories(root.toRealPath().resolve(Long.toString(runId))));
+            return new ContentArea(real.resolve(Long.toString(runId)));
         } catch (IOException unwritable) {
             throw new SourceException("CONTENT_AREA_UNWRITABLE", null);
         }
@@ -56,7 +57,7 @@ final class ContentArea {
     String write(byte[] bytes) {
         String sha256 = ValidateMappingCommand.sha256(bytes);
         try {
-            Path part = Files.createTempFile(directory, "part", ".tmp");
+            Path part = Files.createTempFile(Files.createDirectories(directory), "part", ".tmp");
             Files.write(part, bytes);
             Files.move(part, directory.resolve(sha256), StandardCopyOption.REPLACE_EXISTING);
         } catch (IOException unwritable) {

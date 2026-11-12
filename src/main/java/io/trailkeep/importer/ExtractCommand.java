@@ -97,6 +97,7 @@ class ExtractCommand {
                         refused(runId, ImportIssue.Subject.MAPPING, new SourceException("SOURCE_UNSUPPORTED", null)));
         Path directory = Objects.requireNonNull(file.toAbsolutePath().getParent(), "a file has a directory");
         try (SourceRows source = open(runId, factory, context, directory)) {
+            AttachmentFiles files = attachmentFiles(runId, context, source);
             String fingerprint = source.fingerprint();
             transactions.executeWithoutResult(status -> {
                 ImportRun run = load(runId);
@@ -106,7 +107,6 @@ class ExtractCommand {
                 }
                 runs.save(run);
             });
-            AttachmentFiles files = attachmentFiles(runId, context, source);
             for (StagedEntity entity : StagedEntity.values()) {
                 extract(runId, context, source, entity, entity == StagedEntity.ATTACHMENT ? files : null);
             }

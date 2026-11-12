@@ -72,7 +72,9 @@ class ContentQueryTest {
         Map<String, @Nullable Object> understated = values(1L);
         assertThat(capture(source, understated, 4)).isEmpty();
         assertThat(understated).containsEntry("size", (long) SCAN.length).doesNotContainKey("sha256");
-        assertThat(area.resolve(Long.toString(RUN))).isEmptyDirectory();
+        assertThat(area.resolve(Long.toString(RUN)))
+                .as("made by the first write only")
+                .doesNotExist();
     }
 
     @Test
