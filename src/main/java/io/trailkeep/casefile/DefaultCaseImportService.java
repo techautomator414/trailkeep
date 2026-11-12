@@ -142,6 +142,7 @@ class DefaultCaseImportService implements CaseImportService {
             throw invalid("a closed case needs a closing time after its opening, an open case none");
         }
         if (imported.openedAt().isAfter(now)
+                || (closedAt != null && closedAt.isAfter(now))
                 || imported.fields().identifiedOn().isAfter(LocalDate.ofInstant(now, zone))) {
             throw invalid("dated in the future");
         }

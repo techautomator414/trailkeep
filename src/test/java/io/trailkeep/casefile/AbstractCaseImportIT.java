@@ -166,6 +166,22 @@ abstract class AbstractCaseImportIT {
     }
 
     @Test
+    void closingTimeInTheFutureIsRefused() {
+        ImportedCase closesTomorrow = new ImportedCase(
+                fields(analyst, caseType),
+                ref(),
+                null,
+                null,
+                CaseStatus.CLOSED,
+                OPENED,
+                Instant.now().plusSeconds(86_400));
+
+        assertThatThrownBy(() -> imports.importCase(RUN, closesTomorrow))
+                .satisfies(kind(Kind.INVALID))
+                .hasMessageContaining("dated in the future");
+    }
+
+    @Test
     void theImportIsAuditedByThePrincipalWithTheRunAndRedactedText() {
         CaseNumber number = imports.importCase(RUN, open(analyst, null));
 
