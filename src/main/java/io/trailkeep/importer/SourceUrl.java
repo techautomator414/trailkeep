@@ -3,7 +3,6 @@
 package io.trailkeep.importer;
 
 import io.trailkeep.importer.SourceQueryValidator.Vendor;
-import java.util.Locale;
 import java.util.Set;
 import java.util.regex.Pattern;
 
@@ -56,29 +55,26 @@ final class SourceUrl {
             "oracle.jdbc.ReadTimeout");
 
     /**
-     * SQL Server properties, in lower case, that only choose the database and how to reach and verify the server;
-     * {@code trustServerCertificate} only as {@code false} (design §4.1).
+     * SQL Server properties that only choose the database and how to reach and verify the server, matched without
+     * case as the driver does, but in ASCII only: a name the driver might fold differently is refused, not allowed.
      */
-    private static final Set<String> SQLSERVER_PARAMETERS = Set.of(
-            "databasename",
-            "encrypt",
-            "trustservercertificate",
-            "hostnameincertificate",
-            "servercertificate",
-            "truststore",
-            "truststoretype",
-            "sslprotocol",
-            "logintimeout",
-            "sockettimeout",
-            "connectretrycount",
-            "connectretryinterval",
-            "multisubnetfailover",
-            "applicationintent",
-            "applicationname");
+    private static final Pattern SQLSERVER_PARAMETERS = Pattern.compile(
+            "databaseName|encrypt|hostNameInCertificate|serverCertificate|trustStore|trustStoreType|sslProtocol"
+                    + "|loginTimeout|socketTimeout|connectRetryCount|connectRetryInterval|multiSubnetFailover"
+                    + "|applicationIntent|applicationName",
+            Pattern.CASE_INSENSITIVE);
 
-    /** A SQL Server address: a host name or IPv4 address, an optional named instance, an optional port. */
-    private static final Pattern SQLSERVER_ADDRESS =
-            Pattern.compile("[A-Za-z0-9.-]+(?:\\\\[A-Za-z0-9_$-]+)?(?::[0-9]{1,5})?");
+    /** {@code trustServerCertificate} is allowed only as {@code false} (design §4.1). */
+    private static final Pattern TRUST_SERVER_CERTIFICATE_OFF =
+            Pattern.compile("trustServerCertificate=false", Pattern.CASE_INSENSITIVE);
+
+    /** A SQL Server host: a host name or IPv4 address. */
+    private static final Pattern SQLSERVER_HOST = Pattern.compile("[A-Za-z0-9.-]+");
+
+    /** A SQL Server named instance. */
+    private static final Pattern SQLSERVER_INSTANCE = Pattern.compile("[A-Za-z0-9_$-]+");
+
+    private static final Pattern PORT = Pattern.compile("[0-9]{1,5}");
 
     private static final String SQLSERVER = "jdbc:sqlserver://";
 
@@ -124,7 +120,7 @@ final class SourceUrl {
             return false;
         }
         String[] parts = url.substring(SQLSERVER.length()).split(";", -1);
-        if (!SQLSERVER_ADDRESS.matcher(parts[0]).matches()) {
+        if (!sqlServerAddress(parts[0])) {
             return false;
         }
         for (int i = 1; i < parts.length; i++) {
@@ -136,12 +132,29 @@ final class SourceUrl {
         return true;
     }
 
+    /** {@code host[\instance][:port]}. */
+    private static boolean sqlServerAddress(String address) {
+        int colon = address.indexOf(':');
+        String host = colon < 0 ? address : address.substring(0, colon);
+        int backslash = host.indexOf('\\');
+        return (colon < 0 || PORT.matcher(address.substring(colon + 1)).matches())
+                && SQLSERVER_HOST
+                        .matcher(backslash < 0 ? host : host.substring(0, backslash))
+                        .matches()
+                && (backslash < 0
+                        || SQLSERVER_INSTANCE
+                                .matcher(host.substring(backslash + 1))
+                                .matches());
+    }
+
     /** One {@code name=value}; a property without a value is refused. */
     private static boolean sqlServerProperty(String property) {
         int equals = property.indexOf('=');
-        String name = equals < 0 ? "" : property.substring(0, equals).toLowerCase(Locale.ROOT);
-        return SQLSERVER_PARAMETERS.contains(name)
-                && (!"trustservercertificate".equals(name) || "false".equalsIgnoreCase(property.substring(equals + 1)));
+        return TRUST_SERVER_CERTIFICATE_OFF.matcher(property).matches()
+                || (equals > 0
+                        && SQLSERVER_PARAMETERS
+                                .matcher(property.substring(0, equals))
+                                .matches());
     }
 
     private static boolean parameters(Vendor vendor, String query) {
