@@ -229,7 +229,7 @@ class LoadCommand {
             } catch (RuntimeException notMarked) {
                 e.addSuppressed(notMarked);
             }
-            throw e;
+            throw new IllegalStateException("Import run " + runId + ": the load stopped; the next load resumes it", e);
         }
         return new Outcome(progress.loaded, progress.skipped);
     }
