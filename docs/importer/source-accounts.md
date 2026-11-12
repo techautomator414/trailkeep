@@ -44,6 +44,53 @@ What the recipe achieves is tested against a PostgreSQL container (`PostgresSour
 - cannot read a table it was not granted;
 - cannot execute a legacy-schema function after the revoke.
 
-## Oracle and SQL Server
+## Oracle
 
-The recipes and their tests arrive with the Oracle adapter (WP-26 part o) and the SQL Server adapter (part p).
+The importer reads in one `SET TRANSACTION READ ONLY` transaction (transaction-level read consistency), after setting
+the session's time zone to UTC and its date, timestamp and number formats to ISO ones. Undo must cover the whole
+extract, or a query fails with ORA-01555 (`SOURCE_QUERY_FAILED`); a restored copy avoids both that and the load on
+production. The run's fingerprint records the SCN the transaction started near. That transaction dies with the
+session, so an extract that crashed starts over.
+
+Connect with an Easy Connect URL, `jdbc:oracle:thin:@tcps://host:2484/service?ssl_server_dn_match=true` with
+`javax.net.ssl.trustStore` (and `javax.net.ssl.trustStoreType=PKCS12`) pointing at the mounted CA. The importer
+refuses a TNS descriptor, a TNS alias and any URL property outside its allow-list of TLS and timeout settings before
+connecting, because descriptors and driver properties can name wallet and trace directories, provider classes and
+configuration files. Auto-login wallets need `oraclepki`, which is not on the importer's classpath.
+
+Replace `legacy` with the schema the mapping reads, and `trailkeep_source` with the account name.
+
+```sql
+CREATE USER trailkeep_source IDENTIFIED BY "<from your secret store>";
+GRANT CREATE SESSION TO trailkeep_source;
+-- READ, not SELECT: READ cannot lock rows (SELECT ... FOR UPDATE) or tables (LOCK TABLE).
+-- Only the tables or views the mapping's queries read; never SELECT ANY TABLE or READ ANY TABLE.
+GRANT READ ON legacy.cases TO trailkeep_source;
+GRANT READ ON legacy.notes TO trailkeep_source;
+GRANT READ ON legacy.files TO trailkeep_source;
+GRANT READ ON legacy.users TO trailkeep_source;
+```
+
+Grant nothing else: no `EXECUTE` on the legacy schema, no database links, no `FLASHBACK`, no roles. `PUBLIC` already
+holds `EXECUTE` on many `DBMS_*` and `UTL_*` packages, which a production DBA can rarely revoke. A function marked
+`PRAGMA AUTONOMOUS_TRANSACTION` would run outside the read-only transaction, so calls are controlled by the importer's
+validator: it refuses any function outside its allow-list of pure built-ins, any `@link`, and any qualified name that
+is not a table, alias or subquery of the query, since Oracle calls a parameterless function without parentheses
+(`SOME_PACKAGE.SOME_FUNCTION`).
+
+A read-only transaction cannot read a table whose definition changed moments before it started (ORA-01466); do not
+run DDL on the legacy schema while an extract runs.
+
+What the recipe achieves is tested against the Oracle test containers, Free 23 and XE 21 (`OracleSourceIT`). The
+account:
+
+- can read the granted tables, every row of one read-only snapshot;
+- cannot insert, update or delete;
+- cannot lock rows with `SELECT … FOR UPDATE` or lock a table;
+- cannot create a table;
+- cannot read a table it was not granted;
+- and the validator refuses a `DBMS_*` call with or without parentheses, a legacy-schema function and a database link.
+
+## SQL Server
+
+The recipe and its test arrive with the SQL Server adapter (WP-26 part p).

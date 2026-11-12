@@ -9,6 +9,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- The Oracle source (WP-26 part o, docs/design/importer.md §4.1): a `kind: jdbc` Oracle mapping is test-fetched by
+  `validate-mapping` and extracted in one `SET TRANSACTION READ ONLY` transaction, with the session in UTC and ISO
+  date, timestamp and number formats; `DATE` and `TIMESTAMP` read as local date-times, `TIMESTAMP WITH TIME ZONE` with
+  its offset, `TIMESTAMP WITH LOCAL TIME ZONE` in UTC, `CLOB`/`NCLOB` as text and `BLOB` as bytes, so a `BLOB`
+  content query lands in the content area. The fingerprint is `oracle:scn=<SCN>:<hash of the session>`, so a crashed
+  extract starts over. An Oracle source URL must be an Easy Connect address with allow-listed TLS and timeout
+  parameters (no TNS descriptor or alias, no provider, configuration-file or trace property). The query validator now
+  refuses, on Oracle, a qualified name that is not a table, alias, subquery or `WITH` item of the query, since
+  Oracle calls a parameterless function without parentheses (`SOME_PACKAGE.SOME_FUNCTION`). The Oracle grants recipe
+  (`READ` on the mapped tables only) is in docs/importer/source-accounts.md, with what it achieves tested on both
+  Oracle images. `SOURCE_UNSUPPORTED` now applies to SQL Server and CSV mappings only.
 - The PostgreSQL source for `extract`, attachment content queries and the run's content area (WP-26 part n2,
   docs/design/importer.md §4.1, §4.3). A `kind: jdbc` PostgreSQL mapping is extracted through `SourceQueryJdbcDao` as
   the source account (`import.source.*`, the URL allow-list checked before connecting), every entity query and every

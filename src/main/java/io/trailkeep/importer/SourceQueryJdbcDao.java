@@ -4,6 +4,7 @@ package io.trailkeep.importer;
 
 import io.trailkeep.importer.SourceQueryValidator.ValidatedSourceQuery;
 import io.trailkeep.importer.SourceQueryValidator.Vendor;
+import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
@@ -11,11 +12,13 @@ import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.sql.Savepoint;
+import java.sql.Statement;
 import java.sql.Types;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -30,13 +33,22 @@ import org.springframework.stereotype.Component;
  * necessity: the source is a foreign schema no entity maps, and the queries are the operator's own, from the reviewed
  * mapping. It runs nothing but a {@link ValidatedSourceQuery}, with values only as bind parameters, never wrapped or
  * rewritten, in one read-only snapshot per session, with a statement timeout. A driver failure becomes a code-only
- * {@link SourceQueryException}. PostgreSQL sources are supported here; Oracle and SQL Server arrive with 26o and 26p.
+ * {@link SourceQueryException}. PostgreSQL (26n) and Oracle (26o) sources are supported here; SQL Server arrives
+ * with 26p.
  */
 @Component
 class SourceQueryJdbcDao {
 
     /** Rows fetched per round trip; no stage holds more than one batch (design §8.2). */
     static final int FETCH_SIZE = 500;
+
+    /** Where an Oracle read-only transaction stands: the SCN near its start, then the session and the instant. */
+    private static final String ORACLE_POINT = "SELECT TO_CHAR(TIMESTAMP_TO_SCN(SYSTIMESTAMP)),"
+            + " SYS_CONTEXT('USERENV', 'SID') || ':' || SYS_CONTEXT('USERENV', 'SESSIONID') || ':'"
+            + " || TO_CHAR(SYSTIMESTAMP, 'YYYYMMDDHH24MISSFF9') FROM DUAL";
+
+    /** Where a PostgreSQL snapshot stands. */
+    private static final String POSTGRESQL_POINT = "SELECT 'postgresql', pg_current_snapshot()::text";
 
     /**
      * Where a legacy database is and who reads it: the read-only source account of the grants recipe
@@ -77,15 +89,18 @@ class SourceQueryJdbcDao {
     }
 
     /**
-     * Connects and opens the snapshot every query of the session reads: PostgreSQL {@code REPEATABLE READ READ ONLY}.
+     * Connects and opens the snapshot every query of the session reads: PostgreSQL {@code REPEATABLE READ READ ONLY};
+     * Oracle {@code SET TRANSACTION READ ONLY} (transaction-level read consistency, design §4.1), after the session's
+     * time zone is set to UTC, so {@code TIMESTAMP WITH LOCAL TIME ZONE} reads as UTC, and its date, timestamp and
+     * number formats to ISO ones, so a query's implicit conversions read as the export recipes' do (§4.2.2).
      *
      * @param source the source
      * @return the session
      * @throws SourceQueryException if the source cannot be reached or refuses the account
      */
     Session open(Source source) {
-        if (source.vendor() != Vendor.POSTGRESQL) {
-            throw new UnsupportedOperationException(source.vendor() + " sources arrive with their adapter (26o, 26p)");
+        if (source.vendor() == Vendor.SQLSERVER) {
+            throw new UnsupportedOperationException("SQL Server sources arrive with their adapter (26p)");
         }
         if (!SourceUrl.allowed(source.vendor(), source.url())) {
             throw new IllegalArgumentException(
@@ -94,8 +109,21 @@ class SourceQueryJdbcDao {
         try {
             Connection connection = DriverManager.getConnection(source.url(), source.user(), source.password());
             connection.setAutoCommit(false);
-            connection.setReadOnly(true);
-            connection.setTransactionIsolation(Connection.TRANSACTION_REPEATABLE_READ);
+            if (source.vendor() == Vendor.ORACLE) {
+                // Fixed statements of the engine's own. ALTER SESSION starts no transaction, and SET TRANSACTION must
+                // be the first statement of one.
+                try (Statement statement = connection.createStatement()) {
+                    statement.execute("ALTER SESSION SET TIME_ZONE = 'UTC'"
+                            + " NLS_DATE_FORMAT = 'YYYY-MM-DD\"T\"HH24:MI:SS'"
+                            + " NLS_TIMESTAMP_FORMAT = 'YYYY-MM-DD\"T\"HH24:MI:SS.FF'"
+                            + " NLS_TIMESTAMP_TZ_FORMAT = 'YYYY-MM-DD\"T\"HH24:MI:SS.FFTZH:TZM'"
+                            + " NLS_NUMERIC_CHARACTERS = '.,'");
+                    statement.execute("SET TRANSACTION READ ONLY");
+                }
+            } else {
+                connection.setReadOnly(true);
+                connection.setTransactionIsolation(Connection.TRANSACTION_REPEATABLE_READ);
+            }
             return new Session(connection, source.vendor());
         } catch (SQLException e) {
             throw SourceQueryException.of(e);
@@ -103,27 +131,41 @@ class SourceQueryJdbcDao {
     }
 
     /**
-     * What the snapshot is, for {@code IMPORT_RUN.SOURCE_FINGERPRINT}: PostgreSQL's current snapshot.
+     * What the snapshot is, for {@code IMPORT_RUN.SOURCE_FINGERPRINT}. PostgreSQL: {@code postgresql:} and the hash of
+     * the current snapshot, whose text lists every transaction in progress and can be long. Oracle: {@code oracle:},
+     * the SCN the read-only transaction started near ({@code TIMESTAMP_TO_SCN}, which needs no privilege, unlike
+     * {@code V$DATABASE} or {@code DBMS_FLASHBACK}) and the hash of the session and its start, because that SCN is
+     * approximate and the transaction's read point dies with the session: an extract that restarts always starts over.
      *
      * @param session the session
-     * @return the fingerprint
+     * @return the fingerprint, at most 128 characters
      */
     String fingerprint(Session session) {
-        // A fixed statement of the engine's own; nothing in it comes from the mapping or from data.
-        try (PreparedStatement statement = session.connection.prepareStatement("SELECT pg_current_snapshot()::text");
+        // Fixed statements of the engine's own; nothing in them comes from the mapping or from data.
+        try (PreparedStatement statement = session.vendor == Vendor.ORACLE
+                        ? session.connection.prepareStatement(ORACLE_POINT)
+                        : session.connection.prepareStatement(POSTGRESQL_POINT);
                 ResultSet rows = statement.executeQuery()) {
             rows.next();
-            return rows.getString(1);
+            String point = sha256(rows.getString(2));
+            return session.vendor == Vendor.ORACLE
+                    ? "oracle:scn=" + rows.getString(1) + ":" + point
+                    : "postgresql:" + point;
         } catch (SQLException e) {
             throw SourceQueryException.of(e);
         }
+    }
+
+    private static String sha256(String text) {
+        return ValidateMappingCommand.sha256(text.getBytes(StandardCharsets.UTF_8));
     }
 
     /**
      * {@code validate-mapping}'s test fetch (design §4.1): runs the query for at most one row instead of asking for a
      * plan, which Oracle would write to {@code PLAN_TABLE} and SQL Server cannot give without its own permission. Every
      * bind variable is null, so a keyed query (an attachment's content query) proves it runs without reading content.
-     * A failure is rolled back to a savepoint, so the session's later test fetches still run.
+     * On PostgreSQL a failure is rolled back to a savepoint, so the session's later test fetches still run; a failed
+     * query does not end an Oracle transaction, which as a read-only one takes no savepoint.
      *
      * @param session the session
      * @param query the validated query
@@ -133,6 +175,10 @@ class SourceQueryJdbcDao {
      */
     int testFetch(Session session, ValidatedSourceQuery query, Duration timeout) {
         int[] count = {0};
+        if (session.vendor == Vendor.ORACLE) {
+            run(session, query, null, timeout, 1, row -> count[0]++);
+            return count[0];
+        }
         try {
             Savepoint before = session.connection.setSavepoint();
             try {
@@ -202,7 +248,7 @@ class SourceQueryJdbcDao {
             statement.setMaxRows(maxRows);
             if (binds == null) {
                 for (int i = 1; i <= statement.getParameterMetaData().getParameterCount(); i++) {
-                    statement.setNull(i, Types.NULL);
+                    statement.setNull(i, session.vendor == Vendor.ORACLE ? Types.VARCHAR : Types.NULL);
                 }
             } else {
                 for (int i = 0; i < binds.size(); i++) {
@@ -216,7 +262,7 @@ class SourceQueryJdbcDao {
                     for (int column = 1; column <= columns.getColumnCount(); column++) {
                         row.put(
                                 columns.getColumnLabel(column).toLowerCase(Locale.ROOT),
-                                value(result, columns, column));
+                                value(result, columns, column, session.vendor));
                     }
                     rows.accept(row);
                 }
@@ -231,13 +277,39 @@ class SourceQueryJdbcDao {
      * through {@code getTimestamp}, which applies the JVM zone; zoned ones as {@link OffsetDateTime}; days as
      * {@link LocalDate}; {@code bytea} materialised per value (§4.3); everything else as the driver gives it.
      */
-    private static @Nullable Object value(ResultSet result, ResultSetMetaData columns, int column) throws SQLException {
+    private static @Nullable Object value(ResultSet result, ResultSetMetaData columns, int column, Vendor vendor)
+            throws SQLException {
+        if (vendor == Vendor.ORACLE) {
+            return oracleValue(result, columns.getColumnTypeName(column), column);
+        }
         // PostgreSQL names its types in lower case.
         Object value = switch (columns.getColumnTypeName(column)) {
             case "timestamp" -> result.getObject(column, LocalDateTime.class);
             case "timestamptz" -> result.getObject(column, OffsetDateTime.class);
             case "date" -> result.getObject(column, LocalDate.class);
             case "bytea" -> result.getBytes(column);
+            default -> result.getObject(column);
+        };
+        return result.wasNull() ? null : value;
+    }
+
+    /**
+     * An Oracle value (design §4.1): {@code DATE}, which carries a time, and {@code TIMESTAMP} as {@link
+     * LocalDateTime};
+     * {@code TIMESTAMP WITH TIME ZONE} as {@link OffsetDateTime}; {@code TIMESTAMP WITH LOCAL TIME ZONE} in the
+     * session's UTC; {@code CLOB} and {@code NCLOB} as text and {@code BLOB} as bytes, each materialised per value
+     * (§4.3); {@code NUMBER} as the driver's {@code BigDecimal}.
+     */
+    private static @Nullable Object oracleValue(ResultSet result, String type, int column) throws SQLException {
+        Object value = switch (type) {
+            case "DATE", "TIMESTAMP" -> result.getObject(column, LocalDateTime.class);
+            case "TIMESTAMP WITH TIME ZONE" -> result.getObject(column, OffsetDateTime.class);
+            case "TIMESTAMP WITH LOCAL TIME ZONE" -> {
+                LocalDateTime utc = result.getObject(column, LocalDateTime.class);
+                yield utc == null ? null : utc.atOffset(ZoneOffset.UTC);
+            }
+            case "CLOB", "NCLOB" -> result.getString(column);
+            case "BLOB" -> result.getBytes(column);
             default -> result.getObject(column);
         };
         return result.wasNull() ? null : value;

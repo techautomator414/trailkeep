@@ -109,6 +109,29 @@ class SourceQueryValidatorTest {
         assertRefused(Vendor.ORACLE, "SELECT LEN(title) FROM cases", Code.QUERY_FUNCTION_NOT_ALLOWED);
     }
 
+    /**
+     * Oracle calls a parameterless function without parentheses, so {@code PKG.FN} reads like a qualified column (26o):
+     * on Oracle every qualifier must be a table, alias, subquery or WITH item of the statement.
+     */
+    @Test
+    void oracleQualifiersMustNameWhatTheStatementReads() {
+        for (String call : new String[] {
+            "SELECT DBMS_RANDOM.VALUE FROM DUAL",
+            "SELECT sys.dbms_random.value FROM DUAL",
+            "SELECT c.case_id FROM legacy.cases c WHERE legacy_pkg.flag = 1",
+            "SELECT c.case_id FROM legacy.cases c WHERE c.case_id IN (SELECT pkg.next_id FROM DUAL)"
+        }) {
+            assertRefused(Vendor.ORACLE, call, Code.QUERY_FUNCTION_NOT_ALLOWED);
+        }
+        assertPasses(
+                Vendor.ORACLE,
+                "SELECT c.case_id, CASES.state, t.n, legacy.cases.title FROM legacy.cases c"
+                        + " JOIN legacy.cases ON c.case_id = cases.case_id, (SELECT 1 n FROM DUAL) t");
+        assertPasses(Vendor.ORACLE, "WITH w AS (SELECT case_id FROM legacy.cases) SELECT w.case_id FROM w");
+        assertPasses(Vendor.ORACLE, "SELECT \"c\".case_id FROM legacy.cases \"c\"");
+        assertPasses(Vendor.POSTGRESQL, "SELECT c.case_id FROM legacy.cases c");
+    }
+
     private static void assertPasses(Vendor vendor, String sql) {
         assertThat(SourceQueryValidator.validate(sql, vendor).problems())
                 .as(sql)
