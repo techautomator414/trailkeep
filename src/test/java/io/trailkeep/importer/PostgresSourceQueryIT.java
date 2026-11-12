@@ -153,7 +153,7 @@ class PostgresSourceQueryIT {
                 .containsExactly(new MappingProblem(MappingProblem.Code.SOURCE_UNAVAILABLE, "/source"));
         assertThat(new SourceTestFetch(dao, new MockEnvironment()).check(bytes(mapping)))
                 .containsExactly(new MappingProblem(MappingProblem.Code.SOURCE_SETTING_MISSING, "/source"));
-        assertThat(new SourceTestFetch(dao, environment).check(bytes(mapping.replace("postgresql", "oracle"))))
+        assertThat(new SourceTestFetch(dao, environment).check(bytes(mapping.replace("postgresql", "sqlserver"))))
                 .containsExactly(new MappingProblem(MappingProblem.Code.SOURCE_UNSUPPORTED, "/source/vendor"));
         assertThat(new SourceTestFetch(dao, environment).check(bytes("source: { kind: files }")))
                 .isEmpty();

@@ -52,7 +52,7 @@ class SourceTestFetch {
         if (vendor == null) {
             return List.of();
         }
-        if (vendor != Vendor.POSTGRESQL) {
+        if (vendor == Vendor.SQLSERVER) {
             return List.of(new MappingProblem(Code.SOURCE_UNSUPPORTED, "/source/vendor"));
         }
         Source source;
