@@ -7,6 +7,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import io.trailkeep.importer.MappingProblem.Code;
 import io.trailkeep.importer.SourceQueryValidator.Result;
 import io.trailkeep.importer.SourceQueryValidator.Vendor;
+import java.util.List;
 import java.util.Objects;
 import org.junit.jupiter.api.Test;
 
@@ -49,6 +50,21 @@ class SourceQueryValidatorTest {
         Result hinted = SourceQueryValidator.validate("SELECT id FROM dbo.cases WITH (UPDLOCK)", Vendor.SQLSERVER);
         assertThat(hinted.query()).isNull();
         assertThat(hinted.problems()).containsAnyOf(Code.QUERY_LOCKS, Code.QUERY_UNPARSEABLE);
+        for (String hint : List.of("HOLDLOCK", "XLOCK", "TABLOCKX", "NOLOCK", "READPAST", "READUNCOMMITTED")) {
+            String sql = "SELECT id FROM dbo.cases WITH (" + hint + ")";
+            assertThat(SourceQueryValidator.validate(sql, Vendor.SQLSERVER).query())
+                    .as(sql)
+                    .isNull();
+        }
+    }
+
+    /** A four-part name reaches a linked server; {@code NEXT VALUE FOR} advances a sequence outside any transaction. */
+    @Test
+    void sqlServerLinkedServersAndSequencesAreRefused() {
+        assertRefused(Vendor.SQLSERVER, "SELECT id FROM remote.legacy.dbo.cases", Code.QUERY_DATABASE_LINK);
+        assertRefused(Vendor.SQLSERVER, "SELECT id FROM remote.legacy..cases", Code.QUERY_DATABASE_LINK);
+        assertRefused(Vendor.SQLSERVER, "SELECT NEXT VALUE FOR dbo.ids", Code.QUERY_FUNCTION_NOT_ALLOWED);
+        assertPasses(Vendor.SQLSERVER, "SELECT c.id FROM legacy.dbo.cases c");
     }
 
     @Test

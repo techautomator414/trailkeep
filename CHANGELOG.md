@@ -9,6 +9,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- The SQL Server source (WP-26 part p, docs/design/importer.md §4.1, §11): a `kind: jdbc` SQL Server mapping is
+  test-fetched by `validate-mapping` and extracted through the MIT-licensed `mssql-jdbc` driver in one `SNAPSHOT`
+  transaction (the legacy database needs `ALLOW_SNAPSHOT_ISOLATION ON`; without it nothing is read), which takes no
+  shared locks; `DATETIME`, `DATETIME2` and `SMALLDATETIME` read as local date-times, `DATETIMEOFFSET` with its offset,
+  `NTEXT`/`TEXT`/`XML` as text and `VARBINARY`/`BINARY`/`IMAGE` as bytes, so a `VARBINARY` or `IMAGE` content query
+  lands in the content area. The fingerprint is `sqlserver:<hash of the server, database, session and start>`, so a
+  crashed extract starts over. A SQL Server source URL must be `host[\instance][:port]` with allow-listed database,
+  TLS, timeout and routing properties (case-insensitive, no braces, `trustServerCertificate` only `false`; no class,
+  native-code, Kerberos, key-store or password property). SQL Server has no read-only transaction, so its grants recipe
+  (`SELECT` on the mapped tables only, no `EXECUTE`, a check for grants to `public`) is the control, with what it
+  achieves tested in `SqlServerSourceIT` (new `sqlserver-it` profile and CI job on `main`, nightly and release tags).
+  The query validator now also refuses a four-part name (a linked server), `NEXT VALUE FOR`, and the `NOLOCK`,
+  `READUNCOMMITTED`, `READPAST`, `READCOMMITTEDLOCK` and `REPEATABLEREAD` hints. SQL Server's permission (229, 230,
+  262) and login (18456) errors map to `SOURCE_PERMISSION_DENIED` and `SOURCE_UNAVAILABLE`. `SOURCE_UNSUPPORTED` now
+  applies to CSV mappings only. New test dependency: `testcontainers-mssqlserver` (MIT).
 - The Oracle source (WP-26 part o, docs/design/importer.md §4.1): a `kind: jdbc` Oracle mapping is test-fetched by
   `validate-mapping` and extracted in one `SET TRANSACTION READ ONLY` transaction, with the session in UTC and ISO
   date, timestamp and number formats; `DATE` and `TIMESTAMP` read as local date-times, `TIMESTAMP WITH TIME ZONE` with

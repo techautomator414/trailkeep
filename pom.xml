@@ -269,6 +269,13 @@
       <scope>runtime</scope>
     </dependency>
     <dependency>
+      <!-- The importer's SQL Server source (WP-26 part p, design §4.1). MIT; version from Spring Boot's dependency
+           management. Its Azure identity, MSAL and Bouncy Castle dependencies are optional and not pulled in. -->
+      <groupId>com.microsoft.sqlserver</groupId>
+      <artifactId>mssql-jdbc</artifactId>
+      <scope>runtime</scope>
+    </dependency>
+    <dependency>
       <groupId>org.springframework.modulith</groupId>
       <artifactId>spring-modulith-starter-core</artifactId>
     </dependency>
@@ -344,6 +351,12 @@
     <dependency>
       <groupId>org.testcontainers</groupId>
       <artifactId>testcontainers-oracle-free</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <!-- The SQL Server legacy database of the importer's sqlserver-tagged ITs (WP-26 part p). MIT. -->
+      <groupId>org.testcontainers</groupId>
+      <artifactId>testcontainers-mssqlserver</artifactId>
       <scope>test</scope>
     </dependency>
     <dependency>
@@ -833,8 +846,9 @@
         <artifactId>maven-failsafe-plugin</artifactId>
         <configuration>
           <!-- Oracle ITs run only in the oracle-it profile's per-image executions; heap ITs only in heap-256m;
-               perf ITs (a 50 000-case seed, minutes long) only in the perf-it profile's perf-50k execution. -->
-          <excludedGroups>oracle,heap,perf</excludedGroups>
+               perf ITs (a 50 000-case seed, minutes long) only in the perf-it profile's perf-50k execution;
+               SQL Server source ITs only in the sqlserver-it profile's sqlserver execution. -->
+          <excludedGroups>oracle,heap,perf,sqlserver</excludedGroups>
         </configuration>
         <executions>
           <execution>
@@ -891,6 +905,38 @@
                   <excludedGroups combine.self="override"/>
                   <reportsDirectory>${project.build.directory}/failsafe-reports/perf-50k</reportsDirectory>
                   <summaryFile>${project.build.directory}/failsafe-reports/perf-50k/failsafe-summary.xml</summaryFile>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+    <profile>
+      <!--
+        The importer's SQL Server source (WP-26 part p, design §11): the ITs tagged sqlserver, against a SQL Server
+        Developer edition container as the legacy database. Runs on main, nightly and release tags in CI, not on fork
+        PRs, because the image is large. By hand:
+          ./mvnw -Psqlserver-it test-compile failsafe:integration-test@sqlserver failsafe:verify@sqlserver
+      -->
+      <id>sqlserver-it</id>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-failsafe-plugin</artifactId>
+            <executions>
+              <execution>
+                <id>sqlserver</id>
+                <goals>
+                  <goal>integration-test</goal>
+                  <goal>verify</goal>
+                </goals>
+                <configuration>
+                  <groups>sqlserver</groups>
+                  <excludedGroups combine.self="override"/>
+                  <reportsDirectory>${project.build.directory}/failsafe-reports/sqlserver</reportsDirectory>
+                  <summaryFile>${project.build.directory}/failsafe-reports/sqlserver/failsafe-summary.xml</summaryFile>
                 </configuration>
               </execution>
             </executions>

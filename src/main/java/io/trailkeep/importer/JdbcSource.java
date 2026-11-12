@@ -19,12 +19,12 @@ import org.springframework.stereotype.Component;
 import tools.jackson.databind.JsonNode;
 
 /**
- * The PostgreSQL (WP-26 part n2) and Oracle (26o) source (design §4.1, §4.3): a {@code kind: jdbc} mapping read
- * through {@link SourceQueryJdbcDao} as the account {@link SourceAccount} resolves, in one read-only snapshot that
- * every entity query and every attachment content query shares. The fingerprint names that snapshot. It dies with the
- * connection, so an extract that crashed meets another fingerprint and starts over, as §4.1 "Restart" says it must.
+ * The PostgreSQL (WP-26 part n2), Oracle (26o) and SQL Server (26p) source (design §4.1, §4.3): a {@code kind:
+ * jdbc} mapping read through {@link SourceQueryJdbcDao} as the account {@link SourceAccount} resolves, in one snapshot
+ * that every entity query and every attachment content query shares. The fingerprint names that snapshot. It dies with
+ * the connection, so an extract that crashed meets another fingerprint and starts over, as §4.1 "Restart" says it must.
  * Each query is validated again for the vendor before it runs; the run's mapping hash already proves it is the file
- * {@code validate-mapping} passed. SQL Server arrives with 26p.
+ * {@code validate-mapping} passed.
  */
 @Component
 @Profile("importer")
@@ -43,8 +43,7 @@ final class JdbcSource implements SourceRows.Factory {
 
     @Override
     public boolean supports(JsonNode mapping) {
-        Vendor vendor = MappingValidator.vendor(mapping);
-        return vendor == Vendor.POSTGRESQL || vendor == Vendor.ORACLE;
+        return MappingValidator.vendor(mapping) != null;
     }
 
     @Override
