@@ -156,7 +156,8 @@ class DefaultClosureService implements ClosureService {
                 r.getOutcome(),
                 r.getResolutionSummary(),
                 r.getFollowUpActions(),
-                sentBack));
+                sentBack,
+                r.isImported()));
     }
 
     @Override

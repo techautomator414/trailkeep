@@ -85,6 +85,7 @@ public interface ClosureService {
      * @param followUps the follow-up actions, or {@code null}
      * @param requiresChanges sent back (rejected or changes requested) and nobody has commented since: the case
      *     page's "Requires Changes" badge (BUILD_PLAN §4.3)
+     * @param imported an imported closure (WP-26): approved in the legacy tracker, not in Trailkeep
      */
     record DecidedClosure(
             long id,
@@ -95,7 +96,8 @@ public interface ClosureService {
             String outcome,
             String summary,
             @Nullable String followUps,
-            boolean requiresChanges) {}
+            boolean requiresChanges,
+            boolean imported) {}
 
     /**
      * The case's latest request, if the actor reads the case and it is decided (an open case's latest request may

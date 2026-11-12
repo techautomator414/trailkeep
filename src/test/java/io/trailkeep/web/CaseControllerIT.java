@@ -19,9 +19,12 @@ import io.trailkeep.testsupport.PostgresTestcontainersConfiguration;
 import io.trailkeep.testsupport.RequiresDocker;
 import io.trailkeep.testsupport.WithAppUser;
 import io.trailkeep.user.GlobalRole;
+import io.trailkeep.user.ImportPeopleService;
 import io.trailkeep.user.TeamRole;
 import io.trailkeep.user.UserPermissions;
 import jakarta.persistence.EntityManager;
+import java.sql.Timestamp;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.Map;
@@ -104,6 +107,37 @@ class CaseControllerIT {
                 .andExpect(content().string(containsString("Restricted")))
                 .andExpect(content().string(containsString("Synthetic Analyst")))
                 .andExpect(content().string(containsString("Synthetic Case Team")));
+    }
+
+    /** An imported closure (WP-26 part h) is labelled as one and never reads as an approval given in Trailkeep. */
+    @Test
+    @WithAppUser(id = ANALYST, team = TEAM, teamRole = TeamRole.ANALYST)
+    void anImportedClosureSaysItWasClosedInTheLegacyTracker() throws Exception {
+        entityManager.flush();
+        Timestamp closed = Timestamp.from(Instant.parse("2019-06-01T09:30:00Z"));
+        jdbc.update(
+                "UPDATE CASE_RECORD SET STATUS = 'CLOSED', CLOSED_AT = ? WHERE CASE_NUMBER = ?",
+                closed,
+                standard.toString());
+        jdbc.update(
+                "INSERT INTO CLOSURE_REQUEST (ID, CASE_ID, REQUESTED_BY, APPROVER_ID, REQUESTED_AT, OUTCOME,"
+                        + " RESOLUTION_SUMMARY, DECISION, DECIDED_BY, DECIDED_AT, IMPORTED) SELECT 930001, ID, ?, ?, ?,"
+                        + " 'Substantiated', 'Synthetic summary', 'APPROVED', ?, ?, ? FROM CASE_RECORD"
+                        + " WHERE CASE_NUMBER = ?",
+                ImportPeopleService.IMPORTER_ID,
+                ImportPeopleService.LEGACY_APPROVAL_ID,
+                closed,
+                ImportPeopleService.LEGACY_APPROVAL_ID,
+                closed,
+                true,
+                standard.toString());
+        entityManager.clear();
+
+        mvc.perform(get("/cases/{number}", standard.toString()))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("Imported closure")))
+                .andExpect(content().string(containsString("Closed in the legacy tracker on 2019-06-01")))
+                .andExpect(content().string(not(containsString("Closed on approval by"))));
     }
 
     /** An imported case shows its legacy number and unmatched legacy owner (WP-26 part d); a native case neither. */
