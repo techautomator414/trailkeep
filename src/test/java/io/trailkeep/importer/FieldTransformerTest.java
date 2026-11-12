@@ -200,7 +200,7 @@ class FieldTransformerTest {
                 "{\"coalesce\": [\"v\", {\"const\": \"none\"}]}");
         for (int i = 0; i < 500; i++) {
             Map<String, @Nullable Object> row = Map.of("v", randomText(random));
-            Context context = new Context(row, LOOKUPS, CHICAGO, DstRule.EARLIER, KEY);
+            Context context = new Context(row, LOOKUPS, CHICAGO, DstRule.EARLIER, KEY, new CompiledFormats());
             JsonNode spec = node(specs.get(random.nextInt(specs.size())));
             assertThat(FieldTransformer.evaluate(spec, context)).isEqualTo(FieldTransformer.evaluate(spec, context));
         }
@@ -259,7 +259,7 @@ class FieldTransformerTest {
         row.put("hex", "cafe");
         row.put("b64", "yv4=");
         row.put("dirty", "a\r\nb\u0000");
-        return new Context(row, LOOKUPS, CHICAGO, dst, key);
+        return new Context(row, LOOKUPS, CHICAGO, dst, key, new CompiledFormats());
     }
 
     private static JsonNode node(String json) {

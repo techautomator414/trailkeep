@@ -32,7 +32,13 @@ record MappingProblem(Code code, String pointer) implements Comparable<MappingPr
         /** A {@code maxLength} above what the Trailkeep column holds. */
         MAX_LENGTH_OVER_TARGET,
         /** {@code limits.acceptSkip} names a code that may not be skipped. */
-        ACCEPT_SKIP_NOT_ALLOWED
+        ACCEPT_SKIP_NOT_ALLOWED,
+        /** A {@code regexExtract} pattern or {@code when.matches} that RE2 cannot compile. */
+        BAD_PATTERN,
+        /** A {@code timestamp} or {@code date} format that is not a valid pattern. */
+        BAD_FORMAT,
+        /** A {@code source.timezone} that is not a known zone id. */
+        BAD_TIMEZONE
     }
 
     @Override

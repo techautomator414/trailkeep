@@ -9,6 +9,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Staging one legacy row (WP-26 part k1a, docs/design/importer.md §5, §6). `RowStager` turns a source row, from
+  whichever source, into a staging row: its canonical key (`KEY_INVALID`, or `KEY_TOO_LONG` when `LEGACY_REF` would
+  pass 100 characters), a child's case key (`PARENT_KEY_INVALID`), every mapped field through the transforms and typed
+  for its column (times through `timestamp`, days through `date`, flags, person references canonicalised like person
+  keys, an attachment's content pointer and declared size but never its bytes), and the HMAC-SHA-256 row hash. A row
+  without a usable key is not staged; a failed field is staged empty; both leave codes, never values. The staging
+  entities gain write constructors. A mapping's RE2 patterns and date formats are compiled once per mapping instead of
+  per row, and `validate-mapping` compiles all of them and the time zone first: `BAD_PATTERN`, `BAD_FORMAT` and
+  `BAD_TIMEZONE` are FATAL mapping problems.
 - clamd down alert (WP-25 part f, BUILD_PLAN §16): in `clamd` mode every replica asks clamd for `VERSION` once a
   minute (`ScannerProbe`, `app.attachments.clamd.probe-cron`, the same 3-second bound as the System screen) and reports
   gauge `trailkeep.scanner.up`, 1 or 0 (absent with external scanning). `TrailkeepScannerDown` (critical) fires when

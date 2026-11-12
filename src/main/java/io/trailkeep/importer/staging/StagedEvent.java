@@ -40,4 +40,24 @@ public class StagedEvent extends StagedRow {
 
     /** For JPA. */
     protected StagedEvent() {}
+
+    /**
+     * A legacy history event as the extract staged it.
+     *
+     * @param key its run and canonical key
+     * @param rowHash the keyed hash of its canonical row
+     * @param caseKey its case's canonical key
+     * @param values its mapped fields, typed
+     */
+    public StagedEvent(StagingKey key, String rowHash, String caseKey, StagedValues values) {
+        super(key, rowHash);
+        this.caseKey = caseKey;
+        this.eventAt = values.instant("at");
+        this.whoKey = values.text("whoKey");
+        this.whoName = values.text("whoName");
+        this.kind = values.text("kind");
+        this.fieldName = values.text("field");
+        this.oldValue = values.text("oldValue");
+        this.newValue = values.text("newValue");
+    }
 }
