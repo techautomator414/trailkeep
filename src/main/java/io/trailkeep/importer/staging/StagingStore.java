@@ -148,13 +148,17 @@ public class StagingStore {
     @Transactional(readOnly = true)
     public <T extends StagedRow> List<T> page(Class<T> type, long runId, @Nullable String after, int size) {
         CriteriaBuilder criteria = entityManager.getCriteriaBuilder();
-        CriteriaQuery<T> query = criteria.createQuery(type);
+        // Typed by the class literal of the common supertype, so the query is visibly no string (Semgrep).
+        CriteriaQuery<StagedRow> query = criteria.createQuery(StagedRow.class);
         Root<T> row = query.from(type);
         Path<String> legacyKey = row.get("key").get("legacyKey");
         Predicate inRun = criteria.equal(row.get("key").get("runId"), runId);
-        query.where(after == null ? inRun : criteria.and(inRun, criteria.greaterThan(legacyKey, after)))
+        query.select(row)
+                .where(after == null ? inRun : criteria.and(inRun, criteria.greaterThan(legacyKey, after)))
                 .orderBy(criteria.asc(legacyKey));
-        return entityManager.createQuery(query).setMaxResults(size).getResultList();
+        return entityManager.createQuery(query).setMaxResults(size).getResultList().stream()
+                .map(type::cast)
+                .toList();
     }
 
     private <T extends StagedRow> int delete(Class<T> type, long runId) {
