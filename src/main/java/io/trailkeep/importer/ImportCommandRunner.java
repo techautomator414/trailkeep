@@ -16,7 +16,7 @@ import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
 /**
- * Runs the one command a start of the {@code importer} profile was given (deploy/jobs/importer-job.yaml, design §2.1),
+ * Runs the one command a start of the {@code importer} profile was given (deploy/jobs/importer, design §2.1),
  * as the {@code TRAILKEEP_IMPORT} user; the process then ends ({@code TrailkeepApplication}). A failure fails the
  * start, so the Job's pod exits non-zero. {@code status}, {@code validate-mapping}, {@code extract}, {@code dry-run},
  * {@code load}, {@code relink-owners}, {@code reconcile} and {@code purge-staging} exist so far; any other command is

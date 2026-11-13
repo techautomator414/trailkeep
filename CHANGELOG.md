@@ -252,6 +252,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   context, so Oracle's empty-string-as-`NULL` and microsecond timestamps hash the same at load and later. Grants: the
   import user may insert and read the new columns and the part rows, the runtime user may only read them, nobody may
   change them, and the purge user cannot see them (both vendors). Rows loaded before V19 have no written hash.
+- The importer's deployment (WP-26 part ab, docs/design/importer.md §10): `deploy/jobs/importer/` holds the `Job`
+  and its own `NetworkPolicy`, applied with `kubectl apply -k`, and `deploy/jobs/importer-external-scanning/` the
+  variant without the `clamav-ca` volume, the clamd stream limit and the ClamAV egress rule. The `Job` no longer mounts
+  the web application's Secret: its secret files are projected from `trailkeep-import` (the `TRAILKEEP_IMPORT`
+  username and password items only), `trailkeep-import-hash-key` (`import.hash-key` alone) and `trailkeep-web`
+  (`app.audit.hmac-key` alone). The content area and the report files are writable claims of their own
+  (`IMPORT_CONTENTAREA`, `IMPORT_REPORTSDIR`); the mapping and extract files stay read-only; the command and run id
+  are `IMPORT_COMMAND` and `IMPORT_RUN`. The importer pod admits no ingress and reaches only DNS, the database and
+  clamd; `trailkeep-egress` (identity provider, SMTP relay) now excludes it. Source access is one switch, off by
+  default: the Kustomize component `deploy/jobs/components/source-access` adds both the source password (its own
+  Secret, `trailkeep-import-source`) and the pod label that opens `trailkeep-importer-source`, and only
+  `validate-mapping` and `extract` are applied with it (`deploy/jobs/importer-source-access`,
+  `deploy/jobs/importer-external-scanning-source-access`); `load`, `reconcile` and `relink-owners` hold no source
+  credential and have no route to the source. `deploy/README.md` gains an "Importer" section, a per-command table and
+  the three new Secrets.
 - `reconcile`, the written comparison (WP-26 part aa2a, docs/design/importer.md §9): for an import run whose load
   finished, every ledger row the run wrote has its written hash recomputed through the same import-API reads the load
   hashed, and compared in constant time. A row that differs or is gone (`WRITTEN_DIFFERS`, `WRITTEN_MISSING`, and
