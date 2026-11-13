@@ -31,6 +31,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 /** {@link CaseImportService}: the case, its SLA row, its search row and its audit event, in one transaction. */
@@ -87,6 +88,7 @@ class DefaultCaseImportService implements CaseImportService {
 
     private final CaseRecordRepository cases;
     private final CaseSearchJdbcDao search;
+    private final CaseWrittenJdbcDao written;
     private final CaseTypeRepository caseTypes;
     private final CaseTypeOutcomeRepository outcomes;
     private final SlaPolicyRepository policies;
@@ -103,6 +105,7 @@ class DefaultCaseImportService implements CaseImportService {
     DefaultCaseImportService(
             CaseRecordRepository cases,
             CaseSearchJdbcDao search,
+            CaseWrittenJdbcDao written,
             CaseTypeRepository caseTypes,
             CaseTypeOutcomeRepository outcomes,
             SlaPolicyRepository policies,
@@ -117,6 +120,7 @@ class DefaultCaseImportService implements CaseImportService {
             CaseProperties properties) {
         this.cases = cases;
         this.search = search;
+        this.written = written;
         this.caseTypes = caseTypes;
         this.outcomes = outcomes;
         this.policies = policies;
@@ -376,5 +380,19 @@ class DefaultCaseImportService implements CaseImportService {
 
     private static CaseException invalid(String reason) {
         return new CaseException(Kind.INVALID, reason);
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Map<Long, String> writtenCases(Collection<Long> caseIds) {
+        entityManager.flush();
+        return written.cases(caseIds);
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Map<Long, String> writtenComments(Collection<Long> commentIds) {
+        entityManager.flush();
+        return written.comments(commentIds);
     }
 }

@@ -331,17 +331,11 @@ class LoadCommand {
                             pass.run().runId(),
                             pass.audited().approverId()));
                 }
-                ledger.save(ImportLedgerEntry.ofCase(
-                        pass.run(),
-                        row.getKey().legacyKey(),
-                        row.getRowHash(),
-                        created.caseId(),
-                        imported.status().name(),
-                        closedAt,
-                        pass.now()));
+                List<Long> continued =
+                        pass.children().write(created, comments, scanned, staged, pass.people(), pass.importer());
+                ledger.save(ledgerRow(pass, row, imported, created.caseId(), continued));
                 ImportOwnerPending.of(created.caseId(), owner, pass.run().runId(), pass.hashKey(), pass.now())
                         .ifPresent(pendingOwners::save);
-                pass.children().write(created, comments, scanned, staged, pass.people(), pass.importer());
             });
         } catch (AttachmentRejectedException changed) {
             return AttachmentLoad.CONTENT_CHANGED;
@@ -352,6 +346,24 @@ class LoadCommand {
             return CASE_REFUSED;
         }
         return null;
+    }
+
+    /** A loaded case's ledger row, with the hashes of what its transaction wrote, read back (design §9). */
+    private ImportLedgerEntry ledgerRow(
+            Pass pass, StagedCase row, ImportedCase imported, long caseId, List<Long> continued) {
+        Instant closedAt = imported.closedAt();
+        return ImportLedgerEntry.ofCase(
+                        pass.run(),
+                        row.getKey().legacyKey(),
+                        row.getRowHash(),
+                        caseId,
+                        imported.status().name(),
+                        closedAt,
+                        pass.now())
+                .written(
+                        WrittenHash.ofCase(pass.hashKey(), caseImports, caseId, continued),
+                        closedAt == null ? null : WrittenHash.ofClosure(pass.hashKey(), closures, caseId),
+                        continued);
     }
 
     private <T extends StagedRow> void pages(Class<T> type, long runId, Consumer<List<T>> each) {

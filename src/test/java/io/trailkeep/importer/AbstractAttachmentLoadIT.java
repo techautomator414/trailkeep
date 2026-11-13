@@ -90,6 +90,7 @@ abstract class AbstractAttachmentLoadIT extends LoadSupport {
         assertThat(attachmentIssues(run))
                 .as("a loaded case's attachment issues outlive the next load's claim")
                 .hasSize(1);
+        assertWrittenHashesHold(run);
     }
 
     @Test

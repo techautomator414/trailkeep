@@ -51,6 +51,7 @@
 --   CASE_IMPORTED_EVENT   S          S D          legacy history, for the History tab; case content, purged (V16)
 --   IMPORT_LEDGER         S          -            what each load wrote; insert-only, by the import user (V17)
 --   IMPORT_OWNER_PENDING  S          -            open cases awaiting their legacy owner, for counts (V18)
+--   IMPORT_LEDGER_PART    S          -            the comments a ledger row wrote besides its target (V19)
 --   SEQ_APP_USER         USAGE      -
 --   SEQ_TEAM              USAGE      -
 --   SEQ_AUDIT_EVENT       USAGE      USAGE        the purge's CASE_PURGED rows
@@ -80,7 +81,8 @@
 -- The import user: S I D on the staging tables (IMPORT_STG_PERSON, _CASE, _COMMENT, _ATTACHMENT, _EVENT and
 -- IMPORT_RUN_CHECKPOINT; V13), which no other user may even read, and on IMPORT_ISSUE and IMPORT_RUN_SUMMARY; S I on
 -- IMPORT_RUN with UPDATE of the status, hash, scanning-mode, count and staging-expiry columns, never the sign-off;
--- S I on CASE_IMPORTED_EVENT, insert-only (V16), and on IMPORT_LEDGER, insert-only (V17); USAGE on SEQ_IMPORT_* and
+-- S I on CASE_IMPORTED_EVENT, insert-only (V16), on IMPORT_LEDGER, insert-only (V17), with its written hashes
+-- (V19), and on IMPORT_LEDGER_PART, insert-only (V19); USAGE on SEQ_IMPORT_* and
 -- SEQ_CASE_IMPORTED_EVENT. The load (WP-26 part t) writes cases with their closures: S I on CASE_RECORD, CASE_SLA,
 -- CASE_SEARCH, CLOSURE_REQUEST and AUDIT_EVENT, USAGE on their sequences and SEQ_CASE_NUMBER; with their comments
 -- (part u) S I on CASE_COMMENT, USAGE on SEQ_CASE_COMMENT, and UPDATE of CASE_SEARCH's SEARCH_TEXT and UPDATED_AT
@@ -108,7 +110,8 @@ REVOKE ALL ON TABLE APP_USER, TEAM, APP_USER_TEAM, APP_USER_GLOBAL_ROLE, AUDIT_E
   CASE_RECORD, CASE_SLA, CASE_SEARCH, CASE_COMMENT, CASE_COMMENT_PIN, CASE_ATTACHMENT, CASE_ATTACHMENT_CHUNK, SAVED_VIEW, NOTIFICATION_OUTBOX, USER_ALERT, UPDATE_REQUEST, CLOSURE_REQUEST, CASE_REOPEN,
   ALERT_LEDGER, JOB_RUN, SHEDLOCK, REPORT_SCHEDULE, REPORT_RUN, LEGAL_HOLD_EVENT, USER_PREFERENCE, IMPORT_RUN,
   IMPORT_ISSUE, IMPORT_RUN_SUMMARY, IMPORT_STG_PERSON, IMPORT_STG_CASE, IMPORT_STG_COMMENT, IMPORT_STG_ATTACHMENT,
-  IMPORT_STG_EVENT, IMPORT_RUN_CHECKPOINT, CASE_IMPORTED_EVENT, IMPORT_LEDGER, IMPORT_OWNER_PENDING FROM ${app_user},
+  IMPORT_STG_EVENT, IMPORT_RUN_CHECKPOINT, CASE_IMPORTED_EVENT, IMPORT_LEDGER, IMPORT_OWNER_PENDING,
+  IMPORT_LEDGER_PART FROM ${app_user},
   ${purge_user}, ${import_user};
 REVOKE ALL ON SEQUENCE SEQ_APP_USER, SEQ_TEAM, SEQ_AUDIT_EVENT, SEQ_SLA_POLICY, SEQ_CASE_TYPE, SEQ_CASE_RECORD, SEQ_CASE_NUMBER,
   SEQ_CASE_COMMENT, SEQ_CASE_ATTACHMENT, SEQ_SAVED_VIEW, SEQ_NOTIFICATION_OUTBOX, SEQ_USER_ALERT, SEQ_UPDATE_REQUEST, SEQ_CLOSURE_REQUEST, SEQ_CASE_REOPEN, SEQ_ALERT_LEDGER,
@@ -171,6 +174,7 @@ GRANT SELECT, DELETE                 ON TABLE CASE_IMPORTED_EVENT  TO ${purge_us
 -- The import ledger (V17): the screen may read what a load wrote; only the importer writes it, and nobody changes it.
 GRANT SELECT                         ON TABLE IMPORT_LEDGER        TO ${app_user};
 GRANT SELECT ON SEQUENCE SEQ_IMPORT_LEDGER TO ${app_user};
+GRANT SELECT                         ON TABLE IMPORT_LEDGER_PART   TO ${app_user};
 -- Pending owners (V18): the screen may count them; only the importer writes them, and relink-owners deletes them.
 GRANT SELECT                         ON TABLE IMPORT_OWNER_PENDING TO ${app_user};
 GRANT SELECT ON SEQUENCE SEQ_IMPORT_OWNER_PENDING TO ${app_user};
@@ -190,6 +194,7 @@ GRANT UPDATE (SEARCH_TEXT, UPDATED_AT) ON TABLE CASE_SEARCH TO ${import_user};
 GRANT SELECT, INSERT ON TABLE CASE_ATTACHMENT, CASE_ATTACHMENT_CHUNK TO ${import_user};
 GRANT USAGE ON SEQUENCE SEQ_CASE_ATTACHMENT TO ${import_user};
 GRANT SELECT, INSERT                 ON TABLE IMPORT_LEDGER        TO ${import_user};
+GRANT SELECT, INSERT                 ON TABLE IMPORT_LEDGER_PART   TO ${import_user};
 GRANT SELECT, INSERT, DELETE         ON TABLE IMPORT_OWNER_PENDING TO ${import_user};
 -- relink-owners (part z2) hands a case to its legacy owner: the owner and the change stamp of a case, nothing else.
 GRANT UPDATE (OWNER_ID, UPDATED_AT, UPDATED_BY, VERSION) ON TABLE CASE_RECORD TO ${import_user};

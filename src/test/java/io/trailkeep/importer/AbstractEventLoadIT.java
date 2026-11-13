@@ -83,6 +83,7 @@ abstract class AbstractEventLoadIT extends LoadSupport {
                 .isEqualTo(1);
         assertThat(count("SELECT COUNT(*) FROM CASE_IMPORTED_EVENT WHERE RUN_ID = ?", run))
                 .isEqualTo(5);
+        assertWrittenHashesHold(run);
     }
 
     @Test

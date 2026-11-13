@@ -77,12 +77,14 @@
 --   SEQ_IMPORT_LEDGER     SELECT     -
 --   IMPORT_OWNER_PENDING  S          -            open cases awaiting their legacy owner, for counts (V18)
 --   SEQ_IMPORT_OWNER_PENDING SELECT  -
+--   IMPORT_LEDGER_PART    S          -            the comments a ledger row wrote besides its target (V19)
 --
 -- The import user: S I D on the staging tables (IMPORT_STG_PERSON, _CASE, _COMMENT, _ATTACHMENT, _EVENT and
 -- IMPORT_RUN_CHECKPOINT; V13), which no other user may even read, and on IMPORT_ISSUE and IMPORT_RUN_SUMMARY; S I on
 -- IMPORT_RUN with UPDATE of the status, hash, scanning-mode, count and staging-expiry columns, never the sign-off;
 -- S I on CASE_IMPORTED_EVENT, insert-only, and SELECT (NEXTVAL) on SEQ_CASE_IMPORTED_EVENT (V16); S I on
--- IMPORT_LEDGER, insert-only, and SELECT on SEQ_IMPORT_LEDGER (V17). The load (WP-26 part t) writes cases with their
+-- IMPORT_LEDGER, insert-only, with its written hashes (V19), S I on IMPORT_LEDGER_PART, insert-only (V19), and SELECT
+-- on SEQ_IMPORT_LEDGER (V17). The load (WP-26 part t) writes cases with their
 -- closures: S I on CASE_RECORD, CASE_SLA, CASE_SEARCH, CLOSURE_REQUEST and AUDIT_EVENT, and SELECT (NEXTVAL) on
 -- SEQ_CASE_NUMBER besides the sequences below; with their comments (part u) S I on CASE_COMMENT and UPDATE of
 -- CASE_SEARCH's SEARCH_TEXT and UPDATED_AT alone, which appending a comment to the search text needs; with their
@@ -190,6 +192,8 @@ DECLARE
     UNION ALL SELECT 'SEQ_IMPORT_LEDGER', 'SELECT', UPPER('${app_user}') FROM DUAL
     UNION ALL SELECT 'IMPORT_LEDGER', 'SELECT,INSERT', UPPER('${import_user}') FROM DUAL
     UNION ALL SELECT 'SEQ_IMPORT_LEDGER', 'SELECT', UPPER('${import_user}') FROM DUAL
+    UNION ALL SELECT 'IMPORT_LEDGER_PART', 'SELECT', UPPER('${app_user}') FROM DUAL
+    UNION ALL SELECT 'IMPORT_LEDGER_PART', 'SELECT,INSERT', UPPER('${import_user}') FROM DUAL
     -- Pending owners (V18): the screen may count them; the load writes them, relink-owners deletes them.
     UNION ALL SELECT 'IMPORT_OWNER_PENDING', 'SELECT', UPPER('${app_user}') FROM DUAL
     UNION ALL SELECT 'SEQ_IMPORT_OWNER_PENDING', 'SELECT', UPPER('${app_user}') FROM DUAL

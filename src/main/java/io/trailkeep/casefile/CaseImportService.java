@@ -243,4 +243,23 @@ public interface CaseImportService {
      * @return those that exist, by id
      */
     Map<Long, Existing> existing(Collection<Long> caseIds);
+
+    /**
+     * Imported cases as the database holds them (WP-26 part aa1, design §9): each case's canonical written form
+     * ({@code WrittenForm}), which the importer hashes into its ledger when it writes the case and again in {@code
+     * reconcile}. It leaves out what later work changes in place on any case: version, change stamps, archiving, purge
+     * and legal hold. Pending writes of the caller's transaction are flushed first, so they are read as stored.
+     *
+     * @param caseIds the cases, any number
+     * @return each existing case's form, by id
+     */
+    Map<Long, String> writtenCases(Collection<Long> caseIds);
+
+    /**
+     * Imported comments as the database holds them, like {@link #writtenCases}; a comment is insert-only.
+     *
+     * @param commentIds the comments, any number
+     * @return each existing comment's form, by id
+     */
+    Map<Long, String> writtenComments(Collection<Long> commentIds);
 }

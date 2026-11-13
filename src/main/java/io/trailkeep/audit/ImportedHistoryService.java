@@ -3,6 +3,8 @@
 package io.trailkeep.audit;
 
 import java.time.Instant;
+import java.util.Collection;
+import java.util.Map;
 import java.util.Set;
 import org.jspecify.annotations.Nullable;
 
@@ -84,4 +86,14 @@ public interface ImportedHistoryService {
      *     {@link #FIELDS}, or a plain value over {@link #MAX_VALUE} characters
      */
     long record(ImportedEvent event);
+
+    /**
+     * Imported legacy history events as the database holds them (WP-26 part aa1, design §9): each one's canonical
+     * written form ({@code WrittenForm}), which the importer hashes into its ledger when it writes it and again in
+     * {@code reconcile}. Pending writes of the caller's transaction are flushed first, so they are read as stored.
+     *
+     * @param ids the events, any number
+     * @return each existing one's form, by id
+     */
+    Map<Long, String> writtenEvents(Collection<Long> ids);
 }

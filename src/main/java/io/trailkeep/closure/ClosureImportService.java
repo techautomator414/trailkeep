@@ -3,6 +3,8 @@
 package io.trailkeep.closure;
 
 import java.time.Instant;
+import java.util.Collection;
+import java.util.Map;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -46,4 +48,14 @@ public interface ClosureImportService {
      * @throws ClosureException {@code INVALID} for a blank or over-long outcome, an over-long summary or a future time
      */
     long importClosure(ImportedClosure closure);
+
+    /**
+     * Imported closures, by case, as the database holds them (WP-26 part aa1, design §9): each one's canonical written
+     * form ({@code WrittenForm}), which the importer hashes into its ledger when it writes it and again in {@code
+     * reconcile}. Pending writes of the caller's transaction are flushed first, so they are read as stored.
+     *
+     * @param ids the cases, any number
+     * @return each existing one's form, by case id; a case without an imported closure is absent
+     */
+    Map<Long, String> writtenClosures(Collection<Long> ids);
 }
