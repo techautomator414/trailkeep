@@ -968,6 +968,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   requests. `ForwardedHeadersPrivatePeerIT` sends spoofed `X-Forwarded-For` and `X-Forwarded-Proto` from a container
   on Docker's bridge network, a private address outside the router pattern, and the application keeps the real peer
   and scheme.
+- Browser-level security E2E (WP-28 part b), on every PR. `CspCrawlIT` opens every page the handler mapping lists in
+  Chromium as four dev-realm people: each carries the exact CSP with a fresh nonce on every script, no inline style or
+  handler, and the browser reports no violation on load, with each dialog open or after an htmx swap; every page
+  answers 200 to at least one of them. `RestrictedLeakCrawlIT` follows every link a Reader of the team and an Analyst
+  of another team can reach, with searches and CSV exports: a restricted case's text appears in none of it.
+  `UploadAbuseBrowserIT` uploads a disguised executable, HTML, SVG, an oversize file, EICAR (against a real ClamAV) and
+  a hostile file name through the case page. The crawl found that responses carried no `Referrer-Policy`; they now
+  send `same-origin`, as BUILD_PLAN §9 requires.
 
 ### Documentation
 
