@@ -201,5 +201,88 @@ file rather than stage a broken row.
 
 ## SQL Server
 
-Its recipe (`sqlcmd` writing JSON Lines from a database snapshot) is added with its recipe test. Until then, read SQL
-Server through the JDBC source.
+Export **from a database snapshot** (or a restored copy): every `sqlcmd` connection then reads the same state, so the
+files need no common transaction. Creating the snapshot is a step for the database administrator, not for the source
+account, which only reads it (a snapshot keeps the source database's users and grants):
+
+```sql
+CREATE DATABASE legacy_export ON (NAME = <logical data file name>, FILENAME = '<path>/legacy_export.ss')
+  AS SNAPSHOT OF <legacy database>;
+-- ... export ...
+DROP DATABASE legacy_export;
+```
+
+`bcp -c` does not write RFC 4180 CSV (no quoting, no header, an empty string as a lone `0x00`), so the recipe writes
+**JSON Lines**: `FOR JSON PATH, WITHOUT_ARRAY_WRAPPER, INCLUDE_NULL_VALUES` over the mapping's own query turns each
+row into one JSON object on one line, with line breaks inside values escaped, `NULL` and the empty string kept apart,
+and dates and times in ISO-8601. `sqlcmd -y 0` stops `sqlcmd` cutting long values at its default 256 characters
+and leaves out the column headings, so it cannot be combined with `-h` (`sqlcmd` refuses `-h -1 -y 0`).
+
+<!-- recipe: sqlserver/export.sh (SqlServerExportRecipeIT) -->
+```sh
+#!/bin/sh
+# Exports each entity of the snapshot database as JSON Lines, with the row counts and the snapshot's identity for
+# manifest.sh. The connection comes from sqlcmd's own variables: SQLCMDSERVER, SQLCMDDBNAME (the snapshot),
+# SQLCMDUSER (the source account) and SQLCMDPASSWORD. SQLCMD_TLS holds TLS options; leave it unset to verify the
+# server's certificate (-C, trusting any certificate, is for a test server only).
+set -eu
+run() {
+  sqlcmd ${SQLCMD_TLS:-} -b -y 0 -f o:65001 -Q "SET NOCOUNT ON; $1" -o "$2"
+}
+json() {
+  run "SELECT (SELECT r.* FOR JSON PATH, WITHOUT_ARRAY_WRAPPER, INCLUDE_NULL_VALUES) FROM ($1) AS r" "$2"
+}
+json "SELECT user_id, name, mail FROM dbo.people" people.jsonl
+json "SELECT case_id, subject, details, state, opened, found_on, owner FROM dbo.cases" cases.jsonl
+json "SELECT note_id, case_id, author, created, body FROM dbo.notes" notes.jsonl
+run "SELECT 'people.jsonl,person,' + CAST(COUNT(*) AS VARCHAR(20)) FROM dbo.people
+  UNION ALL SELECT 'cases.jsonl,case,' + CAST(COUNT(*) AS VARCHAR(20)) FROM dbo.cases
+  UNION ALL SELECT 'notes.jsonl,comment,' + CAST(COUNT(*) AS VARCHAR(20)) FROM dbo.notes" counts.csv
+run "SELECT name + '@' + CONVERT(VARCHAR(33), create_date, 126) FROM sys.databases WHERE name = DB_NAME()
+  AND source_database_id IS NOT NULL" snapshot.txt
+test -s snapshot.txt || { echo "SQLCMDDBNAME is not a database snapshot" >&2; exit 1; }
+```
+
+<!-- recipe: sqlserver/manifest.sh (SqlServerExportRecipeIT) -->
+```sh
+#!/bin/sh
+# Writes manifest.yaml for the files export.sh left in this folder: the snapshot, and each file's entity, row count
+# and SHA-256. Row counts come from the database snapshot.
+set -eu
+{
+  printf 'version: 1\n'
+  printf 'fixedPoint: { kind: snapshot, value: "%s" }\n' "$(tr -d ' \r\n' < snapshot.txt)"
+  printf 'files:\n'
+  while IFS=, read -r file entity rows; do
+    printf '  - { file: %s, entity: %s, rows: %s, sha256: %s }\n' \
+      "$file" "$entity" "$(printf '%s' "$rows" | tr -d ' \r')" "$(sha256sum "$file" | cut -d ' ' -f 1)"
+  done < counts.csv
+} > manifest.yaml
+rm snapshot.txt counts.csv
+```
+
+Run both in an empty folder:
+
+```sh
+SQLCMDSERVER=<legacy host> SQLCMDDBNAME=legacy_export SQLCMDUSER=trailkeep_source SQLCMDPASSWORD=<from your secret store> sh export.sh
+sh manifest.sh
+```
+
+**Long values.** Design §4.2.2 left open whether `-y 0` still cuts a value at 1 MB. With the `sqlcmd` of
+mssql-tools18 it does not: the test exports a 1.1 MB description whole. Should another `sqlcmd` build cut a value,
+its JSON line ends unclosed and the extract refuses the file (`ROW_UNREADABLE`), as for Oracle's long rows, rather
+than stage a shortened row.
+
+**Attachments** are read through the JDBC source (a content query): `bcp -n` writes a length prefix before each value,
+and binary data has no place in JSON Lines. Leave the attachment entity out of a files export, as for Oracle.
+
+**The mapping for these files** is the same as for Oracle: `.jsonl` files, `source: { ..., kind: files, manifest:
+manifest.yaml }`. A `DATETIME` keeps its 1/300-second precision in both sources, so file and JDBC rows still hash
+alike.
+
+**What the test verified** (`SqlServerExportRecipeIT`, SQL Server 2022 Developer edition, `-Psqlserver-it`): the export
+and manifest scripts run unchanged with the image's `sqlcmd` (mssql-tools18) as the source account, against a snapshot
+the administrator created; the files pass the manifest checks; values with commas, quotes and line breaks, `NULL` next
+to the empty string, non-ASCII text, `DATETIME` and seven-digit `DATETIME2` values and an integer key arrive intact;
+the file extract and the JDBC extract of the same snapshot stage every person, case and comment with the same keyed
+row hash and the same issues; and a 1.1 MB description is exported and staged whole.

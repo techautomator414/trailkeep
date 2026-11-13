@@ -9,6 +9,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- The SQL Server export recipe (WP-26 part ae3, docs/design/importer.md §4.2.2, §11): `docs/importer/export-recipes.md`
+  gives the administrator's database snapshot as the fixed point and a POSIX `sh` script that exports each entity as
+  JSON Lines with `sqlcmd -y 0` and `FOR JSON PATH, WITHOUT_ARRAY_WRAPPER, INCLUDE_NULL_VALUES` over the mapping's
+  own query, using `sqlcmd`'s own connection variables, plus its manifest script; attachments stay JDBC-only.
+  `SqlServerExportRecipeIT` (`-Psqlserver-it`) runs both unchanged with the image's `sqlcmd` as the source account:
+  the file and JDBC extracts of the snapshot stage every person, case and comment with the same keyed row hash, and a
+  1.1 MB description is exported whole, settling the design's open 1 MB question for mssql-tools18. The test also
+  showed that `sqlcmd` refuses the design's `-h -1` next to `-y 0` (which already omits headings).
 - The Oracle export recipe (WP-26 part ae2, docs/design/importer.md §4.2.2, §11): `docs/importer/export-recipes.md`
   gives the one-session SQL\*Plus script (time zone and NLS formats pinned, one `SET TRANSACTION READ ONLY`, each
   entity spooled as JSON Lines with `JSON_OBJECT(* RETURNING CLOB)` over the mapping's own query, the SCN as the fixed
