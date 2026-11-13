@@ -69,11 +69,27 @@ public class StagedEvent extends StagedRow {
         return eventAt;
     }
 
+    public @Nullable String getWhoKey() {
+        return whoKey;
+    }
+
+    public @Nullable String getWhoName() {
+        return whoName;
+    }
+
     public @Nullable String getKind() {
         return kind;
     }
 
     public @Nullable String getFieldName() {
         return fieldName;
+    }
+
+    public @Nullable String getOldValue() {
+        return oldValue;
+    }
+
+    public @Nullable String getNewValue() {
+        return newValue;
     }
 }
