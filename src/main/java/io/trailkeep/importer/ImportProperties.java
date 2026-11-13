@@ -33,6 +33,8 @@ import org.springframework.util.unit.DataSize;
  * @param allowMappingChange whether a dry run accepts that the source's rows were loaded under another mapping, and
  *     then compares no row hash with the ledger's ({@link LedgerDelta}, design §3.1)
  * @param apply whether {@code relink-owners} changes owners; a dry run otherwise ({@link RelinkOwnersCommand}, §7.3)
+ * @param reportsDir the directory on the run volume where {@code reconcile} writes each run's report files, under a
+ *     folder named by the run id ({@link ReconcileReport}, design §9); required by {@code reconcile}
  */
 @ConfigurationProperties("import")
 record ImportProperties(
@@ -45,7 +47,8 @@ record ImportProperties(
         @Nullable Path contentArea,
         @Nullable LocalDate goLive,
         @DefaultValue("false") boolean allowMappingChange,
-        @DefaultValue("false") boolean apply) {
+        @DefaultValue("false") boolean apply,
+        @Nullable Path reportsDir) {
 
     /**
      * {@code import.attachments} (design §4.3 "Size").

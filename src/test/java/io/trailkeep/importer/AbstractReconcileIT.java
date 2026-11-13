@@ -5,19 +5,25 @@ package io.trailkeep.importer;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
 
+import io.trailkeep.shared.csv.CsvFormat;
 import io.trailkeep.testsupport.CaseSeed;
 import io.trailkeep.user.TeamRole;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.PosixFilePermissions;
+import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 /**
- * {@code reconcile} as the import user (WP-26 part aa2, design §9): a finished load reconciles, and still does once
+ * {@code reconcile} as the import user (WP-26 parts aa2 and aa3, design §9), its report files written under {@code
+ * import.reports-dir} with keyed hashes and ids only, owner-only: a finished load reconciles, and still does once
  * {@code relink-owners} has handed a case to its legacy owner, which is counted as relinked, never as a difference;
  * cases archived or purged since, with their children, and rows loaded before written hashes were recorded are counted
  * and skipped; a row changed behind Trailkeep's back is a difference, recorded by keyed hash and Trailkeep id only,
@@ -38,7 +44,7 @@ abstract class AbstractReconcileIT extends LoadSupport {
         comment(run, "n1", "c2");
         load(run, mapping).close();
 
-        command("reconcile", run, mapping).close();
+        reconcile(run, mapping);
 
         assertThat(status(run)).isEqualTo("RECONCILED");
         assertThat(reconcileFigures(run))
@@ -57,7 +63,7 @@ abstract class AbstractReconcileIT extends LoadSupport {
         command("relink-owners", relink, mapping, "--import.apply=true").close();
         assertThat(number(loadedCase("c1"), "OWNER_ID")).isEqualTo(legacy);
 
-        command("reconcile", run, mapping).close();
+        reconcile(run, mapping);
 
         assertThat(status(run)).isEqualTo("RECONCILED");
         assertThat(reconcileFigures(run))
@@ -83,7 +89,7 @@ abstract class AbstractReconcileIT extends LoadSupport {
         archive(number(loadedCase("c1"), "ID"), false);
         archive(number(loadedCase("c2"), "ID"), true);
 
-        command("reconcile", run, mapping).close();
+        reconcile(run, mapping);
 
         assertThat(status(run)).isEqualTo("RECONCILED");
         assertThat(reconcileFigures(run))
@@ -123,7 +129,7 @@ abstract class AbstractReconcileIT extends LoadSupport {
                 analyst,
                 number(loadedCase("c3"), "ID"));
 
-        command("reconcile", run, mapping).close();
+        reconcile(run, mapping);
 
         assertThat(status(run)).isEqualTo("LOADED");
         assertThat(reconcileFigures(run))
@@ -137,10 +143,14 @@ abstract class AbstractReconcileIT extends LoadSupport {
                 .containsExactlyInAnyOrder(
                         "CASE ERROR WRITTEN_DIFFERS " + hash("c2") + " " + tampered,
                         "COMMENT ERROR WRITTEN_DIFFERS " + hash("n1") + " " + comment);
+        assertTheReportHoldsKeyedHashesAndIdsOnly(directory, run, tampered, comment);
+        assertThat(catchThrowable(() -> command("reconcile", run, mapping)))
+                .as("no reports directory")
+                .hasStackTraceContaining("import.reports-dir must name a directory");
 
         // As a ledger written before V19 recorded no written hashes: counted on their own, and the issues replaced.
         jdbc.update("UPDATE IMPORT_LEDGER SET WRITTEN_HASH = NULL, CLOSURE_HASH = NULL WHERE RUN_ID = ?", run);
-        command("reconcile", run, mapping).close();
+        reconcile(run, mapping);
 
         assertThat(status(run)).isEqualTo("RECONCILED");
         assertThat(reconcileFigures(run))
@@ -172,7 +182,7 @@ abstract class AbstractReconcileIT extends LoadSupport {
         jdbc.update(
                 "UPDATE IMPORT_STG_CASE SET ROW_HASH = ? WHERE RUN_ID = ? AND LEGACY_KEY = 'c2'", "ef".repeat(32), run);
 
-        command("reconcile", run, mapping).close();
+        reconcile(run, mapping);
 
         assertThat(status(run)).isEqualTo("LOADED");
         assertThat(reconcileFigures(run))
@@ -190,7 +200,7 @@ abstract class AbstractReconcileIT extends LoadSupport {
                         "CASE ERROR ROW_HASH_DIFFERS " + hash("c2") + " " + changed,
                         "CASE ERROR UNACCOUNTED " + hash("c8") + " -");
 
-        command("reconcile", run, mapping).close();
+        reconcile(run, mapping);
         assertThat(reconcileFigures(run))
                 .as("its own issues hide nothing from the next reconcile")
                 .containsEntry("UNACCOUNTED CASE", 1L)
@@ -202,7 +212,7 @@ abstract class AbstractReconcileIT extends LoadSupport {
                 .isEqualTo(1);
 
         jdbc.update("UPDATE IMPORT_RUN SET STAGING_PURGED_AT = ? WHERE ID = ?", Timestamp.from(Instant.now()), run);
-        command("reconcile", run, mapping).close();
+        reconcile(run, mapping);
 
         assertThat(status(run)).isEqualTo("LOADED");
         assertThat(reconcileFigures(run))
@@ -223,6 +233,32 @@ abstract class AbstractReconcileIT extends LoadSupport {
                 "CASE_REFUSED",
                 null,
                 Instant.now())));
+    }
+
+    /** The run's report files: the differences by keyed hash and id, no value, owner-only (WP-26 part aa3). */
+    private void assertTheReportHoldsKeyedHashesAndIdsOnly(Path directory, long run, long tampered, long comment)
+            throws Exception {
+        Path report = directory.resolve(Long.toString(run));
+        String csv = Files.readString(report.resolve("reconcile.csv"));
+        String html = Files.readString(report.resolve("reconcile.html"));
+        assertThat(csv)
+                .startsWith(CsvFormat.BOM + "\"row\",")
+                .contains("\"difference\",\"COMMENT\",\"WRITTEN_DIFFERS\",\"\",\"" + hash("n1") + "\",\"" + comment
+                        + "\"")
+                .contains("\"verdict\",\"\",\"NOT_RECONCILED\"");
+        assertThat(html).contains("<td>WRITTEN_DIFFERS</td><td>" + hash("c2") + "</td><td>" + tampered + "</td>");
+        assertThat(csv + html).as("no staged or written value").doesNotContain("Synthetic", "example.test");
+        if (report.getFileSystem().supportedFileAttributeViews().contains("posix")) {
+            assertThat(Files.getPosixFilePermissions(report)).isEqualTo(PosixFilePermissions.fromString("rwx------"));
+            assertThat(Files.getPosixFilePermissions(report.resolve("reconcile.html")))
+                    .isEqualTo(PosixFilePermissions.fromString("rw-------"));
+        }
+    }
+
+    /** Runs {@code reconcile} with the test's folder, which holds the mapping, as the reports directory. */
+    private void reconcile(long run, Path mapping) throws SQLException {
+        command("reconcile", run, mapping, "--import.reports-dir=" + Objects.requireNonNull(mapping.getParent()))
+                .close();
     }
 
     private void comment(long run, String key, String caseKey) {

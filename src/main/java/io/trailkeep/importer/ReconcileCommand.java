@@ -17,6 +17,7 @@ import io.trailkeep.importer.staging.StagedRow;
 import io.trailkeep.importer.staging.StagingStore;
 import io.trailkeep.user.ImportPeopleService;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.time.InstantSource;
 import java.util.EnumSet;
@@ -51,8 +52,9 @@ import org.springframework.transaction.support.TransactionTemplate;
  * <p>Each difference ({@link Reconciliation#DIFFERENCES}) is a {@code RECONCILE} ERROR issue with the row's keyed hash
  * and Trailkeep id. The counts replace the run's {@code RECONCILE_*} figures; the verdict, {@link
  * Reconciliation#VERDICT}, is 1 and the run {@code RECONCILED} only when staging was there and nothing differs,
- * otherwise 0 and the run {@code LOADED}. It may run again, each time replacing its own issues and figures. A run that
- * is not an import run whose load finished is refused before anything is read.
+ * otherwise 0 and the run {@code LOADED}. The same counts, verdict and differences then go to the run's report files
+ * ({@link ReconcileReport}). It may run again, each time replacing its own issues, figures and files. A run that is not
+ * an import run whose load finished, or a missing reports directory, is refused before anything is read.
  */
 @Component
 @Profile("importer")
@@ -125,6 +127,7 @@ class ReconcileCommand {
     Outcome run(long runId) {
         ImportRun run = runs.findById(runId).orElseThrow(() -> new IllegalStateException("No import run " + runId));
         refuseUnlessFinished(run);
+        final Path folder = ReconcileReport.folder(properties.reportsDir(), runId);
         SecretKey key = properties.hashKeySpec();
         Reconciliation found = new Reconciliation(runId, key, clock.instant());
         boolean staged = run.getStagingPurgedAt() == null;
@@ -151,6 +154,7 @@ class ReconcileCommand {
             current.loadMoved(reconciled ? ImportRun.Status.RECONCILED : ImportRun.Status.LOADED, 0, clock.instant());
             runs.save(current);
         });
+        ReconcileReport.write(folder, runId, found, staged, reconciled);
         return new Outcome(reconciled, found.differences());
     }
 

@@ -269,6 +269,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   either side; otherwise the run stays `LOADED`. Once staging is purged, `RECONCILE_STAGING_PURGED` says the source
   could not be compared and nothing reconciles. `RECONCILE` issues only report: neither a later load nor the next
   reconcile treats them as a row's failure.
+- `reconcile`'s report files (WP-26 part aa3, docs/design/importer.md §9): `reconcile.csv` and `reconcile.html` in
+  `<import.reports-dir>/<run id>/` on the Job's run volume, holding the counts per entity and outcome, the verdict and
+  each difference as entity, code, keyed hash and Trailkeep id, never a legacy key or value. The CSV goes through the
+  shared `CsvFormat` (BOM, quoted cells, formula cells defused); the HTML is one static, escaped page with no script
+  (`default-src 'none'`), a `lang`, a title, captioned tables with header scopes, and 0 axe violations. No symbolic link
+  is followed: the reports directory and the run's folder must be directories themselves, and an existing report file
+  is deleted, never written through, before the new one is created; folder and files are owner-only where POSIX
+  permissions exist. `reconcile` refuses to start without `import.reports-dir` naming a directory.
 - The Oracle source (WP-26 part o, docs/design/importer.md §4.1): a `kind: jdbc` Oracle mapping is test-fetched by
   `validate-mapping` and extracted in one `SET TRANSACTION READ ONLY` transaction, with the session in UTC and ISO
   date, timestamp and number formats; `DATE` and `TIMESTAMP` read as local date-times, `TIMESTAMP WITH TIME ZONE` with
