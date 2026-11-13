@@ -17,15 +17,17 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import javax.crypto.spec.SecretKeySpec;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 /**
- * {@code load} as the import user (WP-26 part t, design §3 step 5, §8.2): a signed-off run's cases written with their
- * closures, owners as the dry run chose them and import ledger rows, a case with an ERROR skipped, a second load
- * writing nothing; each unmet condition, a changed scanning mode among them, refused with its own code before anything
- * is written, as is a clamd stream limit below the importer's cap; the run lock refusing
+ * {@code load} as the import user (WP-26 parts t and z1, design §3 step 5, §7.3, §8.2): a signed-off run's cases
+ * written with their closures, owners as the dry run chose them and import ledger rows, a case with an ERROR skipped,
+ * a second load writing nothing; a pending owner row, keyed hashes only, for each open case given the default owner
+ * whose legacy owner may be matched later; each unmet condition, a changed scanning mode among them, refused with its
+ * own code before anything is written, as is a clamd stream limit below the importer's cap; the run lock refusing
  * while a live load holds the run or another run of its source, and taken over once that load is stale; cases the
  * rules, the owners or the import APIs refuse at the load recorded as {@code LOAD} issues while the load goes on, and
  * tried again by the next load; and a load stopped by a case it cannot finish left {@code FAILED}, the next load
@@ -95,6 +97,61 @@ abstract class AbstractLoadIT extends LoadSupport {
         assertThat(jdbc.queryForMap("SELECT STATUS, ROWS_LOADED FROM IMPORT_RUN WHERE ID = ?", run))
                 .containsEntry("STATUS", "LOADED")
                 .satisfies(row -> assertThat(number(row, "ROWS_LOADED")).isEqualTo(3));
+    }
+
+    @Test
+    void loadRecordsEachOpenCaseGivenTheDefaultOwnerAsPendingWithKeyedHashesOnly(@TempDir Path directory)
+            throws Exception {
+        Path mapping = mapping(directory);
+        long run = signedOffRun(mapping);
+        String person = "INSERT INTO IMPORT_STG_PERSON (RUN_ID, LEGACY_KEY, ROW_HASH, DISPLAY_NAME, EXTERNAL_ID)"
+                + " VALUES (?, ?, ?, ?, ?)";
+        jdbc.update(person, run, "p3", "ab".repeat(32), "Synthetic Subject Owner", "synthetic-legacy-subject");
+        jdbc.update(person, run, "p4", "ab".repeat(32), "Synthetic Nameless Owner", null);
+        // p5 matches a reader, who may not own the team's cases: as if unmatched, so the default owner, pending.
+        CaseSeed seed = new CaseSeed(jdbc);
+        long reader = seed.user();
+        users.add(reader);
+        seed.member(reader, team, TeamRole.READER);
+        jdbc.update(person, run, "p5", "ab".repeat(32), "Synthetic Reader Owner", null);
+        String email = "UPDATE IMPORT_STG_PERSON SET EMAIL = ? WHERE RUN_ID = ? AND LEGACY_KEY = ?";
+        jdbc.update(email, "seed" + reader + "@example.test", run, "p5");
+        jdbc.update(email, " NoBody@Example.TEST", run, "p2");
+        stage(run, "c1", "OPEN", "p1");
+        stage(run, "c2", "OPEN", "p2");
+        stage(run, "c3", "CLOSED", "p2");
+        stage(run, "c4", "OPEN", "p3");
+        stage(run, "c5", "OPEN", "p4");
+        stage(run, "c6", "OPEN", "p5");
+
+        load(run, mapping).close();
+
+        SecretKeySpec key = new SecretKeySpec(HASH_KEY, "HmacSHA256");
+        assertThat(jdbc.query(
+                        "SELECT CASE_ID, DEFAULT_OWNER_ID, EMAIL_HMAC, EXTERNAL_ID_HMAC FROM IMPORT_OWNER_PENDING"
+                                + " WHERE RUN_ID = ? ORDER BY CASE_ID",
+                        (row, index) ->
+                                row.getLong(1) + " " + row.getLong(2) + " " + row.getString(3) + " " + row.getString(4),
+                        run))
+                .as("open cases given the default owner, whose legacy owner can be matched later; never plain values")
+                .containsExactlyInAnyOrder(
+                        pending("c2", ImportOwnerPending.emailHmac(key, "nobody@example.test"), null),
+                        pending("c4", null, ImportOwnerPending.externalIdHmac(key, "synthetic-legacy-subject")),
+                        pending("c6", ImportOwnerPending.emailHmac(key, "seed" + reader + "@example.test"), null));
+        assertThat(number(loadedCase("c1"), "OWNER_ID"))
+                .as("kept its legacy owner")
+                .isEqualTo(analyst);
+        assertThat(ImportOwnerPending.emailHmac(key, "x"))
+                .as("an email and an external id never hash alike")
+                .isNotEqualTo(ImportOwnerPending.externalIdHmac(key, "x"))
+                .isNotEqualTo(hash("x"));
+        assertThat(loadedCase("c5"))
+                .as("a legacy owner with neither address nor id cannot be matched: no pending row")
+                .satisfies(row -> assertThat(number(row, "OWNER_ID")).isEqualTo(manager));
+    }
+
+    private String pending(String key, @Nullable String emailHmac, @Nullable String externalIdHmac) {
+        return number(loadedCase(key), "ID") + " " + manager + " " + emailHmac + " " + externalIdHmac;
     }
 
     @Test

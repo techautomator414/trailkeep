@@ -29,7 +29,8 @@ final class GrantsMatrix {
      * Identity (V1), audit (V2), admin (V3), case (V4), comment (V4.1), pin (V4.2), attachment (V4.3), saved view
      * (V4.7), outbox (V4.8), alert (V4.9), update request (V4.10), closure (V5), reopen (V5.1), SLA job (V6), report
      * delivery (V7), legal hold history (V8), preference (V9), import run (V10), import staging (V13), imported
-     * history (V16) and import ledger (V17) tables, and the column each probe touches: the first key column.
+     * history (V16), import ledger (V17) and pending owner (V18) tables, and the column each probe touches: the first
+     * key column.
      */
     static final Map<String, String> TABLES = Map.ofEntries(
             Map.entry("APP_USER", "ID"),
@@ -73,7 +74,8 @@ final class GrantsMatrix {
             Map.entry("IMPORT_STG_EVENT", "RUN_ID"),
             Map.entry("IMPORT_RUN_CHECKPOINT", "RUN_ID"),
             Map.entry("CASE_IMPORTED_EVENT", "ID"),
-            Map.entry("IMPORT_LEDGER", "ID"));
+            Map.entry("IMPORT_LEDGER", "ID"),
+            Map.entry("IMPORT_OWNER_PENDING", "ID"));
 
     /** What the runtime user may do; anything absent is denied. */
     static final Map<String, Set<Privilege>> APP_USER_GRANTS = Map.ofEntries(
@@ -129,7 +131,9 @@ final class GrantsMatrix {
             // Legacy history: read by the History tab, written only by the importer, removed only by purge (V16).
             Map.entry("CASE_IMPORTED_EVENT", EnumSet.of(Privilege.SELECT)),
             // What each load wrote: written only by the importer, never changed (V17).
-            Map.entry("IMPORT_LEDGER", EnumSet.of(Privilege.SELECT)));
+            Map.entry("IMPORT_LEDGER", EnumSet.of(Privilege.SELECT)),
+            // Open cases awaiting their legacy owner: counted by the screen, written and deleted by the importer (V18).
+            Map.entry("IMPORT_OWNER_PENDING", EnumSet.of(Privilege.SELECT)));
 
     /** The purge user (WP-24 part c): deletes purged content and old runs, audits each tombstone, records its run. */
     static final Map<String, Set<Privilege>> PURGE_USER_GRANTS = Stream.of(
@@ -176,6 +180,8 @@ final class GrantsMatrix {
                         "IMPORT_STG_ATTACHMENT",
                         "IMPORT_STG_EVENT",
                         "IMPORT_RUN_CHECKPOINT" -> EnumSet.of(Privilege.SELECT, Privilege.INSERT, Privilege.DELETE);
+                // Written by the load, deleted by relink-owners once a case has its legacy owner, never changed (V18).
+                case "IMPORT_OWNER_PENDING" -> EnumSet.of(Privilege.SELECT, Privilege.INSERT, Privilege.DELETE);
                 default -> EnumSet.of(Privilege.SELECT);
             }));
 
@@ -203,8 +209,12 @@ final class GrantsMatrix {
             "SEQ_IMPORT_RUN");
 
     /** The sequences only the importer draws from; the runtime user may only see them, for validate. */
-    static final List<String> IMPORTER_SEQUENCES =
-            List.of("SEQ_IMPORT_ISSUE", "SEQ_IMPORT_RUN_SUMMARY", "SEQ_CASE_IMPORTED_EVENT", "SEQ_IMPORT_LEDGER");
+    static final List<String> IMPORTER_SEQUENCES = List.of(
+            "SEQ_IMPORT_ISSUE",
+            "SEQ_IMPORT_RUN_SUMMARY",
+            "SEQ_CASE_IMPORTED_EVENT",
+            "SEQ_IMPORT_LEDGER",
+            "SEQ_IMPORT_OWNER_PENDING");
 
     /** The runtime user's sequences the load draws from too: its cases, closures, comments and attachments (t, u). */
     static final List<String> LOAD_SEQUENCES = List.of(
