@@ -30,6 +30,9 @@ interface ImportLedgerRepository extends Repository<ImportLedgerEntry, Long> {
     List<ImportLedgerEntry> findBySourceIdAndEntityAndRunIdNotAndLegacyKeyGreaterThanOrderByLegacyKeyAsc(
             String sourceId, ImportIssue.Subject entity, long runId, String after, Limit limit);
 
+    /** The next rows one run's load wrote, in id order, after an id; {@code reconcile} reads them a page at a time. */
+    List<ImportLedgerEntry> findByRunIdAndIdGreaterThanOrderByIdAsc(long runId, long after, Limit limit);
+
     /** How many rows a load wrote for a source, in any run. */
     long countBySourceId(String sourceId);
 

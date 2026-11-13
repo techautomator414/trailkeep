@@ -7,6 +7,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.time.InstantSource;
 import java.util.List;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.ApplicationArguments;
@@ -18,8 +19,8 @@ import org.springframework.stereotype.Component;
  * Runs the one command a start of the {@code importer} profile was given (deploy/jobs/importer-job.yaml, design §2.1),
  * as the {@code TRAILKEEP_IMPORT} user; the process then ends ({@code TrailkeepApplication}). A failure fails the
  * start, so the Job's pod exits non-zero. {@code status}, {@code validate-mapping}, {@code extract}, {@code dry-run},
- * {@code load}, {@code relink-owners} and {@code purge-staging} exist so far; the other commands arrive with their PRs
- * (design §12) and are refused until then. Every command first applies the staging TTL. Logs carry run ids, codes
+ * {@code load}, {@code relink-owners}, {@code reconcile} and {@code purge-staging} exist so far; any other command is
+ * refused. Every command first applies the staging TTL. Logs carry run ids, codes
  * and counts only.
  */
 @Component
@@ -28,6 +29,9 @@ class ImportCommandRunner implements ApplicationRunner {
 
     private static final Logger LOG = LoggerFactory.getLogger(ImportCommandRunner.class);
 
+    private static final List<String> COMMANDS = List.of(
+            "status", "validate-mapping", "extract", "dry-run", "load", "relink-owners", "reconcile", "purge-staging");
+
     private final ImportProperties properties;
     private final ImportStatusReader statuses;
     private final ValidateMappingCommand validateMapping;
@@ -35,6 +39,7 @@ class ImportCommandRunner implements ApplicationRunner {
     private final DryRunCommand dryRun;
     private final LoadCommand load;
     private final RelinkOwnersCommand relink;
+    private final ReconcileCommand reconcile;
     private final StagingPurger purger;
     private final InstantSource clock;
 
@@ -46,6 +51,7 @@ class ImportCommandRunner implements ApplicationRunner {
             DryRunCommand dryRun,
             LoadCommand load,
             RelinkOwnersCommand relink,
+            ReconcileCommand reconcile,
             StagingPurger purger,
             InstantSource clock) {
         this.properties = properties;
@@ -55,6 +61,7 @@ class ImportCommandRunner implements ApplicationRunner {
         this.dryRun = dryRun;
         this.load = load;
         this.relink = relink;
+        this.reconcile = reconcile;
         this.purger = purger;
         this.clock = clock;
     }
@@ -62,8 +69,7 @@ class ImportCommandRunner implements ApplicationRunner {
     @Override
     public void run(ApplicationArguments args) {
         String command = properties.command();
-        if (!List.of("status", "validate-mapping", "extract", "dry-run", "load", "relink-owners", "purge-staging")
-                .contains(command)) {
+        if (!COMMANDS.contains(command)) {
             throw new IllegalStateException("Unknown or not yet available import command: " + command);
         }
         Long run = properties.run();
@@ -88,6 +94,16 @@ class ImportCommandRunner implements ApplicationRunner {
                     outcome.issues(),
                     outcome.fatal());
         }
+        afterSignOff(command, runId);
+        if ("purge-staging".equals(command)) {
+            purger.purge(runId, clock.instant());
+            LOG.info("Import run {}: staging purged", runId);
+        }
+        LOG.info("Import status: {}", statuses.status(runId, clock.instant()));
+    }
+
+    /** {@code load}, {@code relink-owners} and {@code reconcile}; any other command does nothing here. */
+    private void afterSignOff(@Nullable String command, long runId) {
         if ("load".equals(command)) {
             LoadCommand.Outcome outcome = load.run(runId, mapping());
             LOG.info(
@@ -107,11 +123,12 @@ class ImportCommandRunner implements ApplicationRunner {
                     outcome.relinked(),
                     properties.apply() ? "" : " in the dry run");
         }
-        if ("purge-staging".equals(command)) {
-            purger.purge(runId, clock.instant());
-            LOG.info("Import run {}: staging purged", runId);
+        if ("reconcile".equals(command)) {
+            LOG.info(
+                    "Import run {}: {} written rows differ",
+                    runId,
+                    reconcile.run(runId).differences());
         }
-        LOG.info("Import status: {}", statuses.status(runId, clock.instant()));
     }
 
     /** Every command first applies the staging TTL (design §5), whichever run it was started for. */

@@ -18,6 +18,8 @@ import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
+import org.hibernate.annotations.BatchSize;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -77,6 +79,7 @@ class ImportLedgerEntry {
 
     /** The comments the row wrote besides its target, in the order written (V19 {@code IMPORT_LEDGER_PART}). */
     @ElementCollection
+    @BatchSize(size = 500) // reconcile reads a page of rows' parts in one statement
     @CollectionTable(name = "IMPORT_LEDGER_PART", joinColumns = @JoinColumn(name = "LEDGER_ID"))
     @OrderColumn(name = "PART_NO")
     @Column(name = "COMMENT_ID", nullable = false)
@@ -170,6 +173,22 @@ class ImportLedgerEntry {
      * @param mappingHash the mapping hash it loads under
      */
     record Loaded(long runId, String sourceId, String mappingHash) {}
+
+    long getId() {
+        return Objects.requireNonNull(id, "not persisted");
+    }
+
+    ImportIssue.Subject getEntity() {
+        return entity;
+    }
+
+    long getTargetId() {
+        return targetId;
+    }
+
+    long getRunId() {
+        return runId;
+    }
 
     String getLegacyKey() {
         return legacyKey;

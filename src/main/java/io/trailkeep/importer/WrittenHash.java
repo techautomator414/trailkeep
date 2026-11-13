@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import javax.crypto.SecretKey;
+import org.jspecify.annotations.Nullable;
 
 /**
  * The import ledger's written hashes (WP-26 part aa1, docs/design/importer.md §9): the keyed hash of the written forms
@@ -57,6 +58,39 @@ final class WrittenHash {
      */
     static String of(SecretKey key, List<Long> ids, Map<Long, String> read) {
         return hash(key, forms(ids, read));
+    }
+
+    /**
+     * A row's hash recomputed later, as {@code reconcile} does (WP-26 part aa2), from the same reads the load made: the
+     * forms of the rows of one kind, then of the comments written besides them, in the order written; {@link #ofCase}
+     * is {@code recomputed(key, [case], cases, continued, comments)}, {@link #of} has no comments.
+     *
+     * @param key {@code import.hash-key}
+     * @param ids the rows of one kind
+     * @param read their forms, by id
+     * @param comments the comments written besides them
+     * @param commentForms their forms, by id
+     * @return the hash, or {@code null} when one of the rows no longer exists
+     */
+    static @Nullable String recomputed(
+            SecretKey key,
+            List<Long> ids,
+            Map<Long, String> read,
+            List<Long> comments,
+            Map<Long, String> commentForms) {
+        List<String> forms = new ArrayList<>();
+        return found(forms, ids, read) && found(forms, comments, commentForms) ? hash(key, forms) : null;
+    }
+
+    private static boolean found(List<String> forms, List<Long> ids, Map<Long, String> read) {
+        for (long id : ids) {
+            String form = read.get(id);
+            if (form == null) {
+                return false;
+            }
+            forms.add(form);
+        }
+        return true;
     }
 
     private static List<String> forms(List<Long> ids, Map<Long, String> read) {
