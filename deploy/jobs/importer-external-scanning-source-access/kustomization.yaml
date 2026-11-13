@@ -1,0 +1,12 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Charlie Genova and contributors
+# The importer Job (external scanning) with source access, for validate-mapping and extract only:
+#   kubectl -n <namespace> apply -k deploy/jobs/importer-external-scanning-source-access
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../importer-external-scanning
+
+components:
+  - ../components/source-access

@@ -62,7 +62,7 @@ metadata:
     app.kubernetes.io/part-of: trailkeep
     app.kubernetes.io/component: importer
 spec:
-  # Only an importer pod the operator labelled for validate-mapping or extract (importer-job.yaml).
+  # Only an importer pod the source-access component labelled, for validate-mapping or extract (jobs/components).
   podSelector:
     matchLabels:
       app.kubernetes.io/name: trailkeep

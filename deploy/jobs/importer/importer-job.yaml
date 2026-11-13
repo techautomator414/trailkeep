@@ -4,6 +4,9 @@
 # because applying a Job runs it. Apply it with its NetworkPolicy, after setting the command and the run id below:
 #   kubectl -n <namespace> apply -k deploy/jobs/importer                     (clamd scanning, the default)
 #   kubectl -n <namespace> apply -k deploy/jobs/importer-external-scanning  (APP_ATTACHMENTS_SCANNING=external)
+# Only validate-mapping and extract read the source database: apply those two with the source-access component, through
+# deploy/jobs/importer-source-access or deploy/jobs/importer-external-scanning-source-access. It adds the source
+# password and the route to the source together; every other command runs with neither.
 # A finished Job cannot be changed: delete it (kubectl delete job trailkeep-importer) before the next command.
 # Same image, importer profile, no web server. The database URL and APP_DB_SCHEMA come from trailkeep-config, as for
 # the web pods; the import user does not own the tables, so on Oracle APP_DB_SCHEMA must name their owner.
@@ -24,10 +27,7 @@ spec:
       labels:
         app.kubernetes.io/name: trailkeep
         app.kubernetes.io/component: importer
-        # Only validate-mapping and extract read the source database. Add the label
-        #   trailkeep.io/source-egress: "true"
-        # for those two commands, and only those, to admit this pod to trailkeep-importer-source
-        # (networkpolicy.yaml); without it every other command runs with no route to the source.
+        # No trailkeep.io/source-egress label: the source-access component adds it (networkpolicy.yaml).
       annotations:
         ignore-check.kube-linter.io/no-liveness-probe: "Batch job: no server to probe; activeDeadlineSeconds bounds it."
         ignore-check.kube-linter.io/no-readiness-probe: "Batch job: it never receives traffic."
@@ -103,6 +103,35 @@ spec:
               mountPath: /etc/trailkeep/clamav-ca
               readOnly: true
       volumes:
+        # The Job's secret files (Spring configtree), never the web application's credential or OIDC client secret, and
+        # never the source password (the source-access component adds it, for validate-mapping and extract only):
+        # - trailkeep-import: spring.datasource.username and spring.datasource.password, the TRAILKEEP_IMPORT
+        #   credential, and nothing else even if the Secret holds more;
+        # - trailkeep-import-hash-key: import.hash-key, its own Secret, kept for as long as the ledger is compared;
+        # - trailkeep-web: app.audit.hmac-key only, the same key the web pods redact audit values with. The two HMAC
+        #   keys are separate files with separate values (design §5, R2).
+        # It is the first volume: the source-access component appends to its sources by index, behind a test op.
+        - name: secrets
+          projected:
+            defaultMode: 0444 # readable by whichever non-root UID the platform assigns
+            sources:
+              - secret:
+                  name: trailkeep-import
+                  items:
+                    - key: spring.datasource.username
+                      path: spring.datasource.username
+                    - key: spring.datasource.password
+                      path: spring.datasource.password
+              - secret:
+                  name: trailkeep-import-hash-key
+                  items:
+                    - key: import.hash-key
+                      path: import.hash-key
+              - secret:
+                  name: trailkeep-web
+                  items:
+                    - key: app.audit.hmac-key
+                      path: app.audit.hmac-key
         - name: tmp
           emptyDir:
             sizeLimit: 512Mi
@@ -128,25 +157,3 @@ spec:
           secret:
             secretName: clamav-ca
             defaultMode: 0444
-        # The Job's secret files (Spring configtree), never the web application's credential or OIDC client secret:
-        # - trailkeep-import: spring.datasource.username and spring.datasource.password (the TRAILKEEP_IMPORT
-        #   credential) and, for validate-mapping and extract, import.source.password;
-        # - trailkeep-import-hash-key: import.hash-key, its own Secret, kept for as long as the ledger is compared;
-        # - trailkeep-web: app.audit.hmac-key only, the same key the web pods redact audit values with. The two HMAC
-        #   keys are separate files with separate values (design §5, R2).
-        - name: secrets
-          projected:
-            defaultMode: 0444 # readable by whichever non-root UID the platform assigns
-            sources:
-              - secret:
-                  name: trailkeep-import
-              - secret:
-                  name: trailkeep-import-hash-key
-                  items:
-                    - key: import.hash-key
-                      path: import.hash-key
-              - secret:
-                  name: trailkeep-web
-                  items:
-                    - key: app.audit.hmac-key
-                      path: app.audit.hmac-key

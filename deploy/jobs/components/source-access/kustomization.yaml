@@ -1,0 +1,33 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Charlie Genova and contributors
+# Source access for the importer Job, one switch (docs/design/importer.md §3, §10): only validate-mapping and extract
+# read the source database, so only they are applied with this component. It adds, together, the source password
+# (import.source.password from the trailkeep-import-source Secret, into the Job's secret files) and the pod label that
+# admits the pod to trailkeep-importer-source, the egress rule to the source. Without it, load, reconcile,
+# relink-owners and every other command hold no source credential and have no route to the source.
+# It composes with either variant: deploy/jobs/importer-source-access and
+# deploy/jobs/importer-external-scanning-source-access apply it.
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+
+patches:
+  # The Job's first volume is its projected secret files (importer-job.yaml). The test op fails the render, rather than
+  # add the password to another volume, if that ever changes.
+  - target:
+      kind: Job
+      name: trailkeep-importer
+    patch: |-
+      - op: test
+        path: /spec/template/spec/volumes/0/name
+        value: secrets
+      - op: add
+        path: /spec/template/spec/volumes/0/projected/sources/-
+        value:
+          secret:
+            name: trailkeep-import-source
+            items:
+              - key: import.source.password
+                path: import.source.password
+      - op: add
+        path: /spec/template/metadata/labels/trailkeep.io~1source-egress
+        value: "true"

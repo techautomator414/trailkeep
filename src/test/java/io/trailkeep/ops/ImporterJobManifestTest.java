@@ -32,7 +32,7 @@ class ImporterJobManifestTest {
     private static final Path POLICY = Path.of("deploy/jobs/importer/networkpolicy.yaml");
 
     @Test
-    void theJobSeesTheImportCredentialAndBothKeysButNeverTheWholeWebSecret() throws IOException {
+    void theJobSeesTheImportCredentialAndBothKeysButNeitherTheWholeWebSecretNorTheSourcePassword() throws IOException {
         JsonNode volumes = pod().get("volumes");
         Map<String, List<String>> projected = new TreeMap<>();
         for (JsonNode volume : volumes) {
@@ -51,13 +51,42 @@ class ImporterJobManifestTest {
         }
 
         assertThat(projected)
-                .as("configtree file names: the import credential whole, one key from each of the other two")
+                .as("configtree file names, each Secret's items named; no source password without the component")
                 .isEqualTo(Map.of(
-                        "trailkeep-import", List.of(),
+                        "trailkeep-import", List.of("spring.datasource.username", "spring.datasource.password"),
                         "trailkeep-import-hash-key", List.of("import.hash-key"),
                         "trailkeep-web", List.of("app.audit.hmac-key")));
         assertThat(mountOf("secrets").path("mountPath").asString()).isEqualTo("/etc/trailkeep/secrets");
         assertThat(mountOf("secrets").path("readOnly").asBoolean()).isTrue();
+    }
+
+    @Test
+    void sourceAccessIsOneComponentAddingTheSourcePasswordAndTheRouteTogetherToEitherVariant() throws IOException {
+        JsonNode component = documents(Path.of("deploy/jobs/components/source-access/kustomization.yaml"))
+                .getFirst();
+        JsonNode ops = YAML.readTree(component.at("/patches/0/patch").asString());
+
+        assertThat(component.path("kind").asString()).isEqualTo("Component");
+        assertThat(component.path("patches")).hasSize(1);
+        assertThat(component.at("/patches/0/target/name").asString()).isEqualTo("trailkeep-importer");
+        assertThat(ops.toString())
+                .as("exactly the source password, appended to the secret files behind a test op, and the label")
+                .isEqualTo("[{\"op\":\"test\",\"path\":\"/spec/template/spec/volumes/0/name\",\"value\":\"secrets\"},"
+                        + "{\"op\":\"add\",\"path\":\"/spec/template/spec/volumes/0/projected/sources/-\","
+                        + "\"value\":{\"secret\":{\"name\":\"trailkeep-import-source\",\"items\":[{\"key\":"
+                        + "\"import.source.password\",\"path\":\"import.source.password\"}]}}},"
+                        + "{\"op\":\"add\",\"path\":\"/spec/template/metadata/labels/trailkeep.io~1source-egress\","
+                        + "\"value\":\"true\"}]");
+        assertThat(pod().at("/volumes/0/name").asString()).isEqualTo("secrets");
+        for (String variant : List.of("importer", "importer-external-scanning")) {
+            JsonNode applied = documents(Path.of("deploy/jobs/" + variant + "-source-access/kustomization.yaml"))
+                    .getFirst();
+            assertThat(applied.path("resources").toString()).isEqualTo("[\"../" + variant + "\"]");
+            assertThat(applied.path("components").toString()).isEqualTo("[\"../components/source-access\"]");
+        }
+        assertThat(Files.readString(Path.of("deploy/jobs/importer-external-scanning/kustomization.yaml")))
+                .as("the external variant without the component adds neither")
+                .doesNotContain("import-source", "source-egress");
     }
 
     @Test
