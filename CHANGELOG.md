@@ -9,6 +9,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- The importer's worked example (WP-26 part ae4, docs/design/importer.md §3, §11 "End to end"):
+  `docs/importer/worked-example.md` follows the example mapping through a five-case synthetic legacy tracker, the
+  Trailkeep data it needs, the `Job` directory per command, and run request → `validate-mapping` → `extract` →
+  `dry-run` → sign-off → `load` → `reconcile` → `purge-staging`, with what each step writes: a DST-ambiguous opening
+  time and an unscanned attachment as the two warnings the sign-off acknowledges, a confidential case and an
+  unrepresentable legacy ACL loaded restricted, a legacy-held and a past-retention case loaded on legal hold with their
+  fixed reasons, an unmatched owner replaced by the team's default owner with the name kept, and overdue alerts
+  pre-marked. `WorkedExampleIT` and `OracleWorkedExampleIT` (Free 23 and XE 21) run the page: they create the legacy
+  database from its SQL block, use its mapping and lookup blocks, and compare the dry-run figures, the loaded cases
+  and `reconcile.csv` with the blocks that show them; a second load changes nothing. The example mapping's `people`
+  block gains the `fields` (display name, email) without which email matching and owner name snapshots had nothing to
+  work with.
 - The SQL Server export recipe (WP-26 part ae3, docs/design/importer.md §4.2.2, §11): `docs/importer/export-recipes.md`
   gives the administrator's database snapshot as the fixed point and a POSIX `sh` script that exports each entity as
   JSON Lines with `sqlcmd -y 0` and `FOR JSON PATH, WITHOUT_ARRAY_WRAPPER, INCLUDE_NULL_VALUES` over the mapping's

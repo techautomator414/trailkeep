@@ -30,9 +30,21 @@ final class ExportRecipes {
      * @throws Exception if the page cannot be read
      */
     static String block(String name) throws Exception {
-        String page = Files.readString(PAGE);
+        return block(PAGE, name);
+    }
+
+    /**
+     * A block of another page that marks its blocks the same way, such as docs/importer/worked-example.md.
+     *
+     * @param path the page, relative to the project
+     * @param name the block's name
+     * @return its text
+     * @throws Exception if the page cannot be read
+     */
+    static String block(Path path, String name) throws Exception {
+        String page = Files.readString(path);
         int marker = page.indexOf("<!-- recipe: " + name + " ");
-        assertThat(marker).as("recipe " + name + " on " + PAGE).isNotNegative();
+        assertThat(marker).as("recipe " + name + " on " + path).isNotNegative();
         int open = page.indexOf('\n', page.indexOf("```", marker)) + 1;
         return page.substring(open, page.indexOf("```", open));
     }
