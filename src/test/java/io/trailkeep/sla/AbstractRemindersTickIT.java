@@ -23,6 +23,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.health.contributor.Status;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * The reminders tick on both vendors (WP-17b; BUILD_PLAN §6 "Reminders tick"). On a timeline in 2001 (so no row
@@ -50,6 +51,12 @@ abstract class AbstractRemindersTickIT {
 
     @Autowired
     private JdbcTemplate jdbc;
+
+    @Autowired
+    private GoLiveAlertService goLiveAlerts;
+
+    @Autowired
+    private TransactionTemplate transactions;
 
     private final List<Long> users = new ArrayList<>();
     private CaseSeed seed;
@@ -138,6 +145,35 @@ abstract class AbstractRemindersTickIT {
         assertThat(jdbc.queryForObject(
                         "SELECT LAST_REMINDED_AT FROM UPDATE_REQUEST WHERE ID = ?", Timestamp.class, open * 10 + 1))
                 .isEqualTo(Timestamp.from(T1.plus(Duration.ofDays(3))));
+    }
+
+    /**
+     * Go-live pre-marking (WP-26 part ac, design §8.1 relaxation 10): an imported case's alerts already raised are
+     * recorded as sent with the keys the evaluator and the tick use, so the tick sends no repeat for the period the
+     * load fell in, and the next period alerts as for any case.
+     */
+    @Test
+    void goLiveAlertsPreMarked() {
+        long atRisk = caseOf(CaseStatus.OPEN, "AT_RISK", T1.plus(Duration.ofDays(2)));
+
+        int marked = Objects.requireNonNull(transactions.execute(status ->
+                goLiveAlerts.preMark(overdue, T1) + goLiveAlerts.preMark(atRisk, T1) + goLiveAlerts.preMark(open, T1)));
+
+        assertThat(marked).as("nothing for the on-track case").isEqualTo(3);
+        assertThat(ledger(overdue)).containsExactly("SLA_OVERDUE CYCLE", "SLA_OVERDUE_REPEAT P1");
+        assertThat(ledger(atRisk)).containsExactly("SLA_AT_RISK CYCLE");
+        assertThat(tick.run(T1))
+                .as("the two request reminders, no repeat for the pre-marked period")
+                .isEqualTo(1 + 1);
+        assertThat(tick.run(T1.plus(Duration.ofDays(3)))).isEqualTo(1 + 1 + 3);
+        assertThat(mails(overdue, "sla-overdue-repeat", owner)).isEqualTo(1);
+    }
+
+    private List<String> ledger(long caseId) {
+        return jdbc.queryForList(
+                "SELECT ALERT_TYPE || ' ' || PERIOD_KEY FROM ALERT_LEDGER WHERE CASE_ID = ? ORDER BY ALERT_TYPE",
+                String.class,
+                caseId);
     }
 
     @Test

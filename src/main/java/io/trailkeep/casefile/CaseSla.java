@@ -137,6 +137,20 @@ class CaseSla {
     }
 
     /**
+     * This open case's dry-run forecast (WP-26 part ac): its state, and whether, overdue, its first overdue repeat is
+     * due at {@code at} by the reminders tick's rule ({@link CaseSlaService.OverdueCase#repeatPeriod}).
+     *
+     * @param reminderDays its policy's {@code OVERDUE_REMINDER_DAYS}
+     * @param at the forecast instant
+     * @return the forecast
+     */
+    CaseImportService.SlaForecast.Forecast forecast(int reminderDays, Instant at) {
+        boolean repeatDue = state == SlaState.OVERDUE
+                && new CaseSlaService.OverdueCase(caseId, getDueAt(), reminderDays).repeatPeriod(at) != null;
+        return new CaseImportService.SlaForecast.Forecast(state, repeatDue);
+    }
+
+    /**
      * Starts the next cycle at a reopen (ADR-0007): the cycle increments, so "at risk once" is once per cycle, and
      * the clock runs from the reopen instant.
      *

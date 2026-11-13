@@ -20,3 +20,4 @@ Format: [MADR](https://adr.github.io/madr/); copy [`0000-adr-template.md`](0000-
 | [0013](0013-scanning-mode.md) | Let the deployment choose who scans uploads, clamd by default | Accepted | 2026-11-05 |
 | [0014](0014-importer-sources-and-canonical-model.md) | Import from SQL Server, Oracle, PostgreSQL or their exports through one canonical staging model | Proposed | 2026-11-05 |
 | [0015](0015-import-principals.md) | Two seeded, disabled principals act for the importer | Proposed | 2026-11-10 |
+| [0016](0016-go-live-alerts-pre-marked.md) | Record an imported case's alerts already raised as sent, so go-live sends no wave | Proposed | 2026-11-13 |

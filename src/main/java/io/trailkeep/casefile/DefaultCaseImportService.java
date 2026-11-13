@@ -211,7 +211,7 @@ class DefaultCaseImportService implements CaseImportService {
             return policy == null
                     ? null
                     : CaseSla.importedOpen(0, SlaClock.start(policy, identifiedOn, openedAt, zone), at)
-                            .getState();
+                            .forecast(policy.overdueReminderDays(), at);
         };
     }
 

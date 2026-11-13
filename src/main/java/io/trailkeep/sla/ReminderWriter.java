@@ -163,8 +163,8 @@ class ReminderWriter {
         for (OverdueCase overdue : due) {
             SlaCase about = cases.get(overdue.caseId());
             long days = Duration.between(overdue.dueAt(), now).toDays();
-            String period = "P" + days / Math.max(1, overdue.reminderDays());
-            if (about == null || days < overdue.reminderDays() || told(overdue.caseId(), about.cycle(), period)) {
+            String period = overdue.repeatPeriod(now);
+            if (about == null || period == null || told(overdue.caseId(), about.cycle(), period)) {
                 continue;
             }
             entityManager.persist(

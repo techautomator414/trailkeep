@@ -267,6 +267,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   `deploy/jobs/importer-external-scanning-source-access`); `load`, `reconcile` and `relink-owners` hold no source
   credential and have no route to the source. `deploy/README.md` gains an "Importer" section, a per-command table and
   the three new Secrets.
+- Go-live alert pre-marking (WP-26 part ac, docs/design/importer.md §7.1, ADR-0016): the load records, in each open
+  case's transaction, the alerts its imported SLA state has already raised as sent in `ALERT_LEDGER` (`SLA_AT_RISK`;
+  `SLA_OVERDUE` and, once a repeat is due, `SLA_OVERDUE_REPEAT` for the current period), through the new import-only
+  `sla.GoLiveAlertService`, so go-live mails nothing about the backlog while the case keeps its true SLA state; later
+  transitions and later repeat periods alert as for any case. The reminders tick and the pre-marking share one period
+  rule (`CaseSlaService.OverdueCase.repeatPeriod`). The dry run reports `PRE_MARKED` per alert type for the go-live
+  day. The import user gains `INSERT` on `ALERT_LEDGER` and draws `SEQ_ALERT_LEDGER` (no `UPDATE`, no `DELETE`).
 - `reconcile`, the written comparison (WP-26 part aa2a, docs/design/importer.md §9): for an import run whose load
   finished, every ledger row the run wrote has its written hash recomputed through the same import-API reads the load
   hashed, and compared in constant time. A row that differs or is gone (`WRITTEN_DIFFERS`, `WRITTEN_MISSING`, and

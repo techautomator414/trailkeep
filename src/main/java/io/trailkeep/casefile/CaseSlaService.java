@@ -3,10 +3,13 @@
 package io.trailkeep.casefile;
 
 import io.trailkeep.shared.CaseNumber;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import org.jspecify.annotations.Nullable;
 
 /**
  * The {@code CASE_SLA} side table as the {@code sla} module's evaluator sees it (BUILD_PLAN §6, ADR-0007): which cases
@@ -55,7 +58,38 @@ public interface CaseSlaService {
      * @param dueAt when it was due in its current cycle
      * @param reminderDays how often it is reminded once overdue ({@code SLA_POLICY.OVERDUE_REMINDER_DAYS})
      */
-    record OverdueCase(long caseId, Instant dueAt, int reminderDays) {}
+    record OverdueCase(long caseId, Instant dueAt, int reminderDays) {
+
+        /**
+         * The repeat period an instant falls in, the one rule both the reminders tick and the go-live pre-marking
+         * follow (WP-26 part ac): {@code P<n>}, {@code n} the whole reminder periods since the due time, once the first
+         * repeat is due.
+         *
+         * @param now the instant
+         * @return the period key, or {@code null} before the first repeat
+         */
+        public @Nullable String repeatPeriod(Instant now) {
+            long days = Duration.between(dueAt, now).toDays();
+            return days < reminderDays ? null : "P" + days / Math.max(1, reminderDays);
+        }
+    }
+
+    /**
+     * An imported open case's SLA as the go-live pre-marking reads it (WP-26 part ac, design §7.1).
+     *
+     * @param state its state
+     * @param cycle its cycle
+     * @param due its due time and reminder period, or {@code null} without a due time
+     */
+    record Standing(SlaState state, int cycle, @Nullable OverdueCase due) {}
+
+    /**
+     * One case's SLA, read in the caller's transaction, so a case it has just written is found.
+     *
+     * @param caseId the case
+     * @return its SLA, or empty without an SLA row
+     */
+    Optional<Standing> standing(long caseId);
 
     /**
      * The overdue cases with ids after {@code afterId}, in id order, at most {@code limit}: one page of the repeats.
