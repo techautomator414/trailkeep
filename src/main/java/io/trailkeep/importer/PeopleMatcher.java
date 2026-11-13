@@ -42,6 +42,7 @@ final class PeopleMatcher {
     private final Map<String, String> defaultOwners;
     private final Map<String, PersonMatch> matched = new HashMap<>();
     private final Map<String, String> names = new HashMap<>();
+    private final Map<String, Identity> identities = new HashMap<>();
     private final Map<Eligibility, Boolean> eligible = new HashMap<>();
     private final Map<Long, Optional<Long>> defaults = new HashMap<>();
     private final SortedSet<Long> openTeams = new TreeSet<>();
@@ -74,6 +75,9 @@ final class PeopleMatcher {
     List<Finding> person(StagedPerson row) {
         if (row.getDisplayName() != null) {
             names.put(row.getKey().legacyKey(), row.getDisplayName());
+        }
+        if (row.getEmail() != null || row.getExternalId() != null) {
+            identities.put(row.getKey().legacyKey(), new Identity(row.getEmail(), row.getExternalId()));
         }
         boolean ambiguous = false;
         for (String way : order) {
@@ -149,8 +153,21 @@ final class PeopleMatcher {
      *
      * @param userId the owner's {@code APP_USER} id
      * @param nameSnapshot the legacy owner's name as staged when the case does not keep them, or {@code null}
+     * @param pending for an open case given its team's default owner, how its legacy owner may be matched later
+     *     ({@link ImportOwnerPending}, part z1); else {@code null}
      */
-    record Owner(long userId, @Nullable String nameSnapshot) {}
+    record Owner(
+            long userId,
+            @Nullable String nameSnapshot,
+            @Nullable Identity pending) {}
+
+    /**
+     * A legacy person's email address and external id as staged, at least one of them set.
+     *
+     * @param email the address, or {@code null}
+     * @param externalId the external id, or {@code null}
+     */
+    record Identity(@Nullable String email, @Nullable String externalId) {}
 
     /**
      * The owner the load gives a case: its legacy owner when {@link #keepsOwner} keeps them; otherwise, for an open
@@ -166,13 +183,16 @@ final class PeopleMatcher {
     Owner owner(StagedCase row, long teamId, String teamName, long importer) {
         String key = row.getOwnerKey();
         if (keepsOwner(row, teamId)) {
-            return new Owner(Objects.requireNonNull(matched.get(key), "kept").userId(), null);
+            return new Owner(Objects.requireNonNull(matched.get(key), "kept").userId(), null, null);
         }
         String snapshot = key == null ? null : names.get(key);
         if (!"OPEN".equals(row.getStatus())) {
-            return new Owner(importer, snapshot);
+            return new Owner(importer, snapshot, null);
         }
-        return defaultOwner(teamId, teamName).map(id -> new Owner(id, snapshot)).orElse(null);
+        Identity legacy = key == null ? null : identities.get(key);
+        return defaultOwner(teamId, teamName)
+                .map(id -> new Owner(id, snapshot, legacy))
+                .orElse(null);
     }
 
     /**

@@ -9,7 +9,8 @@ import org.springframework.test.context.ActiveProfiles;
 
 /**
  * {@code load} on Oracle ({@code -Poracle-it}, both images), as the import user: every row the load writes (case, SLA
- * row, search row, closure, audit events, ledger row and the run's progress) is one the import user may write there.
+ * row, search row, closure, audit events, pending owner, ledger row and the run's progress) is one the import user may
+ * write there.
  */
 // "IT" is the Failsafe suffix Part B mandates for integration tests, not an abbreviation.
 @SuppressWarnings("checkstyle:AbbreviationAsWordInName")

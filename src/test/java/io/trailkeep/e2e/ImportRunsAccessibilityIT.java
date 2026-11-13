@@ -148,6 +148,7 @@ class ImportRunsAccessibilityIT {
         // The empty state needs no runs at all: remove anything another test left in the shared database, children
         // first (test-only cleanup over the fixed table names of this list).
         for (String table : List.of(
+                "IMPORT_OWNER_PENDING",
                 "IMPORT_LEDGER",
                 "CASE_IMPORTED_EVENT",
                 "IMPORT_STG_EVENT",

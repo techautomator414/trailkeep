@@ -75,6 +75,8 @@
 --   SEQ_CASE_IMPORTED_EVENT SELECT   -
 --   IMPORT_LEDGER         S          -            what each load wrote; insert-only, by the import user (V17)
 --   SEQ_IMPORT_LEDGER     SELECT     -
+--   IMPORT_OWNER_PENDING  S          -            open cases awaiting their legacy owner, for counts (V18)
+--   SEQ_IMPORT_OWNER_PENDING SELECT  -
 --
 -- The import user: S I D on the staging tables (IMPORT_STG_PERSON, _CASE, _COMMENT, _ATTACHMENT, _EVENT and
 -- IMPORT_RUN_CHECKPOINT; V13), which no other user may even read, and on IMPORT_ISSUE and IMPORT_RUN_SUMMARY; S I on
@@ -84,7 +86,8 @@
 -- closures: S I on CASE_RECORD, CASE_SLA, CASE_SEARCH, CLOSURE_REQUEST and AUDIT_EVENT, and SELECT (NEXTVAL) on
 -- SEQ_CASE_NUMBER besides the sequences below; with their comments (part u) S I on CASE_COMMENT and UPDATE of
 -- CASE_SEARCH's SEARCH_TEXT and UPDATED_AT alone, which appending a comment to the search text needs; with their
--- attachments (part u) S I on CASE_ATTACHMENT and CASE_ATTACHMENT_CHUNK, insert-only. On every other
+-- attachments (part u) S I on CASE_ATTACHMENT and CASE_ATTACHMENT_CHUNK, insert-only; S I D on IMPORT_OWNER_PENDING,
+-- which the load writes and relink-owners deletes, and SELECT on its sequence (V18). On every other
 -- table and sequence an entity maps it has SELECT only, because the dictionary views Hibernate validate reads
 -- (ALL_TABLES, ALL_SEQUENCES) list only objects a user holds a privilege on (design §2.1 R3); on a sequence that
 -- SELECT is also NEXTVAL. The import writes to domain tables come with the importer PRs that use them (§12).
@@ -186,6 +189,11 @@ DECLARE
     UNION ALL SELECT 'SEQ_IMPORT_LEDGER', 'SELECT', UPPER('${app_user}') FROM DUAL
     UNION ALL SELECT 'IMPORT_LEDGER', 'SELECT,INSERT', UPPER('${import_user}') FROM DUAL
     UNION ALL SELECT 'SEQ_IMPORT_LEDGER', 'SELECT', UPPER('${import_user}') FROM DUAL
+    -- Pending owners (V18): the screen may count them; the load writes them, relink-owners deletes them.
+    UNION ALL SELECT 'IMPORT_OWNER_PENDING', 'SELECT', UPPER('${app_user}') FROM DUAL
+    UNION ALL SELECT 'SEQ_IMPORT_OWNER_PENDING', 'SELECT', UPPER('${app_user}') FROM DUAL
+    UNION ALL SELECT 'IMPORT_OWNER_PENDING', 'SELECT,INSERT,DELETE', UPPER('${import_user}') FROM DUAL
+    UNION ALL SELECT 'SEQ_IMPORT_OWNER_PENDING', 'SELECT', UPPER('${import_user}') FROM DUAL
     -- The load (WP-26 part t): a case with its SLA row, search row and closure, audited, in one transaction.
     UNION ALL SELECT COLUMN_VALUE, 'SELECT,INSERT', UPPER('${import_user}') FROM TABLE(SYS.ODCIVARCHAR2LIST(
       'CASE_RECORD', 'CASE_SLA', 'CASE_SEARCH', 'CLOSURE_REQUEST', 'AUDIT_EVENT'))

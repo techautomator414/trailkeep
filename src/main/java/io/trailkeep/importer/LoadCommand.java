@@ -48,22 +48,21 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.dataformat.yaml.YAMLMapper;
 
 /**
- * {@code load} (WP-26 parts t, u and w, design §3 step 5, §8.2): writes the signed-off run's staged cases into
- * Trailkeep through the import APIs, one case per transaction with its closure, comments ({@link CommentLoad}, {@link
- * CaseComments}), attachments ({@link AttachmentLoad}, scanned before the transaction opens), legacy history ({@link
- * EventLoad}), ledger rows and the run's count, so a case is either fully in or absent. It refuses to start ({@link
+ * {@code load} (WP-26 parts t, u, w and z1, design §3 step 5, §8.2): writes the signed-off run's staged cases through
+ * the import APIs, one case per transaction with its closure, comments ({@link CommentLoad}, {@link CaseComments}),
+ * attachments ({@link AttachmentLoad}, scanned first), legacy history ({@link EventLoad}), pending owner ({@link
+ * ImportOwnerPending}), ledger rows and the run's count, so a case is fully in or absent. It refuses to start ({@link
  * LoadRefusal}) unless the run is signed off, has no FATAL issue, is loaded with the mapping and lookup files it was
  * dry-run with, and the scanning mode in force is the one its dry run recorded ({@link ScanModeInForce}, R1). It writes
- * only cases the ledger does not hold for the run's source, so a crashed load resumes at the next case, then the new
- * children of cases it holds ({@link ChildOnlyLoad}), and skips every row with an ERROR from the extract or dry run.
- * Owners are chosen as the dry run forecast them ({@link PeopleMatcher}); each case is checked again against the rules
- * and reference data of the load's moment ({@link CaseRules}). A case they refuse, whose team has no eligible owner
- * now, whose attachment changed or event fails its rules now, or that the import APIs refuse as invalid, is written
- * nowhere but as a {@code LOAD} issue (an ERROR with its code and the case's keyed hash), and the load goes on; the
- * next load drops those issues and tries their cases again. Anything else stops the load, closed: the run is {@code
- * FAILED}, and the next load resumes at that case. The run lock ({@link LoadRunLock}) keeps one load per run, and one
- * loading run per source, on any number of nodes; a load that died is taken over once it has not moved its run for
- * {@link #LEASE}.
+ * only cases the ledger does not hold for the source, so a crashed load resumes at the next case, then the new children
+ * of cases it holds ({@link ChildOnlyLoad}), and skips every row with an ERROR from the extract or dry run. Owners are
+ * chosen as the dry run forecast them ({@link PeopleMatcher}); each case is checked again against the rules and
+ * reference data of the load's moment ({@link CaseRules}). A case they refuse, whose team has no eligible owner now,
+ * whose attachment changed or event fails its rules now, or that the import APIs refuse as invalid, is written nowhere
+ * but as a {@code LOAD} issue (an ERROR with its code and the case's keyed hash), and the load goes on; the next load
+ * tries it again. Anything else stops the load, closed: the run is {@code FAILED}, and the next load resumes at that
+ * case. The run lock ({@link LoadRunLock}) keeps one load per run, and one loading run per source, on any number of
+ * nodes; a load that died is taken over once it has not moved its run for {@link #LEASE}.
  */
 @Component
 @Profile("importer")
@@ -110,6 +109,7 @@ class LoadCommand {
     private final ImportRunRepository runs;
     private final ImportIssueRepository issues;
     private final ImportLedgerRepository ledger;
+    private final ImportOwnerPendingRepository pendingOwners;
     private final TransactionTemplate transactions;
     private final CaseImportService caseImports;
     private final ClosureImportService closures;
@@ -128,6 +128,7 @@ class LoadCommand {
             ImportRunRepository runs,
             ImportIssueRepository issues,
             ImportLedgerRepository ledger,
+            ImportOwnerPendingRepository pendingOwners,
             TransactionTemplate transactions,
             CaseImportService caseImports,
             ClosureImportService closures,
@@ -143,6 +144,7 @@ class LoadCommand {
         this.runs = runs;
         this.issues = issues;
         this.ledger = ledger;
+        this.pendingOwners = pendingOwners;
         this.transactions = transactions;
         this.caseImports = caseImports;
         this.closures = closures;
@@ -339,6 +341,8 @@ class LoadCommand {
                         imported.status().name(),
                         closedAt,
                         pass.now()));
+                ImportOwnerPending.of(created.caseId(), owner, pass.run().runId(), pass.hashKey(), pass.now())
+                        .ifPresent(pendingOwners::save);
                 pass.children().write(created, comments, scanned, staged, pass.people(), pass.importer());
             });
         } catch (AttachmentRejectedException changed) {

@@ -220,6 +220,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   its case, 20 to a page. Nothing is closed automatically; each owner closes the case through the normal closure flow.
   The case ids are resolved under the viewer's own case scope, so a case the viewer may not read is only counted on
   the page, never named. `ImportRunService` gains `closureWorklist(actor, id, page)`. No migration.
+- Pending owners (WP-26 part z1, docs/design/importer.md §5, §7.3): `load` records each open case it gives its team's
+  default owner, because the legacy owner matched nobody or nobody who may own the team's cases, in a new
+  `IMPORT_OWNER_PENDING` table (V18), in the case's own transaction: the case, the default owner, the run, and keyed
+  hashes (`import.hash-key`) of the legacy owner's email address (trimmed, lower-cased) and external id, never the
+  values themselves. A legacy owner with neither gets no row, since nobody could ever be matched to them. Closed cases
+  and cases that keep their legacy owner get none. The rows are for `relink-owners` (part z2), which hands such a case
+  to its legacy owner once they have signed in. The import user may read, insert and delete them; the runtime user may
+  only read them, for counts on the Import runs screen.
 - The Oracle source (WP-26 part o, docs/design/importer.md §4.1): a `kind: jdbc` Oracle mapping is test-fetched by
   `validate-mapping` and extracted in one `SET TRANSACTION READ ONLY` transaction, with the session in UTC and ISO
   date, timestamp and number formats; `DATE` and `TIMESTAMP` read as local date-times, `TIMESTAMP WITH TIME ZONE` with

@@ -24,9 +24,9 @@ import org.springframework.context.ConfigurableApplicationContext;
 /**
  * What every {@code load} IT needs (WP-26 parts t, u and w): an analyst and a manager in the seeded team, the manager
  * the team's default owner, signed-off runs with two legacy people staged, staged cases, the command started as the
- * import user, and what it wrote read back; each test's cases, with their attachments, comments, imported history,
- * closures, audit events, SLA and search rows and ledger rows, and its users are removed after it. The tests are in
- * {@link AbstractLoadIT}, {@link AbstractCommentLoadIT}, {@link AbstractAttachmentLoadIT} and {@link
+ * import user, and what it wrote read back; each test's cases, with their pending owners, attachments, comments,
+ * imported history, closures, audit events, SLA and search rows and ledger rows, and its users are removed after it.
+ * The tests are in {@link AbstractLoadIT}, {@link AbstractCommentLoadIT}, {@link AbstractAttachmentLoadIT} and {@link
  * AbstractEventLoadIT}.
  */
 abstract class LoadSupport extends DryRunSupport {
@@ -63,6 +63,7 @@ abstract class LoadSupport extends DryRunSupport {
                             + " (SELECT ID FROM CASE_ATTACHMENT WHERE CASE_ID = ?)",
                     id);
             for (String table : List.of(
+                    "IMPORT_OWNER_PENDING",
                     "CASE_ATTACHMENT",
                     "CASE_COMMENT",
                     "CASE_IMPORTED_EVENT",
