@@ -199,19 +199,14 @@ abstract class AbstractCaseImportIT {
     @Test
     void everythingElseStaysAsForAnyCase() {
         ImportedCase pending = new ImportedCase(
-                fields(analyst, caseType), ref(), null, null, CaseStatus.PENDING_CLOSURE, OPENED, null);
+                fields(analyst, caseType), ref(), null, null, CaseStatus.PENDING_CLOSURE, OPENED, null, null);
         ImportedCase closedWithoutTime =
-                new ImportedCase(fields(analyst, caseType), ref(), null, null, CaseStatus.CLOSED, OPENED, null);
+                new ImportedCase(fields(analyst, caseType), ref(), null, null, CaseStatus.CLOSED, OPENED, null, null);
         ImportedCase closedBeforeOpened =
-                new ImportedCase(fields(analyst, caseType), ref(), null, null, CaseStatus.CLOSED, CLOSED, OPENED);
-        ImportedCase future = new ImportedCase(
-                fields(analyst, caseType),
-                ref(),
-                null,
-                null,
-                CaseStatus.OPEN,
-                Instant.now().plusSeconds(86_400),
-                null);
+                new ImportedCase(fields(analyst, caseType), ref(), null, null, CaseStatus.CLOSED, CLOSED, OPENED, null);
+        Instant tomorrow = Instant.now().plusSeconds(86_400);
+        ImportedCase future =
+                new ImportedCase(fields(analyst, caseType), ref(), null, null, CaseStatus.OPEN, tomorrow, null, null);
 
         for (ImportedCase refused : new ImportedCase[] {pending, closedWithoutTime, closedBeforeOpened, future}) {
             assertThatThrownBy(() -> imports.importCase(RUN, refused)).satisfies(kind(Kind.INVALID));
@@ -225,14 +220,9 @@ abstract class AbstractCaseImportIT {
 
     @Test
     void closingTimeInTheFutureIsRefused() {
+        Instant tomorrow = Instant.now().plusSeconds(86_400);
         ImportedCase closesTomorrow = new ImportedCase(
-                fields(analyst, caseType),
-                ref(),
-                null,
-                null,
-                CaseStatus.CLOSED,
-                OPENED,
-                Instant.now().plusSeconds(86_400));
+                fields(analyst, caseType), ref(), null, null, CaseStatus.CLOSED, OPENED, tomorrow, null);
 
         assertThatThrownBy(() -> imports.importCase(RUN, closesTomorrow))
                 .satisfies(kind(Kind.INVALID))
@@ -335,11 +325,11 @@ abstract class AbstractCaseImportIT {
 
     private ImportedCase open(long owner, @Nullable String ownerSnapshot) {
         return new ImportedCase(
-                fields(owner, caseType), ref(), "LEG-2019-0042", ownerSnapshot, CaseStatus.OPEN, OPENED, null);
+                fields(owner, caseType), ref(), "LEG-2019-0042", ownerSnapshot, CaseStatus.OPEN, OPENED, null, null);
     }
 
     private ImportedCase closed(long owner, long type) {
-        return new ImportedCase(fields(owner, type), ref(), null, null, CaseStatus.CLOSED, OPENED, CLOSED);
+        return new ImportedCase(fields(owner, type), ref(), null, null, CaseStatus.CLOSED, OPENED, CLOSED, null);
     }
 
     private CaseFields fields(long owner, long type) {

@@ -5,6 +5,7 @@ package io.trailkeep.importer;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.trailkeep.casefile.CaseImportService.ImportCaseType;
+import io.trailkeep.casefile.CaseImportService.ImportHold;
 import io.trailkeep.importer.FieldTransformer.Issue;
 import io.trailkeep.importer.staging.StagedCase;
 import io.trailkeep.importer.staging.StagedValues;
@@ -152,26 +153,44 @@ class CaseRulesTest {
     }
 
     @Test
-    void holdsAreFatalUntilTheImportHoldExists() {
-        assertThat(codes(open(values -> values.put("legalHold", true)))).containsExactly("HOLD_UNAVAILABLE FATAL");
-        assertThat(codes(closed(values -> {
-                    values.put("openedAt", Instant.parse("2019-01-01T00:00:00Z"));
-                    values.put("identifiedOn", LocalDate.of(2019, 1, 1));
-                    values.put("closedAt", Instant.parse("2019-11-12T15:00:00Z"));
-                })))
-                .as("closed exactly its type's seven years ago: the archive job takes it at its next run")
-                .containsExactly("HOLD_UNAVAILABLE FATAL");
-        assertThat(codes(closed(values -> values.put("closedAt", Instant.parse("2024-06-01T00:00:00Z")))))
+    void heldCasesAreNoIssueAndLoadOnTheirHold() {
+        StagedCase legacyHold = open(values -> values.put("legalHold", true));
+        StagedCase sevenYears = closed(values -> {
+            values.put("openedAt", Instant.parse("2019-01-01T00:00:00Z"));
+            values.put("identifiedOn", LocalDate.of(2019, 1, 1));
+            values.put("closedAt", Instant.parse("2019-11-12T15:00:00Z"));
+        });
+        assertThat(codes(legacyHold)).isEmpty();
+        assertThat(codes(sevenYears))
+                .as("closed exactly its type's seven years ago: loaded, and held")
                 .isEmpty();
+        PeopleMatcher.Owner owner = new PeopleMatcher.Owner(5L, null, null);
+        assertThat(rules.imported(legacyHold, "src", 1L, owner, "d").hold()).isEqualTo(ImportHold.LEGAL_HOLD);
+        assertThat(rules.imported(sevenYears, "src", 1L, owner, "d").hold()).isEqualTo(ImportHold.PAST_RETENTION);
+        assertThat(rules.imported(closed(values -> {}), "src", 1L, owner, "d").hold())
+                .isNull();
+        assertThat(ImportHold.PAST_RETENTION.reason(42))
+                .as("fixed text naming the run, never a legacy value")
+                .isEqualTo("Imported: past its retention period at import; review before release (import run 42)");
+        assertThat(ImportHold.LEGAL_HOLD.reason(42))
+                .isEqualTo("Imported: on legal hold in the legacy system (import run 42)");
     }
 
     @Test
     void holdReasonAndVisibilityAreWhatTheLoadWouldApply() {
-        assertThat(rules.holdReason(open(values -> values.put("legalHold", true))))
-                .isEqualTo("LEGAL_HOLD");
-        assertThat(rules.holdReason(closed(values -> values.put("closedAt", Instant.parse("2019-11-12T15:00:00Z")))))
-                .isEqualTo("PAST_RETENTION");
-        assertThat(rules.holdReason(closed(values -> {}))).isNull();
+        assertThat(rules.holdReason(open(values -> values.put("legalHold", true)), NOW))
+                .isEqualTo(ImportHold.LEGAL_HOLD);
+        StagedCase closedAtCutOff = closed(values -> values.put("closedAt", Instant.parse("2019-11-12T15:00:00Z")));
+        assertThat(rules.holdReason(closedAtCutOff, NOW)).isEqualTo(ImportHold.PAST_RETENTION);
+        assertThat(rules.holdReason(closedAtCutOff, NOW.minusSeconds(1)))
+                .as("a second earlier its retention had not passed")
+                .isNull();
+        assertThat(rules.pastRetention(closedAtCutOff, NOW)).isTrue();
+        assertThat(rules.pastRetention(closedAtCutOff, NOW.minusSeconds(1))).isFalse();
+        assertThat(rules.pastRetention(open(values -> {}), NOW.plusSeconds(400L * 365 * 86_400)))
+                .as("an open case is never archived")
+                .isFalse();
+        assertThat(rules.holdReason(closed(values -> {}), NOW)).isNull();
         StagedCase withAcl = open(values -> values.put("legacyAcl", true));
         assertThat(rules.visibility(open(values -> {})))
                 .as("Trailkeep's default")

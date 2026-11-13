@@ -91,7 +91,9 @@
 -- attachments (part u) S I on CASE_ATTACHMENT and CASE_ATTACHMENT_CHUNK, insert-only; S I D on IMPORT_OWNER_PENDING,
 -- which the load writes and relink-owners deletes, and SELECT on its sequence (V18); for relink-owners (part z2)
 -- UPDATE of CASE_RECORD's OWNER_ID, UPDATED_AT, UPDATED_BY and VERSION alone; for the go-live alerts (part ac) S I on
--- ALERT_LEDGER, insert-only, drawing on SEQ_ALERT_LEDGER through its SELECT below. On every other
+-- ALERT_LEDGER, insert-only, drawing on SEQ_ALERT_LEDGER through its SELECT below; for import holds (part ad) S I
+-- on LEGAL_HOLD_EVENT, insert-only, drawing on SEQ_LEGAL_HOLD_EVENT through its SELECT below (the hold itself is
+-- in the case's INSERT, so no UPDATE of CASE_RECORD's hold columns). On every other
 -- table and sequence an entity maps it has SELECT only, because the dictionary views Hibernate validate reads
 -- (ALL_TABLES, ALL_SEQUENCES) list only objects a user holds a privilege on (design §2.1 R3); on a sequence that
 -- SELECT is also NEXTVAL. The import writes to domain tables come with the importer PRs that use them (§12).
@@ -211,11 +213,13 @@ DECLARE
     UNION ALL SELECT 'SEQ_CASE_NUMBER', 'SELECT', UPPER('${import_user}') FROM DUAL
     -- Go-live alerts (part ac), insert-only; SELECT on SEQ_ALERT_LEDGER below is the draw.
     UNION ALL SELECT 'ALERT_LEDGER', 'SELECT,INSERT', UPPER('${import_user}') FROM DUAL
+    -- Import holds (part ad), insert-only; SELECT on SEQ_LEGAL_HOLD_EVENT below is the draw.
+    UNION ALL SELECT 'LEGAL_HOLD_EVENT', 'SELECT,INSERT', UPPER('${import_user}') FROM DUAL
     -- Every other table and sequence an entity maps: SELECT only, for validate (design §2.1 R3).
     UNION ALL SELECT COLUMN_VALUE, 'SELECT', UPPER('${import_user}') FROM TABLE(SYS.ODCIVARCHAR2LIST(
       'APP_USER', 'TEAM', 'APP_USER_TEAM', 'APP_USER_GLOBAL_ROLE', 'SLA_POLICY', 'CASE_TYPE', 'CASE_TYPE_OUTCOME',
       'CASE_COMMENT_PIN', 'SAVED_VIEW', 'NOTIFICATION_OUTBOX', 'USER_ALERT',
-      'UPDATE_REQUEST', 'CASE_REOPEN', 'JOB_RUN', 'REPORT_SCHEDULE', 'REPORT_RUN', 'LEGAL_HOLD_EVENT',
+      'UPDATE_REQUEST', 'CASE_REOPEN', 'JOB_RUN', 'REPORT_SCHEDULE', 'REPORT_RUN',
       'USER_PREFERENCE',
       'SEQ_APP_USER', 'SEQ_TEAM', 'SEQ_AUDIT_EVENT', 'SEQ_SLA_POLICY', 'SEQ_CASE_TYPE', 'SEQ_CASE_RECORD',
       'SEQ_CASE_COMMENT', 'SEQ_CASE_ATTACHMENT', 'SEQ_SAVED_VIEW', 'SEQ_NOTIFICATION_OUTBOX', 'SEQ_USER_ALERT',
