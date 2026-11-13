@@ -269,7 +269,7 @@
     source id, and audits it as IMPORT_RUN_REQUESTED with the kind; the form offers the choice to Compliance Admins
     only. The run is requested, nothing else: owners change only when the importer Job runs relink-owners with
     import.apply=true. Covered by ImportRunActionsControllerIT, ImportRunServiceIT and ImportRunsAccessibilityIT.
-    Needs security-reviewer approval.
+    Approved in the security-reviewer role on #188.
     Approved in the security-reviewer role on #20. Listed by class, never by pattern alone, so each new controller
     is reviewed the same way.
   -->
