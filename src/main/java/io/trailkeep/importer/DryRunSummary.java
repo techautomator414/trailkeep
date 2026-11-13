@@ -24,7 +24,8 @@ import org.jspecify.annotations.Nullable;
  * a sensitivity or a Trailkeep team id, and a count; never a legacy value or key. The metrics:
  *
  * <ul>
- *   <li>{@code ROWS} per entity: the staged rows checked; {@code ISSUES} per {@code <entity>/<severity>/<code>}: the
+ *   <li>{@code ROWS} per entity: the staged rows checked; {@code LOADED_BEFORE} per entity: those of them an earlier
+ *       load wrote (26y1), which no other figure counts; {@code ISSUES} per {@code <entity>/<severity>/<code>}: the
  *       run's issues from the extract and the dry run;
  *   <li>{@code CASES} per status ({@code OPEN}, {@code CLOSED}); {@code VISIBILITY_STANDARD} and {@code
  *       VISIBILITY_RESTRICTED} per team id: the visibility each case would load with; {@code LEGACY_ACL} per {@code
@@ -78,13 +79,17 @@ final class DryRunSummary {
     }
 
     /**
-     * Counts an entity's checked rows.
+     * Counts an entity's checked rows, and those of them an earlier load wrote when there are any.
      *
      * @param subject the entity
      * @param rows how many
+     * @param loadedBefore how many of them the import ledger holds, which are counted nowhere else
      */
-    void rows(ImportIssue.Subject subject, long rows) {
+    void rows(ImportIssue.Subject subject, long rows, long loadedBefore) {
         add("ROWS", subject.name(), rows);
+        if (loadedBefore > 0) {
+            add("LOADED_BEFORE", subject.name(), loadedBefore);
+        }
     }
 
     /**

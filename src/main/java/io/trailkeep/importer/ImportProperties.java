@@ -30,6 +30,8 @@ import org.springframework.util.unit.DataSize;
  *     extract whose attachments come from a content query
  * @param goLive the go-live day the dry run forecasts open cases' SLA states for, from its start in {@code
  *     app.timezone} (design §7.1, §9); the dry run's own time when unset or already past
+ * @param allowMappingChange whether a dry run accepts that the source's rows were loaded under another mapping, and
+ *     then compares no row hash with the ledger's ({@link LedgerDelta}, design §3.1)
  */
 @ConfigurationProperties("import")
 record ImportProperties(
@@ -40,7 +42,8 @@ record ImportProperties(
         @DefaultValue("14d") Duration stagingTtl,
         @DefaultValue Attachments attachments,
         @Nullable Path contentArea,
-        @Nullable LocalDate goLive) {
+        @Nullable LocalDate goLive,
+        @DefaultValue("false") boolean allowMappingChange) {
 
     /**
      * {@code import.attachments} (design §4.3 "Size").
