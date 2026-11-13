@@ -35,7 +35,7 @@ class ReconcileReportTest {
         Path link = Files.createSymbolicLink(directory.resolve("link"), folder);
 
         for (Path refused : new Path[] {null, directory.resolve("missing"), file, link}) {
-            assertThatThrownBy(() -> ReconcileReport.folder(refused, RUN))
+            assertThatThrownBy(() -> ReportFiles.folder(refused, RUN))
                     .isInstanceOf(IllegalStateException.class)
                     .hasMessageContaining("import.reports-dir must name a directory (not a symbolic link)");
         }
@@ -44,7 +44,7 @@ class ReconcileReportTest {
 
     @Test
     void theRunsFolderIsMadeOwnerOnlyAndNeverFollowedWhenItIsLink(@TempDir Path directory) throws Exception {
-        Path folder = ReconcileReport.folder(directory, RUN);
+        Path folder = ReportFiles.folder(directory, RUN);
 
         assertThat(folder).isEqualTo(directory.resolve("42")).isDirectory();
         assumeThat(directory.getFileSystem().supportedFileAttributeViews()).contains("posix");
@@ -52,14 +52,14 @@ class ReconcileReportTest {
 
         Path elsewhere = Files.createDirectory(directory.resolve("elsewhere"));
         Files.createSymbolicLink(directory.resolve("7"), elsewhere);
-        assertThatThrownBy(() -> ReconcileReport.folder(directory, 7))
+        assertThatThrownBy(() -> ReportFiles.folder(directory, 7))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessage("The report folder of import run 7 is not a directory");
     }
 
     @Test
     void reportFileThatIsLinkIsReplacedAndItsTargetLeftAlone(@TempDir Path directory) throws Exception {
-        Path folder = ReconcileReport.folder(directory, RUN);
+        Path folder = ReportFiles.folder(directory, RUN);
         Path target = Files.writeString(directory.resolve("target.txt"), "untouched");
         Files.createSymbolicLink(folder.resolve("reconcile.csv"), target);
 

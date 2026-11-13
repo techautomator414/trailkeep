@@ -51,7 +51,8 @@ import tools.jackson.dataformat.yaml.YAMLMapper;
  * ledger holds are checked only for what changed in the source, and the ledger's rows this run did not stage are
  * reported ({@link LedgerDelta}, 26y1). It writes nothing to the domain. A dry run may be repeated until the sign-off:
  * each replaces the last one's issues. The mapping file and its lookup files must be the ones {@code validate-mapping}
- * accepted ({@link LookupFiles#hash}).
+ * accepted ({@link LookupFiles#hash}). The figures and issues then also go to the run's preview report files ({@link
+ * DryRunReport}, 26ab2); a missing reports directory is refused before anything is read.
  */
 @Component
 @Profile("importer")
@@ -125,9 +126,11 @@ class DryRunCommand {
      * @param file the mapping file, unchanged since {@code validate-mapping}, as are its lookup files
      * @return what it found
      * @throws IllegalStateException if the run is not extracted, is signed off or purged, or a file changed, or in
-     *     {@code clamd} mode clamd's declared stream limit is unset or below the importer's cap
+     *     {@code clamd} mode clamd's declared stream limit is unset or below the importer's cap, or {@code
+     *     import.reports-dir} is not a directory
      */
     Outcome run(long runId, Path file) {
+        final Path folder = ReportFiles.folder(properties.reportsDir(), runId);
         byte[] content = ValidateMappingCommand.read(file);
         ImportRun found = load(runId);
         if (!found.awaitsDryRun()) {
@@ -176,16 +179,24 @@ class DryRunCommand {
                         teams.stream().collect(Collectors.toMap(TeamSummary::id, TeamSummary::name))),
                 mode == ImportRun.ScanMode.EXTERNAL ? pass.summary().loadableFiles() : 0,
                 now));
+        finish(pass, mode, folder);
+        return checked;
+    }
+
+    /** The issue counts into the figures, the figures and the run's new status in one transaction, then the files. */
+    private void finish(Pass pass, ImportRun.ScanMode mode, Path folder) {
+        long runId = pass.runId();
         for (Object[] count : issues.countByCode(runId)) {
             pass.summary().issues((Subject) count[0], (Severity) count[1], (String) count[2], (Long) count[3]);
         }
         transactions.executeWithoutResult(status -> {
             pass.summary().figures(runId, mode).forEach(figures::save);
             ImportRun run = load(runId);
-            run.dryRunDone(mode, now);
+            run.dryRunDone(mode, pass.now());
             runs.save(run);
         });
-        return checked;
+        transactions.executeWithoutResult(
+                status -> DryRunReport.write(folder, runId, figures.reportRows(runId), issues.reportRows(runId)));
     }
 
     /**
