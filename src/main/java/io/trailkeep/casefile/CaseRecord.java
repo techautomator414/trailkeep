@@ -111,17 +111,17 @@ class CaseRecord {
     private @Nullable String ownerNameSnapshot;
 
     /** Placed and lifted by a Compliance Admin (WP-24 part b); a held case is neither archived nor purged. */
-    @Column(name = "LEGAL_HOLD", nullable = false, insertable = false)
+    @Column(name = "LEGAL_HOLD", nullable = false)
     private boolean legalHold;
 
-    @Column(name = "LEGAL_HOLD_BY", insertable = false)
+    @Column(name = "LEGAL_HOLD_BY")
     private @Nullable Long legalHoldBy;
 
-    @Column(name = "LEGAL_HOLD_AT", insertable = false)
+    @Column(name = "LEGAL_HOLD_AT")
     private @Nullable Instant legalHoldAt;
 
-    /** Why the case is held, as the Compliance Admin wrote it; possible PHI, so redacted in the audit trail. */
-    @Column(name = "LEGAL_HOLD_REASON", insertable = false, length = 500)
+    /** Why the case is held, as a Compliance Admin wrote it (PHI: redacted in the audit trail), or an import's text. */
+    @Column(name = "LEGAL_HOLD_REASON", length = 500)
     private @Nullable String legalHoldReason;
 
     @Version
@@ -246,7 +246,7 @@ class CaseRecord {
     }
 
     /**
-     * Places a legal hold ({@link LegalHoldService}, already checked).
+     * Places a legal hold ({@link LegalHoldService}, already checked; {@link ImportHolds} before the first write).
      *
      * @param actorId who places it
      * @param now when

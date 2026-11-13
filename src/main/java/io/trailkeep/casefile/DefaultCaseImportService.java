@@ -50,9 +50,8 @@ class DefaultCaseImportService implements CaseImportService {
             long approverId) {}
 
     /**
-     * The audit snapshot of an imported case: flat, with subject and description redacted as for any case, and the
-     * run in the details (design §7.4). The legacy reference stays out: it is the internal identity, never shown, and
-     * the import ledger keeps it.
+     * The audit snapshot of an imported case: flat, subject and description redacted as for any case, the run in the
+     * details (design §7.4); the legacy reference, the internal identity the import ledger keeps, stays out.
      */
     record ImportedSnapshot(
             long caseTypeId,
@@ -75,9 +74,8 @@ class DefaultCaseImportService implements CaseImportService {
     record RelinkSnapshot(long ownerId, @Nullable Long runId) {}
 
     /**
-     * Changes the owner and the change stamp of a case still open and still the default owner's, and nothing else:
-     * the import user may update only these columns of a case (R__grants.sql), and a reassignment made since the case
-     * was read leaves it unchanged.
+     * Changes only the owner and change stamp of a case still open and the default owner's (the import user may update
+     * only these columns, R__grants.sql); a reassignment made since the case was read leaves it unchanged.
      */
     private static final String RELINK = "update CaseRecord c set c.ownerId = :owner, c.updatedAt = :now,"
             + " c.updatedBy = :by, c.version = c.version + 1"
@@ -98,6 +96,7 @@ class DefaultCaseImportService implements CaseImportService {
     private final UserDirectoryService directory;
     private final ImportPeopleService people;
     private final AuditRecorder audit;
+    private final ImportHolds holds;
     private final InstantSource clock;
     private final ZoneId zone;
     private final String prefix;
@@ -130,6 +129,7 @@ class DefaultCaseImportService implements CaseImportService {
         this.directory = directory;
         this.people = people;
         this.audit = audit;
+        this.holds = new ImportHolds(entityManager, audit, directory);
         this.clock = clock;
         this.zone = app.timezone();
         this.prefix = properties.numberPrefix();
@@ -242,6 +242,7 @@ class DefaultCaseImportService implements CaseImportService {
         checkOwner(fields, closed, principals);
         CaseNumber number = new CaseNumber(prefix, now.atZone(zone).getYear(), numbers.next());
         CaseRecord record = new CaseRecord(number, imported, principals.importer(), now);
+        final String held = holds.place(record, imported.hold(), run.runId(), principals.importer(), now);
         entityManager.persist(record);
         long caseId = Objects.requireNonNull(record.getId(), "persisted");
         SlaPolicyCommand policy = policies.findById(type.getSlaPolicyId())
@@ -263,6 +264,7 @@ class DefaultCaseImportService implements CaseImportService {
                 caseId,
                 "CASE_IMPORTED",
                 audit.diff(null, snapshot(run, imported))));
+        holds.record(caseId, held, principals.importer(), now);
         return new Created(caseId, number);
     }
 

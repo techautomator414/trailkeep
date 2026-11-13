@@ -25,7 +25,11 @@ import org.jspecify.annotations.Nullable;
  *   <li>a closed case may be owned by the "Trailkeep import" principal ({@code closedImportMayBeOwnedByPrincipal});
  *   <li>an open case may be owned by the team's default owner, whom the importer chose in place of an unmatched legacy
  *       owner, with the legacy name kept as a snapshot, and {@link #relinkOwner} later hands it to that legacy owner
- *       with no human actor ({@code defaultOwnerAppliedAndRelinked}).
+ *       with no human actor ({@code defaultOwnerAppliedAndRelinked});
+ *   <li>a case on legal hold in the legacy system, or past its retention at load, is created already on legal hold,
+ *       placed by the "Trailkeep import" principal, who holds no Compliance Admin role, with a fixed reason ({@link
+ *       ImportHold}), its {@code LEGAL_HOLD_EVENT} and its {@code LEGAL_HOLD_PLACED} audit event
+ *       ({@code importHoldPlacedWithoutComplianceAdmin}, WP-26 part ad).
  * </ol>
  *
  * Nothing else is relaxed: every case needs an active team, an open case also an active type and an owner who may own
@@ -45,6 +49,7 @@ public interface CaseImportService {
      * @param status {@code OPEN} or {@code CLOSED}
      * @param openedAt when the legacy case was opened
      * @param closedAt when it was closed; required for {@code CLOSED}, {@code null} for {@code OPEN}
+     * @param hold why the case is created on legal hold, or {@code null} when it is not
      */
     record ImportedCase(
             CaseFields fields,
@@ -53,7 +58,39 @@ public interface CaseImportService {
             @Nullable String ownerNameSnapshot,
             CaseStatus status,
             Instant openedAt,
-            @Nullable Instant closedAt) {}
+            @Nullable Instant closedAt,
+            @Nullable ImportHold hold) {}
+
+    /**
+     * Why an imported case is created on legal hold (design §7.1, "import and hold all"): nothing past its retention
+     * is archived, and so purged, before someone has reviewed it. The reason a case's hold records is fixed text
+     * naming the run, never a legacy value; releasing the hold is the normal legal-hold release by a Compliance Admin.
+     */
+    enum ImportHold {
+        /** On legal hold in the legacy system ({@code legalHold} in the mapping). */
+        LEGAL_HOLD("Imported: on legal hold in the legacy system"),
+        /**
+         * Closed at or before its case type's archive cut-off at load (WP-24's rule), so the archive job would take
+         * it at its next run.
+         */
+        PAST_RETENTION("Imported: past its retention period at import; review before release");
+
+        private final String reason;
+
+        ImportHold(String reason) {
+            this.reason = reason;
+        }
+
+        /**
+         * The reason the hold records.
+         *
+         * @param runId the import run
+         * @return the fixed text, naming the run
+         */
+        public String reason(long runId) {
+            return reason + " (import run " + runId + ")";
+        }
+    }
 
     /**
      * The import run a case belongs to, for its audit event.
@@ -203,7 +240,9 @@ public interface CaseImportService {
     record Created(long caseId, CaseNumber number) {}
 
     /**
-     * Creates the case with its SLA row and search text, and audits it, in the caller's transaction.
+     * Creates the case with its SLA row and search text, and audits it, in the caller's transaction; a case with a
+     * {@link ImportedCase#hold} is created on legal hold, with its hold event and audit event, in the same transaction,
+     * so it is never unheld for a moment.
      *
      * @param run the run
      * @param imported the case

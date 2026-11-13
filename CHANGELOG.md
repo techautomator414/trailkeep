@@ -9,6 +9,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Import holds (WP-26 part ad, docs/design/importer.md §7.1, §8.1 R6 9): a case on legal hold in the legacy system
+  (`legalHold` in the mapping) and a closed case past its type's retention at load are loaded already on legal hold,
+  so the archive job and the purge never take an imported case before someone reviews it. The hold is in the case's
+  `INSERT`, in its load transaction, placed by the "Trailkeep import" principal (who holds no Compliance Admin role)
+  with a fixed reason naming the run ("Imported: on legal hold in the legacy system (import run N)" or "Imported: past
+  its retention period at import; review before release (import run N)"), with its `LEGAL_HOLD_EVENT` and a
+  `LEGAL_HOLD_PLACED` audit event (origin `IMPORT`, reason redacted), so it shows in the case's hold history and
+  History as a hold placed in the app does; releasing it is the normal Compliance Admin release. The dry run's FATAL
+  `HOLD_UNAVAILABLE` is gone; its `HOLDS` figures now count at the forecast instant (`import.go-live`), and the new
+  `ARCHIVED_NEXT_RUN` figure counts the cases the load will not hold that the archive job's first run after it takes
+  (a count only). The import user gains `INSERT` on `LEGAL_HOLD_EVENT` and the draw on `SEQ_LEGAL_HOLD_EVENT`, both
+  vendors; it still may not update a case's hold.
 - The SQL Server source (WP-26 part p, docs/design/importer.md §4.1, §11): a `kind: jdbc` SQL Server mapping is
   test-fetched by `validate-mapping` and extracted through the MIT-licensed `mssql-jdbc` driver in one `SNAPSHOT`
   transaction (the legacy database needs `ALLOW_SNAPSHOT_ISOLATION ON`; without it nothing is read), which takes no

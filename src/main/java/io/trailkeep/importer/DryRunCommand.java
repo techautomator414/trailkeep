@@ -23,6 +23,8 @@ import java.nio.file.Path;
 import java.time.Instant;
 import java.time.InstantSource;
 import java.time.LocalDate;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -35,6 +37,8 @@ import javax.crypto.SecretKey;
 import org.jspecify.annotations.Nullable;
 import org.springframework.context.annotation.Profile;
 import org.springframework.core.env.Environment;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.scheduling.support.CronExpression;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.JsonNode;
@@ -346,7 +350,22 @@ class DryRunCommand {
                 mapping.at("/visibility/onUnrepresentableAcl").asString("restricted"),
                 matcher,
                 caseImports.slaForecast(goLive),
-                LocalDate.ofInstant(goLive, app.timezone()));
+                LocalDate.ofInstant(goLive, app.timezone()),
+                goLive,
+                archiveRun(goLive));
+    }
+
+    /**
+     * The archive job's first run after an instant, by {@code app.retention.archive-cron} (its default when unset) in
+     * the JVM's zone, as Spring schedules it; {@code null} when the job is off ({@code "-"}).
+     */
+    private @Nullable Instant archiveRun(Instant after) {
+        String cron = environment.getProperty("app.retention.archive-cron", "0 37 * * * *");
+        if (Scheduled.CRON_DISABLED.equals(cron)) {
+            return null;
+        }
+        ZonedDateTime next = CronExpression.parse(cron).next(after.atZone(ZoneId.systemDefault()));
+        return next == null ? null : next.toInstant();
     }
 
     /**
