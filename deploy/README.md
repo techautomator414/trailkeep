@@ -15,6 +15,7 @@ Reference manifests for OpenShift, usable on plain Kubernetes. They follow BUILD
 | `base/ingress-alternative.yaml` | Commented `Ingress` to use instead of `route.yaml` on plain Kubernetes. |
 | `overlays/external-scanning/` | Example overlay without ClamAV, for `APP_ATTACHMENTS_SCANNING=external` (see "Scanning mode"). |
 | `components/prometheus-rules/` | Optional Kustomize component with the `PrometheusRule` for the operational alerts (see "Alerts"). |
+| `jobs/migrate/`, `jobs/migrate-external-scanning/` | The schema migration `Job` and its `NetworkPolicy`, run before every rollout (see "Migrations"). |
 | `jobs/importer/` | The importer `Job` and its `NetworkPolicy`, applied by hand because applying a `Job` runs it (see "Importer"). |
 | `jobs/importer-external-scanning/` | The same for `APP_ATTACHMENTS_SCANNING=external`. |
 | `jobs/components/source-access/` | Kustomize component that gives the importer `Job` the source password and the route to the source, together; for `validate-mapping` and `extract` only. |
@@ -49,6 +50,7 @@ kube-linter lint deploy/
    | Secret | Mounted by | Keys (added by the work packages that need them) |
    |---|---|---|
    | `trailkeep-web` | web `Deployment`; the importer `Job` takes `app.audit.hmac-key` alone | `spring.datasource.username`, `spring.datasource.password`, OIDC client secret, SMTP password, `app.audit.hmac-key` (Base64, ≥ 32 random bytes; the `prod` profile refuses to start without it) |
+   | `trailkeep-migrate` | migration `Job` only | `spring.datasource.username`, `spring.datasource.password`: the `TRAILKEEP_OWNER` (schema owner) credential, the only one with DDL rights. Only these two keys are projected. Nothing else: the migration registers no OIDC client and audits nothing, so it needs neither the client secret nor `app.audit.hmac-key`, and no other workload ever mounts this Secret |
    | `trailkeep-purge` | purge `CronJob` only | `spring.datasource.username`, `spring.datasource.password`: the `TRAILKEEP_PURGE` credential. Nothing else: the purge registers no OIDC client, and its `CASE_PURGED` audit rows hold counts only, so it needs neither the client secret nor `app.audit.hmac-key` |
    | `trailkeep-import` | importer `Job` only | `spring.datasource.username`, `spring.datasource.password`: the `TRAILKEEP_IMPORT` credential. Only these two keys are projected, whatever else the Secret holds: the importer registers no OIDC client and never sees the web application's credential |
    | `trailkeep-import-source` | importer `Job` with the `source-access` component only (`validate-mapping`, `extract`) | `import.source.password`: the legacy source account's password. `load`, `reconcile`, `relink-owners` and the other commands never mount it |
@@ -125,6 +127,34 @@ runs screen; the `Job` only carries them out.
 5. **Afterwards.** Lock `TRAILKEEP_IMPORT` again when the import is over. Keep `trailkeep-import-hash-key` while any
    delta run may still compare with the ledger.
 
+## Migrations
+
+Flyway runs in one place: the migration `Job`, with the schema owner's credential (`TRAILKEEP_OWNER`, Secret
+`trailkeep-migrate`, which no other workload mounts) and the same image as the rollout. The runtime users own no table
+and hold no DDL right (BUILD_PLAN §8 rule 7), so the `prod` profile runs Flyway **off** in the web pods, the purge and
+the importer, and they never touch Flyway's history table. Nothing is weakened by that: the `Job` runs Flyway's
+validation (applied checksums, naming, order) before every migrate, re-runs `R__grants.sql` for the runtime, purge and
+import users, and then lets Hibernate validate the migrated schema, so a mapping that does not match fails the `Job`.
+The web pods keep Hibernate's `validate` as well.
+
+The order for a fresh install and for every release:
+
+1. Create the Secrets and the database users (`TRAILKEEP_OWNER`, `TRAILKEEP_APP`, `TRAILKEEP_PURGE`,
+   `TRAILKEEP_IMPORT`), and set `APP_DB_SCHEMA` and the three grantee names in `trailkeep-config`.
+2. Apply the `Job` for the image you are about to roll out, with its `NetworkPolicy`, after setting the image in your
+   overlay (it names the same image as the rollout), and wait for it:
+
+   ```sh
+   kubectl -n <namespace> apply -k deploy/jobs/migrate            # or deploy/jobs/migrate-external-scanning
+   kubectl -n <namespace> wait --for=condition=complete --timeout=60m job/trailkeep-migrate
+   ```
+
+   Its `NetworkPolicy` admits egress only to DNS and the database; `trailkeep-egress` excludes the pod.
+3. Only then roll the web `Deployment` (and unsuspend the purge) out. If the `Job` failed, read its log, fix the cause
+   and delete it (`kubectl delete job trailkeep-migrate`) before running it again; do not roll out, and never grant the
+   runtime user DDL to make a pod start. A pod rolled out against an unmigrated schema fails Hibernate's `validate`
+   (or, for a migration with no entity change, runs the previous schema's queries until the `Job` has run).
+
 ## Runtime properties
 
 - **Pod security.** Non-root, read-only root filesystem, no privilege escalation, all capabilities dropped, seccomp
@@ -136,10 +166,10 @@ runs screen; the `Job` only carries them out.
   members are listed explicitly, so cluster-level indicators never restart a healthy pod.
 - **Metrics.** `/actuator/prometheus` on port 8081. The `NetworkPolicy` admits it only from cluster monitoring.
 - **Logs.** One JSON object per line on stdout, with `requestId` (and later `userId`, `caseNumber`, `module`).
-- **Batch profiles.** The purge `CronJob` and importer `Job` run the same image with `prod,purge` or
-  `prod,importer` and `spring.main.web-application-type=none`.
-- **Migrations.** Run as a separate pre-deploy `Job` with the schema-owner credential (added with the persistence
-  work). The app itself only validates the schema.
+- **Batch profiles.** The purge `CronJob`, importer `Job` and migration `Job` run the same image with `prod,purge`,
+  `prod,importer` or `prod,migrate` and `spring.main.web-application-type=none`.
+- **Migrations.** Only the migration `Job` migrates (see below). The `prod` profile turns Flyway off, so the web
+  pods, the purge and the importer never run DDL; each still lets Hibernate validate the schema it sees at start-up.
 
 ## Alerts
 

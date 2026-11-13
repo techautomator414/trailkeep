@@ -32,6 +32,15 @@ class AuditConfigTest {
     }
 
     @Test
+    void theMigrationJobAuditsNothingAndNeedsNoKey() {
+        MockEnvironment migrate = new MockEnvironment();
+        migrate.setActiveProfiles("prod", "migrate", "postgresql");
+
+        assertThat(AuditConfig.hmac(new AuditProperties(null), migrate).hex("x"))
+                .hasSize(64);
+    }
+
+    @Test
     void otherProfilesFallBackToRandomPerProcessKey() {
         MockEnvironment local = new MockEnvironment();
         local.setActiveProfiles("local");

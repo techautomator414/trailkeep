@@ -1,0 +1,46 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Charlie Genova and contributors
+# The migration pod's own network (BUILD_PLAN §16): no ingress, and egress only to DNS and the Trailkeep database. The
+# pod holds the schema owner's credential, so it reaches nothing else: not the identity provider, not the SMTP relay,
+# not ClamAV. The base's trailkeep-egress excludes this pod. Addresses use RFC 5737 documentation ranges as
+# PLACEHOLDERS; the deploying organization replaces them, with the same value as in trailkeep-egress for the database.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: trailkeep-migrate
+  labels:
+    app.kubernetes.io/name: trailkeep
+    app.kubernetes.io/part-of: trailkeep
+    app.kubernetes.io/component: migrate
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: trailkeep
+      app.kubernetes.io/component: migrate
+  # Ingress listed with no rule: nothing may connect to the pod, even where the base's default-deny is not applied.
+  policyTypes: [Ingress, Egress]
+  egress:
+    # Cluster DNS.
+    - to:
+        - namespaceSelector: {}
+          podSelector:
+            matchLabels:
+              dns.operator.openshift.io/daemonset-dns: default
+      ports:
+        - port: 5353
+          protocol: UDP
+        - port: 5353
+          protocol: TCP
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+    # The Trailkeep database. PLACEHOLDER address; Oracle tcps 2484 (or 1521), PostgreSQL 5432.
+    - to:
+        - ipBlock:
+            cidr: 192.0.2.10/32
+      ports:
+        - port: 2484
+          protocol: TCP
+        - port: 5432
+          protocol: TCP

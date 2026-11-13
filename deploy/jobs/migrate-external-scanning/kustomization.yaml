@@ -1,0 +1,28 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Charlie Genova and contributors
+# The migration Job for organizations that scan upstream (ADR-0013), mirroring deploy/overlays/external-scanning: no
+# clamav-ca volume, because that overlay removes the clamd SSL bundle from trailkeep-config.
+#   kubectl -n <namespace> apply -k deploy/jobs/migrate-external-scanning
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../migrate
+
+patches:
+  - patch: |-
+      apiVersion: batch/v1
+      kind: Job
+      metadata:
+        name: trailkeep-migrate
+      spec:
+        template:
+          spec:
+            containers:
+              - name: migrate
+                volumeMounts:
+                  - mountPath: /etc/trailkeep/clamav-ca
+                    $patch: delete
+            volumes:
+              - name: clamav-ca
+                $patch: delete

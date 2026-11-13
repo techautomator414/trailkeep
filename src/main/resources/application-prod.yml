@@ -15,6 +15,14 @@ server:
   tomcat:
     basedir: /var/lib/trailkeep/tomcat
 spring:
+  # The runtime user owns no table and has no DDL rights (BUILD_PLAN section 8 rule 7), so no prod process migrates:
+  # Flyway runs only in the migration Job (profile migrate, deploy/jobs/migrate), as the schema owner, before the
+  # rollout. Hibernate still validates the schema at start-up (ddl-auto: validate in application.yml). Flyway's own
+  # validation (checksums, pending migrations) is not weakened, it runs in that Job on every migrate
+  # (validate-on-migrate: true); the application does not read Flyway's history table, which the app user has no
+  # grant on.
+  flyway:
+    enabled: false
   security:
     oauth2:
       client:

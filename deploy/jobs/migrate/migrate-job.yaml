@@ -1,0 +1,99 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Charlie Genova and contributors
+# The schema migration (BUILD_PLAN §8 rule 7, §16): Flyway runs here, as the schema owner, and nowhere else. The web
+# Deployment, the purge CronJob and the importer Job run with Flyway off (prod profile), because their users own
+# nothing and have no DDL rights. Not part of deploy/base, because applying a Job runs it. Run it before every rollout
+# that changes the image, then wait for it, then roll the web Deployment out (deploy/README.md, "Migrations"):
+#   kubectl -n <namespace> apply -k deploy/jobs/migrate                     (clamd scanning, the default)
+#   kubectl -n <namespace> apply -k deploy/jobs/migrate-external-scanning   (APP_ATTACHMENTS_SCANNING=external)
+#   kubectl -n <namespace> wait --for=condition=complete --timeout=60m job/trailkeep-migrate
+# A finished Job cannot be changed: delete it (kubectl delete job trailkeep-migrate) before the next run. Same image,
+# prod,migrate profiles, no web server. It validates the applied migrations' checksums, applies the pending ones,
+# re-runs the repeatable R__grants.sql for the three runtime users, lets Hibernate validate the result, and exits.
+# The database URL, APP_DB_SCHEMA and the three grantee names come from trailkeep-config, as for the other workloads.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: trailkeep-migrate
+  labels:
+    app.kubernetes.io/name: trailkeep
+    app.kubernetes.io/part-of: trailkeep
+    app.kubernetes.io/component: migrate
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 3600
+  ttlSecondsAfterFinished: 604800
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: trailkeep
+        app.kubernetes.io/component: migrate
+      annotations:
+        ignore-check.kube-linter.io/no-liveness-probe: "Batch job: no server to probe; activeDeadlineSeconds bounds it."
+        ignore-check.kube-linter.io/no-readiness-probe: "Batch job: it never receives traffic."
+    spec:
+      # Default service account (this file is applied outside the base); its token is not mounted.
+      automountServiceAccountToken: false
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: migrate
+          image: ghcr.io/techautomator414/trailkeep:0.1.0
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef:
+                name: trailkeep-config
+          env:
+            - name: SPRING_PROFILES_ACTIVE
+              value: prod,migrate
+            - name: SPRING_MAIN_WEB_APPLICATION_TYPE
+              value: none
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 250m
+              memory: 768Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            - name: secrets
+              mountPath: /etc/trailkeep/secrets
+              readOnly: true
+            - name: clamav-ca
+              mountPath: /etc/trailkeep/clamav-ca
+              readOnly: true
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 128Mi
+        # The CA certificate (no key) the scanner client loads at startup (clamav.yaml, ADR-0012). The migration never
+        # scans, but it runs the same application context. migrate-external-scanning removes it.
+        - name: clamav-ca
+          secret:
+            secretName: clamav-ca
+            defaultMode: 0444
+        # Reference only: holds the schema owner's credential, TRAILKEEP_OWNER. This is the one Secret the web,
+        # purge and importer workloads never mount, and the only one this Job mounts: no OIDC client secret, no audit
+        # HMAC key, no import keys.
+        - name: secrets
+          projected:
+            defaultMode: 0444 # readable by whichever non-root UID the platform assigns
+            sources:
+              - secret:
+                  name: trailkeep-migrate
+                  items:
+                    - key: spring.datasource.username
+                      path: spring.datasource.username
+                    - key: spring.datasource.password
+                      path: spring.datasource.password

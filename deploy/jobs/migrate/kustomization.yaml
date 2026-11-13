@@ -1,0 +1,16 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Charlie Genova and contributors
+# The migration Job with its NetworkPolicy, for clamd scanning (the default). Applying it runs the Job, so it is not
+# part of deploy/base: kubectl -n <namespace> apply -k deploy/jobs/migrate. ../migrate-external-scanning is the variant
+# for APP_ATTACHMENTS_SCANNING=external. Point your own overlay at either; set the namespace, image and placeholders
+# there.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - migrate-job.yaml
+  - networkpolicy.yaml
+
+images:
+  - name: ghcr.io/techautomator414/trailkeep
+    newTag: 0.1.0

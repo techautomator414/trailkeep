@@ -28,8 +28,8 @@ class AuditConfig {
             return AuditHmac.fromBase64(key);
         }
         // The purge job (profile purge) writes no audit row and has no INSERT grant on AUDIT_EVENT, so its pod is not
-        // given the key; every process that audits is.
-        if (environment.matchesProfiles("prod & !purge")) {
+        // given the key; every process that audits is. The migration Job (profile migrate) only migrates the schema.
+        if (environment.matchesProfiles("prod & !purge & !migrate")) {
             throw new IllegalStateException("app.audit.hmac-key is required in the prod profile");
         }
         LOG.warn("app.audit.hmac-key is not set; using a random per-process key. Redacted audit values will not be"

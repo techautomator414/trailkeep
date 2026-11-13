@@ -156,6 +156,64 @@ public final class TestDatabaseUsers implements Callback {
     }
 
     /**
+     * A schema owner's login for a schema nothing has migrated yet.
+     *
+     * @param username the owner's database user
+     * @param password the owner's password, for this test run only
+     * @param schema the schema the owner's objects live in
+     */
+    public record FreshOwner(String username, String password, String schema) {}
+
+    /**
+     * Creates an empty schema with an owner for it, so a test can run the migration Job's profile against a fresh
+     * install: on Oracle a new user (the schema is the user), on PostgreSQL a new schema owned by the container user.
+     *
+     * @param name a plain identifier made of letters, digits and underscores, at most 30 characters
+     * @return the owner's login
+     * @throws SQLException if the owner cannot be created
+     */
+    public FreshOwner freshOwner(String name) throws SQLException {
+        if (!name.matches("[A-Za-z][A-Za-z0-9_]{0,29}")) {
+            throw new IllegalArgumentException("Not a plain test identifier: " + name);
+        }
+        try (Connection admin = adminConnection();
+                Statement statement = admin.createStatement()) {
+            if (vendor == DatabaseVendor.ORACLE) {
+                String password = "Tk" + HexFormat.of().formatHex(RANDOM.generateSeed(12));
+                // Test-only DDL; the name is checked above and the password is hex from SecureRandom.
+                statement.execute("CREATE USER " + name + " IDENTIFIED BY \"" + password + "\"");
+                statement.execute(
+                        "GRANT CREATE SESSION, CREATE TABLE, CREATE SEQUENCE, UNLIMITED TABLESPACE TO " + name);
+                return new FreshOwner(name, password, name.toUpperCase(Locale.ROOT));
+            }
+            statement.execute("CREATE SCHEMA " + name);
+            return new FreshOwner(
+                    Objects.requireNonNull(connection.getUsername(), "container user"),
+                    Objects.requireNonNull(connection.getPassword(), "container password"),
+                    name);
+        }
+    }
+
+    /**
+     * Drops what {@link #freshOwner(String)} created, with everything in it.
+     *
+     * @param name the name given to {@code freshOwner}
+     * @throws SQLException if the drop fails
+     */
+    public void dropFreshOwner(String name) throws SQLException {
+        if (!name.matches("[A-Za-z][A-Za-z0-9_]{0,29}")) {
+            throw new IllegalArgumentException("Not a plain test identifier: " + name);
+        }
+        try (Connection admin = adminConnection();
+                Statement statement = admin.createStatement()) {
+            statement.execute(
+                    vendor == DatabaseVendor.ORACLE
+                            ? "DROP USER " + name + " CASCADE"
+                            : "DROP SCHEMA " + name + " CASCADE");
+        }
+    }
+
+    /**
      * The container's JDBC URL, for a test that starts an application as one of the grantees.
      *
      * @return the URL
