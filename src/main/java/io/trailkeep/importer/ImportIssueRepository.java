@@ -4,6 +4,7 @@ package io.trailkeep.importer;
 
 import java.util.Collection;
 import java.util.List;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.Repository;
@@ -49,4 +50,16 @@ interface ImportIssueRepository extends Repository<ImportIssue, Long> {
     @Query("select i.subject, i.severity, i.code, count(i) from ImportIssue i where i.runId = :runId"
             + " group by i.subject, i.severity, i.code")
     List<Object[]> countByCode(long runId);
+
+    /**
+     * One page of a run's issues for its report files, by id: id, stage, entity, severity, code, keyed hash, detail.
+     */
+    @Query("select i.id, i.stage, i.subject, i.severity, i.code, i.keyHash, i.detail from ImportIssue i"
+            + " where i.runId = :runId and i.id > :afterId order by i.id")
+    List<Object[]> reportPage(long runId, long afterId, Pageable page);
+
+    /** A run's issue counts for its report page: entity, stage, severity, code and count. */
+    @Query("select i.subject, i.stage, i.severity, i.code, count(i) from ImportIssue i where i.runId = :runId"
+            + " group by i.subject, i.stage, i.severity, i.code order by i.subject, i.stage, i.severity, i.code")
+    List<Object[]> reportCounts(long runId);
 }

@@ -21,8 +21,8 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 /**
- * {@code reconcile.html} (WP-26 part aa3, BUILD_PLAN §10.2) in a real browser: axe-core finds 0 WCAG 2.x A/AA
- * violations, for a report with differences and for one with none, and the page runs no script.
+ * {@code reconcile.html} (WP-26 part aa3, BUILD_PLAN §10.2) and {@code dry-run.html} (part ab2) in a real browser:
+ * axe-core finds 0 WCAG 2.x A/AA violations, for reports with rows and for empty ones, and the pages run no script.
  */
 // "IT" is the Failsafe suffix Part B mandates for integration tests, not an abbreviation.
 @SuppressWarnings("checkstyle:AbbreviationAsWordInName")
@@ -62,17 +62,29 @@ class ReconcileReportAccessibilityIT {
                 false,
                 false);
         for (String html : List.of(withDifferences, without)) {
-            try (Page page = Objects.requireNonNull(browser).newPage()) {
-                List<String> console = new ArrayList<>();
-                page.onConsoleMessage(message -> console.add(message.text()));
-                page.setContent(html);
+            assertAccessible(html, "Reconciliation of import run");
+        }
+    }
 
-                assertThat(page.title()).startsWith("Reconciliation of import run");
-                assertThat(new ShellPage(page).heading()).startsWith("Reconciliation of import run");
-                assertThat(page.locator("script").count()).isZero();
-                assertThat(new ShellPage(page).axeViolations()).isEmpty();
-                assertThat(console).isEmpty();
-            }
+    @Test
+    void theDryRunPreviewHasNoAxeViolationsWithOrWithoutIssues() {
+        assertAccessible(
+                DryRunReport.html(42, DryRunReportTest.FIGURES, DryRunReportTest.COUNTS, DryRunReportTest.ISSUES, 1201),
+                "Dry run of");
+        assertAccessible(DryRunReport.html(43, List.of(), List.of(), List.of(), 0), "Dry run of");
+    }
+
+    private static void assertAccessible(String html, String title) {
+        try (Page page = Objects.requireNonNull(browser).newPage()) {
+            List<String> console = new ArrayList<>();
+            page.onConsoleMessage(message -> console.add(message.text()));
+            page.setContent(html);
+
+            assertThat(page.title()).startsWith(title);
+            assertThat(new ShellPage(page).heading()).startsWith(title);
+            assertThat(page.locator("script").count()).isZero();
+            assertThat(new ShellPage(page).axeViolations()).isEmpty();
+            assertThat(console).isEmpty();
         }
     }
 }
