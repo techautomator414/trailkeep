@@ -6,6 +6,7 @@ import io.trailkeep.shared.access.CaseScope;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.CriteriaQuery;
+import jakarta.persistence.criteria.Path;
 import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
 import jakarta.persistence.criteria.Subquery;
@@ -92,19 +93,13 @@ class AuditEventQueriesImpl implements AuditEventQueries {
             CriteriaQuery<?> query,
             Root<AuditEvent> event,
             CriteriaBuilder cb) {
-        List<Predicate> all = new ArrayList<>(3);
+        List<Predicate> all = new ArrayList<>(2);
         if (caseId != null) {
-            all.add(cb.equal(event.get("caseId"), caseId));
-            if (!scope.isUnrestricted()) {
-                EntityType<?> caseEntity = caseEntity();
-                if (caseEntity == null) {
-                    return null;
-                }
-                Subquery<Long> readable = query.subquery(Long.class);
-                Root<?> caseRoot = readable.from(caseEntity);
-                readable.select(caseRoot.<Long>get("id")).where(scope.toPredicate(caseRoot, query, cb));
-                all.add(event.<Long>get("caseId").in(readable));
+            Predicate ofCase = ofReadableCase(entityManager, scope, caseId, event.<Long>get("caseId"), query, cb);
+            if (ofCase == null) {
+                return null;
             }
+            all.add(ofCase);
         } else if (!scope.isUnrestricted()) {
             return null;
         }
@@ -114,7 +109,40 @@ class AuditEventQueriesImpl implements AuditEventQueries {
         return cb.and(all.toArray(Predicate[]::new));
     }
 
-    private @Nullable EntityType<?> caseEntity() {
+    /**
+     * The rows of one case, if the scope reads it: the scope rule of the class comment, shared with {@link
+     * CaseImportedEventQueriesImpl}.
+     *
+     * @param entityManager the entity manager
+     * @param scope the caller's scope
+     * @param caseId the case id
+     * @param column the row's case id
+     * @param query the query the filter is for
+     * @param cb the criteria builder
+     * @return the filter, or {@code null} if nothing can be visible to this scope
+     */
+    static @Nullable Predicate ofReadableCase(
+            EntityManager entityManager,
+            CaseScope scope,
+            long caseId,
+            Path<Long> column,
+            CriteriaQuery<?> query,
+            CriteriaBuilder cb) {
+        Predicate ofCase = cb.equal(column, caseId);
+        if (scope.isUnrestricted()) {
+            return ofCase;
+        }
+        EntityType<?> caseEntity = caseEntity(entityManager);
+        if (caseEntity == null) {
+            return null;
+        }
+        Subquery<Long> readable = query.subquery(Long.class);
+        Root<?> caseRoot = readable.from(caseEntity);
+        readable.select(caseRoot.<Long>get("id")).where(scope.toPredicate(caseRoot, query, cb));
+        return cb.and(ofCase, column.in(readable));
+    }
+
+    private static @Nullable EntityType<?> caseEntity(EntityManager entityManager) {
         return entityManager.getMetamodel().getEntities().stream()
                 .filter(entity -> CASE_ENTITY.equals(entity.getName()))
                 .findFirst()

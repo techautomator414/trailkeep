@@ -4,7 +4,9 @@
      form chooses the kind of event and plain links page through; nothing here needs a script. Each time is a <time>
      element (UTC in datetime, app.timezone as text). A field whose value is possible PHI arrives from the service as
      "set" or "changed" only, never as a digest or a length. The SLA evaluator's "state" values read as the list's SLA
-     state labels (On track, At risk, Overdue). -->
+     state labels (On track, At risk, Overdue). Imported legacy history (WP-26 part x) is interleaved by time; each such
+     row carries an "Imported" chip in text (never colour alone) and its import run, and its actor is the name the
+     legacy system recorded. Its redacted values read "set" or "changed" exactly as audit's do. -->
 <html lang="en" xmlns:th="http://www.thymeleaf.org" th:replace="~{web/layout :: page(~{::title}, ~{::main})}">
 <head><title th:text="#{tk.history.heading(${h.number})} + ' · ' + ${@branding.name()}">History</title></head>
 <body>
@@ -44,9 +46,16 @@
       <tr th:each="e : ${h.entries}">
         <th scope="row"><time th:datetime="${e.at}"
             th:text="${#temporals.format(e.local, 'yyyy-MM-dd HH:mm')}">2026-11-05 10:30</time></th>
-        <td th:text="${e.who} ?: #{tk.history.system}">Someone</td>
+        <td th:text="${e.who} ?: (${e.importRun != null} ? #{tk.history.unrecorded} : #{tk.history.system})">Someone</td>
         <td th:text="#{'tk.history.origin.' + ${e.origin}}">Screen</td>
-        <td th:text="${#messages.msgOrNull('tk.history.action.' + e.action)} ?: ${e.action}">Case edited</td>
+        <td th:if="${e.importRun == null}"
+            th:text="${#messages.msgOrNull('tk.history.action.' + e.action)} ?: ${e.action}">Case edited</td>
+        <td th:if="${e.importRun != null}">
+          <span class="tk-chip"><span aria-hidden="true">&#x2913;</span>
+            <span th:text="#{tk.history.imported}">Imported</span></span>
+          <span th:text="#{'tk.history.action.' + ${e.action}}">Status changed</span>
+          <span class="d-block small" th:text="#{tk.history.imported.run(${e.importRun})}">From the legacy tracker,
+            import run 7</span></td>
         <td>
           <ul class="list-unstyled mb-0" th:unless="${e.changes.isEmpty()}">
             <li th:each="c : ${e.changes}" class="text-break"

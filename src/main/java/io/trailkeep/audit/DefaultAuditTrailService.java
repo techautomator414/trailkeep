@@ -11,7 +11,10 @@ import java.util.Set;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** The audit read path; the one class allowed to hold {@link AuditEventRepository}. */
+/**
+ * The audit read path; the one class allowed to hold {@link AuditEventRepository} and {@link
+ * CaseImportedEventRepository}, the History tab's two sources (design §7.5).
+ */
 @Service
 @CaseAccessPath
 @Transactional(readOnly = true)
@@ -20,10 +23,13 @@ class DefaultAuditTrailService implements AuditTrailService {
     static final int MAX_LIMIT = 500;
 
     private final AuditEventRepository repository;
+    private final CaseImportedEventRepository imported;
     private final StandingEventQueries standing;
 
-    DefaultAuditTrailService(AuditEventRepository repository, StandingEventQueries standing) {
+    DefaultAuditTrailService(
+            AuditEventRepository repository, CaseImportedEventRepository imported, StandingEventQueries standing) {
         this.repository = repository;
+        this.imported = imported;
         this.standing = standing;
     }
 
@@ -46,6 +52,21 @@ class DefaultAuditTrailService implements AuditTrailService {
         long total = repository.countByCase(scope, caseId, kept);
         return new AuditPage(
                 total == 0 ? List.of() : toRecords(repository.pageByCase(scope, caseId, kept, offset, checked(limit))),
+                total);
+    }
+
+    @Override
+    public ImportedPage importedPageForCase(CaseScope scope, long caseId, int offset, int limit) {
+        if (offset < 0) {
+            throw new IllegalArgumentException("offset must not be negative");
+        }
+        long total = imported.countByCase(scope, caseId);
+        return new ImportedPage(
+                total == 0
+                        ? List.of()
+                        : imported.pageByCase(scope, caseId, offset, checked(limit)).stream()
+                                .map(CaseImportedEvent::toRecord)
+                                .toList(),
                 total);
     }
 

@@ -5,19 +5,26 @@ package io.trailkeep.audit;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import io.trailkeep.audit.AuditTrailService.ImportedRecord;
 import io.trailkeep.audit.ImportedHistoryService.ImportedEvent;
 import io.trailkeep.audit.ImportedHistoryService.Kind;
 import io.trailkeep.audit.SnapshotDiff.Redaction;
+import io.trailkeep.casefile.CaseScopeService;
 import io.trailkeep.shared.CaseStatus;
 import io.trailkeep.shared.Sensitivity;
+import io.trailkeep.shared.access.CaseScope;
 import io.trailkeep.testsupport.CaseSeed;
 import io.trailkeep.testsupport.RequiresDocker;
+import io.trailkeep.user.TeamRole;
+import io.trailkeep.user.UserPermissions;
 import jakarta.persistence.EntityManager;
 import java.sql.Timestamp;
 import java.sql.Types;
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
@@ -32,7 +39,8 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * {@link ImportedHistoryService} and {@code CASE_IMPORTED_EVENT} (WP-26 part v, design §7.5, §8.1 R6 11) on both
  * vendors: legacy time and actor name kept, plain values only for the plain fields of a non-note event, every other
- * value redacted exactly as audit redacts one, and the table's own checks.
+ * value redacted exactly as audit redacts one, and the table's own checks; and the History tab's read (WP-26 part x):
+ * newest legacy time first, paged in the database, through the case scope, with no digest leaving the module.
  */
 // "IT" is the Failsafe suffix Part B mandates for integration tests, not an abbreviation.
 @SuppressWarnings("checkstyle:AbbreviationAsWordInName")
@@ -57,14 +65,24 @@ abstract class AbstractImportedHistoryIT {
     @Autowired
     private EntityManager entityManager;
 
+    @Autowired
+    private AuditTrailService trail;
+
+    @Autowired
+    private CaseScopeService scopes;
+
+    private CaseSeed seed;
+    private long owner;
+    private long team;
     private long caseId;
     private long runId;
 
     @BeforeEach
     void seed() {
-        CaseSeed seed = new CaseSeed(jdbc);
-        long owner = seed.user();
-        caseId = seed.caseId(seed.caseRow(seed.team(), owner, Sensitivity.STANDARD, CaseStatus.CLOSED));
+        seed = new CaseSeed(jdbc);
+        owner = seed.user();
+        team = seed.team();
+        caseId = seed.caseId(seed.caseRow(team, owner, Sensitivity.STANDARD, CaseStatus.CLOSED));
         runId = NEXT_RUN.incrementAndGet();
         jdbc.update(
                 "INSERT INTO IMPORT_RUN (ID, KIND, SOURCE_ID, STATUS, REQUESTED_BY, REQUESTED_AT, UPDATED_AT)"
@@ -147,6 +165,70 @@ abstract class AbstractImportedHistoryIT {
     void kindsAreAClosedSet() {
         assertThatThrownBy(() -> insert("RENAMED", null, null, null))
                 .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void theHistoryTabReadsImportedEventsNewestFirstInPagesWithoutDigests() {
+        history.record(event("Legacy Clerk", Kind.STATUS_CHANGE, "status", "New", "In review"));
+        Instant later = AT.plusSeconds(3600);
+        final long described = history.record(new ImportedEvent(
+                caseId, later, null, Kind.FIELD_CHANGE, "description", null, "SECRETLEGACY text", runId));
+        final long note = history.record(
+                new ImportedEvent(caseId, later, "Legacy Clerk", Kind.NOTE, null, "Old note", "New note", runId));
+        entityManager.flush();
+        CaseScope scope = scopes.forUser(analyst(owner, team));
+
+        assertThat(note).as("rows are numbered in the order written").isGreaterThan(described);
+        AuditTrailService.ImportedPage first = trail.importedPageForCase(scope, caseId, 0, 2);
+        assertThat(first.total()).isEqualTo(3);
+        assertThat(first.records())
+                .as("newest legacy time first, then the newest row")
+                .extracting(ImportedRecord::kind)
+                .containsExactly(Kind.NOTE, Kind.FIELD_CHANGE);
+        ImportedRecord redacted = first.records().stream()
+                .filter(record -> record.kind() == Kind.FIELD_CHANGE)
+                .findFirst()
+                .orElseThrow();
+        assertThat(redacted.field()).isEqualTo("description");
+        assertThat(redacted.before()).isNull();
+        assertThat(redacted.after()).isNull();
+        assertThat(redacted.beforeRedacted()).isFalse();
+        assertThat(redacted.afterRedacted()).isTrue();
+        String digest = Objects.requireNonNull(
+                jdbc.queryForObject("SELECT NEW_HMAC FROM CASE_IMPORTED_EVENT WHERE ID = ?", String.class, described));
+        assertThat(first.records().toString()).doesNotContain(digest, "SECRETLEGACY", "Old note", "New note");
+
+        AuditTrailService.ImportedPage second = trail.importedPageForCase(scope, caseId, 2, 2);
+        assertThat(second.total()).isEqualTo(3);
+        assertThat(second.records())
+                .containsExactly(new ImportedRecord(
+                        AT, "Legacy Clerk", Kind.STATUS_CHANGE, "status", "New", "In review", false, false, runId));
+        assertThat(trail.importedPageForCase(scope, caseId, 3, 2).records()).isEmpty();
+    }
+
+    @Test
+    void importedHistoryOfAnUnreadableCaseIsEmptyWithATotalOfZero() {
+        long restricted = seed.caseId(seed.caseRow(team, owner, Sensitivity.RESTRICTED, CaseStatus.OPEN));
+        history.record(new ImportedEvent(restricted, AT, "Legacy Clerk", Kind.OTHER, "other", "a", "b", runId));
+        history.record(event("Legacy Clerk", Kind.STATUS_CHANGE, "status", "New", "Open"));
+        entityManager.flush();
+        CaseScope colleague = scopes.forUser(analyst(seed.user(), team));
+        CaseScope outsider = scopes.forUser(analyst(seed.user(), seed.team()));
+
+        assertThat(trail.importedPageForCase(colleague, restricted, 0, 50))
+                .isEqualTo(new AuditTrailService.ImportedPage(List.of(), 0));
+        assertThat(trail.importedPageForCase(outsider, caseId, 0, 50))
+                .isEqualTo(new AuditTrailService.ImportedPage(List.of(), 0));
+        assertThat(trail.importedPageForCase(colleague, caseId, 0, 50).total())
+                .as("the colleague reads the standard case, and only its own event")
+                .isEqualTo(1);
+        assertThat(trail.importedPageForCase(scopes.forUser(analyst(owner, team)), restricted, 0, 50)
+                        .total())
+                .isEqualTo(1);
+    }
+
+    private static UserPermissions analyst(long userId, long teamId) {
+        return new UserPermissions(userId, false, Set.of(), Map.of(teamId, TeamRole.ANALYST));
     }
 
     /** Writes a row past the service, to reach the table's own checks. */

@@ -18,11 +18,13 @@ import io.trailkeep.e2e.pages.SignInPage;
 import io.trailkeep.shared.CaseNumber;
 import io.trailkeep.shared.Sensitivity;
 import io.trailkeep.testsupport.CaseSeed;
+import io.trailkeep.testsupport.HistorySeed;
 import io.trailkeep.testsupport.KeycloakDevRealm;
 import io.trailkeep.testsupport.PostgresTestcontainersConfiguration;
 import io.trailkeep.testsupport.RequiresDocker;
 import io.trailkeep.user.TeamRole;
 import io.trailkeep.user.UserPermissions;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.List;
@@ -48,8 +50,11 @@ import org.springframework.test.context.DynamicPropertySource;
  * The History page in a real browser (WP-16, BUILD_PLAN §4.3, §10.1): the dev realm's {@code alpha.analyst} reaches
  * it from the case page by keyboard (Enter on the History link), finds a captioned table with column and row headers
  * and a {@code time} element per event, narrows it to comments with the native select and the button by keyboard,
- * and every state has 0 axe violations and no CSP violation in the console. The rows the test commits are removed
- * afterwards. Browser handling follows {@link ShellAccessibilityIT}.
+ * and every state has 0 axe violations and no CSP violation in the console. With imported legacy history (WP-26 part
+ * x), each imported row carries a text marker (an icon hidden from assistive technology and the word "Imported") and
+ * its import run, a redacted value reads "set", and the kind select isolates or leaves out the imported rows by
+ * keyboard, each state axe-clean. The rows the test commits are removed afterwards. Browser handling follows {@link
+ * ShellAccessibilityIT}.
  */
 // "IT" is the Failsafe suffix Part B mandates for integration tests, not an abbreviation.
 @SuppressWarnings("checkstyle:AbbreviationAsWordInName")
@@ -70,6 +75,7 @@ class CaseHistoryAccessibilityIT {
     private Page page;
     private long team;
     private long caseType;
+    private long run;
 
     @Autowired
     private CaseService cases;
@@ -124,6 +130,8 @@ class CaseHistoryAccessibilityIT {
         // Test-only cleanup as the schema owner; the application user may not delete comments or audit events.
         String ofTeam = " WHERE CASE_ID IN (SELECT ID FROM CASE_RECORD WHERE TEAM_ID = ?)";
         if (team != 0) {
+            jdbc.update("DELETE FROM CASE_IMPORTED_EVENT" + ofTeam, team);
+            jdbc.update("DELETE FROM IMPORT_RUN WHERE ID = ?", run);
             jdbc.update("DELETE FROM AUDIT_EVENT" + ofTeam, team);
             jdbc.update("DELETE FROM CASE_COMMENT" + ofTeam, team);
             jdbc.update("DELETE FROM CASE_SEARCH" + ofTeam, team);
@@ -139,18 +147,7 @@ class CaseHistoryAccessibilityIT {
 
     @Test
     void analystReachesTheHistoryByKeyboardAndNarrowsItToComments() {
-        page.navigate(KEYCLOAK.app("/"));
-        new SignInPage(page).signIn("alpha.analyst", KeycloakDevRealm.PASSWORD, KEYCLOAK.app(""));
-        page.waitForLoadState();
-        consoleProblems.clear();
-        long analyst = Objects.requireNonNull(
-                jdbc.queryForObject("SELECT ID FROM APP_USER WHERE EXTERNAL_ID = ?", Long.class, ALPHA_ANALYST));
-        CaseSeed seed = new CaseSeed(jdbc);
-        team = seed.team();
-        caseType = seed.caseType();
-        seed.member(analyst, team, TeamRole.ANALYST);
-        CaseNumber number = cases.create(actor(analyst), fields(analyst));
-        comments.post(actor(analyst), number.toString(), "A synthetic comment for the history");
+        CaseNumber number = signInWithACommentedCase();
 
         Response casePage = Objects.requireNonNull(page.navigate(KEYCLOAK.app("/cases/" + number)));
         assertThat(casePage.status()).isEqualTo(200);
@@ -181,6 +178,81 @@ class CaseHistoryAccessibilityIT {
         assertThat(page.locator("tbody tr").count()).isEqualTo(1);
         assertThat(page.textContent("tbody")).contains("Comment added").doesNotContain("Case created");
         assertThat(page.inputValue("#tk-history-kind")).isEqualTo("comments");
+    }
+
+    @Test
+    void importedRowsAreMarkedInTextAndTheFilterIsolatesOrExcludesThemByKeyboard() {
+        CaseNumber number = signInWithACommentedCase();
+        HistorySeed history = new HistorySeed(jdbc);
+        run = history.run(analyst());
+        long caseId = new CaseSeed(jdbc).caseId(number);
+        history.plain(
+                caseId,
+                run,
+                Instant.parse("2019-03-04T05:06:07Z"),
+                "Synthetic Legacy Clerk",
+                "STATUS_CHANGE",
+                "status",
+                "New",
+                "In review");
+        history.redacted(caseId, run, Instant.parse("2018-03-04T05:06:07Z"), "NOTE", null);
+
+        page.navigate(KEYCLOAK.app("/cases/" + number + "/history"));
+        assertHistoryClean(number);
+        assertThat(page.textContent("#tk-history-status")).isEqualTo("4 events found.");
+        assertThat(page.locator("tbody tr").count()).isEqualTo(4);
+        assertThat(page.locator("tbody .tk-chip").allTextContents())
+                .as("a text marker on each imported row, not colour alone")
+                .hasSize(2)
+                .allSatisfy(marker -> assertThat(marker.strip()).endsWith("Imported"));
+        assertThat(page.locator("tbody .tk-chip [aria-hidden=true]").count()).isEqualTo(2);
+        assertThat(page.textContent("tbody"))
+                .contains("From the legacy tracker, import run " + run, "Status: New → In review", "Note: (set)")
+                .contains("Synthetic Legacy Clerk")
+                .doesNotContain(HistorySeed.DIGEST);
+
+        chooseKind("Imp", "imported");
+        assertHistoryClean(number);
+        assertThat(page.textContent("#tk-history-status")).isEqualTo("2 events found.");
+        assertThat(page.locator("tbody .tk-chip").count()).isEqualTo(2);
+        assertThat(page.textContent("tbody")).doesNotContain("Case created");
+
+        chooseKind("All ex", "native");
+        assertHistoryClean(number);
+        assertThat(page.textContent("#tk-history-status")).isEqualTo("2 events found.");
+        assertThat(page.locator("tbody .tk-chip").count()).isZero();
+        assertThat(page.textContent("tbody")).contains("Case created", "Comment added");
+    }
+
+    /** Signs {@code alpha.analyst} in and gives them a case of a new team with one comment: two audit events. */
+    private CaseNumber signInWithACommentedCase() {
+        page.navigate(KEYCLOAK.app("/"));
+        new SignInPage(page).signIn("alpha.analyst", KeycloakDevRealm.PASSWORD, KEYCLOAK.app(""));
+        page.waitForLoadState();
+        consoleProblems.clear();
+        long analyst = analyst();
+        CaseSeed seed = new CaseSeed(jdbc);
+        team = seed.team();
+        caseType = seed.caseType();
+        seed.member(analyst, team, TeamRole.ANALYST);
+        CaseNumber number = cases.create(actor(analyst), fields(analyst));
+        comments.post(actor(analyst), number.toString(), "A synthetic comment for the history");
+        return number;
+    }
+
+    private long analyst() {
+        return Objects.requireNonNull(
+                jdbc.queryForObject("SELECT ID FROM APP_USER WHERE EXTERNAL_ID = ?", Long.class, ALPHA_ANALYST));
+    }
+
+    /** Tabs to the kind select, types to choose a kind, tabs to the button and presses Enter. */
+    private void chooseKind(String typed, String value) {
+        tabTo("tk-history-kind");
+        page.keyboard().type(typed);
+        assertThat(page.inputValue("#tk-history-kind")).isEqualTo(value);
+        page.keyboard().press("Tab");
+        page.keyboard().press("Enter");
+        page.waitForURL(url -> url.contains("kind=" + value));
     }
 
     private void tabTo(String id) {
