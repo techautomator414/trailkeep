@@ -3,11 +3,9 @@
 package io.trailkeep.importer;
 
 import io.trailkeep.audit.ImportedHistoryService;
-import io.trailkeep.casefile.CaseFields;
 import io.trailkeep.casefile.CaseImportService;
 import io.trailkeep.casefile.CaseImportService.ImportCaseType;
 import io.trailkeep.casefile.CaseImportService.ImportedCase;
-import io.trailkeep.casefile.CasePriority;
 import io.trailkeep.closure.ClosureImportService;
 import io.trailkeep.closure.ClosureImportService.ImportedClosure;
 import io.trailkeep.document.AttachmentImportService;
@@ -20,9 +18,7 @@ import io.trailkeep.importer.staging.StagedCase;
 import io.trailkeep.importer.staging.StagedPerson;
 import io.trailkeep.importer.staging.StagedRow;
 import io.trailkeep.importer.staging.StagingStore;
-import io.trailkeep.shared.CaseStatus;
 import io.trailkeep.shared.DomainException;
-import io.trailkeep.shared.Sensitivity;
 import io.trailkeep.shared.config.AppProperties;
 import io.trailkeep.user.ImportPeopleDirectory;
 import io.trailkeep.user.ImportPeopleService;
@@ -94,7 +90,6 @@ class LoadCommand {
             Instant now,
             CaseRules rules,
             Map<String, TeamSummary> teams,
-            Map<String, ImportCaseType> caseTypes,
             PeopleMatcher people,
             ChildLoads children) {}
 
@@ -247,7 +242,6 @@ class LoadCommand {
                         now,
                         app.timezone()),
                 teams,
-                caseTypes,
                 new PeopleMatcher(peopleDirectory, caseImports, mapping, lookups.defaultOwners()),
                 new ChildLoads(
                         new CommentLoad(children),
@@ -319,7 +313,7 @@ class LoadCommand {
         CaseComments texts = pass.children().comments().texts();
         List<CaseComments.Comment> comments = texts.of(row, staged.comments(), pass.people(), pass.importer());
         String description = texts.description(Objects.requireNonNull(row.getDescription(), "checked"));
-        ImportedCase imported = imported(pass, row, team.id(), owner, description);
+        ImportedCase imported = pass.rules().imported(row, pass.run().sourceId(), team.id(), owner, description);
         AttachmentLoad.Scanned scanned = pass.children().attachments().scan(staged.files(), pass.lock());
         if (scanned.refusal() != null) {
             return scanned.refusal();
@@ -358,29 +352,6 @@ class LoadCommand {
             return CASE_REFUSED;
         }
         return null;
-    }
-
-    private static ImportedCase imported(
-            Pass pass, StagedCase row, long teamId, PeopleMatcher.Owner owner, String description) {
-        ImportCaseType type = Objects.requireNonNull(pass.caseTypes().get(row.getCaseTypeKey()), "checked");
-        CaseFields fields = new CaseFields(
-                type.id(),
-                Objects.requireNonNull(row.getTitle(), "checked"),
-                row.getPriority() == null ? CasePriority.NORMAL : CasePriority.valueOf(row.getPriority()),
-                Objects.requireNonNull(row.getIdentifiedOn(), "checked"),
-                teamId,
-                owner.userId(),
-                row.getSubjectText(),
-                description,
-                Sensitivity.valueOf(pass.rules().visibility(row)));
-        return new ImportedCase(
-                fields,
-                pass.run().sourceId() + ":" + row.getKey().legacyKey(),
-                row.getLegacyNumber(),
-                owner.nameSnapshot(),
-                CaseStatus.valueOf(Objects.requireNonNull(row.getStatus(), "checked")),
-                Objects.requireNonNull(row.getOpenedAt(), "checked"),
-                row.getClosedAt());
     }
 
     private <T extends StagedRow> void pages(Class<T> type, long runId, Consumer<List<T>> each) {
