@@ -2,7 +2,10 @@
 // Copyright 2026 Charlie Genova and contributors
 package io.trailkeep.importer;
 
-/** Why {@code load} refused to start, before it wrote anything (WP-26 parts t and u, design §3, §8.2). */
+/**
+ * Why {@code load}, {@code relink-owners} or {@code reconcile} refused to start, before it wrote anything (WP-26 parts
+ * t, u, z2 and aa2, design §3, §8.2).
+ */
 enum LoadRefusal {
     /** No Compliance Admin has signed the run off. */
     NOT_SIGNED_OFF,
@@ -17,7 +20,9 @@ enum LoadRefusal {
     /** Another load holds it, or claimed it first. */
     RUN_LOCKED,
     /** A live load holds another run of its source (design §8.2). */
-    SOURCE_LOADING;
+    SOURCE_LOADING,
+    /** For {@code reconcile} (WP-26 part aa2): not an import run whose load finished. */
+    NOT_LOADED;
 
     /** {@code load} refused to start. */
     static final class RefusedException extends IllegalStateException {

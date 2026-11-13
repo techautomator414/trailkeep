@@ -258,9 +258,9 @@ abstract class AbstractImporterProfileIT {
 
     @Test
     void theImporterRefusesACommandItDoesNotHaveYetAndAStatusWithoutARun() {
-        assertThatThrownBy(() -> start(importUser, true, "--import.command=reconcile", "--import.run=1"))
+        assertThatThrownBy(() -> start(importUser, true, "--import.command=rollback", "--import.run=1"))
                 .isInstanceOf(IllegalStateException.class)
-                .hasMessage("Unknown or not yet available import command: reconcile");
+                .hasMessage("Unknown or not yet available import command: rollback");
         assertThatThrownBy(() -> start(importUser, true, "--import.command=status"))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessage("import.run is required");

@@ -15,4 +15,9 @@ interface ImportRunSummaryRepository extends Repository<ImportRunSummary, Long> 
     @Modifying
     @Query("delete from ImportRunSummary s where s.runId = :runId")
     int deleteByRunId(long runId);
+
+    /** A reconcile that runs again replaces its own figures, and only those. */
+    @Modifying
+    @Query("delete from ImportRunSummary s where s.runId = :runId and s.metric like 'RECONCILE%'")
+    int deleteReconcileFigures(long runId);
 }

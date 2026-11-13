@@ -99,7 +99,8 @@ interface CaseRecordQueries {
     List<CaseService.CaseRef> refs(CaseScope scope, Collection<Long> caseIds);
 
     /**
-     * Several cases by id, number and archive and purge state, those the scope reads, for the importer's delta.
+     * Several cases by id, number, archive and purge state and who changed them since their import, those the scope
+     * reads, for the importer's delta and {@code reconcile}.
      *
      * @param scope the caller's scope
      * @param caseIds the ids, at most a page's worth
