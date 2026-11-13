@@ -18,6 +18,12 @@ data:
   APP_DB_APP_USER: TRAILKEEP_APP
   APP_DB_PURGE_USER: TRAILKEEP_PURGE
   APP_DB_IMPORT_USER: TRAILKEEP_IMPORT
+  # PLACEHOLDER: the schema that owns the tables (app.db.schema). REQUIRED on Oracle, where the runtime, purge and
+  # import users own nothing: every pooled connection runs ALTER SESSION SET CURRENT_SCHEMA with it, and without it
+  # native SQL fails with ORA-00942 or ORA-02289. Name the schema owner's user (upper case, a plain identifier). On
+  # PostgreSQL it sets search_path to that schema (for example public); leave the value empty only where the
+  # connecting user owns the tables. The web Deployment, the purge CronJob and the importer Job all read it from here.
+  APP_DB_SCHEMA: TRAILKEEP_OWNER
   # Who scans uploads for malware (ADR-0013). clamd (the default): every upload is scanned by the ClamAV below before
   # it is stored, fail-closed. external: the organization scans upstream (gateway, ICAP proxy) or at the endpoints;
   # Trailkeep stores files as NOT_SCANNED, never as clean, and needs neither the two clamd entries below nor
