@@ -4,6 +4,8 @@ package io.trailkeep.casefile;
 
 import io.trailkeep.shared.persistence.WrittenForm;
 import java.util.Collection;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Repository;
@@ -33,38 +35,46 @@ class CaseWrittenJdbcDao {
 
     /** Case forms; the caller has flushed its transaction's pending writes. */
     Map<Long, String> cases(Collection<Long> ids) {
-        return WrittenForm.read(
-                jdbc,
-                CASES,
-                "ID",
-                ids,
-                Map.of(),
-                form -> form.texts(
-                                "CASE_NUMBER",
-                                "TITLE",
-                                "DESCRIPTION",
-                                "SUBJECT_TEXT",
-                                "PRIORITY",
-                                "STATUS",
-                                "SENSITIVITY",
-                                "LEGACY_REF",
-                                "LEGACY_NUMBER",
-                                "OWNER_NAME_SNAPSHOT")
-                        .numbers("CASE_TYPE_ID", "TEAM_ID", "OWNER_ID", "CREATED_BY")
-                        .dates("IDENTIFIED_ON")
-                        .instants("OPENED_AT", "CLOSED_AT"));
+        Map<Long, String> forms = new HashMap<>();
+        for (List<Long> chunk : WrittenForm.chunks(ids)) {
+            jdbc.query(
+                    CASES,
+                    Map.of("ids", chunk),
+                    WrittenForm.into(
+                            forms,
+                            "ID",
+                            form -> form.texts(
+                                            "CASE_NUMBER",
+                                            "TITLE",
+                                            "DESCRIPTION",
+                                            "SUBJECT_TEXT",
+                                            "PRIORITY",
+                                            "STATUS",
+                                            "SENSITIVITY",
+                                            "LEGACY_REF",
+                                            "LEGACY_NUMBER",
+                                            "OWNER_NAME_SNAPSHOT")
+                                    .numbers("CASE_TYPE_ID", "TEAM_ID", "OWNER_ID", "CREATED_BY")
+                                    .dates("IDENTIFIED_ON")
+                                    .instants("OPENED_AT", "CLOSED_AT")));
+        }
+        return forms;
     }
 
     /** Comment forms; the caller has flushed its transaction's pending writes. */
     Map<Long, String> comments(Collection<Long> ids) {
-        return WrittenForm.read(
-                jdbc,
-                COMMENTS,
-                "ID",
-                ids,
-                Map.of(),
-                form -> form.texts("BODY", "AUTHOR_NAME_SNAPSHOT")
-                        .numbers("CASE_ID", "AUTHOR_ID")
-                        .instants("CREATED_AT"));
+        Map<Long, String> forms = new HashMap<>();
+        for (List<Long> chunk : WrittenForm.chunks(ids)) {
+            jdbc.query(
+                    COMMENTS,
+                    Map.of("ids", chunk),
+                    WrittenForm.into(
+                            forms,
+                            "ID",
+                            form -> form.texts("BODY", "AUTHOR_NAME_SNAPSHOT")
+                                    .numbers("CASE_ID", "AUTHOR_ID")
+                                    .instants("CREATED_AT")));
+        }
+        return forms;
     }
 }

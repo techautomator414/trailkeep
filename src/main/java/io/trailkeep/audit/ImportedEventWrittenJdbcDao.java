@@ -4,6 +4,8 @@ package io.trailkeep.audit;
 
 import io.trailkeep.shared.persistence.WrittenForm;
 import java.util.Collection;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Repository;
@@ -29,21 +31,25 @@ class ImportedEventWrittenJdbcDao {
 
     /** The forms; the caller has flushed its transaction's pending writes. */
     Map<Long, String> events(Collection<Long> ids) {
-        return WrittenForm.read(
-                jdbc,
-                SQL,
-                "ID",
-                ids,
-                Map.of(),
-                form -> form.texts(
-                                "WHO_NAME_SNAPSHOT",
-                                "KIND",
-                                "FIELD_NAME",
-                                "OLD_VALUE",
-                                "NEW_VALUE",
-                                "OLD_HMAC",
-                                "NEW_HMAC")
-                        .numbers("CASE_ID", "OLD_LENGTH", "NEW_LENGTH", "RUN_ID")
-                        .instants("AT_TS"));
+        Map<Long, String> forms = new HashMap<>();
+        for (List<Long> chunk : WrittenForm.chunks(ids)) {
+            jdbc.query(
+                    SQL,
+                    Map.of("ids", chunk),
+                    WrittenForm.into(
+                            forms,
+                            "ID",
+                            form -> form.texts(
+                                            "WHO_NAME_SNAPSHOT",
+                                            "KIND",
+                                            "FIELD_NAME",
+                                            "OLD_VALUE",
+                                            "NEW_VALUE",
+                                            "OLD_HMAC",
+                                            "NEW_HMAC")
+                                    .numbers("CASE_ID", "OLD_LENGTH", "NEW_LENGTH", "RUN_ID")
+                                    .instants("AT_TS")));
+        }
+        return forms;
     }
 }

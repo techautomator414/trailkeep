@@ -11,6 +11,10 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.LongStream;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -41,6 +45,29 @@ class WrittenFormTest {
         assertThat(WrittenForm.of(row).texts("A").toString())
                 .isEqualTo("s6:x;s1:y;")
                 .isNotEqualTo(WrittenForm.of(row).texts("B", "C").toString());
+    }
+
+    @Test
+    void idsAreChunkedBelowOraclesInListLimitInTheirOrder() {
+        List<Long> ids = LongStream.rangeClosed(1, 1001).boxed().toList();
+
+        List<List<Long>> chunks = WrittenForm.chunks(ids);
+
+        assertThat(chunks).extracting(List::size).containsExactly(500, 500, 1);
+        assertThat(chunks.stream().flatMap(List::stream).toList()).isEqualTo(ids);
+        assertThat(WrittenForm.chunks(List.of())).isEmpty();
+    }
+
+    @Test
+    void theHandlerPutsEachRowsFormUnderItsKey() throws SQLException {
+        ResultSet row = mock(ResultSet.class);
+        when(row.getLong("ID")).thenReturn(7L);
+        when(row.getString("A")).thenReturn("x");
+        Map<Long, String> forms = new HashMap<>();
+
+        WrittenForm.into(forms, "ID", form -> form.texts("A")).processRow(row);
+
+        assertThat(forms).containsExactly(Map.entry(7L, "s1:x;"));
     }
 
     @Test

@@ -9,13 +9,12 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.Collection;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.RowCallbackHandler;
-import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 
 /**
  * One row's values as the database holds them, as a canonical string (docs/design/importer.md §9): what the importer
@@ -63,33 +62,31 @@ public final class WrittenForm {
     }
 
     /**
-     * Reads the forms of rows by id, a chunk of ids per statement, in the caller's transaction. The statement is a
-     * {@code *JdbcDao}'s constant, taking the ids as {@code :ids}; nothing is built from data.
+     * Splits ids into the chunks a {@code *JdbcDao} binds to its constant statement's {@code IN} list, one statement
+     * per chunk; this class runs no statement itself.
      *
-     * @param jdbc the caller's template
-     * @param sql the statement, selecting {@code key} and the columns
-     * @param key the column the forms are keyed by
-     * @param ids the ids to bind
-     * @param params any other parameters the statement takes, constant ones
-     * @param columns the columns of each form
-     * @return each row's form, by its key; rows that do not exist are absent
+     * @param ids the ids
+     * @return the ids in chunks of at most 500, in their order
      */
-    public static Map<Long, String> read(
-            NamedParameterJdbcTemplate jdbc,
-            String sql,
-            String key,
-            Collection<Long> ids,
-            Map<String, ?> params,
-            Columns columns) {
+    public static List<List<Long>> chunks(Collection<Long> ids) {
         List<Long> all = List.copyOf(ids);
-        Map<Long, String> forms = new HashMap<>();
+        List<List<Long>> chunks = new ArrayList<>();
         for (int from = 0; from < all.size(); from += IDS_PER_QUERY) {
-            Map<String, Object> bound = new HashMap<>(params);
-            bound.put("ids", all.subList(from, Math.min(all.size(), from + IDS_PER_QUERY)));
-            jdbc.query(sql, bound, (RowCallbackHandler)
-                    row -> forms.put(row.getLong(key), columns.add(of(row)).toString()));
+            chunks.add(all.subList(from, Math.min(all.size(), from + IDS_PER_QUERY)));
         }
-        return forms;
+        return chunks;
+    }
+
+    /**
+     * A row handler for a {@code *JdbcDao}'s query that puts each row's form into a map.
+     *
+     * @param forms the map to fill, by key
+     * @param key the column the forms are keyed by
+     * @param columns the columns of each form
+     * @return the handler
+     */
+    public static RowCallbackHandler into(Map<Long, String> forms, String key, Columns columns) {
+        return row -> forms.put(row.getLong(key), columns.add(of(row)).toString());
     }
 
     /**

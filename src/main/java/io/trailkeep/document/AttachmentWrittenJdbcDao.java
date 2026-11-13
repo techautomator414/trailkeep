@@ -4,6 +4,8 @@ package io.trailkeep.document;
 
 import io.trailkeep.shared.persistence.WrittenForm;
 import java.util.Collection;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Repository;
@@ -30,14 +32,18 @@ class AttachmentWrittenJdbcDao {
 
     /** The forms; the caller has flushed its transaction's pending writes. */
     Map<Long, String> attachments(Collection<Long> ids) {
-        return WrittenForm.read(
-                jdbc,
-                SQL,
-                "ID",
-                ids,
-                Map.of(),
-                form -> form.texts("FILE_NAME", "CONTENT_TYPE", "SHA256", "UPLOADER_NAME_SNAPSHOT")
-                        .numbers("CASE_ID", "SIZE_BYTES", "UPLOADED_BY")
-                        .instants("UPLOADED_AT"));
+        Map<Long, String> forms = new HashMap<>();
+        for (List<Long> chunk : WrittenForm.chunks(ids)) {
+            jdbc.query(
+                    SQL,
+                    Map.of("ids", chunk),
+                    WrittenForm.into(
+                            forms,
+                            "ID",
+                            form -> form.texts("FILE_NAME", "CONTENT_TYPE", "SHA256", "UPLOADER_NAME_SNAPSHOT")
+                                    .numbers("CASE_ID", "SIZE_BYTES", "UPLOADED_BY")
+                                    .instants("UPLOADED_AT")));
+        }
+        return forms;
     }
 }

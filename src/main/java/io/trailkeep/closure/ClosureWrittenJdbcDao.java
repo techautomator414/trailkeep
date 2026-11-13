@@ -4,6 +4,8 @@ package io.trailkeep.closure;
 
 import io.trailkeep.shared.persistence.WrittenForm;
 import java.util.Collection;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Repository;
@@ -31,14 +33,19 @@ class ClosureWrittenJdbcDao {
 
     /** The forms; the caller has flushed its transaction's pending writes. */
     Map<Long, String> byCase(Collection<Long> ids) {
-        return WrittenForm.read(
-                jdbc,
-                SQL,
-                "CASE_ID",
-                ids,
-                Map.of("imported", true),
-                form -> form.texts("OUTCOME", "RESOLUTION_SUMMARY", "FOLLOW_UP_ACTIONS", "DECISION", "REASON")
-                        .numbers("REQUESTED_BY", "APPROVER_ID", "DECIDED_BY")
-                        .instants("REQUESTED_AT", "DECIDED_AT"));
+        Map<Long, String> forms = new HashMap<>();
+        for (List<Long> chunk : WrittenForm.chunks(ids)) {
+            jdbc.query(
+                    SQL,
+                    Map.of("ids", chunk, "imported", true),
+                    WrittenForm.into(
+                            forms,
+                            "CASE_ID",
+                            form -> form.texts(
+                                            "OUTCOME", "RESOLUTION_SUMMARY", "FOLLOW_UP_ACTIONS", "DECISION", "REASON")
+                                    .numbers("REQUESTED_BY", "APPROVER_ID", "DECIDED_BY")
+                                    .instants("REQUESTED_AT", "DECIDED_AT")));
+        }
+        return forms;
     }
 }
