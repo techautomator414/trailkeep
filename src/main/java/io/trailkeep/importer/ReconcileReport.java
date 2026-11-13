@@ -13,7 +13,8 @@ import org.jspecify.annotations.Nullable;
  * {@code reconcile}'s report files (WP-26 part aa3, design §9): {@code reconcile.csv} and {@code reconcile.html} in
  * the run's report folder ({@link ReportFiles}). They hold what the run's figures and issues hold, the counts per
  * entity and outcome, the verdict and each difference, and nothing else: codes, numbers, keyed hashes and Trailkeep
- * ids, never a legacy key or value. The CSV is written through {@link CsvFormat} (quoted, formula cells defused, BOM).
+ * ids, never a legacy key or value. The CSV is written through {@link CsvFormat} (quoted, formula cells defused, BOM)
+ * and lists every difference; the page shows at most the first {@link ReportFiles#PAGE_ROWS} and says so.
  */
 final class ReconcileReport {
 
@@ -59,7 +60,9 @@ final class ReconcileReport {
         found.counts()
                 .forEach((entity, byOutcome) -> byOutcome.forEach(
                         (outcome, count) -> counts.add(List.of(entity.name(), outcome, Long.toString(count)))));
-        List<List<String>> differences = found.differing().stream()
+        List<Difference> differing = found.differing();
+        List<List<String>> differences = differing.stream()
+                .limit(ReportFiles.PAGE_ROWS)
                 .map(row -> List.of(row.entity().name(), row.code(), row.keyHash(), id(row.trailkeepId())))
                 .toList();
         return ReportFiles.page(
@@ -69,7 +72,8 @@ final class ReconcileReport {
                 List.of(
                         ReportFiles.table("Rows per entity and outcome", List.of("Entity", "Outcome", "Rows"), counts),
                         ReportFiles.table(
-                                "Rows that differ",
+                                ReportFiles.caption(
+                                        "Rows that differ", differences.size(), differing.size(), "reconcile.csv"),
                                 List.of("Entity", "Code", "Keyed hash", "Trailkeep id"),
                                 differences)));
     }

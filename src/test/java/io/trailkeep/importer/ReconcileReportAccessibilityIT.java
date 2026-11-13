@@ -68,8 +68,10 @@ class ReconcileReportAccessibilityIT {
 
     @Test
     void theDryRunPreviewHasNoAxeViolationsWithOrWithoutIssues() {
-        assertAccessible(DryRunReport.html(42, DryRunReportTest.FIGURES, DryRunReportTest.ISSUES), "Dry run of");
-        assertAccessible(DryRunReport.html(43, List.of(), List.of()), "Dry run of");
+        assertAccessible(
+                DryRunReport.html(42, DryRunReportTest.FIGURES, DryRunReportTest.COUNTS, DryRunReportTest.ISSUES, 1201),
+                "Dry run of");
+        assertAccessible(DryRunReport.html(43, List.of(), List.of(), List.of(), 0), "Dry run of");
     }
 
     private static void assertAccessible(String html, String title) {

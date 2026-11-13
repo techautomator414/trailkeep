@@ -35,9 +35,27 @@ import org.springframework.web.util.HtmlUtils;
  */
 final class ReportFiles {
 
+    /** At most this many rows of a list whose length grows with the run go on a page; the CSV holds them all. */
+    static final int PAGE_ROWS = 1_000;
+
     private static final LinkOption[] NO_FOLLOW = {LinkOption.NOFOLLOW_LINKS};
 
     private ReportFiles() {}
+
+    /**
+     * A table's caption, saying when the page shows only the first rows.
+     *
+     * @param caption what the table holds
+     * @param shown how many rows the page shows
+     * @param total how many there are
+     * @param file the CSV file that lists them all
+     * @return the caption
+     */
+    static String caption(String caption, int shown, long total, String file) {
+        return total > shown
+                ? caption + ": the first " + shown + " of " + total + "; the full list is in " + file
+                : caption;
+    }
 
     /**
      * The run's report folder, checked before a reporting command reads anything and made if missing.
@@ -117,21 +135,68 @@ final class ReportFiles {
      * @throws IllegalStateException if a file appeared while the old one was replaced
      */
     static void file(Path folder, String name, String content) {
+        try (Lines file = lines(folder, name)) {
+            file.write(content);
+        }
+    }
+
+    /**
+     * Opens one report file to be written piece by piece, replacing an earlier one, so a long list never needs to be
+     * held whole.
+     *
+     * @param folder the run's report folder, from {@link #folder}
+     * @param name the file's name
+     * @return the open file, to be closed
+     * @throws IllegalStateException if a file appeared while the old one was replaced
+     */
+    static Lines lines(Path folder, String name) {
         Path file = folder.resolve(name);
         Set<OpenOption> options =
                 Set.of(StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE, LinkOption.NOFOLLOW_LINKS);
         try {
             Files.deleteIfExists(file);
-            try (SeekableByteChannel channel = Files.newByteChannel(file, options, ownerOnly(folder, false))) {
-                ByteBuffer bytes = ByteBuffer.wrap(content.getBytes(StandardCharsets.UTF_8));
-                while (bytes.hasRemaining()) {
-                    channel.write(bytes);
-                }
-            }
+            return new Lines(name, Files.newByteChannel(file, options, ownerOnly(folder, false)));
         } catch (FileAlreadyExistsException raced) {
             throw new IllegalStateException("A report file appeared while it was replaced: " + name, raced);
         } catch (IOException e) {
             throw new UncheckedIOException("Cannot write the report file " + name, e);
+        }
+    }
+
+    /** A report file open for writing, as UTF-8 text. */
+    static final class Lines implements AutoCloseable {
+
+        private final String name;
+        private final SeekableByteChannel channel;
+
+        private Lines(String name, SeekableByteChannel channel) {
+            this.name = name;
+            this.channel = channel;
+        }
+
+        /**
+         * Appends text.
+         *
+         * @param text the text
+         */
+        void write(String text) {
+            ByteBuffer bytes = ByteBuffer.wrap(text.getBytes(StandardCharsets.UTF_8));
+            try {
+                while (bytes.hasRemaining()) {
+                    channel.write(bytes);
+                }
+            } catch (IOException e) {
+                throw new UncheckedIOException("Cannot write the report file " + name, e);
+            }
+        }
+
+        @Override
+        public void close() {
+            try {
+                channel.close();
+            } catch (IOException e) {
+                throw new UncheckedIOException("Cannot write the report file " + name, e);
+            }
         }
     }
 

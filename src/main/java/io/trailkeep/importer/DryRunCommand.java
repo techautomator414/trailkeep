@@ -35,6 +35,7 @@ import javax.crypto.SecretKey;
 import org.jspecify.annotations.Nullable;
 import org.springframework.context.annotation.Profile;
 import org.springframework.core.env.Environment;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.JsonNode;
@@ -195,8 +196,13 @@ class DryRunCommand {
             run.dryRunDone(mode, pass.now());
             runs.save(run);
         });
-        transactions.executeWithoutResult(
-                status -> DryRunReport.write(folder, runId, figures.reportRows(runId), issues.reportRows(runId)));
+        transactions.executeWithoutResult(status -> DryRunReport.write(
+                folder,
+                runId,
+                figures.reportRows(runId),
+                issues.reportCounts(runId),
+                (afterId, limit) -> issues.reportPage(runId, afterId, PageRequest.of(0, limit)),
+                DryRunReport.PAGE));
     }
 
     /**

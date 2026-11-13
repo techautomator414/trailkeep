@@ -296,7 +296,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   the same `<import.reports-dir>/<run id>/`, written after the dry run's figures and issues are committed: every
   `IMPORT_RUN_SUMMARY` figure (metric, dimension, value) and every issue of the run (entity, stage, severity, code,
   keyed hash, numeric detail), never a legacy key or value, with the same CSV writer, page rules, symlink refusal and
-  owner-only permissions as `reconcile`'s, which now share one implementation. `dry-run` now also refuses to start
+  owner-only permissions as `reconcile`'s, which now share one implementation. The CSV is written while the issues
+  are read, 5 000 at a time by id, so memory does not grow with the run's issue count; the page shows the issue counts
+  per entity, stage, severity and code and the first 1 000 issues, captioned "the first 1000 of N; the full list is in
+  dry-run.csv", and `reconcile`'s page caps its differences the same way. `dry-run` now also refuses to start
   without `import.reports-dir` naming a directory.
 - The Oracle source (WP-26 part o, docs/design/importer.md §4.1): a `kind: jdbc` Oracle mapping is test-fetched by
   `validate-mapping` and extracted in one `SET TRANSACTION READ ONLY` transaction, with the session in UTC and ISO
