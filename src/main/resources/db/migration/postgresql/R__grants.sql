@@ -90,7 +90,9 @@
 -- on CASE_ATTACHMENT and CASE_ATTACHMENT_CHUNK, insert-only, and USAGE on SEQ_CASE_ATTACHMENT; S I D on
 -- IMPORT_OWNER_PENDING, which the load writes and relink-owners deletes, and USAGE on its sequence (V18); for
 -- relink-owners (part z2) UPDATE of CASE_RECORD's OWNER_ID, UPDATED_AT, UPDATED_BY and VERSION alone; for the go-live
--- alerts (part ac) S I on ALERT_LEDGER, insert-only, and USAGE on SEQ_ALERT_LEDGER. On every
+-- alerts (part ac) S I on ALERT_LEDGER, insert-only, and USAGE on SEQ_ALERT_LEDGER; for import holds (part ad) S I
+-- on LEGAL_HOLD_EVENT, insert-only, and USAGE on SEQ_LEGAL_HOLD_EVENT (the hold itself is in the case's INSERT, so
+-- no UPDATE of CASE_RECORD's hold columns). On every
 -- other table and sequence an entity maps it has SELECT only, so its Hibernate validate sees the whole model (on
 -- Oracle the dictionary lists only objects a user holds a privilege on, design §2.1 R3). The import writes to domain
 -- tables come with the importer PRs that use them (design §12).
@@ -183,7 +185,7 @@ GRANT SELECT ON SEQUENCE SEQ_IMPORT_OWNER_PENDING TO ${app_user};
 -- The importer Job (design §5): its own tables, and SELECT on every table and sequence an entity maps, for validate.
 GRANT SELECT ON TABLE APP_USER, TEAM, APP_USER_TEAM, APP_USER_GLOBAL_ROLE, SLA_POLICY, CASE_TYPE, CASE_TYPE_OUTCOME,
   CASE_COMMENT_PIN, SAVED_VIEW, NOTIFICATION_OUTBOX, USER_ALERT, UPDATE_REQUEST,
-  CASE_REOPEN, JOB_RUN, REPORT_SCHEDULE, REPORT_RUN, LEGAL_HOLD_EVENT, USER_PREFERENCE TO ${import_user};
+  CASE_REOPEN, JOB_RUN, REPORT_SCHEDULE, REPORT_RUN, USER_PREFERENCE TO ${import_user};
 -- The load (WP-26 part t): a case with its SLA row, search row and closure, audited, in one transaction.
 GRANT SELECT, INSERT ON TABLE CASE_RECORD, CASE_SLA, CASE_SEARCH, CLOSURE_REQUEST, AUDIT_EVENT TO ${import_user};
 GRANT USAGE ON SEQUENCE SEQ_CASE_RECORD, SEQ_CASE_NUMBER, SEQ_CLOSURE_REQUEST, SEQ_AUDIT_EVENT TO ${import_user};
@@ -213,9 +215,12 @@ GRANT USAGE ON SEQUENCE SEQ_CASE_IMPORTED_EVENT TO ${import_user};
 -- Go-live alerts (part ac): an imported open case's alerts already raised, recorded as sent; insert-only.
 GRANT SELECT, INSERT                 ON TABLE ALERT_LEDGER         TO ${import_user};
 GRANT USAGE ON SEQUENCE SEQ_ALERT_LEDGER TO ${import_user};
+-- Import holds (part ad): a held imported case's hold history row, insert-only; the hold is in the case's INSERT.
+GRANT SELECT, INSERT                 ON TABLE LEGAL_HOLD_EVENT     TO ${import_user};
+GRANT USAGE ON SEQUENCE SEQ_LEGAL_HOLD_EVENT TO ${import_user};
 GRANT SELECT ON SEQUENCE SEQ_APP_USER, SEQ_TEAM, SEQ_SLA_POLICY, SEQ_CASE_TYPE,
   SEQ_SAVED_VIEW, SEQ_NOTIFICATION_OUTBOX, SEQ_USER_ALERT, SEQ_UPDATE_REQUEST, SEQ_CASE_REOPEN,
-  SEQ_REPORT_SCHEDULE, SEQ_REPORT_RUN, SEQ_LEGAL_HOLD_EVENT TO ${import_user};
+  SEQ_REPORT_SCHEDULE, SEQ_REPORT_RUN TO ${import_user};
 
 -- USAGE allows nextval(), which is all Hibernate's pooled optimizer calls.
 GRANT USAGE ON SEQUENCE SEQ_APP_USER, SEQ_TEAM, SEQ_AUDIT_EVENT, SEQ_SLA_POLICY, SEQ_CASE_TYPE, SEQ_CASE_RECORD, SEQ_CASE_NUMBER,

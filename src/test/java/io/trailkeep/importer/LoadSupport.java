@@ -94,6 +94,7 @@ abstract class LoadSupport extends DryRunSupport {
                     "CASE_ATTACHMENT",
                     "CASE_COMMENT",
                     "CASE_IMPORTED_EVENT",
+                    "LEGAL_HOLD_EVENT",
                     "CLOSURE_REQUEST",
                     "AUDIT_EVENT",
                     "CASE_SLA",

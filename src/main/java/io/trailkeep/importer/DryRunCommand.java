@@ -363,7 +363,9 @@ class DryRunCommand {
                 mapping.at("/visibility/onUnrepresentableAcl").asString("restricted"),
                 matcher,
                 caseImports.slaForecast(goLive),
-                LocalDate.ofInstant(goLive, app.timezone()));
+                LocalDate.ofInstant(goLive, app.timezone()),
+                goLive,
+                DryRunSummary.archiveRun(environment, goLive));
     }
 
     /**

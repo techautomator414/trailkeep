@@ -98,7 +98,7 @@ abstract class AbstractWrittenHashIT extends LoadSupport {
                 "Synthetic description",
                 Sensitivity.STANDARD);
         ImportedCase imported = new ImportedCase(
-                fields, "memory1:written", "", "Synthetic Matched Owner", CaseStatus.CLOSED, OPENED, CLOSED);
+                fields, "memory1:written", "", "Synthetic Matched Owner", CaseStatus.CLOSED, OPENED, CLOSED, null);
 
         // As the load's case transaction does: write, then hash what the database now holds.
         String[] atWrite = Objects.requireNonNull(transactions.execute(status -> {

@@ -164,10 +164,11 @@ final class GrantsMatrix {
                 // UPDATE of the status, hash, scanning-mode, count and expiry columns only (see the column test).
                 case "IMPORT_RUN" -> EnumSet.of(Privilege.SELECT, Privilege.INSERT);
                 // Insert-only: imported history (V16), the ledger and its parts (V17, V19), and what the load writes
-                // per case (parts t, u, and the go-live alerts of part ac); CASE_SEARCH's UPDATE is of two columns only
-                // (see the column test).
+                // per case (parts t, u, the go-live alerts of part ac and a held case's hold event of part ad);
+                // CASE_SEARCH's UPDATE is of two columns only (see the column test).
                 case "CASE_IMPORTED_EVENT",
                         "ALERT_LEDGER",
+                        "LEGAL_HOLD_EVENT",
                         "IMPORT_LEDGER",
                         "IMPORT_LEDGER_PART",
                         "CASE_RECORD",
@@ -225,10 +226,11 @@ final class GrantsMatrix {
 
     /**
      * The runtime user's sequences the load draws from too: its cases, closures, comments and attachments (t, u), and
-     * the go-live alerts it records (ac).
+     * the go-live alerts it records (ac) and the hold events of held cases (ad).
      */
     static final List<String> LOAD_SEQUENCES = List.of(
             "SEQ_ALERT_LEDGER",
+            "SEQ_LEGAL_HOLD_EVENT",
             "SEQ_CASE_RECORD",
             "SEQ_CASE_NUMBER",
             "SEQ_CLOSURE_REQUEST",

@@ -12,12 +12,17 @@ import io.trailkeep.importer.staging.StagedCase;
 import io.trailkeep.importer.staging.StagedComment;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import org.jspecify.annotations.Nullable;
+import org.springframework.core.env.Environment;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.scheduling.support.CronExpression;
 
 /**
  * The dry run's aggregates for the sign-off (WP-26 part r1, design §3 R8, §7.1, §9), counted while the rows are checked
@@ -31,7 +36,9 @@ import org.jspecify.annotations.Nullable;
  *   <li>{@code CASES} per status ({@code OPEN}, {@code CLOSED}); {@code VISIBILITY_STANDARD} and {@code
  *       VISIBILITY_RESTRICTED} per team id: the visibility each case would load with; {@code LEGACY_ACL} per {@code
  *       visibility.onUnrepresentableAcl} handling; {@code HOLDS} per reason ({@code LEGAL_HOLD}, {@code
- *       PAST_RETENTION});
+ *       PAST_RETENTION}): the cases the load will create on legal hold if it runs at the forecast instant (26ad);
+ *       {@code ARCHIVED_NEXT_RUN}: the cases it will not hold that the archive job's first run after that instant
+ *       will archive, those whose retention ends in between, 0 when the job is off or none does;
  *   <li>{@code ATTACHMENT_FILES} and {@code ATTACHMENT_BYTES}: attachments the dry run found nothing against;
  *       {@code SKIPPED_FILES} and {@code SKIPPED_BYTES} per accepted code; in {@code external} scanning mode {@code
  *       NOT_SCANNED_FILES} and {@code NOT_SCANNED_BYTES}, the attachments that will be stored {@code NOT_SCANNED}
@@ -55,6 +62,8 @@ final class DryRunSummary {
     private final String aclHandling;
     private final PeopleMatcher people;
     private final CaseImportService.SlaForecast forecast;
+    private final Instant forecastAt;
+    private final @Nullable Instant archiveRun;
 
     /**
      * An empty summary.
@@ -65,6 +74,8 @@ final class DryRunSummary {
      * @param people the legacy people as matched, which know whether a case keeps its owner
      * @param forecast the open cases' SLA states on the go-live day
      * @param goLiveDay that day, in {@code app.timezone}
+     * @param forecastAt the instant the load is forecast for, on that day, at which it decides each case's hold
+     * @param archiveRun the archive job's first run after it, or {@code null} when the job is off
      */
     DryRunSummary(
             CaseRules rules,
@@ -72,13 +83,18 @@ final class DryRunSummary {
             String aclHandling,
             PeopleMatcher people,
             CaseImportService.SlaForecast forecast,
-            LocalDate goLiveDay) {
+            LocalDate goLiveDay,
+            Instant forecastAt,
+            @Nullable Instant archiveRun) {
         this.rules = rules;
         this.teamIds = Map.copyOf(teamIds);
         this.aclHandling = aclHandling;
         this.people = people;
         this.forecast = forecast;
+        this.forecastAt = forecastAt;
+        this.archiveRun = archiveRun;
         add("SLA_FORECAST_DAY", null, goLiveDay.toEpochDay());
+        add("ARCHIVED_NEXT_RUN", null, 0);
     }
 
     /**
@@ -96,8 +112,9 @@ final class DryRunSummary {
     }
 
     /**
-     * Counts one staged case: its status, the visibility it would load with in its team, a legacy ACL, a hold,
-     * whether its owner matched or it gets its team's default owner, and an open case's SLA state on go-live day.
+     * Counts one staged case: its status, the visibility it would load with in its team, a legacy ACL, its hold or
+     * else whether the archive job's next run takes it, whether its owner matched or it gets its team's default owner,
+     * and an open case's SLA state on go-live day.
      *
      * @param row the case
      * @param findings what the dry run found against it (unused: a case with issues is still counted as staged)
@@ -115,9 +132,11 @@ final class DryRunSummary {
         if (Boolean.TRUE.equals(row.getLegacyAcl())) {
             add("LEGACY_ACL", aclHandling, 1);
         }
-        String hold = rules.holdReason(row);
+        CaseImportService.ImportHold hold = rules.holdReason(row, forecastAt);
         if (hold != null) {
-            add("HOLDS", hold, 1);
+            add("HOLDS", hold.name(), 1);
+        } else if (archiveRun != null && rules.pastRetention(row, archiveRun)) {
+            add("ARCHIVED_NEXT_RUN", null, 1);
         }
     }
 
@@ -223,6 +242,23 @@ final class DryRunSummary {
         List<ImportRunSummary> rows = new ArrayList<>();
         figures.forEach((key, value) -> rows.add(new ImportRunSummary(runId, key.metric(), key.dimension(), value)));
         return rows;
+    }
+
+    /**
+     * The archive job's first run after an instant, by {@code app.retention.archive-cron} (its default when unset) in
+     * the JVM's zone, as Spring schedules it; {@code null} when the job is off ({@code "-"}).
+     *
+     * @param environment the importer's environment, which holds the application's settings
+     * @param after the instant
+     * @return the run, or {@code null}
+     */
+    static @Nullable Instant archiveRun(Environment environment, Instant after) {
+        String cron = environment.getProperty("app.retention.archive-cron", "0 37 * * * *");
+        if (Scheduled.CRON_DISABLED.equals(cron)) {
+            return null;
+        }
+        ZonedDateTime next = CronExpression.parse(cron).next(after.atZone(ZoneId.systemDefault()));
+        return next == null ? null : next.toInstant();
     }
 
     private void add(String metric, @Nullable String dimension, long value) {

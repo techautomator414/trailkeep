@@ -4,6 +4,7 @@ package io.trailkeep.importer;
 
 import io.trailkeep.casefile.CaseFields;
 import io.trailkeep.casefile.CaseImportService.ImportCaseType;
+import io.trailkeep.casefile.CaseImportService.ImportHold;
 import io.trailkeep.casefile.CaseImportService.ImportedCase;
 import io.trailkeep.casefile.CasePriority;
 import io.trailkeep.importer.FieldTransformer.Issue;
@@ -45,11 +46,13 @@ import tools.jackson.databind.JsonNode;
  *       case ({@code CASE_TYPE_INACTIVE}, ERROR; closed history may keep it);
  *   <li>a closed case whose outcome is not one of its case type's outcomes ({@code CLOSURE_OUTCOME_NOT_ALLOWED},
  *       FATAL: the closure could not be written, and the mapping's outcome lookup is wrong);
- *   <li>a case on legal hold, or closed so long ago that the archive job would take it at its next run, while the
- *       import hold does not exist yet ({@code HOLD_UNAVAILABLE}, FATAL until 26ad);
  *   <li>a case with a legacy ACL when {@code visibility.onUnrepresentableAcl} is {@code fail} ({@code
  *       ACL_UNREPRESENTABLE}, ERROR).
  * </ul>
+ *
+ * <p>A case on legal hold in the legacy system, or closed so long ago that the archive job would take it at its next
+ * run, is no issue: the load creates it on legal hold ({@link #holdReason}, WP-26 part ad), so nothing is archived or
+ * purged before someone reviews it.
  */
 final class CaseRules {
 
@@ -179,7 +182,6 @@ final class CaseRules {
 
     private void caseType(StagedCase row, boolean closed, List<Issue> issues) {
         ImportCaseType type = row.getCaseTypeKey() == null ? null : caseTypes.get(row.getCaseTypeKey());
-        hold(row, issues);
         if (row.getCaseTypeKey() != null && type == null) {
             issues.add(new Issue("CASE_TYPE_UNKNOWN", Severity.FATAL));
         }
@@ -195,26 +197,38 @@ final class CaseRules {
     }
 
     /**
-     * Why a case would be held at load (design §7.1): on legal hold in the legacy system, or closed at or before the
-     * archive job's cut-off for its type (WP-24's rule).
+     * Why a case is held when loaded at {@code at} (design §7.1): on legal hold in the legacy system, or closed at or
+     * before the archive job's cut-off for its type at that instant (WP-24's rule).
      *
      * @param row the case
-     * @return {@code LEGAL_HOLD}, {@code PAST_RETENTION}, or {@code null} when it would not be held
+     * @param at when it is loaded
+     * @return the reason, or {@code null} when it is not held
      */
     @Nullable
-    String holdReason(StagedCase row) {
+    ImportHold holdReason(StagedCase row, Instant at) {
         if (Boolean.TRUE.equals(row.getLegalHold())) {
-            return "LEGAL_HOLD";
+            return ImportHold.LEGAL_HOLD;
         }
+        return pastRetention(row, at) ? ImportHold.PAST_RETENTION : null;
+    }
+
+    /**
+     * Whether the archive job running at {@code at} would take a case were it loaded unheld: closed, at or before its
+     * type's cut-off (calendar years in UTC, as {@code CaseRetentionService} computes it).
+     *
+     * @param row the case
+     * @param at the instant
+     * @return true if it is past its retention then
+     */
+    boolean pastRetention(StagedCase row, Instant at) {
         ImportCaseType type = row.getCaseTypeKey() == null ? null : caseTypes.get(row.getCaseTypeKey());
         Instant closedAt = row.getClosedAt();
-        boolean pastRetention = type != null
+        return type != null
                 && "CLOSED".equals(row.getStatus())
                 && closedAt != null
-                && !closedAt.isAfter(now.atZone(ZoneOffset.UTC)
+                && !closedAt.isAfter(at.atZone(ZoneOffset.UTC)
                         .minusYears(type.retentionYears())
                         .toInstant());
-        return pastRetention ? "PAST_RETENTION" : null;
     }
 
     /**
@@ -232,7 +246,8 @@ final class CaseRules {
     }
 
     /**
-     * The case the import API writes for a row these rules passed ({@link #check} found nothing).
+     * The case the import API writes for a row these rules passed ({@link #check} found nothing), held as {@link
+     * #holdReason} says at these rules' instant, the load's.
      *
      * @param row the case
      * @param sourceId the mapping's {@code source.id}, which prefixes its {@code LEGACY_REF}
@@ -260,13 +275,8 @@ final class CaseRules {
                 owner.nameSnapshot(),
                 CaseStatus.valueOf(Objects.requireNonNull(row.getStatus(), "checked")),
                 Objects.requireNonNull(row.getOpenedAt(), "checked"),
-                row.getClosedAt());
-    }
-
-    private void hold(StagedCase row, List<Issue> issues) {
-        if (holdReason(row) != null) {
-            issues.add(new Issue("HOLD_UNAVAILABLE", Severity.FATAL));
-        }
+                row.getClosedAt(),
+                holdReason(row, now));
     }
 
     private void dates(StagedCase row, List<Issue> issues) {
