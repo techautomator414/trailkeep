@@ -22,6 +22,7 @@ import org.springframework.security.config.annotation.web.configurers.oauth2.cli
 import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.context.SecurityContextHolderFilter;
+import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter.ReferrerPolicy;
 import org.springframework.web.context.WebApplicationContext;
 import org.springframework.web.context.support.WebApplicationContextUtils;
 
@@ -61,6 +62,8 @@ class SecurityConfig {
             SecurityProperties properties,
             OidcBackChannelLogoutHandler backChannelLogout) {
         return http.authorizeHttpRequests(requests -> requests.anyRequest().authenticated())
+                // BUILD_PLAN §9 asks for Referrer-Policy: same-origin, which Spring Security does not send by default.
+                .headers(headers -> headers.referrerPolicy(policy -> policy.policy(ReferrerPolicy.SAME_ORIGIN)))
                 .exceptionHandling(exceptions -> exceptions
                         .authenticationEntryPoint(HtmxAwareResponses.entryPoint(LOGIN_START))
                         .accessDeniedHandler(HtmxAwareResponses.accessDenied()))

@@ -57,6 +57,7 @@ class SecurityDefaultsIT {
                 .andExpect(status().isNotFound())
                 .andExpect(header().string("X-Content-Type-Options", "nosniff"))
                 .andExpect(header().string("X-Frame-Options", "DENY"))
+                .andExpect(header().string("Referrer-Policy", "same-origin"))
                 .andExpect(header().string("Cache-Control", org.hamcrest.Matchers.containsString("no-store")));
     }
 
