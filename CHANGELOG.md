@@ -816,6 +816,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   of the opentelemetry family): every Semgrep release up to 1.184.0 pins `mcp==1.29.0` and `opentelemetry-api<1.38`, so
   `.github/requirements/semgrep-overrides.in` lifts those pins when the lockfile is compiled (the job installs with
   `--no-deps` and never runs `semgrep mcp`).
+- The importer's identity lookups (matching a legacy person by external id or email, and every enabled user's email
+  address and external id for `relink-owners`) move from `ImportPeopleService` to a new `ImportPeopleDirectory` in the
+  `user` module, which only the `importer` module may call (a fifth line in `ImportOnlyApiRulesTest`, proven on a
+  planted caller). `ImportPeopleService` keeps only the two principals, which the import APIs of `casefile`, `closure`
+  and `document` read. Behaviour is unchanged.
 
 ### Documentation
 

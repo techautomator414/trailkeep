@@ -5,8 +5,8 @@ package io.trailkeep.importer;
 import io.trailkeep.casefile.CaseImportService;
 import io.trailkeep.casefile.CaseImportService.Relinked;
 import io.trailkeep.importer.LoadRefusal.RefusedException;
-import io.trailkeep.user.ImportPeopleService;
-import io.trailkeep.user.ImportPeopleService.SignedIn;
+import io.trailkeep.user.ImportPeopleDirectory;
+import io.trailkeep.user.ImportPeopleDirectory.SignedIn;
 import java.time.InstantSource;
 import java.util.EnumSet;
 import java.util.HashMap;
@@ -65,7 +65,7 @@ class RelinkOwnersCommand {
     private final ImportOwnerPendingRepository pending;
     private final ImportRunSummaryRepository summaries;
     private final CaseImportService cases;
-    private final ImportPeopleService people;
+    private final ImportPeopleDirectory people;
     private final TransactionTemplate transactions;
     private final ImportProperties properties;
     private final InstantSource clock;
@@ -75,7 +75,7 @@ class RelinkOwnersCommand {
             ImportOwnerPendingRepository pending,
             ImportRunSummaryRepository summaries,
             CaseImportService cases,
-            ImportPeopleService people,
+            ImportPeopleDirectory people,
             TransactionTemplate transactions,
             ImportProperties properties,
             InstantSource clock) {

@@ -12,7 +12,7 @@ import io.trailkeep.document.ScanStatus;
 import io.trailkeep.importer.ImportIssue.Severity;
 import io.trailkeep.importer.ImportIssue.Subject;
 import io.trailkeep.importer.staging.StagedAttachment;
-import io.trailkeep.user.ImportPeopleService.PersonMatch;
+import io.trailkeep.user.ImportPeopleDirectory.PersonMatch;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;

@@ -4,7 +4,8 @@ package io.trailkeep.importer;
 
 import io.trailkeep.importer.staging.StagedCase;
 import io.trailkeep.importer.staging.StagedComment;
-import io.trailkeep.user.ImportPeopleService.PersonMatch;
+import io.trailkeep.user.ImportPeopleDirectory.PersonMatch;
+import io.trailkeep.user.UserDirectoryService;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -40,7 +41,13 @@ final class CaseComments {
      * @param id the matched user, or {@code null}
      * @param name the name snapshot
      */
-    record Author(@Nullable Long id, String name) {}
+    record Author(@Nullable Long id, String name) {
+
+        /** The "Trailkeep import" principal, named as the directory knows it. */
+        static Author importer(long id, UserDirectoryService directory) {
+            return new Author(id, directory.displayName(id).orElse("Trailkeep import"));
+        }
+    }
 
     /**
      * One comment the load writes.

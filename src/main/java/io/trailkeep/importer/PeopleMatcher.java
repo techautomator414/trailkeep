@@ -7,8 +7,8 @@ import io.trailkeep.importer.ChildRules.Finding;
 import io.trailkeep.importer.ImportIssue.Severity;
 import io.trailkeep.importer.staging.StagedCase;
 import io.trailkeep.importer.staging.StagedPerson;
-import io.trailkeep.user.ImportPeopleService;
-import io.trailkeep.user.ImportPeopleService.PersonMatch;
+import io.trailkeep.user.ImportPeopleDirectory;
+import io.trailkeep.user.ImportPeopleDirectory.PersonMatch;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -36,7 +36,7 @@ final class PeopleMatcher {
 
     private record Eligibility(long userId, long teamId) {}
 
-    private final ImportPeopleService people;
+    private final ImportPeopleDirectory people;
     private final CaseImportService cases;
     private final List<String> order;
     private final Map<String, String> defaultOwners;
@@ -56,7 +56,10 @@ final class PeopleMatcher {
      * @param defaultOwners {@code defaults.owner.byTeam}: team name to the default owner's external id or email
      */
     PeopleMatcher(
-            ImportPeopleService people, CaseImportService cases, JsonNode mapping, Map<String, String> defaultOwners) {
+            ImportPeopleDirectory people,
+            CaseImportService cases,
+            JsonNode mapping,
+            Map<String, String> defaultOwners) {
         this.people = people;
         this.cases = cases;
         this.order = mapping.at("/people/match")
