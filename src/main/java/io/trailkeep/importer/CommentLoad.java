@@ -134,15 +134,17 @@ final class CommentLoad {
 
     /**
      * Writes one comment of a case being loaded, in the case's transaction: each of its parts, and its ledger row
-     * unless it continues the description, which the case's own row covers.
+     * unless it continues the description, which the case's own row covers. The row's written hash covers every
+     * part, and the row lists the parts after the first, so {@code reconcile} reads back exactly those comments.
      *
      * @param created the case
      * @param comment the comment
+     * @return the ids of its parts, in order
      */
-    void write(CaseImportService.Created created, CaseComments.Comment comment) {
-        long first = 0;
+    List<Long> write(CaseImportService.Created created, CaseComments.Comment comment) {
+        List<Long> ids = new ArrayList<>();
         for (String part : comment.parts()) {
-            long id = context.cases()
+            ids.add(context.cases()
                     .importComment(
                             context.audited(),
                             new ImportedComment(
@@ -150,20 +152,27 @@ final class CommentLoad {
                                     part,
                                     comment.author().id(),
                                     comment.author().name(),
-                                    comment.writtenAt()));
-            first = first == 0 ? id : first;
+                                    comment.writtenAt())));
         }
         StagedComment staged = comment.staged();
         if (staged != null) {
             context.ledger()
                     .save(ImportLedgerEntry.ofChild(
-                            context.run(),
-                            Subject.COMMENT,
-                            staged.getKey().legacyKey(),
-                            staged.getRowHash(),
-                            created.caseId(),
-                            first,
-                            context.now()));
+                                    context.run(),
+                                    Subject.COMMENT,
+                                    staged.getKey().legacyKey(),
+                                    staged.getRowHash(),
+                                    created.caseId(),
+                                    ids.getFirst(),
+                                    context.now())
+                            .written(
+                                    WrittenHash.of(
+                                            context.hashKey(),
+                                            ids,
+                                            context.cases().writtenComments(ids)),
+                                    null,
+                                    ids.subList(1, ids.size())));
         }
+        return ids;
     }
 }

@@ -12,8 +12,11 @@ import io.trailkeep.user.UserDirectoryService;
 import jakarta.persistence.EntityManager;
 import java.time.Instant;
 import java.time.InstantSource;
+import java.util.Collection;
+import java.util.Map;
 import java.util.Objects;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 /** {@link ClosureImportService}: the approved, imported request and its audit event, in the caller's transaction. */
@@ -28,6 +31,7 @@ class DefaultClosureImportService implements ClosureImportService {
     /** {@code CLOSURE_REQUEST.OUTCOME}. */
     private static final int MAX_OUTCOME = 40;
 
+    private final ClosureWrittenJdbcDao written;
     private final EntityManager entityManager;
     private final ImportPeopleService people;
     private final UserDirectoryService directory;
@@ -35,12 +39,14 @@ class DefaultClosureImportService implements ClosureImportService {
     private final InstantSource clock;
 
     DefaultClosureImportService(
+            ClosureWrittenJdbcDao written,
             EntityManager entityManager,
             ImportPeopleService people,
             UserDirectoryService directory,
             AuditRecorder audit,
             InstantSource clock) {
         this.entityManager = entityManager;
+        this.written = written;
         this.people = people;
         this.directory = directory;
         this.audit = audit;
@@ -80,5 +86,12 @@ class DefaultClosureImportService implements ClosureImportService {
                                 closure.runId(),
                                 closure.runApproverId()))));
         return id;
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Map<Long, String> writtenClosures(Collection<Long> ids) {
+        entityManager.flush();
+        return written.byCase(ids);
     }
 }

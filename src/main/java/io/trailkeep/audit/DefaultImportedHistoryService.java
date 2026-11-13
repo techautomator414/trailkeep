@@ -5,6 +5,8 @@ package io.trailkeep.audit;
 import io.trailkeep.audit.SnapshotDiff.Redaction;
 import jakarta.persistence.EntityManager;
 import java.time.InstantSource;
+import java.util.Collection;
+import java.util.Map;
 import java.util.Objects;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
@@ -19,12 +21,18 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 class DefaultImportedHistoryService implements ImportedHistoryService {
 
+    private final ImportedEventWrittenJdbcDao written;
     private final EntityManager entityManager;
     private final SnapshotDiff snapshotDiff;
     private final InstantSource clock;
 
-    DefaultImportedHistoryService(EntityManager entityManager, SnapshotDiff snapshotDiff, InstantSource clock) {
+    DefaultImportedHistoryService(
+            ImportedEventWrittenJdbcDao written,
+            EntityManager entityManager,
+            SnapshotDiff snapshotDiff,
+            InstantSource clock) {
         this.entityManager = entityManager;
+        this.written = written;
         this.snapshotDiff = snapshotDiff;
         this.clock = clock;
     }
@@ -67,5 +75,12 @@ class DefaultImportedHistoryService implements ImportedHistoryService {
 
     private @Nullable Redaction redact(@Nullable String value) {
         return value == null ? null : snapshotDiff.redact(value);
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Map<Long, String> writtenEvents(Collection<Long> ids) {
+        entityManager.flush();
+        return written.events(ids);
     }
 }

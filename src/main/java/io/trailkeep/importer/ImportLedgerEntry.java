@@ -2,16 +2,22 @@
 // Copyright 2026 Charlie Genova and contributors
 package io.trailkeep.importer;
 
+import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
+import jakarta.persistence.ElementCollection;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.OrderColumn;
 import jakarta.persistence.SequenceGenerator;
 import jakarta.persistence.Table;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -62,6 +68,19 @@ class ImportLedgerEntry {
 
     @Column(name = "LOADED_AT", nullable = false, updatable = false)
     private Instant loadedAt = Instant.EPOCH;
+
+    @Column(name = "WRITTEN_HASH", updatable = false, length = 64)
+    private @Nullable String writtenHash;
+
+    @Column(name = "CLOSURE_HASH", updatable = false, length = 64)
+    private @Nullable String closureHash;
+
+    /** The comments the row wrote besides its target, in the order written (V19 {@code IMPORT_LEDGER_PART}). */
+    @ElementCollection
+    @CollectionTable(name = "IMPORT_LEDGER_PART", joinColumns = @JoinColumn(name = "LEDGER_ID"))
+    @OrderColumn(name = "PART_NO")
+    @Column(name = "COMMENT_ID", nullable = false)
+    private List<Long> parts = new ArrayList<>();
 
     /** For JPA. */
     protected ImportLedgerEntry() {}
@@ -128,6 +147,22 @@ class ImportLedgerEntry {
     }
 
     /**
+     * Records what the row's load wrote, as read back in its transaction (design §9), before the row is saved.
+     *
+     * @param written the keyed hash of the written forms of the target and its parts
+     * @param closure the keyed hash of a case's imported closure, or {@code null}
+     * @param comments the comments written besides the target, in order: a split comment's later parts or a case's
+     *     description continuation
+     * @return this row
+     */
+    ImportLedgerEntry written(String written, @Nullable String closure, List<Long> comments) {
+        this.writtenHash = written;
+        this.closureHash = closure;
+        this.parts = new ArrayList<>(comments);
+        return this;
+    }
+
+    /**
      * What every ledger row of one load shares.
      *
      * @param runId the run
@@ -146,6 +181,20 @@ class ImportLedgerEntry {
 
     String getRowHash() {
         return rowHash;
+    }
+
+    @Nullable
+    String getWrittenHash() {
+        return writtenHash;
+    }
+
+    @Nullable
+    String getClosureHash() {
+        return closureHash;
+    }
+
+    List<Long> getParts() {
+        return List.copyOf(parts);
     }
 
     @Nullable

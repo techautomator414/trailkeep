@@ -2,6 +2,7 @@
 // Copyright 2026 Charlie Genova and contributors
 package io.trailkeep.schema;
 
+import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
@@ -29,8 +30,8 @@ final class GrantsMatrix {
      * Identity (V1), audit (V2), admin (V3), case (V4), comment (V4.1), pin (V4.2), attachment (V4.3), saved view
      * (V4.7), outbox (V4.8), alert (V4.9), update request (V4.10), closure (V5), reopen (V5.1), SLA job (V6), report
      * delivery (V7), legal hold history (V8), preference (V9), import run (V10), import staging (V13), imported
-     * history (V16), import ledger (V17) and pending owner (V18) tables, and the column each probe touches: the first
-     * key column.
+     * history (V16), import ledger (V17), pending owner (V18) and ledger part (V19) tables, and the column each probe
+     * touches: the first key column.
      */
     static final Map<String, String> TABLES = Map.ofEntries(
             Map.entry("APP_USER", "ID"),
@@ -75,7 +76,8 @@ final class GrantsMatrix {
             Map.entry("IMPORT_RUN_CHECKPOINT", "RUN_ID"),
             Map.entry("CASE_IMPORTED_EVENT", "ID"),
             Map.entry("IMPORT_LEDGER", "ID"),
-            Map.entry("IMPORT_OWNER_PENDING", "ID"));
+            Map.entry("IMPORT_OWNER_PENDING", "ID"),
+            Map.entry("IMPORT_LEDGER_PART", "LEDGER_ID"));
 
     /** What the runtime user may do; anything absent is denied. */
     static final Map<String, Set<Privilege>> APP_USER_GRANTS = Map.ofEntries(
@@ -133,7 +135,9 @@ final class GrantsMatrix {
             // What each load wrote: written only by the importer, never changed (V17).
             Map.entry("IMPORT_LEDGER", EnumSet.of(Privilege.SELECT)),
             // Open cases awaiting their legacy owner: counted by the screen, written and deleted by the importer (V18).
-            Map.entry("IMPORT_OWNER_PENDING", EnumSet.of(Privilege.SELECT)));
+            Map.entry("IMPORT_OWNER_PENDING", EnumSet.of(Privilege.SELECT)),
+            // The comments a ledger row wrote besides its target: written only by the importer, never changed (V19).
+            Map.entry("IMPORT_LEDGER_PART", EnumSet.of(Privilege.SELECT)));
 
     /** The purge user (WP-24 part c): deletes purged content and old runs, audits each tombstone, records its run. */
     static final Map<String, Set<Privilege>> PURGE_USER_GRANTS = Stream.of(
@@ -159,10 +163,11 @@ final class GrantsMatrix {
             .collect(Collectors.toUnmodifiableMap(Function.identity(), table -> switch (table) {
                 // UPDATE of the status, hash, scanning-mode, count and expiry columns only (see the column test).
                 case "IMPORT_RUN" -> EnumSet.of(Privilege.SELECT, Privilege.INSERT);
-                // Insert-only: imported history (V16), the ledger (V17), and what the load writes per case (parts t,
-                // u); CASE_SEARCH's UPDATE is of two columns only (see the column test).
+                // Insert-only: imported history (V16), the ledger and its parts (V17, V19), and what the load writes
+                // per case (parts t, u); CASE_SEARCH's UPDATE is of two columns only (see the column test).
                 case "CASE_IMPORTED_EVENT",
                         "IMPORT_LEDGER",
+                        "IMPORT_LEDGER_PART",
                         "CASE_RECORD",
                         "CASE_SLA",
                         "CASE_SEARCH",
@@ -224,6 +229,38 @@ final class GrantsMatrix {
             "SEQ_AUDIT_EVENT",
             "SEQ_CASE_COMMENT",
             "SEQ_CASE_ATTACHMENT");
+
+    /** The outcome of one probe. */
+    enum Outcome {
+        ALLOWED,
+        DENIED
+    }
+
+    /** One probe: who, which table, which privilege, and what the matrix says. */
+    record Probe(String grantee, String table, Privilege privilege, Outcome expected) {
+        @Override
+        public String toString() {
+            return grantee + " " + privilege + " " + table + " -> " + expected;
+        }
+    }
+
+    /** Every probe of the matrix, for the parameterized test. */
+    static Stream<Probe> matrix() {
+        List<Probe> probes = new ArrayList<>();
+        for (String table : TABLES.keySet()) {
+            for (Privilege privilege : Privilege.values()) {
+                probes.add(probe("app", table, privilege, APP_USER_GRANTS));
+                probes.add(probe("purge", table, privilege, PURGE_USER_GRANTS));
+                probes.add(probe("import", table, privilege, IMPORT_USER_GRANTS));
+            }
+        }
+        return probes.stream();
+    }
+
+    private static Probe probe(String who, String table, Privilege privilege, Map<String, Set<Privilege>> grants) {
+        boolean allowed = grants.getOrDefault(table, Set.of()).contains(privilege);
+        return new Probe(who, table, privilege, allowed ? Outcome.ALLOWED : Outcome.DENIED);
+    }
 
     private GrantsMatrix() {}
 }

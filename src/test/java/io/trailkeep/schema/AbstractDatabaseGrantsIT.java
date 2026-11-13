@@ -2,26 +2,21 @@
 // Copyright 2026 Charlie Genova and contributors
 package io.trailkeep.schema;
 
-import static io.trailkeep.schema.GrantsMatrix.APP_USER_GRANTS;
 import static io.trailkeep.schema.GrantsMatrix.IMPORTER_SEQUENCES;
-import static io.trailkeep.schema.GrantsMatrix.IMPORT_USER_GRANTS;
 import static io.trailkeep.schema.GrantsMatrix.LOAD_SEQUENCES;
-import static io.trailkeep.schema.GrantsMatrix.PURGE_USER_GRANTS;
 import static io.trailkeep.schema.GrantsMatrix.SEQUENCES;
 import static io.trailkeep.schema.GrantsMatrix.TABLES;
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.trailkeep.schema.GrantsMatrix.Privilege;
+import io.trailkeep.schema.GrantsMatrix.Outcome;
 import io.trailkeep.testsupport.RequiresDocker;
 import io.trailkeep.testsupport.TestDatabaseUsers;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.Statement;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Test;
@@ -45,12 +40,6 @@ import org.springframework.boot.test.context.SpringBootTest;
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE)
 abstract class AbstractDatabaseGrantsIT {
 
-    /** The outcome of one probe. */
-    enum Outcome {
-        ALLOWED,
-        DENIED
-    }
-
     /**
      * One open connection per grantee for the whole class. Opening a connection per probe (about 100 in a burst, each
      * also taking an administrator connection to reset the password) exhausts the server processes or listener
@@ -69,31 +58,6 @@ abstract class AbstractDatabaseGrantsIT {
 
     @Value("${app.db.import-user}")
     private String importUser = "";
-
-    /** One probe: who, which table, which privilege, and what the matrix says. */
-    record Probe(String grantee, String table, Privilege privilege, Outcome expected) {
-        @Override
-        public String toString() {
-            return grantee + " " + privilege + " " + table + " -> " + expected;
-        }
-    }
-
-    static Stream<Probe> matrix() {
-        List<Probe> probes = new ArrayList<>();
-        for (String table : TABLES.keySet()) {
-            for (Privilege privilege : Privilege.values()) {
-                probes.add(probe("app", table, privilege, APP_USER_GRANTS));
-                probes.add(probe("purge", table, privilege, PURGE_USER_GRANTS));
-                probes.add(probe("import", table, privilege, IMPORT_USER_GRANTS));
-            }
-        }
-        return probes.stream();
-    }
-
-    private static Probe probe(String who, String table, Privilege privilege, Map<String, Set<Privilege>> grants) {
-        boolean allowed = grants.getOrDefault(table, Set.of()).contains(privilege);
-        return new Probe(who, table, privilege, allowed ? Outcome.ALLOWED : Outcome.DENIED);
-    }
 
     /**
      * Whether an exception is the vendor's "you lack the privilege" error.
@@ -128,8 +92,8 @@ abstract class AbstractDatabaseGrantsIT {
     abstract boolean seeingASequenceDrawsFromIt();
 
     @ParameterizedTest(name = "{0}")
-    @MethodSource("matrix")
-    void eachTablePrivilegeIsGrantedExactlyAsTheMatrixSays(Probe probe) throws SQLException {
+    @MethodSource("io.trailkeep.schema.GrantsMatrix#matrix")
+    void eachTablePrivilegeIsGrantedExactlyAsTheMatrixSays(GrantsMatrix.Probe probe) throws SQLException {
         String table = users.ownerSchema() + "." + probe.table();
         String column = TABLES.get(probe.table());
         String sql = switch (probe.privilege()) {
@@ -310,6 +274,36 @@ abstract class AbstractDatabaseGrantsIT {
         }
         assertThat(run(purgeUser, "SELECT ID FROM " + cases + " WHERE 1 = 0 FOR UPDATE"))
                 .isEqualTo(Outcome.ALLOWED);
+    }
+
+    /**
+     * The import ledger's written hashes and its parts (V19) are written once, with the row, by the import user: it may
+     * insert and read them, the runtime user may only read them, nobody may change them, and the purge user cannot
+     * see them.
+     */
+    @Test
+    void theLedgersWrittenHashesAndPartsAreInsertedOnlyByTheImportUserAndNeverChanged() throws SQLException {
+        String ledger = users.ownerSchema() + ".IMPORT_LEDGER";
+        String parts = users.ownerSchema() + ".IMPORT_LEDGER_PART";
+        String insertHashes = "INSERT INTO " + ledger + " (WRITTEN_HASH, CLOSURE_HASH) VALUES ('h', 'c')";
+        String insertPart = "INSERT INTO " + parts + " (COMMENT_ID) VALUES (1)";
+
+        assertThat(run(importUser, insertHashes)).isEqualTo(Outcome.ALLOWED);
+        assertThat(run(importUser, insertPart)).isEqualTo(Outcome.ALLOWED);
+        assertThat(run(appUser, insertHashes)).isEqualTo(Outcome.DENIED);
+        assertThat(run(appUser, insertPart)).isEqualTo(Outcome.DENIED);
+        for (String user : List.of(appUser, importUser)) {
+            assertThat(run(user, "SELECT WRITTEN_HASH, CLOSURE_HASH FROM " + ledger))
+                    .isEqualTo(Outcome.ALLOWED);
+            assertThat(run(user, "SELECT LEDGER_ID, PART_NO, COMMENT_ID FROM " + parts))
+                    .isEqualTo(Outcome.ALLOWED);
+            for (String column : List.of("WRITTEN_HASH", "CLOSURE_HASH")) {
+                assertThat(update(user, ledger, column)).as(column).isEqualTo(Outcome.DENIED);
+            }
+            assertThat(update(user, parts, "COMMENT_ID")).isEqualTo(Outcome.DENIED);
+        }
+        assertThat(run(purgeUser, "SELECT WRITTEN_HASH FROM " + ledger)).isEqualTo(Outcome.DENIED);
+        assertThat(run(purgeUser, "SELECT COMMENT_ID FROM " + parts)).isEqualTo(Outcome.DENIED);
     }
 
     @Test

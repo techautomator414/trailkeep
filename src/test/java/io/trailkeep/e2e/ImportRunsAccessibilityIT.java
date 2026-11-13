@@ -149,6 +149,7 @@ class ImportRunsAccessibilityIT {
         // first (test-only cleanup over the fixed table names of this list).
         for (String table : List.of(
                 "IMPORT_OWNER_PENDING",
+                "IMPORT_LEDGER_PART",
                 "IMPORT_LEDGER",
                 "CASE_IMPORTED_EVENT",
                 "IMPORT_STG_EVENT",

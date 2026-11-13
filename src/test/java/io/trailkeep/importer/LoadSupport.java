@@ -2,8 +2,13 @@
 // Copyright 2026 Charlie Genova and contributors
 package io.trailkeep.importer;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
 
+import io.trailkeep.audit.ImportedHistoryService;
+import io.trailkeep.casefile.CaseImportService;
+import io.trailkeep.closure.ClosureImportService;
+import io.trailkeep.document.AttachmentImportService;
 import io.trailkeep.testsupport.CaseSeed;
 import io.trailkeep.user.TeamRole;
 import java.nio.file.Files;
@@ -14,12 +19,16 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Stream;
+import javax.crypto.SecretKey;
+import javax.crypto.spec.SecretKeySpec;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ConfigurableApplicationContext;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * What every {@code load} IT needs (WP-26 parts t, u and w): an analyst and a manager in the seeded team, the manager
@@ -33,6 +42,21 @@ abstract class LoadSupport extends DryRunSupport {
 
     @Autowired
     ImportIssueRepository issueRows;
+
+    @Autowired
+    CaseImportService caseImports;
+
+    @Autowired
+    ClosureImportService closureImports;
+
+    @Autowired
+    AttachmentImportService attachmentImports;
+
+    @Autowired
+    ImportedHistoryService history;
+
+    @Autowired
+    TransactionTemplate transactions;
 
     @Value("${app.db.import-user}")
     String importUser = "";
@@ -56,6 +80,8 @@ abstract class LoadSupport extends DryRunSupport {
     void removeWhatTheLoadWrote() {
         List<Long> cases =
                 jdbc.queryForList("SELECT ID FROM CASE_RECORD WHERE LEGACY_REF LIKE 'memory1:%'", Long.class);
+        jdbc.update("DELETE FROM IMPORT_LEDGER_PART WHERE LEDGER_ID IN"
+                + " (SELECT ID FROM IMPORT_LEDGER WHERE SOURCE_ID = 'memory1')");
         jdbc.update("DELETE FROM IMPORT_LEDGER WHERE SOURCE_ID = 'memory1'");
         for (long id : cases) {
             jdbc.update(
@@ -189,5 +215,42 @@ abstract class LoadSupport extends DryRunSupport {
                 (row, index) -> row.getString(1) + " " + row.getString(2) + " " + row.getLong(3) + " "
                         + (row.getTimestamp(4) == null ? "-" : "closed"),
                 run);
+    }
+
+    /**
+     * Recomputes every written hash of the run's ledger rows from Trailkeep in a new transaction, as {@code reconcile}
+     * will (WP-26 part aa1, design §9), and asserts each equals the hash the load recorded.
+     *
+     * @return how many rows held a closure hash
+     */
+    int assertWrittenHashesHold(long run) {
+        SecretKey key = new SecretKeySpec(HASH_KEY, "HmacSHA256");
+        List<Map<String, @Nullable Object>> rows = jdbc.queryForList(
+                "SELECT ID, ENTITY, TARGET_ID, WRITTEN_HASH, CLOSURE_HASH FROM IMPORT_LEDGER WHERE RUN_ID = ?", run);
+        assertThat(rows).isNotEmpty();
+        int closures = 0;
+        for (Map<String, @Nullable Object> row : rows) {
+            long target = number(row, "TARGET_ID");
+            List<Long> parts = jdbc.queryForList(
+                    "SELECT COMMENT_ID FROM IMPORT_LEDGER_PART WHERE LEDGER_ID = ? ORDER BY PART_NO",
+                    Long.class,
+                    number(row, "ID"));
+            List<Long> all = Stream.concat(Stream.of(target), parts.stream()).toList();
+            String entity = String.valueOf(row.get("ENTITY"));
+            String expected = transactions.execute(status -> switch (entity) {
+                case "CASE" -> WrittenHash.ofCase(key, caseImports, target, parts);
+                case "COMMENT" -> WrittenHash.of(key, all, caseImports.writtenComments(all));
+                case "ATTACHMENT" -> WrittenHash.of(key, all, attachmentImports.writtenAttachments(all));
+                default -> WrittenHash.of(key, all, history.writtenEvents(all));
+            });
+            assertThat(row.get("WRITTEN_HASH")).as(entity + " " + target).isEqualTo(expected);
+            if (row.get("CLOSURE_HASH") != null) {
+                closures++;
+                assertThat(row.get("CLOSURE_HASH"))
+                        .as("closure of " + target)
+                        .isEqualTo(transactions.execute(status -> WrittenHash.ofClosure(key, closureImports, target)));
+            }
+        }
+        return closures;
     }
 }

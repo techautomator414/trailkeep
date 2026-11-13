@@ -21,10 +21,13 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.time.InstantSource;
+import java.util.Collection;
 import java.util.HexFormat;
+import java.util.Map;
 import java.util.Objects;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 /** {@link AttachmentImportService}: the upload intake on a file in place, then the row, chunks and audit event. */
@@ -49,6 +52,7 @@ class DefaultAttachmentImportService implements AttachmentImportService {
 
     private final UploadIntake intake;
     private final AttachmentContentJdbcDao content;
+    private final AttachmentWrittenJdbcDao written;
     private final EntityManager entityManager;
     private final ImportPeopleService people;
     private final UserDirectoryService directory;
@@ -56,6 +60,7 @@ class DefaultAttachmentImportService implements AttachmentImportService {
     private final InstantSource clock;
 
     DefaultAttachmentImportService(
+            AttachmentWrittenJdbcDao written,
             UploadIntake intake,
             AttachmentContentJdbcDao content,
             EntityManager entityManager,
@@ -66,6 +71,7 @@ class DefaultAttachmentImportService implements AttachmentImportService {
         this.intake = intake;
         this.content = content;
         this.entityManager = entityManager;
+        this.written = written;
         this.people = people;
         this.directory = directory;
         this.audit = audit;
@@ -154,5 +160,12 @@ class DefaultAttachmentImportService implements AttachmentImportService {
         } catch (NoSuchAlgorithmException e) {
             throw new IllegalStateException("every Java platform provides SHA-256", e);
         }
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Map<Long, String> writtenAttachments(Collection<Long> ids) {
+        entityManager.flush();
+        return written.attachments(ids);
     }
 }

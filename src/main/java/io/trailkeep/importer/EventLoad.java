@@ -111,13 +111,17 @@ final class EventLoad {
                     context.run().runId()));
             context.ledger()
                     .save(ImportLedgerEntry.ofChild(
-                            context.run(),
-                            Subject.EVENT,
-                            row.getKey().legacyKey(),
-                            row.getRowHash(),
-                            created.caseId(),
-                            id,
-                            context.now()));
+                                    context.run(),
+                                    Subject.EVENT,
+                                    row.getKey().legacyKey(),
+                                    row.getRowHash(),
+                                    created.caseId(),
+                                    id,
+                                    context.now())
+                            .written(
+                                    WrittenHash.of(context.hashKey(), List.of(id), history.writtenEvents(List.of(id))),
+                                    null,
+                                    List.of()));
         }
     }
 

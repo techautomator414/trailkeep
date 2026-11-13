@@ -4,6 +4,8 @@ package io.trailkeep.document;
 
 import java.nio.file.Path;
 import java.time.Instant;
+import java.util.Collection;
+import java.util.Map;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -90,4 +92,14 @@ public interface AttachmentImportService {
      * @throws AttachmentRejectedException if the file changed since it was prepared
      */
     long store(Prepared prepared, Placement placement);
+
+    /**
+     * Imported attachments as the database holds them (WP-26 part aa1, design §9): each one's canonical written form
+     * ({@code WrittenForm}), which the importer hashes into its ledger when it writes it and again in {@code
+     * reconcile}. Pending writes of the caller's transaction are flushed first, so they are read as stored.
+     *
+     * @param ids the attachments, any number
+     * @return each existing one's form, by id
+     */
+    Map<Long, String> writtenAttachments(Collection<Long> ids);
 }

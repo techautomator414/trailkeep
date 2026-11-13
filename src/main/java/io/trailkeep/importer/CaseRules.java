@@ -2,11 +2,14 @@
 // Copyright 2026 Charlie Genova and contributors
 package io.trailkeep.importer;
 
+import io.trailkeep.casefile.CaseFields;
 import io.trailkeep.casefile.CaseImportService.ImportCaseType;
+import io.trailkeep.casefile.CaseImportService.ImportedCase;
 import io.trailkeep.casefile.CasePriority;
 import io.trailkeep.importer.FieldTransformer.Issue;
 import io.trailkeep.importer.ImportIssue.Severity;
 import io.trailkeep.importer.staging.StagedCase;
+import io.trailkeep.shared.CaseStatus;
 import io.trailkeep.shared.Sensitivity;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -16,6 +19,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
@@ -225,6 +229,38 @@ final class CaseRules {
             return Sensitivity.RESTRICTED.name();
         }
         return row.getSensitivity() == null ? Sensitivity.STANDARD.name() : row.getSensitivity();
+    }
+
+    /**
+     * The case the import API writes for a row these rules passed ({@link #check} found nothing).
+     *
+     * @param row the case
+     * @param sourceId the mapping's {@code source.id}, which prefixes its {@code LEGACY_REF}
+     * @param teamId its team
+     * @param owner its owner, as {@link PeopleMatcher#owner} chose them
+     * @param description its description as a description holds it
+     * @return the case to import
+     */
+    ImportedCase imported(StagedCase row, String sourceId, long teamId, PeopleMatcher.Owner owner, String description) {
+        ImportCaseType type = Objects.requireNonNull(caseTypes.get(row.getCaseTypeKey()), "checked");
+        CaseFields fields = new CaseFields(
+                type.id(),
+                Objects.requireNonNull(row.getTitle(), "checked"),
+                row.getPriority() == null ? CasePriority.NORMAL : CasePriority.valueOf(row.getPriority()),
+                Objects.requireNonNull(row.getIdentifiedOn(), "checked"),
+                teamId,
+                owner.userId(),
+                row.getSubjectText(),
+                description,
+                Sensitivity.valueOf(visibility(row)));
+        return new ImportedCase(
+                fields,
+                sourceId + ":" + row.getKey().legacyKey(),
+                row.getLegacyNumber(),
+                owner.nameSnapshot(),
+                CaseStatus.valueOf(Objects.requireNonNull(row.getStatus(), "checked")),
+                Objects.requireNonNull(row.getOpenedAt(), "checked"),
+                row.getClosedAt());
     }
 
     private void hold(StagedCase row, List<Issue> issues) {

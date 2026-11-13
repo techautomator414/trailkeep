@@ -6,6 +6,7 @@ import io.trailkeep.casefile.CaseImportService;
 import io.trailkeep.importer.staging.StagedAttachment;
 import io.trailkeep.importer.staging.StagedComment;
 import io.trailkeep.importer.staging.StagedEvent;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -61,17 +62,25 @@ record ChildLoads(CommentLoad comments, AttachmentLoad attachments, EventLoad ev
      * @param staged its staged children
      * @param people the load's matched people
      * @param importer the "Trailkeep import" principal
+     * @return the ids of the comments its description continued in, which the case's ledger row covers
      * @throws io.trailkeep.document.AttachmentRejectedException if a file changed since its scan
      */
-    void write(
+    List<Long> write(
             CaseImportService.Created created,
             List<CaseComments.Comment> texts,
             AttachmentLoad.Scanned scanned,
             Staged staged,
             PeopleMatcher people,
             CaseComments.Author importer) {
-        texts.forEach(comment -> comments.write(created, comment));
+        List<Long> continued = new ArrayList<>();
+        for (CaseComments.Comment comment : texts) {
+            List<Long> ids = comments.write(created, comment);
+            if (comment.staged() == null) {
+                continued.addAll(ids);
+            }
+        }
         attachments.write(created, scanned, people, importer);
         events.write(created, staged.events(), people);
+        return continued;
     }
 }

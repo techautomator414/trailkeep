@@ -241,6 +241,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   are rolled back, so the run's figures (metric `RELINK`, per outcome) forecast exactly what applying does; applying
   leaves the run `LOADED` with the cases relinked as its loaded count. The import user may update a case's `OWNER_ID`,
   `UPDATED_AT`, `UPDATED_BY` and `VERSION` and nothing else of it (both vendors).
+- Written hashes (WP-26 part aa1, docs/design/importer.md §9; V19): each import ledger row now records the keyed hash
+  of what its load wrote (`WRITTEN_HASH`), as read back from the database in the load's own transaction: a case with
+  the comments its description continued in, a comment with every part it was split into, an attachment (name, type,
+  size, SHA-256, upload; not its scan status, which a release changes) or an imported history event; and for a closed
+  case the hash of its imported closure (`CLOSURE_HASH`). `IMPORT_LEDGER_PART` lists, in order, the comments a row wrote
+  besides its target, so `reconcile` (part aa2) reads exactly those rows back and recomputes the same hashes. The
+  forms are read with constant native SQL by each module's import API (`writtenCases`, `writtenComments`,
+  `writtenClosures`, `writtenAttachments`, `writtenEvents`) through the shared `WrittenForm`, never from the persistence
+  context, so Oracle's empty-string-as-`NULL` and microsecond timestamps hash the same at load and later. Grants: the
+  import user may insert and read the new columns and the part rows, the runtime user may only read them, nobody may
+  change them, and the purge user cannot see them (both vendors). Rows loaded before V19 have no written hash.
 - The Oracle source (WP-26 part o, docs/design/importer.md §4.1): a `kind: jdbc` Oracle mapping is test-fetched by
   `validate-mapping` and extracted in one `SET TRANSACTION READ ONLY` transaction, with the session in UTC and ISO
   date, timestamp and number formats; `DATE` and `TIMESTAMP` read as local date-times, `TIMESTAMP WITH TIME ZONE` with

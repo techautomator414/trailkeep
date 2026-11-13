@@ -177,13 +177,20 @@ final class AttachmentLoad {
                             context.run().runId()));
             context.ledger()
                     .save(ImportLedgerEntry.ofChild(
-                            context.run(),
-                            Subject.ATTACHMENT,
-                            row.getKey().legacyKey(),
-                            row.getRowHash(),
-                            created.caseId(),
-                            id,
-                            context.now()));
+                                    context.run(),
+                                    Subject.ATTACHMENT,
+                                    row.getKey().legacyKey(),
+                                    row.getRowHash(),
+                                    created.caseId(),
+                                    id,
+                                    context.now())
+                            .written(
+                                    WrittenHash.of(
+                                            context.hashKey(),
+                                            List.of(id),
+                                            attachments.writtenAttachments(List.of(id))),
+                                    null,
+                                    List.of()));
         }
     }
 
