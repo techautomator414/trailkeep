@@ -175,6 +175,26 @@ public interface CaseImportService {
     interface SlaForecast {
 
         /**
+         * One open case's forecast.
+         *
+         * @param state its SLA state at the instant
+         * @param repeatDue whether, overdue, its first overdue repeat is due by then ({@link
+         *     CaseSlaService.OverdueCase#repeatPeriod}), so the load pre-marks a repeat too (WP-26 part ac)
+         */
+        record Forecast(SlaState state, boolean repeatDue) {}
+
+        /**
+         * The forecast of one open case.
+         *
+         * @param caseTypeName its case type's name
+         * @param identifiedOn when the matter was identified
+         * @param openedAt when the legacy case was opened
+         * @return the forecast, or {@code null} for a case type Trailkeep does not have
+         */
+        @Nullable
+        Forecast forecast(String caseTypeName, LocalDate identifiedOn, Instant openedAt);
+
+        /**
          * The state of one open case.
          *
          * @param caseTypeName its case type's name
@@ -182,8 +202,10 @@ public interface CaseImportService {
          * @param openedAt when the legacy case was opened
          * @return the state, or {@code null} for a case type Trailkeep does not have
          */
-        @Nullable
-        SlaState state(String caseTypeName, LocalDate identifiedOn, Instant openedAt);
+        default @Nullable SlaState state(String caseTypeName, LocalDate identifiedOn, Instant openedAt) {
+            Forecast forecast = forecast(caseTypeName, identifiedOn, openedAt);
+            return forecast == null ? null : forecast.state();
+        }
     }
 
     /**

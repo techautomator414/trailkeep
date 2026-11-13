@@ -15,6 +15,7 @@ import io.trailkeep.audit.ImportedHistoryService;
 import io.trailkeep.casefile.CaseImportService;
 import io.trailkeep.closure.ClosureImportService;
 import io.trailkeep.document.AttachmentImportService;
+import io.trailkeep.sla.GoLiveAlertService;
 import io.trailkeep.user.ImportPeopleDirectory;
 import org.junit.jupiter.api.Test;
 
@@ -32,7 +33,8 @@ class ImportOnlyApiRulesTest {
             .and(onlyTheImporterAnd("io.trailkeep.closure..", ClosureImportService.class))
             .and(onlyTheImporterAnd("io.trailkeep.casefile..", CaseImportService.class))
             .and(onlyTheImporterAnd("io.trailkeep.audit..", ImportedHistoryService.class))
-            .and(onlyTheImporterAnd("io.trailkeep.user..", ImportPeopleDirectory.class));
+            .and(onlyTheImporterAnd("io.trailkeep.user..", ImportPeopleDirectory.class))
+            .and(onlyTheImporterAnd("io.trailkeep.sla..", GoLiveAlertService.class));
 
     private static ArchRule onlyTheImporterAnd(String module, Class<?> api) {
         return noClasses()
@@ -65,6 +67,7 @@ class ImportOnlyApiRulesTest {
                 .anySatisfy(detail -> assertThat(detail).contains("ImportApiOutsideImporter", "ClosureImportService"))
                 .anySatisfy(detail -> assertThat(detail).contains("ImportApiOutsideImporter", "CaseImportService"))
                 .anySatisfy(detail -> assertThat(detail).contains("ImportApiOutsideImporter", "ImportedHistoryService"))
-                .anySatisfy(detail -> assertThat(detail).contains("ImportApiOutsideImporter", "ImportPeopleDirectory"));
+                .anySatisfy(detail -> assertThat(detail).contains("ImportApiOutsideImporter", "ImportPeopleDirectory"))
+                .anySatisfy(detail -> assertThat(detail).contains("ImportApiOutsideImporter", "GoLiveAlertService"));
     }
 }

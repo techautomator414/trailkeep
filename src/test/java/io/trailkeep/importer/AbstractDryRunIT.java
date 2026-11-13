@@ -78,7 +78,9 @@ abstract class AbstractDryRunIT extends DryRunSupport {
                         "ISSUES CASE/ERROR/TITLE_MISSING 1",
                         "ROWS COMMENT 0",
                         "NOT_SCANNED_FILES - 0",
-                        "SLA_FORECAST OVERDUE 501")
+                        "SLA_FORECAST OVERDUE 501",
+                        "PRE_MARKED SLA_OVERDUE 501",
+                        "PRE_MARKED SLA_OVERDUE_REPEAT 501")
                 .noneMatch(figure -> figure.startsWith("HOLDS") || figure.startsWith("LEGACY_ACL"));
         assertThePreviewHoldsFiguresAndKeyedIssuesOnly(directory.resolve(Long.toString(run)));
 

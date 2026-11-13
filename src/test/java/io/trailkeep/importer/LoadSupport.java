@@ -90,6 +90,7 @@ abstract class LoadSupport extends DryRunSupport {
                     id);
             for (String table : List.of(
                     "IMPORT_OWNER_PENDING",
+                    "ALERT_LEDGER",
                     "CASE_ATTACHMENT",
                     "CASE_COMMENT",
                     "CASE_IMPORTED_EVENT",

@@ -14,6 +14,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -35,6 +36,9 @@ class DefaultCaseSlaService implements CaseSlaService {
             + " FROM CaseSla s, CaseRecord r, CaseType t, SlaPolicy p"
             + " WHERE r.id = s.caseId AND t.id = r.caseTypeId AND p.id = t.slaPolicyId"
             + " AND s.state = :overdue AND s.caseId > :after ORDER BY s.caseId";
+    private static final String STANDING = "SELECT s.state, s.cycle, s.dueAt, p.overdueReminderDays"
+            + " FROM CaseSla s, CaseRecord r, CaseType t, SlaPolicy p"
+            + " WHERE r.id = s.caseId AND t.id = r.caseTypeId AND p.id = t.slaPolicyId AND s.caseId = :id";
     private static final String ABOUT = "SELECT r.id, r.caseNumber, r.title, r.ownerId, r.teamId, p.escalateTo, s.cycle"
             + " FROM CaseRecord r, CaseType t, SlaPolicy p, CaseSla s"
             + " WHERE t.id = r.caseTypeId AND p.id = t.slaPolicyId AND s.caseId = r.id AND r.id IN :ids";
@@ -134,6 +138,23 @@ class DefaultCaseSlaService implements CaseSlaService {
             }
         }
         return about;
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Optional<Standing> standing(long caseId) {
+        return entityManager
+                .createQuery(STANDING, Tuple.class)
+                .setParameter("id", caseId)
+                .getResultStream()
+                .findFirst()
+                .map(row -> {
+                    Instant dueAt = row.get(2, Instant.class);
+                    return new Standing(
+                            row.get(0, SlaState.class),
+                            row.get(1, Integer.class),
+                            dueAt == null ? null : new OverdueCase(caseId, dueAt, row.get(3, Integer.class)));
+                });
     }
 
     /** One kind of change, written by one bulk update. */

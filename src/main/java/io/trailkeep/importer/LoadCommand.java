@@ -20,6 +20,7 @@ import io.trailkeep.importer.staging.StagedRow;
 import io.trailkeep.importer.staging.StagingStore;
 import io.trailkeep.shared.DomainException;
 import io.trailkeep.shared.config.AppProperties;
+import io.trailkeep.sla.GoLiveAlertService;
 import io.trailkeep.user.ImportPeopleDirectory;
 import io.trailkeep.user.ImportPeopleService;
 import io.trailkeep.user.TeamAdminService.TeamSummary;
@@ -109,6 +110,7 @@ class LoadCommand {
     private final TransactionTemplate transactions;
     private final CaseImportService caseImports;
     private final ClosureImportService closures;
+    private final GoLiveAlertService goLiveAlerts;
     private final AttachmentImportService attachmentImports;
     private final ImportedHistoryService history;
     private final UserDirectoryService directory;
@@ -129,6 +131,7 @@ class LoadCommand {
             TransactionTemplate transactions,
             CaseImportService caseImports,
             ClosureImportService closures,
+            GoLiveAlertService goLiveAlerts,
             AttachmentImportService attachmentImports,
             ImportedHistoryService history,
             UserDirectoryService directory,
@@ -146,6 +149,7 @@ class LoadCommand {
         this.transactions = transactions;
         this.caseImports = caseImports;
         this.closures = closures;
+        this.goLiveAlerts = goLiveAlerts;
         this.attachmentImports = attachmentImports;
         this.history = history;
         this.directory = directory;
@@ -330,6 +334,8 @@ class LoadCommand {
                             closedAt,
                             pass.run().runId(),
                             pass.audited().approverId()));
+                } else {
+                    goLiveAlerts.preMark(created.caseId(), clock.instant());
                 }
                 List<Long> continued =
                         pass.children().write(created, comments, scanned, staged, pass.people(), pass.importer());

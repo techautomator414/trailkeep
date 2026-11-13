@@ -88,15 +88,27 @@ abstract class AbstractLoadIT extends LoadSupport {
                         "c1 OPEN " + number(loadedCase("c1"), "ID") + " -",
                         "c2 OPEN " + number(loadedCase("c2"), "ID") + " -",
                         "c3 CLOSED " + number(closed, "ID") + " closed");
+        assertTheOpenCaseIsPreMarkedAndTheClosedOneNot(number(loadedCase("c1"), "ID"), number(closed, "ID"));
 
         load(run, mapping).close();
 
         assertThat(loadedCases("memory1:%"))
                 .as("a load after LOADED writes nothing the ledger holds")
                 .isEqualTo(3);
+        assertTheOpenCaseIsPreMarkedAndTheClosedOneNot(number(loadedCase("c1"), "ID"), number(closed, "ID"));
         assertThat(jdbc.queryForMap("SELECT STATUS, ROWS_LOADED FROM IMPORT_RUN WHERE ID = ?", run))
                 .containsEntry("STATUS", "LOADED")
                 .satisfies(row -> assertThat(number(row, "ROWS_LOADED")).isEqualTo(3));
+    }
+
+    /** Overdue since 2024: its alerts recorded as sent, keyed as the evaluator and the reminders tick key them (ac). */
+    private void assertTheOpenCaseIsPreMarkedAndTheClosedOneNot(long open, long closed) {
+        String alerts =
+                "SELECT ALERT_TYPE || ' ' || PERIOD_KEY FROM ALERT_LEDGER WHERE CASE_ID = ? ORDER BY ALERT_TYPE";
+        List<String> marked = jdbc.queryForList(alerts, String.class, open);
+        assertThat(marked).hasSize(2).first().isEqualTo("SLA_OVERDUE CYCLE");
+        assertThat(marked.getLast()).matches("SLA_OVERDUE_REPEAT P[0-9]+");
+        assertThat(jdbc.queryForList(alerts, String.class, closed)).isEmpty();
     }
 
     @Test

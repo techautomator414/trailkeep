@@ -3,6 +3,7 @@
 package io.trailkeep.importer;
 
 import io.trailkeep.casefile.CaseImportService;
+import io.trailkeep.casefile.CaseImportService.SlaForecast;
 import io.trailkeep.casefile.SlaState;
 import io.trailkeep.importer.ChildRules.Finding;
 import io.trailkeep.importer.ImportIssue.Severity;
@@ -39,7 +40,9 @@ import org.jspecify.annotations.Nullable;
  *       {@code AUTHOR}, {@code UPLOADER}): the match rate (§7.3), an open case's owner counted as matched only when
  *       eligible to keep it; {@code DEFAULT_OWNER_CASES} per team id: open cases the team's default owner will get;
  *   <li>{@code SLA_FORECAST} per SLA state: the open cases by the state they would have on the go-live day ({@code
- *       SLA_FORECAST_DAY}, an epoch day), as the load computes it (§7.1, §9).
+ *       SLA_FORECAST_DAY}, an epoch day), as the load computes it (§7.1, §9); {@code PRE_MARKED} per alert type
+ *       ({@code SLA_AT_RISK}, {@code SLA_OVERDUE}, {@code SLA_OVERDUE_REPEAT}): the alerts a load that day would record
+ *       as already sent ({@code sla.GoLiveAlertService}, 26ac).
  * </ul>
  */
 final class DryRunSummary {
@@ -135,11 +138,17 @@ final class DryRunSummary {
         String type = row.getCaseTypeKey();
         LocalDate identifiedOn = row.getIdentifiedOn();
         Instant openedAt = row.getOpenedAt();
-        SlaState state = type == null || identifiedOn == null || openedAt == null
+        SlaForecast.Forecast found = type == null || identifiedOn == null || openedAt == null
                 ? null
-                : forecast.state(type, identifiedOn, openedAt);
-        if (state != null) {
-            add("SLA_FORECAST", state.name(), 1);
+                : forecast.forecast(type, identifiedOn, openedAt);
+        if (found != null) {
+            add("SLA_FORECAST", found.state().name(), 1);
+            if (found.state() == SlaState.AT_RISK || found.state() == SlaState.OVERDUE) {
+                add("PRE_MARKED", "SLA_" + found.state().name(), 1);
+            }
+            if (found.repeatDue()) {
+                add("PRE_MARKED", "SLA_OVERDUE_REPEAT", 1);
+            }
         }
     }
 
