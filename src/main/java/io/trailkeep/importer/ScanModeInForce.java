@@ -32,6 +32,23 @@ final class ScanModeInForce {
     }
 
     /**
+     * Refuses a load unless the mode in force is the one its dry run recorded (none counts as changed), then checks
+     * clamd's declared limit ({@link #checkStreamMax}).
+     *
+     * @param environment this start's environment
+     * @param run the run to load
+     * @param attachments the importer's attachment settings
+     * @throws LoadRefusal.RefusedException with {@code SCAN_MODE_CHANGED} if the mode changed
+     */
+    static void checkLoad(Environment environment, ImportRun run, ImportProperties.Attachments attachments) {
+        ImportRun.ScanMode mode = read(environment);
+        if (mode != run.getScanMode()) {
+            throw new LoadRefusal.RefusedException(run.getId(), LoadRefusal.SCAN_MODE_CHANGED);
+        }
+        checkStreamMax(mode, attachments);
+    }
+
+    /**
      * Checks that, in {@code clamd} mode, {@code import.attachments.clamd-stream-max} is declared and at least {@code
      * import.attachments.max-bytes}: otherwise clamd would refuse files the importer's cap lets through.
      *

@@ -33,9 +33,8 @@ class DefaultImportedHistoryService implements ImportedHistoryService {
     @Transactional(propagation = Propagation.MANDATORY)
     public long record(ImportedEvent event) {
         validate(event);
-        String field = event.field();
         CaseImportedEvent row;
-        if (event.kind() != Kind.NOTE && field != null && PLAIN_FIELDS.contains(field)) {
+        if (ImportedHistoryService.storesAsText(event.kind(), event.field())) {
             if (tooLong(event.oldValue()) || tooLong(event.newValue())) {
                 throw new IllegalArgumentException("an imported plain value is too long");
             }

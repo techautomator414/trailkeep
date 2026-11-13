@@ -181,6 +181,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   run over; a new load's claim clears only the cases' `LOAD` issues. The import user gains SELECT and INSERT on
   `CASE_ATTACHMENT` and `CASE_ATTACHMENT_CHUNK` and USAGE on `SEQ_CASE_ATTACHMENT` (PostgreSQL; Oracle's SELECT
   already draws).
+- `load` writes each case's legacy history (WP-26 part w, docs/design/importer.md §7.5, §8.2). In the case's
+  transaction each staged event becomes a `CASE_IMPORTED_EVENT` row through the history import API, in the order the
+  events happened, with its legacy time, the canonical field the mapping placed it on, and an import ledger row. The
+  actor is a name snapshot: the name the event recorded, else the legacy person's staged name, else the matched user's
+  name. Only the values of `status`, `owner`, `priority`, `team`, `due` and `title` in an event that is not a note are
+  stored as text, cut to 1000 characters (never inside a surrogate pair), which the dry run now reports as
+  `VALUE_TRUNCATED` (WARNING) with the longer value's length; every other value is kept only as its HMAC and length.
+  Events with an ERROR are left out; one that fails the event rules at the load's moment keeps its case out as an
+  `EVENT_<code>` `LOAD` issue, tried again by the next load. No grant changes: the import user already has SELECT and
+  INSERT on `CASE_IMPORTED_EVENT` (V16).
 - The Oracle source (WP-26 part o, docs/design/importer.md §4.1): a `kind: jdbc` Oracle mapping is test-fetched by
   `validate-mapping` and extracted in one `SET TRANSACTION READ ONLY` transaction, with the session in UTC and ISO
   date, timestamp and number formats; `DATE` and `TIMESTAMP` read as local date-times, `TIMESTAMP WITH TIME ZONE` with

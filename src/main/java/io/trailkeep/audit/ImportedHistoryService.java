@@ -64,6 +64,18 @@ public interface ImportedHistoryService {
             long runId) {}
 
     /**
+     * Whether an event's values are stored as text: those of a {@link #PLAIN_FIELDS} field of an event that is not a
+     * {@link Kind#NOTE}; every other value is redacted.
+     *
+     * @param kind the event's kind
+     * @param field its field, or {@code null}
+     * @return true if plain
+     */
+    static boolean storesAsText(Kind kind, @Nullable String field) {
+        return kind != Kind.NOTE && field != null && PLAIN_FIELDS.contains(field);
+    }
+
+    /**
      * Writes one event, redacting its values unless they are plain (see the class comment).
      *
      * @param event the event

@@ -31,7 +31,8 @@ import tools.jackson.databind.JsonNode;
  *   <li>a comment longer, as a comment holds it, than one comment takes: {@code COMMENT_SPLIT} (WARNING) with the
  *       number of comments the load splits it into ({@link CaseComments});
  *   <li>an event kind or field {@code CASE_IMPORTED_EVENT} does not have: {@code KIND_INVALID}, {@code FIELD_INVALID}
- *       (ERROR);
+ *       (ERROR); an event the load would take whose value the history stores as text ({@link EventLoad}) and that is
+ *       longer than it keeps: {@code VALUE_TRUNCATED} (WARNING) with the longer value's length;
  *   <li>an attachment over {@code import.attachments.max-bytes}: {@code ATTACHMENT_TOO_LARGE} with its staged size as
  *       the detail; one with no bytes to load (no SHA-256 was staged; the extract's own issue says why, when it had
  *       one): {@code ATTACHMENT_MISSING}. Both are ERRORs unless {@code limits.acceptSkip} names them: then they are
@@ -149,6 +150,10 @@ final class ChildRules {
             found.add(error("FIELD_INVALID"));
         }
         future(found, row.getEventAt());
+        int longest = found.isEmpty() ? EventLoad.truncated(row) : 0;
+        if (longest > 0) {
+            found.add(new Finding("VALUE_TRUNCATED", Severity.WARNING, (long) longest));
+        }
         return List.copyOf(found);
     }
 

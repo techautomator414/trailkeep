@@ -22,9 +22,9 @@ import tools.jackson.dataformat.yaml.YAMLMapper;
 
 /**
  * The dry run's rules for comments, attachments and legacy history (WP-26 part q2, design §4.3, §7.2, §7.5) on
- * synthetic staged rows: a missing case, an empty required field, a future time, an unknown event kind or field, and
- * an attachment over the importer's cap (its size the detail) or without bytes, both skippable only by {@code
- * limits.acceptSkip}.
+ * synthetic staged rows: a missing case, an empty required field, a future time, an unknown event kind or field, a
+ * plain history value longer than the history keeps (its length the detail), and an attachment over the importer's cap
+ * (its size the detail) or without bytes, both skippable only by {@code limits.acceptSkip}.
  */
 class ChildRulesTest {
 
@@ -88,6 +88,36 @@ class ChildRulesTest {
                         }),
                         true)))
                 .containsExactly("KIND_INVALID ERROR", "FIELD_INVALID ERROR");
+    }
+
+    @Test
+    void plainHistoryValueLongerThanTheTableKeepsIsTruncatedWithItsLength() {
+        assertThat(rules.event(event(values -> values.put("newValue", "x".repeat(1000))), true))
+                .as("exactly what the table keeps")
+                .isEmpty();
+        assertThat(rules.event(
+                        event(values -> {
+                            values.put("oldValue", "x".repeat(1001));
+                            values.put("newValue", "x".repeat(1200));
+                        }),
+                        true))
+                .containsExactly(new Finding("VALUE_TRUNCATED", Severity.WARNING, 1200L));
+        assertThat(rules.event(
+                        event(values -> {
+                            values.put("field", "description");
+                            values.put("newValue", "x".repeat(5000));
+                        }),
+                        true))
+                .as("redacted: only its HMAC and length are kept")
+                .isEmpty();
+        assertThat(rules.event(
+                        event(values -> {
+                            values.put("kind", "NOTE");
+                            values.put("newValue", "x".repeat(5000));
+                        }),
+                        true))
+                .as("a note is redacted, whatever its field")
+                .isEmpty();
     }
 
     @Test
