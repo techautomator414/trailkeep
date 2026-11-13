@@ -8,6 +8,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.Comparator;
+import java.util.regex.Pattern;
 import java.util.stream.Stream;
 import org.jspecify.annotations.Nullable;
 
@@ -19,6 +20,9 @@ import org.jspecify.annotations.Nullable;
  * that starts over). Paths never reach an issue or a log line.
  */
 final class ContentArea {
+
+    /** A file's name in the area: its SHA-256, lower-case hex. */
+    private static final Pattern SHA256 = Pattern.compile("[0-9a-f]{64}");
 
     private final Path directory;
 
@@ -64,6 +68,26 @@ final class ContentArea {
             throw new SourceException("CONTENT_AREA_UNWRITABLE", null);
         }
         return sha256;
+    }
+
+    /**
+     * The file the load reads for an attachment the extract stored here (WP-26 part u): named by its SHA-256 alone,
+     * and contained in the area as every file the mapping names is ({@link FileManifest#open}).
+     *
+     * @param sha256 the staged content pointer
+     * @return the file, as a real path
+     * @throws SourceException {@code PATH_OUTSIDE_ROOT} for a pointer that is not a SHA-256, {@code
+     *     SOURCE_FILE_MISSING} when the file or the area is gone
+     */
+    Path file(String sha256) {
+        if (!SHA256.matcher(sha256).matches()) {
+            throw new SourceException("PATH_OUTSIDE_ROOT", null);
+        }
+        try {
+            return FileManifest.open(directory.toRealPath(), sha256);
+        } catch (IOException gone) {
+            throw new SourceException("SOURCE_FILE_MISSING", null);
+        }
     }
 
     /**

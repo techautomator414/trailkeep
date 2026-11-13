@@ -23,6 +23,7 @@ final class LoadRunLock {
     private final InstantSource clock;
     private final long runId;
     private int version;
+    private Instant moved = Instant.MIN;
 
     LoadRunLock(ImportRunRepository runs, TransactionTemplate transactions, InstantSource clock, long runId) {
         this.runs = runs;
@@ -59,6 +60,7 @@ final class LoadRunLock {
             throw new RefusedException(runId, LoadRefusal.RUN_LOCKED);
         }
         version = Objects.requireNonNull(run, "claimed").getVersion();
+        moved = now;
     }
 
     /**
@@ -76,6 +78,20 @@ final class LoadRunLock {
             runs.save(run);
         });
         version++;
+        moved = clock.instant();
+    }
+
+    /**
+     * Moves the run on, with no other work, once a tenth of {@link LoadCommand#LEASE} has passed since it last moved:
+     * attachments are scanned outside any case's transaction (WP-26 part u), and a case with many large files must not
+     * look like a load that died.
+     *
+     * @throws RefusedException {@code RUN_LOCKED} once another load has taken the run over
+     */
+    void keepAlive() {
+        if (clock.instant().isAfter(moved.plus(LoadCommand.LEASE.dividedBy(10)))) {
+            write(0, () -> {});
+        }
     }
 
     /**

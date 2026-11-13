@@ -9,10 +9,13 @@ import io.trailkeep.casefile.CaseImportService.ImportedCase;
 import io.trailkeep.casefile.CasePriority;
 import io.trailkeep.closure.ClosureImportService;
 import io.trailkeep.closure.ClosureImportService.ImportedClosure;
+import io.trailkeep.document.AttachmentImportService;
+import io.trailkeep.document.AttachmentRejectedException;
 import io.trailkeep.importer.ImportIssue.Severity;
 import io.trailkeep.importer.ImportIssue.Subject;
 import io.trailkeep.importer.ImportLedgerEntry.Loaded;
 import io.trailkeep.importer.LoadRefusal.RefusedException;
+import io.trailkeep.importer.staging.StagedAttachment;
 import io.trailkeep.importer.staging.StagedCase;
 import io.trailkeep.importer.staging.StagedComment;
 import io.trailkeep.importer.staging.StagedPerson;
@@ -47,25 +50,19 @@ import tools.jackson.dataformat.yaml.YAMLMapper;
 
 /**
  * {@code load} (WP-26 parts t and u, design §3 step 5, §8.2): writes the signed-off run's staged cases into Trailkeep
- * through {@code casefile}'s and {@code closure}'s import APIs, one case per transaction with its closure, its comments
- * ({@link CommentLoad}; a description too long for a case continues in the first, {@link CaseComments}), its import
- * ledger rows and the run's count, so a case is either fully in or absent. It refuses to start, each refusal its own
- * code ({@link LoadRefusal}), unless the run is signed off, has no FATAL issue, is loaded with the mapping file and
- * lookup files it was validated and dry-run with, and the attachment scanning mode in force is the one its dry run
- * recorded ({@link ScanModeInForce}, R1): the sign-off checks the first two already, and the load checks them all
- * again. It writes only cases the ledger does not hold for the run's source, so a crashed load resumes at the next case
- * and a load after {@code LOADED} writes nothing, and it skips every case and every comment with an ERROR from the
- * extract or the dry run.
- * Owners are chosen as the dry run forecast them ({@link PeopleMatcher}). Every other case is checked again against
- * the rules and the reference data of the load's moment ({@link CaseRules}): a case they refuse now, whose team has
- * no eligible owner now, or that the import APIs refuse as invalid, is written nowhere but as a {@code LOAD} issue
- * (an ERROR with its code and the case's keyed hash), and the load goes on. The next load drops those issues and
- * tries their cases again. Anything else a case's transaction cannot do stops the load, closed: the run is {@code
- * FAILED}, and the next load resumes at that case.
- *
- * <p>The run lock ({@link LoadRunLock}) keeps one load per run, and one loading run per source, on any number of
- * nodes; a load that died is taken over once it has not moved its run for {@link #LEASE}. The load ends {@code
- * LOADED}, or {@code FAILED} on an error.
+ * through the import APIs, one case per transaction with its closure, comments ({@link CommentLoad}, {@link
+ * CaseComments}), attachments ({@link AttachmentLoad}, scanned before the transaction opens), ledger rows and the run's
+ * count, so a case is either fully in or absent. It refuses to start ({@link LoadRefusal}) unless the run is signed
+ * off, has no FATAL issue, is loaded with the mapping and lookup files it was dry-run with, and the scanning mode in
+ * force is the one its dry run recorded ({@link ScanModeInForce}, R1). It writes only cases the ledger does not hold
+ * for the run's source, so a crashed load resumes at the next case, and skips every row with an ERROR from the extract
+ * or the dry run. Owners are chosen as the dry run forecast them ({@link PeopleMatcher}); each case is checked again
+ * against the rules and reference data of the load's moment ({@link CaseRules}). A case they refuse, whose team has no
+ * eligible owner now, whose attachment changed, or that the import APIs refuse as invalid, is written nowhere but as a
+ * {@code LOAD} issue (an ERROR with its code and the case's keyed hash), and the load goes on; the next load drops
+ * those issues and tries their cases again. Anything else stops the load, closed: the run is {@code FAILED}, and the
+ * next load resumes at that case. The run lock ({@link LoadRunLock}) keeps one load per run, and one loading run per
+ * source, on any number of nodes; a load that died is taken over once it has not moved its run for {@link #LEASE}.
  */
 @Component
 @Profile("importer")
@@ -80,13 +77,7 @@ class LoadCommand {
     /** The {@code LOAD} issue code of a case the import APIs refuse as invalid. */
     static final String CASE_REFUSED = "CASE_REFUSED";
 
-    /**
-     * What a load did.
-     *
-     * @param loaded the cases it wrote
-     * @param skipped the cases it left: in the ledger already, or with an ERROR from the extract or the dry run
-     * @param refused the cases refused now, each a {@code LOAD} issue
-     */
+    /** What a load did: the cases it wrote, left (in the ledger, or with an ERROR) and refused now as LOAD issues. */
     record Outcome(long loaded, long skipped, long refused) {}
 
     /** One load's run, its hold on it, settings and reference data. */
@@ -101,7 +92,8 @@ class LoadCommand {
             Map<String, TeamSummary> teams,
             Map<String, ImportCaseType> caseTypes,
             PeopleMatcher people,
-            CommentLoad comments) {}
+            CommentLoad comments,
+            AttachmentLoad attachments) {}
 
     /** How far a load got. */
     private static final class Progress {
@@ -117,6 +109,7 @@ class LoadCommand {
     private final TransactionTemplate transactions;
     private final CaseImportService caseImports;
     private final ClosureImportService closures;
+    private final AttachmentImportService attachmentImports;
     private final UserDirectoryService directory;
     private final ImportPeopleService people;
     private final ImportProperties properties;
@@ -133,6 +126,7 @@ class LoadCommand {
             TransactionTemplate transactions,
             CaseImportService caseImports,
             ClosureImportService closures,
+            AttachmentImportService attachmentImports,
             UserDirectoryService directory,
             ImportPeopleService people,
             ImportProperties properties,
@@ -146,6 +140,7 @@ class LoadCommand {
         this.transactions = transactions;
         this.caseImports = caseImports;
         this.closures = closures;
+        this.attachmentImports = attachmentImports;
         this.directory = directory;
         this.people = people;
         this.properties = properties;
@@ -155,14 +150,10 @@ class LoadCommand {
     }
 
     /**
-     * Loads a signed-off run, or resumes its load.
+     * Loads a signed-off run, or resumes its load, with the mapping file it was validated with ({@code file}).
      *
-     * @param runId the run
-     * @param file the mapping file, unchanged since {@code validate-mapping}, as are its lookup files
-     * @return what it did
-     * @throws RefusedException if the run may not be loaded now, before anything is written
-     * @throws IllegalStateException in {@code clamd} mode, if clamd's declared stream limit is unset or below the
-     *     importer's cap, before anything is written
+     * @throws RefusedException if the run may not be loaded now; {@link IllegalStateException} in {@code clamd} mode
+     *     if clamd's declared stream limit is unset or below the importer's cap; both before anything is written
      */
     Outcome run(long runId, Path file) {
         ImportRun found = load(runId);
@@ -191,7 +182,7 @@ class LoadCommand {
                 .claim(
                         found.getSourceId(),
                         pass.now(),
-                        () -> issues.deleteByRunIdAndStage(runId, ImportIssue.Stage.LOAD));
+                        () -> issues.deleteByRunIdAndStageAndSubject(runId, ImportIssue.Stage.LOAD, Subject.CASE));
         try {
             pages(StagedPerson.class, runId, page -> page.forEach(pass.people()::person));
             pages(StagedCase.class, runId, page -> loadPage(pass, progress, page));
@@ -214,6 +205,16 @@ class LoadCommand {
                 directory.allTeams().stream().collect(Collectors.toMap(TeamSummary::name, Function.identity()));
         Map<String, ImportCaseType> caseTypes =
                 caseImports.caseTypes().stream().collect(Collectors.toMap(ImportCaseType::name, Function.identity()));
+        CommentLoad.Context children = new CommentLoad.Context(
+                staging,
+                issues,
+                ledger,
+                caseImports,
+                new Loaded(found.getId(), found.getSourceId(), hash),
+                new CaseImportService.ImportRun(found.getId(), approver),
+                properties.hashKeySpec(),
+                now,
+                new CaseComments(mapping));
         return new Pass(
                 new Loaded(found.getId(), found.getSourceId(), hash),
                 new LoadRunLock(runs, transactions, clock, found.getId()),
@@ -230,22 +231,16 @@ class LoadCommand {
                 teams,
                 caseTypes,
                 new PeopleMatcher(people, caseImports, mapping, lookups.defaultOwners()),
-                new CommentLoad(new CommentLoad.Context(
-                        staging,
-                        issues,
-                        ledger,
-                        caseImports,
-                        new Loaded(found.getId(), found.getSourceId(), hash),
-                        new CaseImportService.ImportRun(found.getId(), approver),
-                        properties.hashKeySpec(),
-                        now,
-                        new CaseComments(mapping))));
+                new CommentLoad(children),
+                new AttachmentLoad(
+                        children,
+                        attachmentImports,
+                        mapping,
+                        properties.contentArea(),
+                        properties.attachments().maxBytes().toBytes()));
     }
 
-    /**
-     * Refuses unless the scanning mode in force is the one the run's dry run recorded, which a run dry-run before the
-     * mode was recorded lacks, so that counts as changed; then, in {@code clamd} mode, checks clamd's stream limit.
-     */
+    /** Refuses unless the scanning mode in force is the one recorded (none counts as changed); checks clamd's limit. */
     private void checkScanMode(ImportRun found) {
         ImportRun.ScanMode mode = ScanModeInForce.read(environment);
         if (mode != found.getScanMode()) {
@@ -266,6 +261,7 @@ class LoadCommand {
         Set<String> failed =
                 Set.copyOf(issues.keyHashesWith(pass.run().runId(), Subject.CASE, Severity.ERROR, hashes.values()));
         Map<String, List<StagedComment>> comments = pass.comments().staged(List.copyOf(hashes.keySet()));
+        Map<String, List<StagedAttachment>> files = pass.attachments().staged(List.copyOf(hashes.keySet()));
         for (StagedCase row : page) {
             String key = row.getKey().legacyKey();
             String keyHash = Objects.requireNonNull(hashes.get(key), "hashed");
@@ -273,7 +269,8 @@ class LoadCommand {
                 progress.skipped++;
                 continue;
             }
-            String refusal = loadCase(pass, row, comments.getOrDefault(key, List.of()));
+            String refusal =
+                    loadCase(pass, row, comments.getOrDefault(key, List.of()), files.getOrDefault(key, List.of()));
             if (refusal == null) {
                 progress.loaded++;
                 continue;
@@ -296,13 +293,11 @@ class LoadCommand {
     }
 
     /**
-     * Loads one case in its own transaction: the case, its closure when closed, its comments, its ledger rows and the
-     * run's count, which also proves this load still holds the run. A case the rules or the import APIs refuse is not
-     * written, nor are its comments.
-     *
-     * @return {@code null} once loaded, else the code of what refused it
+     * Loads one case in its own transaction, its attachments scanned first, with the run's count, which also proves
+     * this load still holds the run; {@code null} once loaded, else the code of what refused it.
      */
-    private @Nullable String loadCase(Pass pass, StagedCase row, List<StagedComment> staged) {
+    private @Nullable String loadCase(
+            Pass pass, StagedCase row, List<StagedComment> staged, List<StagedAttachment> files) {
         List<FieldTransformer.Issue> problems = pass.rules().check(row);
         if (!problems.isEmpty()) {
             return problems.getFirst().code();
@@ -321,6 +316,10 @@ class LoadCommand {
         String description =
                 pass.comments().texts().description(Objects.requireNonNull(row.getDescription(), "checked"));
         ImportedCase imported = imported(pass, row, team.id(), owner, description);
+        AttachmentLoad.Scanned scanned = pass.attachments().scan(files, pass.lock());
+        if (scanned.refusal() != null) {
+            return scanned.refusal();
+        }
         try {
             pass.lock().write(1, () -> {
                 CaseImportService.Created created = caseImports.importCase(pass.audited(), imported);
@@ -343,7 +342,10 @@ class LoadCommand {
                         closedAt,
                         pass.now()));
                 comments.forEach(comment -> pass.comments().write(created, comment));
+                pass.attachments().write(created, scanned, pass.people(), pass.importer());
             });
+        } catch (AttachmentRejectedException changed) {
+            return AttachmentLoad.CONTENT_CHANGED;
         } catch (DomainException refused) {
             if (refused.kind() != DomainException.Kind.INVALID) {
                 throw refused;

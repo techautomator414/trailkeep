@@ -167,6 +167,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   case with it as `CASE_REFUSED`, tried again by the next load. The import user gains SELECT and INSERT on
   `CASE_COMMENT`, USAGE on `SEQ_CASE_COMMENT` (PostgreSQL; Oracle's SELECT already draws) and UPDATE of
   `CASE_SEARCH`'s `SEARCH_TEXT` and `UPDATED_AT` only.
+- `load` writes each case's attachments (WP-26 part u-c, docs/design/importer.md §4.3, §8.2). Before the case's
+  transaction each staged attachment is read where the extract hashed it (the run's content area or under
+  `attachments.root`, through the same containment checks) and goes through the attachment import API's intake and
+  scan; in the transaction it is stored with its legacy upload time, its matched uploader or the "Trailkeep import"
+  principal with the legacy name, and an import ledger row. Attachments with an ERROR or with no bytes staged (over
+  the cap or missing, skipped by `limits.acceptSkip` or not) are left out silently. One the intake refuses, or that
+  clamd refuses as over its own limit, becomes an `ATTACHMENT_<reason>` or `ATTACHMENT_TOO_LARGE` `LOAD` issue and its
+  case loads without it; an infected one is stored `QUARANTINED` and reported as `ATTACHMENT_QUARANTINED` (WARNING);
+  in `external` mode each is stored `NOT_SCANNED`. A file gone or changed since the extract keeps its case out as
+  `CONTENT_CHANGED`, tried again by the next load; any other scanner failure stops the load, `FAILED` and resumable.
+  The load moves its run on between scans once a minute has passed, so long scans never let another load take the
+  run over; a new load's claim clears only the cases' `LOAD` issues. The import user gains SELECT and INSERT on
+  `CASE_ATTACHMENT` and `CASE_ATTACHMENT_CHUNK` and USAGE on `SEQ_CASE_ATTACHMENT` (PostgreSQL; Oracle's SELECT
+  already draws).
 - The Oracle source (WP-26 part o, docs/design/importer.md §4.1): a `kind: jdbc` Oracle mapping is test-fetched by
   `validate-mapping` and extracted in one `SET TRANSACTION READ ONLY` transaction, with the session in UTC and ISO
   date, timestamp and number formats; `DATE` and `TIMESTAMP` read as local date-times, `TIMESTAMP WITH TIME ZONE` with
