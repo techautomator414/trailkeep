@@ -42,7 +42,21 @@ final class Reconciliation {
     private final SecretKey key;
     private final Instant at;
     private final Map<Subject, SortedMap<String, Long>> counts = new EnumMap<>(Subject.class);
-    private final List<ImportIssue> issues = new ArrayList<>();
+    private final List<Difference> differences = new ArrayList<>();
+
+    /**
+     * One row that differs (WP-26 part aa3 writes them to the report files too).
+     *
+     * @param entity what the row is
+     * @param code the outcome
+     * @param keyHash the keyed hash of its canonical key
+     * @param trailkeepId the Trailkeep row it wrote, or {@code null}
+     */
+    record Difference(
+            Subject entity,
+            String code,
+            String keyHash,
+            @Nullable Long trailkeepId) {}
 
     /**
      * An empty tally.
@@ -68,24 +82,51 @@ final class Reconciliation {
     void found(Subject entity, String outcome, String legacyKey, @Nullable Long trailkeepId) {
         counts.computeIfAbsent(entity, any -> new TreeMap<>()).merge(outcome, 1L, Long::sum);
         if (DIFFERENCES.contains(outcome)) {
-            issues.add(new ImportIssue(
-                    runId,
-                    ImportIssue.Stage.RECONCILE,
-                    entity,
-                    KeyedHash.hex(key, legacyKey),
-                    ImportIssue.Severity.ERROR,
-                    outcome,
-                    trailkeepId,
-                    at));
+            differences.add(new Difference(entity, outcome, KeyedHash.hex(key, legacyKey), trailkeepId));
         }
     }
 
     long differences() {
-        return issues.size();
+        return differences.size();
     }
 
+    /**
+     * The rows that differ, in the order found.
+     *
+     * @return them
+     */
+    List<Difference> differing() {
+        return List.copyOf(differences);
+    }
+
+    /**
+     * The counts, by entity, then by outcome in code order.
+     *
+     * @return a copy
+     */
+    Map<Subject, SortedMap<String, Long>> counts() {
+        Map<Subject, SortedMap<String, Long>> copy = new EnumMap<>(Subject.class);
+        counts.forEach((entity, byOutcome) -> copy.put(entity, new TreeMap<>(byOutcome)));
+        return copy;
+    }
+
+    /**
+     * Each difference as a {@code RECONCILE} ERROR issue.
+     *
+     * @return the issues to save
+     */
     List<ImportIssue> issues() {
-        return List.copyOf(issues);
+        return differences.stream()
+                .map(found -> new ImportIssue(
+                        runId,
+                        ImportIssue.Stage.RECONCILE,
+                        found.entity(),
+                        found.keyHash(),
+                        ImportIssue.Severity.ERROR,
+                        found.code(),
+                        found.trailkeepId(),
+                        at))
+                .toList();
     }
 
     /**
