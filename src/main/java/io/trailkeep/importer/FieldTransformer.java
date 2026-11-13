@@ -14,7 +14,6 @@ import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
-import java.time.temporal.TemporalAccessor;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.HexFormat;
@@ -304,21 +303,24 @@ final class FieldTransformer {
         };
     }
 
-    /** A text time: with an offset, without one, or a bare day, by the declared format or ISO-8601. */
+    /**
+     * A text time: with an offset, without one, or a bare day, by the declared format, else ISO-8601 or its SQL form
+     * with a space for the {@code T} ({@link DeclaredFormat#SQL}).
+     */
     private @Nullable Object parse(String text, @Nullable String format) {
-        DateTimeFormatter formatter = format == null
-                ? DateTimeFormatter.ISO_DATE_TIME
-                : context.formats().format(format);
+        if (format != null) {
+            return best(text, context.formats().format(format));
+        }
+        Object parsed = best(text, DateTimeFormatter.ISO_DATE_TIME);
+        parsed = parsed == null ? best(text, DeclaredFormat.SQL) : parsed;
+        return parsed == null ? best(text, DateTimeFormatter.ISO_LOCAL_DATE) : parsed;
+    }
+
+    private static @Nullable Object best(String text, DateTimeFormatter formatter) {
         try {
-            TemporalAccessor parsed =
-                    formatter.parseBest(text.strip(), OffsetDateTime::from, LocalDateTime::from, LocalDate::from);
-            return parsed;
-        } catch (DateTimeParseException first) {
-            try {
-                return format == null ? LocalDate.parse(text.strip()) : null;
-            } catch (DateTimeParseException second) {
-                return null;
-            }
+            return formatter.parseBest(text.strip(), OffsetDateTime::from, LocalDateTime::from, LocalDate::from);
+        } catch (DateTimeParseException malformed) {
+            return null;
         }
     }
 
@@ -357,11 +359,13 @@ final class FieldTransformer {
     // Returns Object, not byte[]: a missing or broken value is null, never an empty array that would read as content.
     private @Nullable Object binary(@Nullable String text, String encoding) {
         try {
-            return text == null
+            String value = text == null ? null : text.strip();
+            return value == null
                     ? null
                     : "hex".equals(encoding)
-                            ? HexFormat.of().parseHex(text.strip())
-                            : Base64.getMimeDecoder().decode(text);
+                            // PostgreSQL writes bytea as \x and the hex digits (bytea_output = hex, docs/importer).
+                            ? HexFormat.of().parseHex(value.startsWith("\\x") ? value.substring(2) : value)
+                            : Base64.getMimeDecoder().decode(value);
         } catch (IllegalArgumentException malformed) {
             issue("BAD_BINARY", Severity.ERROR);
             return null;
