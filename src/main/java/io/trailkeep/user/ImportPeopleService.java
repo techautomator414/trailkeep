@@ -2,13 +2,10 @@
 // Copyright 2026 Charlie Genova and contributors
 package io.trailkeep.user;
 
-import java.util.List;
-import java.util.Optional;
-
 /**
- * Read-only people lookups for the importer (WP-26 part c, docs/design/importer.md §7.3): the two principals that act
- * for it (ADR-0015), and matching a legacy person to a Trailkeep user. People are never created here; a user exists
- * only once they have signed in.
+ * The two principals that act for the importer (WP-26 part c, docs/design/importer.md §7.3, ADR-0015), read by the
+ * import APIs of {@code casefile}, {@code closure} and {@code document} as well. Matching legacy people to users reads
+ * any user's identity, so it is the importer's alone: {@link ImportPeopleDirectory}.
  */
 public interface ImportPeopleService {
 
@@ -35,53 +32,10 @@ public interface ImportPeopleService {
     record ImportPrincipals(long importer, long legacyApproval) {}
 
     /**
-     * A Trailkeep user a legacy person matched.
-     *
-     * @param userId the user's id
-     * @param displayName the user's name
-     * @param disabled whether the user is disabled, which makes them ineligible to own
-     */
-    record PersonMatch(long userId, String displayName, boolean disabled) {}
-
-    /**
      * The two principals, seeded by {@code V11__import_principals}.
      *
      * @return their ids
      * @throws IllegalStateException if either row is missing
      */
     ImportPrincipals principals();
-
-    /**
-     * The user with this external id (the identity provider's subject), exactly as stored. Never a principal.
-     *
-     * @param externalId the legacy person's external id
-     * @return the user, or empty
-     */
-    Optional<PersonMatch> byExternalId(String externalId);
-
-    /**
-     * The users with this email address, compared case-insensitively. Email is not unique in Trailkeep, so more than
-     * one match is the importer's {@code AMBIGUOUS_PERSON} issue, never a guess. Never a principal.
-     *
-     * @param email the legacy person's email address
-     * @return the users, by id; empty when none
-     */
-    List<PersonMatch> byEmail(String email);
-
-    /**
-     * A user {@code relink-owners} may match a pending owner to (WP-26 part z2, design §7.3).
-     *
-     * @param userId the user's id
-     * @param email their email address, possibly empty
-     * @param externalId the identity provider's subject
-     */
-    record SignedIn(long userId, String email, String externalId) {}
-
-    /**
-     * Every enabled user, never a principal, whose email address and external id {@code relink-owners} hashes to match
-     * the open cases waiting for their legacy owner.
-     *
-     * @return them, by display name
-     */
-    List<SignedIn> signedIn();
 }

@@ -2,10 +2,7 @@
 // Copyright 2026 Charlie Genova and contributors
 package io.trailkeep.user;
 
-import java.util.Comparator;
-import java.util.List;
 import java.util.Objects;
-import java.util.Optional;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,37 +24,9 @@ class DefaultImportPeople implements ImportPeopleService {
         return new ImportPrincipals(principal(IMPORTER), principal(LEGACY_APPROVAL));
     }
 
-    @Override
-    public Optional<PersonMatch> byExternalId(String externalId) {
-        return users.findByExternalId(externalId)
-                .filter(user -> !user.isPrincipal())
-                .map(DefaultImportPeople::match);
-    }
-
-    @Override
-    public List<PersonMatch> byEmail(String email) {
-        return users.findByEmailIgnoreCase(email).stream()
-                .filter(user -> !user.isPrincipal())
-                .map(DefaultImportPeople::match)
-                .sorted(Comparator.comparingLong(PersonMatch::userId))
-                .toList();
-    }
-
-    @Override
-    public List<SignedIn> signedIn() {
-        return users.findByDisabledFalseOrderByDisplayNameAsc().stream()
-                .filter(user -> !user.isPrincipal())
-                .map(user -> new SignedIn(Objects.requireNonNull(user.getId()), user.getEmail(), user.getExternalId()))
-                .toList();
-    }
-
     private long principal(String externalId) {
         return users.findByExternalId(externalId)
                 .map(user -> Objects.requireNonNull(user.getId()))
                 .orElseThrow(() -> new IllegalStateException("Import principal missing: " + externalId));
-    }
-
-    private static PersonMatch match(AppUser user) {
-        return new PersonMatch(Objects.requireNonNull(user.getId()), user.getDisplayName(), user.isDisabled());
     }
 }

@@ -9,8 +9,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.trailkeep.shared.DomainException.Kind;
 import io.trailkeep.testsupport.RequiresDocker;
+import io.trailkeep.user.ImportPeopleDirectory.PersonMatch;
+import io.trailkeep.user.ImportPeopleDirectory.SignedIn;
 import io.trailkeep.user.ImportPeopleService.ImportPrincipals;
-import io.trailkeep.user.ImportPeopleService.PersonMatch;
 import io.trailkeep.user.TeamAdminService.Actor;
 import java.time.Instant;
 import java.util.Set;
@@ -38,6 +39,9 @@ abstract class AbstractImportPeopleIT {
 
     @Autowired
     private ImportPeopleService people;
+
+    @Autowired
+    private ImportPeopleDirectory lookups;
 
     @Autowired
     private UserDirectoryService directory;
@@ -109,11 +113,11 @@ abstract class AbstractImportPeopleIT {
         String subject = "ext-" + UUID.randomUUID();
         long id = user(subject, "Synthetic Matched", "matched@example.invalid");
 
-        assertThat(people.byExternalId(subject)).contains(new PersonMatch(id, "Synthetic Matched", false));
-        assertThat(people.byExternalId(subject.toUpperCase(java.util.Locale.ROOT)))
+        assertThat(lookups.byExternalId(subject)).contains(new PersonMatch(id, "Synthetic Matched", false));
+        assertThat(lookups.byExternalId(subject.toUpperCase(java.util.Locale.ROOT)))
                 .isEmpty();
-        assertThat(people.byExternalId("ext-unknown-" + UUID.randomUUID())).isEmpty();
-        assertThat(people.byExternalId(ImportPeopleService.PRINCIPAL_PREFIX + "import"))
+        assertThat(lookups.byExternalId("ext-unknown-" + UUID.randomUUID())).isEmpty();
+        assertThat(lookups.byExternalId(ImportPeopleService.PRINCIPAL_PREFIX + "import"))
                 .isEmpty();
     }
 
@@ -127,14 +131,29 @@ abstract class AbstractImportPeopleIT {
         users.save(second);
         user("ext-" + UUID.randomUUID(), "Synthetic Other", "other." + local + "@example.invalid");
 
-        assertThat(people.byEmail(local.toUpperCase(java.util.Locale.ROOT) + "@EXAMPLE.invalid"))
+        assertThat(lookups.byEmail(local.toUpperCase(java.util.Locale.ROOT) + "@EXAMPLE.invalid"))
                 .containsExactly(
                         new PersonMatch(first, "Synthetic Pat", false),
                         new PersonMatch(id(second), "Synthetic Pat Two", true));
-        assertThat(people.byEmail("nobody." + local + "@example.invalid")).isEmpty();
-        assertThat(people.byEmail("import@trailkeep.invalid"))
+        assertThat(lookups.byEmail("nobody." + local + "@example.invalid")).isEmpty();
+        assertThat(lookups.byEmail("import@trailkeep.invalid"))
                 .as("a principal's address")
                 .isEmpty();
+    }
+
+    @Test
+    void signedInListsEveryEnabledUserButNeverADisabledOneOrAPrincipal() {
+        String subject = "ext-" + UUID.randomUUID();
+        long enabled = user(subject, "Synthetic Relinked", "relinked@example.invalid");
+        AppUser disabled =
+                users.save(new AppUser("ext-" + UUID.randomUUID(), "Synthetic Gone", "gone@example.invalid", CREATED));
+        disabled.disable();
+        users.save(disabled);
+
+        assertThat(lookups.signedIn())
+                .contains(new SignedIn(enabled, "relinked@example.invalid", subject))
+                .extracting(SignedIn::userId)
+                .doesNotContain(id(disabled), IMPORTER_ID, LEGACY_APPROVAL_ID);
     }
 
     /** Global and team roles held by any principal, read from the tables (permissions drop a disabled user's roles). */

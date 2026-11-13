@@ -24,6 +24,7 @@ import io.trailkeep.shared.CaseStatus;
 import io.trailkeep.shared.DomainException;
 import io.trailkeep.shared.Sensitivity;
 import io.trailkeep.shared.config.AppProperties;
+import io.trailkeep.user.ImportPeopleDirectory;
 import io.trailkeep.user.ImportPeopleService;
 import io.trailkeep.user.TeamAdminService.TeamSummary;
 import io.trailkeep.user.UserDirectoryService;
@@ -117,6 +118,7 @@ class LoadCommand {
     private final ImportedHistoryService history;
     private final UserDirectoryService directory;
     private final ImportPeopleService people;
+    private final ImportPeopleDirectory peopleDirectory;
     private final ImportProperties properties;
     private final Environment environment;
     private final AppProperties app;
@@ -136,6 +138,7 @@ class LoadCommand {
             ImportedHistoryService history,
             UserDirectoryService directory,
             ImportPeopleService people,
+            ImportPeopleDirectory peopleDirectory,
             ImportProperties properties,
             Environment environment,
             AppProperties app,
@@ -152,6 +155,7 @@ class LoadCommand {
         this.history = history;
         this.directory = directory;
         this.people = people;
+        this.peopleDirectory = peopleDirectory;
         this.properties = properties;
         this.environment = environment;
         this.app = app;
@@ -233,7 +237,7 @@ class LoadCommand {
                 new Loaded(found.getId(), found.getSourceId(), hash),
                 new LoadRunLock(runs, transactions, clock, found.getId()),
                 new CaseImportService.ImportRun(found.getId(), approver),
-                importer(),
+                CaseComments.Author.importer(people.principals().importer(), directory),
                 properties.hashKeySpec(),
                 now,
                 new CaseRules(
@@ -244,7 +248,7 @@ class LoadCommand {
                         app.timezone()),
                 teams,
                 caseTypes,
-                new PeopleMatcher(people, caseImports, mapping, lookups.defaultOwners()),
+                new PeopleMatcher(peopleDirectory, caseImports, mapping, lookups.defaultOwners()),
                 new ChildLoads(
                         new CommentLoad(children),
                         new AttachmentLoad(children, attachmentImports, mapping, properties.contentArea(), maxBytes),
@@ -354,11 +358,6 @@ class LoadCommand {
             return CASE_REFUSED;
         }
         return null;
-    }
-
-    private CaseComments.Author importer() {
-        long importer = people.principals().importer();
-        return new CaseComments.Author(importer, directory.displayName(importer).orElse("Trailkeep import"));
     }
 
     private static ImportedCase imported(

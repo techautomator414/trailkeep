@@ -16,7 +16,7 @@ import io.trailkeep.importer.staging.StagedPerson;
 import io.trailkeep.importer.staging.StagedRow;
 import io.trailkeep.importer.staging.StagingStore;
 import io.trailkeep.shared.config.AppProperties;
-import io.trailkeep.user.ImportPeopleService;
+import io.trailkeep.user.ImportPeopleDirectory;
 import io.trailkeep.user.TeamAdminService.TeamSummary;
 import io.trailkeep.user.UserDirectoryService;
 import java.nio.file.Path;
@@ -82,7 +82,7 @@ class DryRunCommand {
     private final TransactionTemplate transactions;
     private final CaseImportService caseImports;
     private final UserDirectoryService directory;
-    private final ImportPeopleService people;
+    private final ImportPeopleDirectory people;
     private final ImportProperties properties;
     private final Environment environment;
     private final AppProperties app;
@@ -98,7 +98,7 @@ class DryRunCommand {
             TransactionTemplate transactions,
             CaseImportService caseImports,
             UserDirectoryService directory,
-            ImportPeopleService people,
+            ImportPeopleDirectory people,
             ImportProperties properties,
             Environment environment,
             AppProperties app,

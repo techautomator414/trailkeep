@@ -13,8 +13,8 @@ import io.trailkeep.importer.staging.StagedCase;
 import io.trailkeep.importer.staging.StagedPerson;
 import io.trailkeep.importer.staging.StagedValues;
 import io.trailkeep.importer.staging.StagingKey;
-import io.trailkeep.user.ImportPeopleService;
-import io.trailkeep.user.ImportPeopleService.PersonMatch;
+import io.trailkeep.user.ImportPeopleDirectory;
+import io.trailkeep.user.ImportPeopleDirectory.PersonMatch;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -35,7 +35,7 @@ class PeopleMatcherTest {
     private static final long SOUTH = 20;
     private static final long WEST = 30;
 
-    private final ImportPeopleService people = mock(ImportPeopleService.class);
+    private final ImportPeopleDirectory people = mock(ImportPeopleDirectory.class);
     private final CaseImportService cases = mock(CaseImportService.class);
 
     @BeforeEach

@@ -9,7 +9,7 @@ import io.trailkeep.casefile.CaseImportService;
 import io.trailkeep.importer.ImportIssue.Severity;
 import io.trailkeep.importer.ImportIssue.Subject;
 import io.trailkeep.importer.staging.StagedEvent;
-import io.trailkeep.user.ImportPeopleService.PersonMatch;
+import io.trailkeep.user.ImportPeopleDirectory.PersonMatch;
 import java.time.Instant;
 import java.util.Comparator;
 import java.util.List;

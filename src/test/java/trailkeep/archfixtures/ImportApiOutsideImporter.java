@@ -6,24 +6,28 @@ import io.trailkeep.audit.ImportedHistoryService;
 import io.trailkeep.casefile.CaseImportService;
 import io.trailkeep.closure.ClosureImportService;
 import io.trailkeep.document.AttachmentImportService;
+import io.trailkeep.user.ImportPeopleDirectory;
 
-/** Violation: the import-only APIs (design §8.1) are for the importer module alone. */
+/** Violation: the import-only APIs (design §8.1) and identity lookups are for the importer module alone. */
 class ImportApiOutsideImporter {
 
     private final AttachmentImportService attachments;
     private final ClosureImportService closures;
     private final CaseImportService cases;
     private final ImportedHistoryService history;
+    private final ImportPeopleDirectory people;
 
     ImportApiOutsideImporter(
             AttachmentImportService attachments,
             ClosureImportService closures,
             CaseImportService cases,
-            ImportedHistoryService history) {
+            ImportedHistoryService history,
+            ImportPeopleDirectory people) {
         this.attachments = attachments;
         this.closures = closures;
         this.cases = cases;
         this.history = history;
+        this.people = people;
     }
 
     AttachmentImportService attachments() {
@@ -40,5 +44,9 @@ class ImportApiOutsideImporter {
 
     ImportedHistoryService history() {
         return history;
+    }
+
+    ImportPeopleDirectory people() {
+        return people;
     }
 }

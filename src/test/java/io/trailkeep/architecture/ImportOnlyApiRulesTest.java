@@ -15,13 +15,15 @@ import io.trailkeep.audit.ImportedHistoryService;
 import io.trailkeep.casefile.CaseImportService;
 import io.trailkeep.closure.ClosureImportService;
 import io.trailkeep.document.AttachmentImportService;
+import io.trailkeep.user.ImportPeopleDirectory;
 import org.junit.jupiter.api.Test;
 
 /**
  * The import-only APIs relax rules for imports alone (docs/design/importer.md §8.1, R6), so only the {@code importer}
  * module may call them, besides the module that implements each (and only that one: {@code closure} may not call the
  * attachment API). One rule per API, checked together on the production classes and proven to fire on a planted
- * caller in {@code trailkeep.archfixtures}. Each later import-only API adds its line here.
+ * caller in {@code trailkeep.archfixtures}. Each later import-only API adds its line here, as does
+ * {@link ImportPeopleDirectory}, which relaxes no rule but reads every user's identity.
  */
 class ImportOnlyApiRulesTest {
 
@@ -29,7 +31,8 @@ class ImportOnlyApiRulesTest {
                     onlyTheImporterAnd("io.trailkeep.document..", AttachmentImportService.class))
             .and(onlyTheImporterAnd("io.trailkeep.closure..", ClosureImportService.class))
             .and(onlyTheImporterAnd("io.trailkeep.casefile..", CaseImportService.class))
-            .and(onlyTheImporterAnd("io.trailkeep.audit..", ImportedHistoryService.class));
+            .and(onlyTheImporterAnd("io.trailkeep.audit..", ImportedHistoryService.class))
+            .and(onlyTheImporterAnd("io.trailkeep.user..", ImportPeopleDirectory.class));
 
     private static ArchRule onlyTheImporterAnd(String module, Class<?> api) {
         return noClasses()
@@ -61,7 +64,7 @@ class ImportOnlyApiRulesTest {
                         detail -> assertThat(detail).contains("ImportApiOutsideImporter", "AttachmentImportService"))
                 .anySatisfy(detail -> assertThat(detail).contains("ImportApiOutsideImporter", "ClosureImportService"))
                 .anySatisfy(detail -> assertThat(detail).contains("ImportApiOutsideImporter", "CaseImportService"))
-                .anySatisfy(
-                        detail -> assertThat(detail).contains("ImportApiOutsideImporter", "ImportedHistoryService"));
+                .anySatisfy(detail -> assertThat(detail).contains("ImportApiOutsideImporter", "ImportedHistoryService"))
+                .anySatisfy(detail -> assertThat(detail).contains("ImportApiOutsideImporter", "ImportPeopleDirectory"));
     }
 }
