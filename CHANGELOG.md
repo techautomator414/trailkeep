@@ -947,6 +947,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   `user` module, which only the `importer` module may call (a fifth line in `ImportOnlyApiRulesTest`, proven on a
   planted caller). `ImportPeopleService` keeps only the two principals, which the import APIs of `casefile`, `closure`
   and `document` read. Behaviour is unchanged.
+- Security E2E sweeps over every mapped route (WP-28 part a), run on every PR against the real server after a dev-realm
+  sign-in. `RouteSweepIT` reads the routes from Spring MVC's handler mapping, so a new controller is covered without
+  editing it. Every mutating route, and `/logout`, refuses a request with no CSRF token or with another session's
+  token, with 403 and before any controller runs. Every route that names a case answers another team's case and an
+  unreadable restricted case exactly as it answers an absent number: 404 with the same body, for plain and htmx
+  requests. `ForwardedHeadersPrivatePeerIT` sends spoofed `X-Forwarded-For` and `X-Forwarded-Proto` from a container
+  on Docker's bridge network, a private address outside the router pattern, and the application keeps the real peer
+  and scheme.
 
 ### Documentation
 
