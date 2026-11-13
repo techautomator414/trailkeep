@@ -38,6 +38,9 @@ kube-linter lint deploy/
    **`APP_DB_APP_USER`**, **`APP_DB_PURGE_USER`** and **`APP_DB_IMPORT_USER`**: the existing database users that the
    vendor `R__grants.sql` grants to (runtime, retention purge and importer Job). The app does not start without them.
    The import user may stay locked until an import is run.
+   **`APP_DB_SCHEMA`**: the schema that owns the tables. Required on Oracle, where those three users own nothing and
+   every connection must default to the owner's schema (the application, the purge and the importer all read it from
+   `trailkeep-config`); on PostgreSQL it is the schema `search_path` points at, for example `public`.
 3. **NetworkPolicy targets** in `trailkeep-egress`: database, identity provider, SMTP relay and clamd. The base uses
    RFC 5737 documentation addresses.
 4. **Secrets.** Create them from the platform's secret store; the manifests only reference them. Each key is a file

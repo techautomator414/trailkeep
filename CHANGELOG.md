@@ -860,6 +860,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- `deploy/base`'s `trailkeep-config` now carries an `APP_DB_SCHEMA` placeholder (#204), which every runtime user on
+  Oracle needs since #178 (the web pods, the purge `CronJob` and the importer `Job` all read it from the ConfigMap);
+  the deploy README's overlay list names it, and `DatabaseSchemaConfigManifestTest` proves each workload receives it.
 - On a deployment where the application connects as a user that does not own the tables and names the owner in
   `app.db.schema` (BUILD_PLAN §8 rule 7, as on Oracle), every statement Hibernate does not write failed with
   ORA-00942 or ORA-02289: creating a case (the case-number sequence), posting a comment (the search text), uploading
