@@ -15,7 +15,8 @@ Reference manifests for OpenShift, usable on plain Kubernetes. They follow BUILD
 | `base/ingress-alternative.yaml` | Commented `Ingress` to use instead of `route.yaml` on plain Kubernetes. |
 | `overlays/external-scanning/` | Example overlay without ClamAV, for `APP_ATTACHMENTS_SCANNING=external` (see "Scanning mode"). |
 | `components/prometheus-rules/` | Optional Kustomize component with the `PrometheusRule` for the operational alerts (see "Alerts"). |
-| `jobs/importer-job.yaml` | One-off importer `Job`, applied by hand because applying a `Job` runs it. |
+| `jobs/importer/` | The importer `Job` and its `NetworkPolicy`, applied by hand because applying a `Job` runs it (see "Importer"). |
+| `jobs/importer-external-scanning/` | The same for `APP_ATTACHMENTS_SCANNING=external`. |
 
 Render and check locally:
 
@@ -42,10 +43,12 @@ kube-linter lint deploy/
 
    | Secret | Mounted by | Keys (added by the work packages that need them) |
    |---|---|---|
-   | `trailkeep-web` | web `Deployment`, importer `Job` | `spring.datasource.username`, `spring.datasource.password`, OIDC client secret, SMTP password, `app.audit.hmac-key` (Base64, ≥ 32 random bytes; the `prod` profile refuses to start without it) |
+   | `trailkeep-web` | web `Deployment`; the importer `Job` takes `app.audit.hmac-key` alone | `spring.datasource.username`, `spring.datasource.password`, OIDC client secret, SMTP password, `app.audit.hmac-key` (Base64, ≥ 32 random bytes; the `prod` profile refuses to start without it) |
    | `trailkeep-purge` | purge `CronJob` only | `spring.datasource.username`, `spring.datasource.password`: the `TRAILKEEP_PURGE` credential. Nothing else: the purge registers no OIDC client, and its `CASE_PURGED` audit rows hold counts only, so it needs neither the client secret nor `app.audit.hmac-key` |
+   | `trailkeep-import` | importer `Job` only | `spring.datasource.username`, `spring.datasource.password`: the `TRAILKEEP_IMPORT` credential; `import.source.password` for `validate-mapping` and `extract`. Nothing else: the importer registers no OIDC client and never sees the web application's credential |
+   | `trailkeep-import-hash-key` | importer `Job` only | `import.hash-key` (Base64, ≥ 32 random bytes, a different value from `app.audit.hmac-key`): keys the row and key hashes in staging, issues and the import ledger. Keep it for as long as later runs compare with the ledger; a new key makes every delta row look changed |
    | `clamav-tls` | ClamAV `Deployment` (TLS sidecar) only | `tls.crt`, `tls.key`: the sidecar's server certificate, naming the host in `APP_ATTACHMENTS_CLAMD_HOST` (the `clamav` Service by default); for example a cert-manager `Certificate` with `secretName: clamav-tls` (ADR-0012) |
-   | `clamav-ca` | web `Deployment`, importer `Job`, purge `CronJob` | `ca.crt` only: the CA that issued `clamav-tls`, loaded as the `clamd` SSL bundle; never the key |
+   | `clamav-ca` | web `Deployment`, importer `Job` (clamd mode), purge `CronJob` | `ca.crt` only: the CA that issued `clamav-tls`, loaded as the `clamd` SSL bundle; never the key |
 
 5. **Scanning mode.** See below; the default needs nothing.
 6. **Purge schedule.** Set `suspend: false` on `trailkeep-purge` once retention is enabled. Each run tombstones the archived cases whose `PURGE_AFTER` has passed and that are not on legal hold (comments, attachments, search text, update and closure requests and their mail deleted; description and subject cleared; audit trail, alert ledger and legal hold history kept), deletes report runs older than `APP_RETENTION_REPORT_RUNS` (default 400 days) with the mail that names them, logs counts only and exits.
@@ -71,9 +74,41 @@ its patches. It sets `APP_ATTACHMENTS_SCANNING: external` and removes:
 - the `clamav-ca` volume and mount from the web `Deployment` and the purge `CronJob`;
 - the ClamAV egress rule from `trailkeep-egress`.
 
-The `clamav-tls` and `clamav-ca` Secrets are then not created. For the importer `Job`, which is applied by hand,
-delete its `clamav-ca` volume and volume mount. Make sure every path into the application passes your scanner: a
+The `clamav-tls` and `clamav-ca` Secrets are then not created. For the importer, apply
+`jobs/importer-external-scanning` instead of `jobs/importer`. Make sure every path into the application passes your scanner: a
 file that bypasses it is stored unscanned and can be downloaded.
+
+## Importer
+
+The importer (`docs/design/importer.md`) runs one command for one run per `Job` run, as the `TRAILKEEP_IMPORT`
+database user, with the same image and the `prod,importer` profiles. Run requests and sign-offs are made on the Import
+runs screen; the `Job` only carries them out.
+
+1. **Claims.** The operator prepares three `PersistentVolumeClaim`s; the manifests only reference them, so deleting
+   the `Job` never deletes their data:
+   - `trailkeep-import-data`, mounted read-only: the reviewed mapping file (`IMPORT_MAPPING`), lookups, extract files
+     and attachment folders;
+   - `trailkeep-import-content`, writable: each run's content area, the attachment bytes a content query fetched at
+     extract. It holds legacy content, so it must be encrypted at rest; `purge-staging` and the staging TTL delete each
+     run's folder. Size it for the largest run's source-query attachments;
+   - `trailkeep-import-reports`, writable: each run's report files under `<run id>/`, counts, codes, keyed hashes and
+     Trailkeep ids only. They outlive the staging, for the approver.
+
+   OpenShift's `restricted-v2` SCC assigns an `fsGroup`, which makes the writable claims writable; on plain
+   Kubernetes set `fsGroup` in your overlay. Each claim's root is used as it is: it must be a directory, never a
+   symbolic link.
+2. **Secrets.** `trailkeep-import` and `trailkeep-import-hash-key` (table above), and `app.audit.hmac-key` from
+   `trailkeep-web`, all projected into `/etc/trailkeep/secrets/`.
+3. **Command.** Set `IMPORT_COMMAND` and `IMPORT_RUN` in the `Job`, apply `jobs/importer` (or
+   `jobs/importer-external-scanning`), and read the outcome in the pod log and on the Import runs screen. A finished
+   `Job` cannot be changed: delete it before the next command.
+4. **Network.** `trailkeep-importer` admits no ingress and allows egress only to DNS, the database and clamd;
+   `trailkeep-egress` excludes the importer pod, so it cannot reach the identity provider or the SMTP relay. Only
+   `validate-mapping` and `extract` read the source: for those two commands add the pod label
+   `trailkeep.io/source-egress: "true"`, which admits the pod to `trailkeep-importer-source`. Replace the
+   placeholder addresses as in `trailkeep-egress`.
+5. **Afterwards.** Lock `TRAILKEEP_IMPORT` again when the import is over. Keep `trailkeep-import-hash-key` while any
+   delta run may still compare with the ledger.
 
 ## Runtime properties
 

@@ -1,0 +1,45 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Charlie Genova and contributors
+# The importer Job for organizations that scan upstream (ADR-0013), mirroring deploy/overlays/external-scanning: no
+# clamav-ca volume, no clamd stream limit and no egress rule to ClamAV. The importer reads the mode from
+# trailkeep-config (APP_ATTACHMENTS_SCANNING=external, set by that overlay); dry-run records it, the sign-off approves
+# it, and load refuses to start if it differs (design §4.3, R1). Imported files are stored as NOT_SCANNED, never as
+# clean.
+#   kubectl -n <namespace> apply -k deploy/jobs/importer-external-scanning
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../importer
+
+patches:
+  - patch: |-
+      apiVersion: batch/v1
+      kind: Job
+      metadata:
+        name: trailkeep-importer
+      spec:
+        template:
+          spec:
+            containers:
+              - name: importer
+                env:
+                  - name: IMPORT_ATTACHMENTS_CLAMDSTREAMMAX
+                    $patch: delete
+                volumeMounts:
+                  - mountPath: /etc/trailkeep/clamav-ca
+                    $patch: delete
+            volumes:
+              - name: clamav-ca
+                $patch: delete
+  # The egress rule to ClamAV is the third in trailkeep-importer. The test op fails the build, rather than remove
+  # another rule, if the file ever reorders them.
+  - target:
+      kind: NetworkPolicy
+      name: trailkeep-importer
+    patch: |-
+      - op: test
+        path: /spec/egress/2/to/0/podSelector/matchLabels/app.kubernetes.io~1name
+        value: clamav
+      - op: remove
+        path: /spec/egress/2

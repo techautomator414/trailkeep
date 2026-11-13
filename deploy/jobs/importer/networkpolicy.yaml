@@ -1,0 +1,86 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Charlie Genova and contributors
+# The importer pod's own network (docs/design/importer.md §10): no ingress, and egress only to DNS, the Trailkeep
+# database, clamd's TLS sidecar and, for validate-mapping and extract alone, the source database. The base's
+# trailkeep-egress (identity provider, SMTP relay) excludes this pod. Addresses use RFC 5737 documentation ranges as
+# PLACEHOLDERS; the deploying organization replaces them, with the same values as in trailkeep-egress for the database.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: trailkeep-importer
+  labels:
+    app.kubernetes.io/name: trailkeep
+    app.kubernetes.io/part-of: trailkeep
+    app.kubernetes.io/component: importer
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: trailkeep
+      app.kubernetes.io/component: importer
+  # Ingress listed with no rule: nothing may connect to the pod, even where the base's default-deny is not applied.
+  policyTypes: [Ingress, Egress]
+  egress:
+    # Cluster DNS.
+    - to:
+        - namespaceSelector: {}
+          podSelector:
+            matchLabels:
+              dns.operator.openshift.io/daemonset-dns: default
+      ports:
+        - port: 5353
+          protocol: UDP
+        - port: 5353
+          protocol: TCP
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+    # The Trailkeep database. PLACEHOLDER address; Oracle tcps 2484 (or 1521), PostgreSQL 5432.
+    - to:
+        - ipBlock:
+            cidr: 192.0.2.10/32
+      ports:
+        - port: 2484
+          protocol: TCP
+        - port: 5432
+          protocol: TCP
+    # The ClamAV Service (clamav.yaml): TLS to its sidecar only (ADR-0012). importer-external-scanning removes it.
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: clamav
+      ports:
+        - port: 3311
+          protocol: TCP
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: trailkeep-importer-source
+  labels:
+    app.kubernetes.io/name: trailkeep
+    app.kubernetes.io/part-of: trailkeep
+    app.kubernetes.io/component: importer
+spec:
+  # Only an importer pod the operator labelled for validate-mapping or extract (importer-job.yaml).
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: trailkeep
+      app.kubernetes.io/component: importer
+      trailkeep.io/source-egress: "true"
+  policyTypes: [Egress]
+  egress:
+    # The source database, over TLS with certificate and host verification (§4.1). PLACEHOLDER address; keep only the
+    # source's port: PostgreSQL 5432, Oracle tcps 2484 (or 1521), SQL Server 1433.
+    - to:
+        - ipBlock:
+            cidr: 192.0.2.40/32
+      ports:
+        - port: 5432
+          protocol: TCP
+        - port: 2484
+          protocol: TCP
+        - port: 1521
+          protocol: TCP
+        - port: 1433
+          protocol: TCP
