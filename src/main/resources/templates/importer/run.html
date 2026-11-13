@@ -3,7 +3,9 @@
 <!-- One import run (WP-26 part s): its facts, its issues per class (fatal first) and the figures of its last completed
      dry run (IMPORT_RUN_SUMMARY, design §3 R8): codes, times and counts only, teams by name, times in app.timezone.
      Then the sign-off (part s2): offered to a Compliance Admin only for a signable run, one checkbox per WARNING class
-     and the recorded scanning mode; 422 keeps the ticks and summarizes, 409 offers Reload instead of the form. -->
+     and the recorded scanning mode; 422 keeps the ticks and summarizes, 409 offers Reload instead of the form.
+     The closure worklist (part y3) lists the CLOSED_IN_SOURCE cases the viewer may read, by number and title, linked,
+     20 to a page; the others on the page are only counted. -->
 <html lang="en" xmlns:th="http://www.thymeleaf.org" th:replace="~{web/layout :: page(~{::title}, ~{::main})}">
 <head><title th:text="#{tk.imports.run(${line.id})} + ' · ' + ${@branding.name()}">Import run 12</title></head>
 <body>
@@ -56,6 +58,38 @@
     </tr>
     </tbody>
   </table>
+  <section th:if="${worklist.total > 0}" aria-labelledby="tk-worklist-title">
+    <h2 id="tk-worklist-title" th:text="#{tk.imports.worklist}">Closure worklist</h2>
+    <p th:text="#{tk.imports.worklist.text(${worklist.total})}">2 cases are open here but closed in the source.</p>
+    <p th:if="${worklist.pages > 1}" th:text="#{tk.list.page(${worklist.page},${worklist.pages})}">Page 1 of 2.</p>
+    <table th:unless="${worklist.rows.isEmpty()}" class="table">
+      <caption th:text="#{tk.imports.worklist.caption}">Cases closed in the source, by case number</caption>
+      <thead><tr>
+        <th scope="col" th:text="#{tk.list.number}">Case number</th>
+        <th scope="col" th:text="#{tk.list.titlecol}">Title</th>
+      </tr></thead>
+      <tbody>
+      <tr th:each="c : ${worklist.rows}">
+        <th scope="row"><a th:href="@{/cases/{n}(n=${c.number})}" th:text="${c.number}">2026-000012</a></th>
+        <td th:text="${c.title}">Synthetic case</td>
+      </tr>
+      </tbody>
+    </table>
+    <p th:if="${unlisted > 0}" th:text="#{tk.imports.worklist.unlisted(${unlisted})}">1 case on this page is not
+      listed because you may not read it.</p>
+    <nav th:if="${worklist.pages > 1}" th:aria-label="#{tk.imports.worklist.pages}">
+      <ul class="pagination">
+        <li class="page-item" th:if="${worklist.page > 1}">
+          <a class="page-link" rel="prev"
+             th:href="@{/admin/import-runs/{id}(id=${line.id},worklist=${worklist.page - 1})}"
+             th:text="#{tk.list.previous}">Previous page</a></li>
+        <li class="page-item" th:if="${worklist.page < worklist.pages}">
+          <a class="page-link" rel="next"
+             th:href="@{/admin/import-runs/{id}(id=${line.id},worklist=${worklist.page + 1})}"
+             th:text="#{tk.list.next}">Next page</a></li>
+      </ul>
+    </nav>
+  </section>
   <h2 th:text="#{tk.imports.figures}">Dry-run figures</h2>
   <p th:if="${figures.isEmpty()}" th:text="#{tk.imports.figures.none}">No dry run has completed for this run.</p>
   <p th:if="${r.forecastDay != null}" th:text="#{tk.imports.forecast(${#temporals.format(r.forecastDay,

@@ -2,7 +2,9 @@
 // Copyright 2026 Charlie Genova and contributors
 package io.trailkeep.web;
 
+import io.trailkeep.casefile.CaseService;
 import io.trailkeep.casefile.CaseService.Actor;
+import io.trailkeep.casefile.CaseService.CaseRef;
 import io.trailkeep.importer.ImportRunException;
 import io.trailkeep.importer.ImportRunService;
 import io.trailkeep.importer.ImportRunService.Figure;
@@ -40,7 +42,10 @@ import org.springframework.web.bind.annotation.RequestParam;
  * The Import runs screen (WP-26 part s, design §3 steps 0 and 4, BUILD_PLAN §3.1): System Admins and Compliance Admins
  * see every run, newest first, and each run with its issues per class and the figures of its last completed dry run
  * ({@code IMPORT_RUN_SUMMARY}, R8), teams by name and times in {@code app.timezone}. {@link ImportRunService} runs
- * first on every request, so anyone else gets 403, and then an unknown run 404. It shows codes, times and counts only.
+ * first on every request, so anyone else gets 403, and then an unknown run 404. It shows codes, times and counts only,
+ * and the run's closure worklist (WP-26 part y3, design §3.1): the cases its dry run found closed in the source, by
+ * number and title, linked, 20 to a page, resolved under the viewer's own case scope, so a case they may not read is
+ * only counted, never named.
  *
  * <p>Both may request a run naming a source id ({@code POST /admin/import-runs}, from a native dialog on the list or
  * {@code /admin/import-runs/new}, which a malformed id re-renders with 422). A Compliance Admin may sign off a run
@@ -78,12 +83,19 @@ class ImportRunController {
             long value) {}
 
     private final ImportRunService imports;
+    private final CaseService cases;
     private final UserDirectoryService directory;
     private final CasePage page;
     private final ZoneId zone;
 
-    ImportRunController(ImportRunService imports, UserDirectoryService directory, CasePage page, AppProperties app) {
+    ImportRunController(
+            ImportRunService imports,
+            CaseService cases,
+            UserDirectoryService directory,
+            CasePage page,
+            AppProperties app) {
         this.imports = imports;
+        this.cases = cases;
         this.directory = directory;
         this.page = page;
         this.zone = app.timezone();
@@ -106,8 +118,12 @@ class ImportRunController {
     }
 
     @GetMapping("/{id}")
-    String show(@AuthenticationPrincipal TrailkeepOidcUser principal, @PathVariable String id, Model model) {
-        return render(page.actor(principal), number(id, -1), List.of(), false, false, model);
+    String show(
+            @AuthenticationPrincipal TrailkeepOidcUser principal,
+            @PathVariable String id,
+            @RequestParam(defaultValue = "1") String worklist,
+            Model model) {
+        return render(page.actor(principal), number(id, -1), (int) number(worklist, 1), List.of(), false, false, model);
     }
 
     @GetMapping("/new")
@@ -152,14 +168,29 @@ class ImportRunController {
                 throw refused;
             }
             response.setStatus((conflict ? HttpStatus.CONFLICT : HttpStatus.UNPROCESSABLE_CONTENT).value());
-            return render(actor, run, ticked, conflict, !conflict, model);
+            return render(actor, run, 1, ticked, conflict, !conflict, model);
         }
         return "redirect:/admin/import-runs/" + run;
     }
 
     private String render(
-            Actor actor, long id, List<String> ticked, boolean conflict, boolean unacknowledged, Model model) {
+            Actor actor,
+            long id,
+            int worklist,
+            List<String> ticked,
+            boolean conflict,
+            boolean unacknowledged,
+            Model model) {
         RunDetail run = imports.run(actor, id);
+        // Resolved under the viewer's own scope: a case they may not read is left out, only counted.
+        Paged<Long> closed = imports.closureWorklist(actor, id, worklist);
+        Map<Long, CaseRef> readable = cases.refs(actor, closed.rows());
+        List<CaseRef> listed = closed.rows().stream()
+                .map(readable::get)
+                .filter(Objects::nonNull)
+                .toList();
+        model.addAttribute("worklist", new Paged<>(closed.page(), closed.pages(), closed.total(), listed));
+        model.addAttribute("unlisted", closed.rows().size() - listed.size());
         List<Long> people = new ArrayList<>(List.of(run.requestedBy()));
         if (run.approvedBy() != null) {
             people.add(run.approvedBy());

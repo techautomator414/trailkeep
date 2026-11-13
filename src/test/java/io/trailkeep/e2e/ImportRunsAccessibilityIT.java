@@ -10,6 +10,9 @@ import com.microsoft.playwright.Playwright;
 import com.microsoft.playwright.PlaywrightException;
 import io.trailkeep.e2e.pages.ShellPage;
 import io.trailkeep.e2e.pages.SignInPage;
+import io.trailkeep.shared.CaseNumber;
+import io.trailkeep.shared.CaseStatus;
+import io.trailkeep.shared.Sensitivity;
 import io.trailkeep.testsupport.CaseSeed;
 import io.trailkeep.testsupport.KeycloakDevRealm;
 import io.trailkeep.testsupport.PostgresTestcontainersConfiguration;
@@ -40,7 +43,8 @@ import org.springframework.test.context.DynamicPropertySource;
  * list, which says there are none (the test first removes any run left in the shared database); with two runs, Tab
  * and Enter on "Open import run" open the latest, which has no dry run yet, Tab and Enter on "All import runs" go back
  * to the list, and Tab and Enter on the other run open it with its issues and figures. axe finds 0 violations on the
- * empty list, the list, and both run pages, with no CSP problem.
+ * empty list, the list, and both run pages, with no CSP problem. The dry-run run's page has its closure worklist (part
+ * y3), whose case number link Tab reaches.
  *
  * <p>The run request and the sign-off (part s2): Tab and Enter on "Request an import run" open the native dialog with
  * focus in the source id; a malformed id comes back as the request page with the error summarized, and a corrected one
@@ -68,6 +72,7 @@ class ImportRunsAccessibilityIT {
     private final List<String> consoleProblems = new CopyOnWriteArrayList<>();
     private Page page;
     private long requester;
+    private long team;
 
     @Autowired
     private JdbcTemplate jdbc;
@@ -124,6 +129,17 @@ class ImportRunsAccessibilityIT {
             jdbc.update("DELETE FROM " + table + " WHERE RUN_ID IN (?, ?)", DRY_RUN, VALIDATED);
         }
         jdbc.update("DELETE FROM IMPORT_RUN WHERE ID IN (?, ?) OR SOURCE_ID = 'legacy-k1'", DRY_RUN, VALIDATED);
+        if (team != 0) {
+            List<Long> types = jdbc.queryForList(
+                    "SELECT DISTINCT CASE_TYPE_ID FROM CASE_RECORD WHERE TEAM_ID = ?", Long.class, team);
+            jdbc.update("DELETE FROM CASE_RECORD WHERE TEAM_ID = ?", team);
+            for (long type : types) {
+                Long policy = jdbc.queryForObject("SELECT SLA_POLICY_ID FROM CASE_TYPE WHERE ID = ?", Long.class, type);
+                jdbc.update("DELETE FROM CASE_TYPE WHERE ID = ?", type);
+                jdbc.update("DELETE FROM SLA_POLICY WHERE ID = ?", policy);
+            }
+            jdbc.update("DELETE FROM TEAM WHERE ID = ?", team);
+        }
         jdbc.update("DELETE FROM APP_USER WHERE ID = ?", requester);
     }
 
@@ -150,6 +166,7 @@ class ImportRunsAccessibilityIT {
         assertThat(page.textContent("main")).contains("No import has been run.");
 
         seed();
+        final CaseNumber closed = closedInSource();
         follow("/admin/system", "Open import run " + VALIDATED, "/admin/import-runs/" + VALIDATED);
         assertClean("Import run " + VALIDATED);
         assertThat(page.textContent("main")).contains("No issues.", "No dry run has completed for this run.");
@@ -167,8 +184,16 @@ class ImportRunsAccessibilityIT {
         page.waitForURL(url -> url.endsWith("/admin/import-runs/" + DRY_RUN));
         assertClean("Import run " + DRY_RUN);
         assertThat(page.locator("table caption").allTextContents())
-                .containsExactly("Issues per class, fatal first", "Figures of the last completed dry run, by figure");
+                .containsExactly(
+                        "Issues per class, fatal first",
+                        "Cases closed in the source, by case number",
+                        "Figures of the last completed dry run, by figure");
         assertThat(page.textContent("main")).contains("NOT_SCANNED", "External: attachments are stored as not scanned");
+        assertThat(page.textContent("#tk-worklist-title")).isEqualTo("Closure worklist");
+        page.locator("#main").focus();
+        tabTo(closed.toString(), 2);
+        assertThat(page.evaluate("() => document.activeElement.getAttribute('href')"))
+                .isEqualTo("/cases/" + closed);
     }
 
     @Test
@@ -275,6 +300,20 @@ class ImportRunsAccessibilityIT {
                         + " VALUES (?, ?, 'CASES', 'OPEN', 3)",
                 DRY_RUN,
                 DRY_RUN);
+    }
+
+    /** A committed open case of a new team, a {@code CLOSED_IN_SOURCE} issue of the dry-run run (WP-26 part y3). */
+    private CaseNumber closedInSource() {
+        CaseSeed seed = new CaseSeed(jdbc);
+        team = seed.team();
+        CaseNumber number = seed.caseRow(team, requester, Sensitivity.STANDARD, CaseStatus.OPEN);
+        jdbc.update(
+                "INSERT INTO IMPORT_ISSUE (ID, RUN_ID, STAGE, ENTITY, SEVERITY, CODE, DETAIL, CREATED_AT)"
+                        + " VALUES (?, ?, 'DRY_RUN', 'CASE', 'WARNING', 'CLOSED_IN_SOURCE', ?, CURRENT_TIMESTAMP)",
+                DRY_RUN + 2,
+                DRY_RUN,
+                seed.caseId(number));
+        return number;
     }
 
     private void run(long id, String status, Instant at) {

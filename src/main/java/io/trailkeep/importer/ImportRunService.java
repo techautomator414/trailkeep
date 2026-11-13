@@ -161,6 +161,20 @@ public interface ImportRunService {
     RunDetail run(Actor actor, long id);
 
     /**
+     * One page of a run's closure worklist (WP-26 part y3, design §3.1): the Trailkeep cases its last dry run found
+     * open here and closed in the source ({@code CLOSED_IN_SOURCE}), which their owners close through the normal
+     * closure flow. Ids only: the caller resolves them under the viewer's own scope, so a case the viewer may not read
+     * is never named.
+     *
+     * @param actor who asks: a System Admin or a Compliance Admin
+     * @param id the run's id
+     * @param page the page, from 1, 20 to a page; a page past the last shows the last
+     * @return the case ids, in id order; empty for an unknown run or one with none
+     * @throws ImportRunException {@code FORBIDDEN} for anyone else
+     */
+    Paged<Long> closureWorklist(Actor actor, long id, int page);
+
+    /**
      * Refuses anyone who may not use the Import runs screen.
      *
      * @param actor who asks

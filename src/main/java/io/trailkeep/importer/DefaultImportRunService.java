@@ -42,6 +42,13 @@ class DefaultImportRunService implements ImportRunService {
     private static final String NEWEST_FIRST = COLUMNS + " ORDER BY r.requestedAt DESC, r.id DESC";
     private static final int PAGE_SIZE = 20;
 
+    /** A run's closure worklist: its dry run's {@code CLOSED_IN_SOURCE} issues, each carrying a Trailkeep case id. */
+    private static final String WORKLIST = " FROM ImportIssue i WHERE i.runId = :id AND i.stage = :stage"
+            + " AND i.code = 'CLOSED_IN_SOURCE' AND i.detail IS NOT NULL";
+
+    private static final String WORKLIST_COUNT = "SELECT count(i)" + WORKLIST;
+    private static final String WORKLIST_IDS = "SELECT i.detail" + WORKLIST + " ORDER BY i.detail";
+
     /** The statuses from which the loaded count means something. */
     private static final Set<ImportRun.Status> LOADING = Set.of(
             ImportRun.Status.LOADING, ImportRun.Status.LOADED, ImportRun.Status.RECONCILED, ImportRun.Status.FAILED);
@@ -168,6 +175,26 @@ class DefaultImportRunService implements ImportRunService {
                 acknowledged == null ? List.of() : List.of(acknowledged.split(",")),
                 run.getVersion(),
                 run.awaitsSignOff() && !fatal);
+    }
+
+    @Override
+    public Paged<Long> closureWorklist(Actor actor, long id, int page) {
+        allowed(actor);
+        return Paged.of(
+                page,
+                PAGE_SIZE,
+                () -> entityManager
+                        .createQuery(WORKLIST_COUNT, Long.class)
+                        .setParameter("id", id)
+                        .setParameter("stage", ImportIssue.Stage.DRY_RUN)
+                        .getSingleResult(),
+                offset -> entityManager
+                        .createQuery(WORKLIST_IDS, Long.class)
+                        .setParameter("id", id)
+                        .setParameter("stage", ImportIssue.Stage.DRY_RUN)
+                        .setFirstResult(offset)
+                        .setMaxResults(PAGE_SIZE)
+                        .getResultList());
     }
 
     @Override

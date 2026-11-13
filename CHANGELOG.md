@@ -215,6 +215,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   any other change, and each new child of it as `PARENT_ARCHIVED` or `PARENT_PURGED`, with the case id. The run's
   loaded count stays the cases it created; the log line adds the cases given new children. `CaseImportService` gains
   `existing(ids)`, the ids, numbers and archive or purge state of cases by id. No migration and no grant changes.
+- The closure worklist on an import run's page (WP-26 part y3, docs/design/importer.md §3.1): the cases the run's dry
+  run found open in Trailkeep and closed in the source (`CLOSED_IN_SOURCE`), by case number and title, each linked to
+  its case, 20 to a page. Nothing is closed automatically; each owner closes the case through the normal closure flow.
+  The case ids are resolved under the viewer's own case scope, so a case the viewer may not read is only counted on
+  the page, never named. `ImportRunService` gains `closureWorklist(actor, id, page)`. No migration.
 - The Oracle source (WP-26 part o, docs/design/importer.md §4.1): a `kind: jdbc` Oracle mapping is test-fetched by
   `validate-mapping` and extracted in one `SET TRANSACTION READ ONLY` transaction, with the session in UTC and ISO
   date, timestamp and number formats; `DATE` and `TIMESTAMP` read as local date-times, `TIMESTAMP WITH TIME ZONE` with

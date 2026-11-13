@@ -6,6 +6,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import io.trailkeep.shared.CaseNumber;
+import io.trailkeep.shared.CaseStatus;
+import io.trailkeep.shared.Sensitivity;
+import io.trailkeep.testsupport.CaseSeed;
 import io.trailkeep.testsupport.PostgresTestcontainersConfiguration;
 import io.trailkeep.testsupport.RequiresDocker;
 import io.trailkeep.testsupport.WithAppUser;
@@ -16,6 +20,7 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.List;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
@@ -35,7 +40,8 @@ import org.springframework.transaction.annotation.Transactional;
  * mode, its issues per class (fatal first) and its dry-run figures with teams by name and the forecast day as a date,
  * and says so when there are none; a signed-off run shows who signed it off. It never shows the source id or a key
  * hash. An unknown or malformed run is 404; anyone else gets 403 on both pages, and anonymous requests go to the
- * identity provider. Rows are rolled back after each test.
+ * identity provider. The closure worklist (WP-26 part y3) links the run's CLOSED_IN_SOURCE cases 20 to a page, and
+ * only counts those the viewer may not read. Rows are rolled back after each test.
  */
 // "IT" is the Failsafe suffix Part B mandates for integration tests, not an abbreviation.
 @SuppressWarnings("checkstyle:AbbreviationAsWordInName")
@@ -146,6 +152,43 @@ class ImportRunControllerIT {
 
     @Test
     @WithAppUser(id = COMPLIANCE_ADMIN, globalRole = GlobalRole.COMPLIANCE_ADMIN)
+    void closureWorklistLinksTheCasesClosedInTheSourceTwentyToAPage() throws Exception {
+        run(RUN, "DRY_RUN", requested);
+        List<CaseNumber> numbers = closedInSource(21);
+
+        String first = html("/admin/import-runs/" + RUN + "?worklist=x");
+        String second = html("/admin/import-runs/" + RUN + "?worklist=2");
+
+        assertThat(first)
+                .contains("<h2 id=\"tk-worklist-title\">Closure worklist</h2>")
+                .contains("<p>21 cases are open here but closed in the source. Nothing was closed automatically: each"
+                        + " owner closes the case through the normal closure flow.</p>")
+                .contains("<p>Page 1 of 2.</p>", "<caption>Cases closed in the source, by case number</caption>")
+                .contains("<th scope=\"row\"><a href=\"/cases/" + numbers.getFirst() + "\">" + numbers.getFirst()
+                        + "</a></th><td>Seed case " + numbers.getFirst().sequence() + "</td>")
+                .contains("href=\"/admin/import-runs/" + RUN + "?worklist=2\">Next page</a>")
+                .doesNotContain(numbers.getLast().toString(), "not listed");
+        assertThat(second)
+                .contains("<p>Page 2 of 2.</p>", "/cases/" + numbers.getLast())
+                .contains("href=\"/admin/import-runs/" + RUN + "?worklist=1\">Previous page</a>")
+                .doesNotContain("/cases/" + numbers.getFirst() + "\"");
+    }
+
+    @Test
+    @WithAppUser(id = SYSTEM_ADMIN, globalRole = GlobalRole.SYSTEM_ADMIN)
+    void worklistCasesTheViewerMayNotReadAreOnlyCounted() throws Exception {
+        run(RUN, "DRY_RUN", requested);
+        List<CaseNumber> numbers = closedInSource(2);
+
+        assertThat(html("/admin/import-runs/" + RUN))
+                .contains("<p>2 cases are open here but closed in the source.")
+                .contains("<p>2 cases on this page are not listed because you may not read them.</p>")
+                .doesNotContain(numbers.getFirst().toString(), numbers.getLast().toString(), "Seed case")
+                .doesNotContain("<caption>Cases closed in the source");
+    }
+
+    @Test
+    @WithAppUser(id = COMPLIANCE_ADMIN, globalRole = GlobalRole.COMPLIANCE_ADMIN)
     void runWithoutDryRunSaysSo() throws Exception {
         run(RUN, "VALIDATED", requested);
 
@@ -243,6 +286,25 @@ class ImportRunControllerIT {
                 "cd".repeat(31) + id + id,
                 severity,
                 code);
+    }
+
+    /** Open cases of the team, each a {@code CLOSED_IN_SOURCE} issue of the run carrying its id, in id order. */
+    private List<CaseNumber> closedInSource(int count) {
+        CaseSeed seed = new CaseSeed(jdbc);
+        List<CaseNumber> numbers = new ArrayList<>();
+        for (int i = 0; i < count; i++) {
+            CaseNumber number = seed.caseRow(TEAM, COMPLIANCE_ADMIN, Sensitivity.STANDARD, CaseStatus.OPEN);
+            numbers.add(number);
+            jdbc.update(
+                    "INSERT INTO IMPORT_ISSUE (ID, RUN_ID, STAGE, ENTITY, KEY_HASH, SEVERITY, CODE, DETAIL, CREATED_AT)"
+                            + " VALUES (?, ?, 'DRY_RUN', 'CASE', ?, 'WARNING', 'CLOSED_IN_SOURCE', ?,"
+                            + " CURRENT_TIMESTAMP)",
+                    988_400L + i,
+                    RUN,
+                    "%064x".formatted(i),
+                    seed.caseId(number));
+        }
+        return numbers;
     }
 
     private void figure(long id, String metric, @Nullable String dimension, long value) {

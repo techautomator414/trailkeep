@@ -37,7 +37,8 @@ import org.springframework.transaction.annotation.Transactional;
  * codes, and its loaded count only once loading has started; a signed-off dry run reads as approved. For the Import
  * runs screen (WP-26 part s1): runs come 20 to a page, newest first, and one run with its issues per class (fatal
  * first) and its figures (per team with the team id, without the issue counts, the forecast day as a date); only System
- * and Compliance Admins may read them, and an unknown run is not found. The tables are emptied and filled inside the
+ * and Compliance Admins may read them, and an unknown run is not found. A run's closure worklist (WP-26 part y3) is the
+ * case ids of its dry run's {@code CLOSED_IN_SOURCE} issues, 20 to a page. The tables are emptied and filled inside the
  * test's transaction, which is rolled back.
  */
 // "IT" is the Failsafe suffix Part B mandates for integration tests, not an abbreviation.
@@ -182,6 +183,33 @@ abstract class AbstractImportRunServiceIT {
                 .isEmpty();
     }
 
+    @Test
+    void closureWorklistIsTheDryRunsClosedInSourceCaseIdsTwentyToAPage() {
+        run(989_006L, "IMPORT", "DRY_RUN", T, 0);
+        for (int i = 0; i < 21; i++) {
+            closure(10 + i, "DRY_RUN", "CLOSED_IN_SOURCE", 990_040L - i);
+        }
+        closure(40, "DRY_RUN", "CHANGED_AFTER_IMPORT", 990_001L);
+        closure(41, "LOAD", "CLOSED_IN_SOURCE", 990_002L);
+        Actor manager = new Actor(
+                new UserPermissions(requester, false, Set.of(), Map.of(1L, TeamRole.MANAGER)), "Synthetic Manager");
+
+        Paged<Long> first = imports.closureWorklist(admin(GlobalRole.COMPLIANCE_ADMIN), 989_006L, 1);
+        Paged<Long> past = imports.closureWorklist(admin(GlobalRole.SYSTEM_ADMIN), 989_006L, 9);
+
+        assertThat(first.total()).isEqualTo(21);
+        assertThat(first.pages()).isEqualTo(2);
+        assertThat(first.rows()).hasSize(20).startsWith(990_020L, 990_021L).endsWith(990_039L);
+        assertThat(past.page()).isEqualTo(2);
+        assertThat(past.rows()).containsExactly(990_040L);
+        assertThat(imports.closureWorklist(admin(GlobalRole.SYSTEM_ADMIN), 989_999L, 1)
+                        .total())
+                .isZero();
+        assertThatThrownBy(() -> imports.closureWorklist(manager, 989_006L, 1))
+                .isInstanceOfSatisfying(
+                        ImportRunException.class, e -> assertThat(e.kind()).isEqualTo(DomainException.Kind.FORBIDDEN));
+    }
+
     private Actor admin(GlobalRole role) {
         return new Actor(new UserPermissions(requester, false, Set.of(role), Map.of()), "Synthetic Admin");
     }
@@ -196,6 +224,19 @@ abstract class AbstractImportRunServiceIT {
                 "MAPPING".equals(entity) ? null : "cd".repeat(31) + id + id,
                 severity,
                 code,
+                Timestamp.from(T));
+    }
+
+    /** An issue of run 989006 about one case, carrying its Trailkeep id. */
+    private void closure(long id, String stage, String code, long caseId) {
+        jdbc.update(
+                "INSERT INTO IMPORT_ISSUE (ID, RUN_ID, STAGE, ENTITY, KEY_HASH, SEVERITY, CODE, DETAIL, CREATED_AT)"
+                        + " VALUES (?, 989006, ?, 'CASE', ?, 'WARNING', ?, ?, ?)",
+                989_000L + id,
+                stage,
+                "%064x".formatted(id),
+                code,
+                caseId,
                 Timestamp.from(T));
     }
 
