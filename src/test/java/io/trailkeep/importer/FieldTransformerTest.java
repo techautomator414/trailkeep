@@ -108,6 +108,26 @@ class FieldTransformerTest {
         assertThat(evaluate("{\"date\": \"case_no\"}")).isEqualTo(failure("BAD_DATE", Severity.ERROR));
     }
 
+    /** What database clients write with no declared format (docs/importer/export-recipes.md): a space for the T. */
+    @Test
+    void sqlFormTimesAndPostgresHexAreReadWithNoDeclaredFormat() {
+        assertThat(value("{\"timestamp\": \"sql_text\"}")).isEqualTo(Instant.parse("2019-03-04T15:00:00.25Z"));
+        assertThat(value("{\"timestamp\": \"sql_utc\"}")).isEqualTo(Instant.parse("2019-03-04T12:00:00Z"));
+        assertThat(value("{\"timestamp\": \"sql_offset\"}")).isEqualTo(Instant.parse("2019-03-04T12:00:00Z"));
+        assertThat(value("{\"date\": \"sql_text\"}")).isEqualTo(LocalDate.of(2019, 3, 4));
+        assertThat(evaluate("{\"timestamp\": \"sql_feb30\"}"))
+                .as("strict, as ISO-8601 is")
+                .isEqualTo(failure("BAD_TIMESTAMP", Severity.ERROR));
+        assertThat(evaluate("{\"timestamp\": \"sql_text\", \"format\": \"MM/dd/yyyy HH:mm\"}"))
+                .as("a declared format is the only one read")
+                .isEqualTo(failure("BAD_TIMESTAMP", Severity.ERROR));
+        assertThat((byte[]) value("{\"binary\": \"hex\", \"column\": \"pg_hex\"}"))
+                .containsExactly(0xCA, 0xFE);
+        assertThat(evaluate("{\"binary\": \"base64\", \"column\": \"pg_hex\"}"))
+                .as("the \\x prefix is PostgreSQL's hex only")
+                .isEqualTo(failure("BAD_BINARY", Severity.ERROR));
+    }
+
     /** A declared format is resolved strictly: an impossible day is an error, never the nearest real one. */
     @Test
     void declaredFormatsRefuseImpossibleDaysInsteadOfMovingThem() {
@@ -248,6 +268,11 @@ class FieldTransformerTest {
         row.put("offset_text", "2019-03-04T07:00:00-05:00");
         row.put("with_offset", OffsetDateTime.parse("2019-03-04T07:00:00-05:00"));
         row.put("found_text", "2019-03-01");
+        row.put("sql_text", "2019-03-04 09:00:00.25");
+        row.put("sql_utc", "2019-03-04 12:00:00+00");
+        row.put("sql_offset", "2019-03-04 17:30:00+05:30");
+        row.put("sql_feb30", "2026-02-30 09:00:00");
+        row.put("pg_hex", "\\xcafe");
         row.put("feb30", "2026-02-30");
         row.put("feb30_time", "02/30/2026 09:00");
         row.put("leap_day", "2024-02-29");

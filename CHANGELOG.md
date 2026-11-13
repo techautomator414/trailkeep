@@ -9,6 +9,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- The PostgreSQL export recipe (WP-26 part ae1, docs/design/importer.md §4.2.2, §11): `docs/importer/export-recipes.md`
+  gives the one-session `psql` script (every `\copy` in one `REPEATABLE READ READ ONLY` transaction, the snapshot
+  recorded as the fixed point) and a manifest script, and the mapping change from `query:` to `file:`.
+  `PostgresExportRecipeIT` reads both scripts from the page, runs them unchanged with `psql` as the source account and
+  extracts the files: they pass the manifest checks, and the file extract and the JDBC extract of the same database
+  stage every row with the same keyed row hash and the same issues. The test found two gaps, now fixed: with no
+  declared `format`, a time in the SQL form database clients write (`2019-03-01 09:30:00.25`, a `timestamptz` with
+  `+00` or `+05:30`) is now read like ISO-8601 instead of `BAD_TIMESTAMP`, and `binary: hex` accepts PostgreSQL's
+  `\x` prefix instead of `BAD_BINARY`.
 - The SQL Server source (WP-26 part p, docs/design/importer.md §4.1, §11): a `kind: jdbc` SQL Server mapping is
   test-fetched by `validate-mapping` and extracted through the MIT-licensed `mssql-jdbc` driver in one `SNAPSHOT`
   transaction (the legacy database needs `ALLOW_SNAPSHOT_ISOLATION ON`; without it nothing is read), which takes no
