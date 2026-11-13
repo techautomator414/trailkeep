@@ -54,6 +54,15 @@ class CaseRecordQueriesImpl implements CaseRecordQueries {
     }
 
     @Override
+    public Optional<CaseRecord> findById(CaseScope scope, long caseId) {
+        CriteriaBuilder cb = entityManager.getCriteriaBuilder();
+        CriteriaQuery<CaseRecord> query = cb.createQuery(CaseRecord.class);
+        Root<CaseRecord> root = query.from(CaseRecord.class);
+        query.select(root).where(cb.equal(root.get("id"), caseId), scope.toPredicate(root, query, cb));
+        return entityManager.createQuery(query).getResultStream().findFirst();
+    }
+
+    @Override
     public boolean exists(CaseScope scope, CaseNumber caseNumber) {
         CriteriaBuilder cb = entityManager.getCriteriaBuilder();
         CriteriaQuery<Long> query = cb.createQuery(Long.class);

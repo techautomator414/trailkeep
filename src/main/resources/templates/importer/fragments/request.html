@@ -14,6 +14,22 @@
     <div class="form-text" id="tk-source-hint" th:text="#{tk.imports.source.hint}">The mapping file's source.id: 1
       to 16 lowercase letters, digits or hyphens.</div>
   </div>
+  <fieldset class="mb-3" th:if="${relinks}">
+    <legend class="form-label fs-6" th:text="#{tk.imports.kind.choice}">Kind of run</legend>
+    <div class="form-check">
+      <input class="form-check-input" id="tk-kind-import" name="kind" type="radio" value="IMPORT"
+             th:checked="${relink != true}">
+      <label class="form-check-label" for="tk-kind-import" th:text="#{tk.imports.kind.import}">Import the source's
+        cases</label>
+    </div>
+    <div class="form-check">
+      <input class="form-check-input" id="tk-kind-relink" name="kind" type="radio" value="RELINK"
+             aria-describedby="tk-kind-relink-hint" th:checked="${relink == true}">
+      <label class="form-check-label" for="tk-kind-relink" th:text="#{tk.imports.kind.relink}">Relink owners</label>
+      <div class="form-text" id="tk-kind-relink-hint" th:text="#{tk.imports.kind.relink.hint}">Hands each open case
+        of the source that was given a team's default owner to its legacy owner, once they have signed in.</div>
+    </div>
+  </fieldset>
   <div class="tk-dialog-actions">
     <button class="btn btn-primary" type="submit" th:text="#{tk.imports.request.submit}">Request run</button>
     <a class="btn btn-outline-secondary" th:href="@{/admin/import-runs}"

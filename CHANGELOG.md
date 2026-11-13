@@ -228,6 +228,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   and cases that keep their legacy owner get none. The rows are for `relink-owners` (part z2), which hands such a case
   to its legacy owner once they have signed in. The import user may read, insert and delete them; the runtime user may
   only read them, for counts on the Import runs screen.
+- Relinking owners (WP-26 part z2, docs/design/importer.md §7.3): a Compliance Admin may now request a relink run on the
+  Import runs screen (a "Kind of run" choice offered to Compliance Admins only; audited as `IMPORT_RUN_REQUESTED` with
+  kind `RELINK`), and the importer job's new `relink-owners` command works through the pending owners of every load of
+  that source. Each enabled user's email address and external id are hashed with `import.hash-key` as the load hashed
+  the legacy owner's; a case matches by external id, else by an address only one user has. A matched case goes to its
+  legacy owner through the new `CaseImportService.relinkOwner` only while it is still open, still the default owner's
+  (a person who reassigned it meanwhile wins) and the person may own the team's cases: one conditional update by the
+  import principal, audited `CASE_OWNER_RELINKED` (origin `IMPORT`, old and new owner, the run). Pending rows go once
+  their case is relinked, closed, archived, purged or reassigned, and stay for a shared address, an ineligible person,
+  nobody signed in or a pending closure. It is a dry run unless `--import.apply=true`: the same transactions run and
+  are rolled back, so the run's figures (metric `RELINK`, per outcome) forecast exactly what applying does; applying
+  leaves the run `LOADED` with the cases relinked as its loaded count. The import user may update a case's `OWNER_ID`,
+  `UPDATED_AT`, `UPDATED_BY` and `VERSION` and nothing else of it (both vendors).
 - The Oracle source (WP-26 part o, docs/design/importer.md §4.1): a `kind: jdbc` Oracle mapping is test-fetched by
   `validate-mapping` and extracted in one `SET TRANSACTION READ ONLY` transaction, with the session in UTC and ISO
   date, timestamp and number formats; `DATE` and `TIMESTAMP` read as local date-times, `TIMESTAMP WITH TIME ZONE` with

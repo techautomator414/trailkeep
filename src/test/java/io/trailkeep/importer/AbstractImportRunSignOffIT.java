@@ -75,7 +75,8 @@ abstract class AbstractImportRunSignOffIT {
 
     @Test
     void requestingOpensARequestedRunAuditedWithItsSource() {
-        long id = imports.request(as(GlobalRole.SYSTEM_ADMIN), "legacy-a1");
+        long id = imports.request(as(GlobalRole.SYSTEM_ADMIN), "legacy-a1", false);
+        final long relink = imports.request(as(GlobalRole.COMPLIANCE_ADMIN), "legacy-a1", true);
         entityManager.flush();
 
         assertThat(jdbc.queryForList("SELECT KIND, SOURCE_ID, STATUS, REQUESTED_BY FROM IMPORT_RUN WHERE ID = ?", id))
@@ -83,17 +84,23 @@ abstract class AbstractImportRunSignOffIT {
                 .satisfies(row -> assertThat(List.copyOf(row.values()).stream().map(String::valueOf))
                         .containsExactly("IMPORT", "legacy-a1", "REQUESTED", Long.toString(admin)));
         assertThat(audited(id, "IMPORT_RUN_REQUESTED")).contains("\"sourceId\":\"legacy-a1\"", "\"kind\":\"IMPORT\"");
+        assertThat(jdbc.queryForObject("SELECT KIND FROM IMPORT_RUN WHERE ID = ?", String.class, relink))
+                .as("a Compliance Admin's relink run (WP-26 part z2)")
+                .isEqualTo("RELINK");
+        assertThat(audited(relink, "IMPORT_RUN_REQUESTED")).contains("\"kind\":\"RELINK\"");
     }
 
     @Test
     void malformedSourceIdsAndTeamRolesRequestNothing() {
         final Long before = jdbc.queryForObject("SELECT COUNT(*) FROM IMPORT_RUN", Long.class);
 
-        refused(() -> imports.request(as(GlobalRole.COMPLIANCE_ADMIN), "Legacy A"), Kind.INVALID);
-        refused(() -> imports.request(as(GlobalRole.COMPLIANCE_ADMIN), "a".repeat(17)), Kind.INVALID);
-        refused(() -> imports.request(as(GlobalRole.COMPLIANCE_ADMIN), ""), Kind.INVALID);
+        refused(() -> imports.request(as(GlobalRole.COMPLIANCE_ADMIN), "Legacy A", false), Kind.INVALID);
+        refused(() -> imports.request(as(GlobalRole.COMPLIANCE_ADMIN), "a".repeat(17), true), Kind.INVALID);
+        refused(() -> imports.request(as(GlobalRole.COMPLIANCE_ADMIN), "", false), Kind.INVALID);
+        refused(() -> imports.request(as(GlobalRole.SYSTEM_ADMIN), "legacy-a1", true), Kind.FORBIDDEN);
         Actor manager = new Actor(new UserPermissions(admin, false, Set.of(), Map.of(1L, TeamRole.MANAGER)), "M");
-        refused(() -> imports.request(manager, "legacy-a1"), Kind.FORBIDDEN);
+        refused(() -> imports.request(manager, "legacy-a1", false), Kind.FORBIDDEN);
+        refused(() -> imports.request(manager, "legacy-a1", true), Kind.FORBIDDEN);
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM IMPORT_RUN", Long.class))
                 .isEqualTo(before);
     }

@@ -48,7 +48,8 @@ import org.springframework.web.bind.annotation.RequestParam;
  * only counted, never named.
  *
  * <p>Both may request a run naming a source id ({@code POST /admin/import-runs}, from a native dialog on the list or
- * {@code /admin/import-runs/new}, which a malformed id re-renders with 422). A Compliance Admin may sign off a run
+ * {@code /admin/import-runs/new}, which a malformed id re-renders with 422); a Compliance Admin may also choose a
+ * relink run ({@code kind=RELINK}, WP-26 part z2), offered to nobody else. A Compliance Admin may sign off a run
  * whose last dry run completed with no FATAL issue, acknowledging every WARNING class; the service checks it all
  * again, and the run's page comes back with 409 and Reload when the run changed, or 422 with the acknowledgements
  * kept.
@@ -106,7 +107,9 @@ class ImportRunController {
             @AuthenticationPrincipal TrailkeepOidcUser principal,
             @RequestParam(defaultValue = "1") String page,
             Model model) {
-        Paged<RunSummary> runs = imports.runs(this.page.actor(principal), (int) number(page, 1));
+        Actor actor = this.page.actor(principal);
+        Paged<RunSummary> runs = imports.runs(actor, (int) number(page, 1));
+        model.addAttribute("relinks", imports.signsOff(actor));
         model.addAttribute(
                 "runs",
                 new Paged<>(
@@ -128,24 +131,28 @@ class ImportRunController {
 
     @GetMapping("/new")
     String requestForm(@AuthenticationPrincipal TrailkeepOidcUser principal, Model model) {
-        imports.checkAccess(page.actor(principal));
-        return requestPage("", false, model);
+        Actor actor = page.actor(principal);
+        imports.checkAccess(actor);
+        return requestPage("", false, false, imports.signsOff(actor), model);
     }
 
     @PostMapping
     String request(
             @AuthenticationPrincipal TrailkeepOidcUser principal,
             @RequestParam(defaultValue = "") String sourceId,
+            @RequestParam(defaultValue = "IMPORT") String kind,
             HttpServletResponse response,
             Model model) {
+        Actor actor = page.actor(principal);
+        boolean relink = "RELINK".equals(kind);
         try {
-            return "redirect:/admin/import-runs/" + imports.request(page.actor(principal), sourceId);
+            return "redirect:/admin/import-runs/" + imports.request(actor, sourceId, relink);
         } catch (ImportRunException refused) {
             if (refused.kind() != Kind.INVALID) {
                 throw refused;
             }
             response.setStatus(HttpStatus.UNPROCESSABLE_CONTENT.value());
-            return requestPage(sourceId, true, model);
+            return requestPage(sourceId, true, relink, imports.signsOff(actor), model);
         }
     }
 
@@ -212,9 +219,11 @@ class ImportRunController {
         return "importer/run";
     }
 
-    private static String requestPage(String sourceId, boolean invalid, Model model) {
+    private static String requestPage(String sourceId, boolean invalid, boolean relink, boolean relinks, Model model) {
         model.addAttribute("sourceId", sourceId);
         model.addAttribute("invalid", invalid);
+        model.addAttribute("relink", relink);
+        model.addAttribute("relinks", relinks);
         return "importer/request";
     }
 

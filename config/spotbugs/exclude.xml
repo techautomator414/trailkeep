@@ -263,6 +263,13 @@
     by ImportRunSignOffIT, OracleImportRunSignOffIT, ImportRunActionsControllerIT and ImportRunsAccessibilityIT, and
     as the runtime user by ImporterProfileIT and OracleImporterProfileIT.
     Approved in the security-reviewer role on #176.
+    WP-26 part z2 adds one parameter to POST /admin/import-runs: kind, where exactly "RELINK" asks for a relink run and
+    anything else is an import run as before (the posted string is never stored; the run's KIND is the enum chosen in
+    code). ImportRunService refuses (403) a relink request from anyone but a Compliance Admin, before validating the
+    source id, and audits it as IMPORT_RUN_REQUESTED with the kind; the form offers the choice to Compliance Admins
+    only. The run is requested, nothing else: owners change only when the importer Job runs relink-owners with
+    import.apply=true. Covered by ImportRunActionsControllerIT, ImportRunServiceIT and ImportRunsAccessibilityIT.
+    Approved in the security-reviewer role on #188.
     Approved in the security-reviewer role on #20. Listed by class, never by pattern alone, so each new controller
     is reviewed the same way.
   -->

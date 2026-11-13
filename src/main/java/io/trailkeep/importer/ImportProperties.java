@@ -32,6 +32,7 @@ import org.springframework.util.unit.DataSize;
  *     app.timezone} (design §7.1, §9); the dry run's own time when unset or already past
  * @param allowMappingChange whether a dry run accepts that the source's rows were loaded under another mapping, and
  *     then compares no row hash with the ledger's ({@link LedgerDelta}, design §3.1)
+ * @param apply whether {@code relink-owners} changes owners; a dry run otherwise ({@link RelinkOwnersCommand}, §7.3)
  */
 @ConfigurationProperties("import")
 record ImportProperties(
@@ -43,7 +44,8 @@ record ImportProperties(
         @DefaultValue Attachments attachments,
         @Nullable Path contentArea,
         @Nullable LocalDate goLive,
-        @DefaultValue("false") boolean allowMappingChange) {
+        @DefaultValue("false") boolean allowMappingChange,
+        @DefaultValue("false") boolean apply) {
 
     /**
      * {@code import.attachments} (design §4.3 "Size").

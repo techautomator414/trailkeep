@@ -86,7 +86,8 @@
 -- (part u) S I on CASE_COMMENT, USAGE on SEQ_CASE_COMMENT, and UPDATE of CASE_SEARCH's SEARCH_TEXT and UPDATED_AT
 -- alone, which appending a comment to the search text needs (CaseSearchJdbcDao); with their attachments (part u) S I
 -- on CASE_ATTACHMENT and CASE_ATTACHMENT_CHUNK, insert-only, and USAGE on SEQ_CASE_ATTACHMENT; S I D on
--- IMPORT_OWNER_PENDING, which the load writes and relink-owners deletes, and USAGE on its sequence (V18). On every
+-- IMPORT_OWNER_PENDING, which the load writes and relink-owners deletes, and USAGE on its sequence (V18); for
+-- relink-owners (part z2) UPDATE of CASE_RECORD's OWNER_ID, UPDATED_AT, UPDATED_BY and VERSION alone. On every
 -- other table and sequence an entity maps it has SELECT only, so its Hibernate validate sees the whole model (on
 -- Oracle the dictionary lists only objects a user holds a privilege on, design §2.1 R3). The import writes to domain
 -- tables come with the importer PRs that use them (design §12).
@@ -190,6 +191,8 @@ GRANT SELECT, INSERT ON TABLE CASE_ATTACHMENT, CASE_ATTACHMENT_CHUNK TO ${import
 GRANT USAGE ON SEQUENCE SEQ_CASE_ATTACHMENT TO ${import_user};
 GRANT SELECT, INSERT                 ON TABLE IMPORT_LEDGER        TO ${import_user};
 GRANT SELECT, INSERT, DELETE         ON TABLE IMPORT_OWNER_PENDING TO ${import_user};
+-- relink-owners (part z2) hands a case to its legacy owner: the owner and the change stamp of a case, nothing else.
+GRANT UPDATE (OWNER_ID, UPDATED_AT, UPDATED_BY, VERSION) ON TABLE CASE_RECORD TO ${import_user};
 GRANT SELECT, INSERT                 ON TABLE IMPORT_RUN           TO ${import_user};
 GRANT UPDATE (STATUS, MAPPING_HASH, SOURCE_FINGERPRINT, SCAN_MODE, ROWS_STAGED, ROWS_LOADED, STAGING_EXPIRES_AT,
   STAGING_PURGED_AT, UPDATED_AT, VERSION) ON TABLE IMPORT_RUN TO ${import_user};

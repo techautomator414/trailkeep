@@ -157,7 +157,7 @@ abstract class AbstractImporterProfileIT {
                     .as("the read API is wired in the web application and the runtime user may SELECT the runs")
                     .isPresent();
 
-            requested = service.request(compliance, "legacy-b");
+            requested = service.request(compliance, "legacy-b", false);
             service.signOff(compliance, seeded, service.run(compliance, seeded).version(), Set.of("NOT_SCANNED"));
 
             assertThat(jdbc.queryForObject(

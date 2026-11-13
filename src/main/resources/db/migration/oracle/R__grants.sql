@@ -87,7 +87,8 @@
 -- SEQ_CASE_NUMBER besides the sequences below; with their comments (part u) S I on CASE_COMMENT and UPDATE of
 -- CASE_SEARCH's SEARCH_TEXT and UPDATED_AT alone, which appending a comment to the search text needs; with their
 -- attachments (part u) S I on CASE_ATTACHMENT and CASE_ATTACHMENT_CHUNK, insert-only; S I D on IMPORT_OWNER_PENDING,
--- which the load writes and relink-owners deletes, and SELECT on its sequence (V18). On every other
+-- which the load writes and relink-owners deletes, and SELECT on its sequence (V18); for relink-owners (part z2)
+-- UPDATE of CASE_RECORD's OWNER_ID, UPDATED_AT, UPDATED_BY and VERSION alone. On every other
 -- table and sequence an entity maps it has SELECT only, because the dictionary views Hibernate validate reads
 -- (ALL_TABLES, ALL_SEQUENCES) list only objects a user holds a privilege on (design §2.1 R3); on a sequence that
 -- SELECT is also NEXTVAL. The import writes to domain tables come with the importer PRs that use them (§12).
@@ -251,5 +252,8 @@ BEGIN
     || 'STAGING_EXPIRES_AT, STAGING_PURGED_AT, UPDATED_AT, VERSION) ON IMPORT_RUN TO ' || UPPER('${import_user}');
   -- The load appends each comment it writes to its case's search text (WP-26 part u, CaseSearchJdbcDao).
   EXECUTE IMMEDIATE 'GRANT UPDATE (SEARCH_TEXT, UPDATED_AT) ON CASE_SEARCH TO ' || UPPER('${import_user}');
+  -- relink-owners (part z2) hands a case to its legacy owner: the owner and the change stamp, nothing else.
+  EXECUTE IMMEDIATE 'GRANT UPDATE (OWNER_ID, UPDATED_AT, UPDATED_BY, VERSION) ON CASE_RECORD TO '
+    || UPPER('${import_user}');
 END;
 /

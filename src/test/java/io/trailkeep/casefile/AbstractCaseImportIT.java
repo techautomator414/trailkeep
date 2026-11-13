@@ -8,6 +8,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import io.trailkeep.casefile.CaseImportService.ImportRun;
 import io.trailkeep.casefile.CaseImportService.ImportedCase;
 import io.trailkeep.casefile.CaseImportService.ImportedComment;
+import io.trailkeep.casefile.CaseImportService.Relinked;
 import io.trailkeep.shared.CaseNumber;
 import io.trailkeep.shared.CaseStatus;
 import io.trailkeep.shared.DomainException.Kind;
@@ -174,7 +175,7 @@ abstract class AbstractCaseImportIT {
     }
 
     @Test
-    void defaultOwnerApplied() {
+    void defaultOwnerAppliedAndRelinked() {
         CaseNumber number =
                 imports.importCase(RUN, open(analyst, "Synthetic Legacy Owner")).number();
 
@@ -183,6 +184,16 @@ abstract class AbstractCaseImportIT {
         assertThatThrownBy(() -> imports.importCase(RUN, open(outsider, "Synthetic Legacy Owner")))
                 .as("a default owner must still be able to own the team's cases")
                 .satisfies(kind(Kind.INVALID));
+
+        // The legacy owner signs in; relink-owners hands the case over (all outcomes: AbstractRelinkOwnersIT).
+        long legacy = new CaseSeed(jdbc).user();
+        new CaseSeed(jdbc).member(legacy, team, TeamRole.ANALYST);
+        long caseId = id(caseRow(number).get("ID"));
+        assertThat(imports.relinkOwner(99L, caseId, analyst, legacy)).isEqualTo(Relinked.RELINKED);
+        assertThat(id(caseRow(number).get("OWNER_ID"))).isEqualTo(legacy);
+        String audit = "SELECT NEW_VALUES_JSON FROM AUDIT_EVENT WHERE CASE_ID = ? AND ACTION = 'CASE_OWNER_RELINKED'";
+        assertThat(jdbc.queryForObject(audit + " AND ACTOR_ID = -1001 AND ORIGIN = 'IMPORT'", String.class, caseId))
+                .contains("\"ownerId\":" + legacy, "\"runId\":99");
     }
 
     @Test

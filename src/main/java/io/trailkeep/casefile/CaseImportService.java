@@ -24,7 +24,8 @@ import org.jspecify.annotations.Nullable;
  *   <li>a closed case may use an inactive case type ({@code closedImportMayUseInactiveType});
  *   <li>a closed case may be owned by the "Trailkeep import" principal ({@code closedImportMayBeOwnedByPrincipal});
  *   <li>an open case may be owned by the team's default owner, whom the importer chose in place of an unmatched legacy
- *       owner, with the legacy name kept as a snapshot ({@code defaultOwnerApplied}).
+ *       owner, with the legacy name kept as a snapshot, and {@link #relinkOwner} later hands it to that legacy owner
+ *       with no human actor ({@code defaultOwnerAppliedAndRelinked}).
  * </ol>
  *
  * Nothing else is relaxed: every case needs an active team, an open case also an active type and an owner who may own
@@ -132,6 +133,38 @@ public interface CaseImportService {
      * @return true if {@link #importCase} would accept them as an open case's owner
      */
     boolean eligibleOwner(long userId, long teamId);
+
+    /** What {@link #relinkOwner} did with a case, and whether it can still be relinked later. */
+    enum Relinked {
+        /** Handed to its legacy owner, or the legacy owner is the default owner: done. */
+        RELINKED,
+        /** Still open and the default owner's, with nobody named to hand it to: it still waits. */
+        WAITING,
+        /** Its closure is pending: left alone, and it waits, since a rejected closure reopens it. */
+        CLOSURE_PENDING,
+        /** Closed, archived or purged: it can never be relinked. */
+        CLOSED,
+        /** Someone reassigned it since the load: they win, and it can never be relinked. */
+        OWNER_CHANGED,
+        /** The legacy owner may not own the team's cases, or is disabled: left alone, and it waits. */
+        INELIGIBLE
+    }
+
+    /**
+     * Hands an open case from its team's default owner to its legacy owner, matched since the load (WP-26 part z2,
+     * design §7.3), in the caller's transaction and with no human actor: the import principal changes the owner, and
+     * the audit event {@code CASE_OWNER_RELINKED} (origin {@code IMPORT}) holds the old and the new owner and the run.
+     * Only a case still {@code OPEN} and still owned by the default owner changes, and only to someone who may own the
+     * team's cases ({@link #eligibleOwner}); one conditional statement changes the owner, so a reassignment made
+     * meanwhile wins. Without an owner it only says whether the case still waits.
+     *
+     * @param runId the {@code RELINK} run
+     * @param caseId the case, from the importer's pending owners
+     * @param defaultOwnerId the default owner the load gave it
+     * @param ownerId the legacy owner's user, or {@code null} when nobody single was matched
+     * @return what was done
+     */
+    Relinked relinkOwner(long runId, long caseId, long defaultOwnerId, @Nullable Long ownerId);
 
     /**
      * The SLA state an imported open case would have at one instant (WP-26 part r3, design §7.1): its case type's

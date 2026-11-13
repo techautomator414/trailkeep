@@ -67,4 +67,21 @@ public interface ImportPeopleService {
      * @return the users, by id; empty when none
      */
     List<PersonMatch> byEmail(String email);
+
+    /**
+     * A user {@code relink-owners} may match a pending owner to (WP-26 part z2, design §7.3).
+     *
+     * @param userId the user's id
+     * @param email their email address, possibly empty
+     * @param externalId the identity provider's subject
+     */
+    record SignedIn(long userId, String email, String externalId) {}
+
+    /**
+     * Every enabled user, never a principal, whose email address and external id {@code relink-owners} hashes to match
+     * the open cases waiting for their legacy owner.
+     *
+     * @return them, by display name
+     */
+    List<SignedIn> signedIn();
 }

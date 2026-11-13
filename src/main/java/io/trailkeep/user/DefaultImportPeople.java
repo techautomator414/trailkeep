@@ -43,6 +43,14 @@ class DefaultImportPeople implements ImportPeopleService {
                 .toList();
     }
 
+    @Override
+    public List<SignedIn> signedIn() {
+        return users.findByDisabledFalseOrderByDisplayNameAsc().stream()
+                .filter(user -> !user.isPrincipal())
+                .map(user -> new SignedIn(Objects.requireNonNull(user.getId()), user.getEmail(), user.getExternalId()))
+                .toList();
+    }
+
     private long principal(String externalId) {
         return users.findByExternalId(externalId)
                 .map(user -> Objects.requireNonNull(user.getId()))
