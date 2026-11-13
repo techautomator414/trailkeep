@@ -2,20 +2,30 @@
   SPDX-License-Identifier: Apache-2.0
   Copyright 2026 Charlie Genova and contributors
 -->
-# Trailkeep handoff: state at the end of Phase 4
+# Trailkeep handoff: state at the end of Phase 5
 
 _Written 2026-11-04 at 0.1.0 for the team taking over; refreshed 2026-11-06, after WP-11 to WP-18 merged (Phase 2
-closed), 2026-11-07, after WP-19 merged (Phase 3 closed), and 2026-11-08, after WP-23 merged (Phase 4 closed). Read this first, then `README.md`, then `IMPLEMENTATION_PLAN.md` Part B (standards) and Part C
-(work packages). Where this file and the plans disagree, the plans win; this file only says where the build stands._
+closed), 2026-11-07, after WP-19 merged (Phase 3 closed), 2026-11-08, after WP-23 merged (Phase 4 closed), and
+2026-11-13, after WP-24 to WP-27 merged (Phase 5 closed). Read this first, then `README.md`, then
+`IMPLEMENTATION_PLAN.md` Part B (standards) and Part C (work packages). Where this file and the plans disagree, the
+plans win; this file only says where the build stands._
 
 ## 1. Where the project stands
 
 | Measure | Done | Total | Share |
 |---|---|---|---|
-| Work packages (IMPLEMENTATION_PLAN Part C) | 26 (WP-01 to WP-08 are 10 rows with the 03a/b and 04a/b splits, plus WP-09 to WP-23 with WP-17b) | 33 | 79 % |
-| Work packages weighted by size (S = 1, M = 2, L = 3) | 53 (44 at the end of Phase 3, plus WP-21 L, WP-22 M, WP-23 M, WP-17b S and WP-20 S) | 67 | 79 % |
+| Work packages (IMPLEMENTATION_PLAN Part C) | 30 (WP-01 to WP-08 are 10 rows with the 03a/b and 04a/b splits, plus WP-09 to WP-27 with WP-17b) | 33 | 91 % |
+| Work packages weighted by size (S = 1, M = 2, L = 3) | 60 (53 at the end of Phase 4, plus WP-24 M, WP-25 S, WP-26 L and WP-27 S) | 67 | 90 % |
 | Phase 1 pull requests (Part D) | 12 | 12 | 100 % |
-| Plan calendar (Part F) | 15 weeks: Phase 1 (4), Phase 2 (5), Phase 3 (3) and Phase 4 (3) | 25 weeks | 60 % (the 25 include Phase 0 discovery and Phase 7 go-live, 2 weeks each, neither of them build work; Phases 1 to 6 alone are 15 of 21 weeks, 71 %) |
+| Plan calendar (Part F) | 18 weeks: Phase 1 (4), Phase 2 (5), Phase 3 (3), Phase 4 (3) and Phase 5 (3) | 25 weeks | 72 % (the 25 include Phase 0 discovery and Phase 7 go-live, 2 weeks each, neither of them build work; Phases 1 to 6 alone are 18 of 21 weeks, 86 %) |
+
+What is left in the plan is Phase 6: WP-28 (DAST and security E2E, M), WP-29 (the Section 508 conformance pass, L,
+with a named certified tester) and WP-30 (performance at 500k, restore drill, runbook and 1.0.0, M).
+
+**Phase 5 is complete.** WP-24 (retention, archive, legal hold and purge, M; #125 to #128), WP-25 (the System screen
+and operational alerts, S; #139, #140, #144, #153, #159, #160), WP-26 (the generic importer, L; 53 pull requests from
+#134 to #202) and WP-27 (preferences, shortcuts and i18n, S; #132, #135, #138) are done. WP-26 was planned as the 31
+rows of `docs/design/importer.md` §12 and landed as 53 PRs; section 2 maps each row to its PRs.
 
 **Phase 4 is complete.** WP-21 (SLA evaluator and alerts, L; #111, #112, #113), WP-17b (the reminders tick, S;
 #114), WP-20 (the dashboard, S; #115), WP-22 (aging and SLA-compliance reports, M; #116, #118, #119) and WP-23
@@ -64,13 +74,32 @@ report is delivered weekly per team**: an hourly job stores each due team's repo
 Managers and every Compliance Admin by mail and alert, linking to the run; the runs have their own pages and CSV
 download, and Compliance Admins set each team's day and hour at `/admin/report-schedules`.
 
-What Phase 5 adds: retention, archiving, legal hold and the purge `CronJob` (WP-24), the System screen with job,
-outbox and scanner status (WP-25), the generic importer (WP-26), and preferences, shortcuts and i18n (WP-27).
+Phase 5 adds the end of a case's life, the operator's view and the way in for old records. **Retention**: an hourly
+archive job moves each closed case to `ARCHIVED` once its case type's `RETENTION_YEARS` have passed since closure
+(archived cases are read-only, cannot be reopened and are left out of the lists unless a Manager or Compliance Admin
+asks for them), and a Compliance Admin places and lifts a **legal hold** with a reason, which stops both archive and
+purge and leaves a readable hold history. The **purge** is a separate `CronJob` (`prod,purge`, its own database user,
+no web server) that tombstones archived cases past `PURGE_AFTER`: their content is deleted in foreign-key order, the
+case row keeps its number, type, team, dates and title, and the audit trail, alert ledger and hold history stay. **The
+System screen** (`/admin/system`, System and Compliance Admins) shows every job's last run from `JOB_RUN`, the outbox
+backlog, the scanner, the durable role-conflict list, the last import run, and sends a person any of the 11 mails as
+a test; Prometheus rules alert on late jobs, mail, the database pool and the scanner. **The importer** brings a legacy
+tracker's cases, comments, attachments, closures and history in from SQL Server, Oracle or PostgreSQL (live, read-only)
+or from CSV, TSV or JSON Lines exports, through staging, a dry run a Compliance Admin signs off on the Import runs
+screen (`/admin/import-runs`), an idempotent load under its own database user, delta runs, owner relinking and a
+reconciliation report; it runs as a Kubernetes `Job`, one command per run. **Preferences**: `/preferences` turns the
+single-key shortcuts (`/` for the cases search, `N` for a new case) on or off, all mail wording lives in
+`messages.properties`, and every time a page shows is in `app.timezone`.
+
+What Phase 6 adds: authenticated DAST with ZAP and the security E2E suite (WP-28), the Section 508 conformance pass
+and ACR by the named certified tester (WP-29), and performance at the 500k seed, the restore drill, the runbook, the
+evidence pack and 1.0.0 (WP-30).
 
 0.1.0 is the `v0.1.0` tag, cut from `main` as the last step of this handoff, after #25 (CI fix for #13), #33 (the
 test port fix below) and #32 (this document) merged. Every workflow is green on that commit: `ci`, `main` (both Oracle images, image build and
 scan), `codeql`, `scorecard`. "Green" has one caveat: `main.yml` skips SonarCloud and Dependency-Check with a notice
-when their secrets are absent, and they were absent at handoff (#30).
+when their secrets are absent, and they were absent at handoff (#30). No tag has been cut since; `v0.2.0` is an owner
+item (section 6, item 8).
 
 ### Phase 1 exit criteria (Part C)
 
@@ -113,26 +142,98 @@ when their secrets are absent, and they were absent at handoff (#30).
 | WP-20 | Dashboard: KPI tiles (each a count in text and a link), My cases (ten, by SLA due date), "Needs attention" paged by 20 with `Paged<T>`; and the CI fix that stops each test class's Keycloak container before the next one starts (c54f2b5) | #115 | `DashboardController`, `templates/web/dashboard.html`, `shared.Paged`, `KeycloakDevRealm.start`, `DashboardAccessibilityIT` |
 | WP-22 | Reports. a, #116: aging (team and owner, age bands and SLA states, a total row) and SLA compliance (team and case type, a period of up to 366 days) as accessible HTML with a print stylesheet, counted in one grouped Criteria query each under `CaseScope`. b, #118: the same as CSV through `shared.csv.CsvFormat`, audited `REPORT_EXPORTED`. c, #119: the aging report's overdue cases and unanswered update requests (at most 100 each) | #116, #118, #119 | `io.trailkeep.report` (`ReportService`, `DefaultReportService`, `ReportExportService`, `DefaultReportExportService`), `CaseReportService`, `CaseReportQueriesImpl`, `ReportController`, `templates/report/`, `AbstractReportIT` and its Oracle twin, `ReportsAccessibilityIT` |
 | WP-23 | Scheduled report delivery. a, #120: `V7__report_delivery` (`REPORT_SCHEDULE`, `REPORT_RUN`, the outbox's `REPORT_RUN_ID` foreign key), the hourly `report-delivery` job that stores each due team's aging report (the page's own fragment and the export's own CSV, read as a Manager of that team) and sends `report-ready` to the team's enabled Managers and every enabled Compliance Admin, `app.reports.admins-only` for the first cycle, its health indicator. b1, #121: `/reports/runs`, `/reports/runs/{id}` (the stored HTML through `StoredReportSanitizer`) and the audited `/reports/runs/{id}.csv`. b2, #123 (reviewed and approved as #122, which closed when its stacked base was deleted): the schedule admin at `/admin/report-schedules` | #120, #121, #123 | `ReportDeliveryTick`, `ReportDeliveryWriter`, `ReportHtml`, `ReportSchedule`, `ReportRun`, `ReportDeliveryHealthIndicator`, `ReportRunService`, `ReportScheduleService` and their `Default*` implementations, `shared.html.StoredReportSanitizer`, `ReportRunController`, `ReportScheduleController`, `NotificationService.notifyOfReport`, `AbstractReportDeliveryIT`, `AbstractReportRunIT`, `AbstractReportScheduleIT` and their Oracle twins, `ReportRunsAccessibilityIT`, `ReportSchedulesAccessibilityIT` |
+| WP-24 | Retention, archive, legal hold and purge. a, #125: the hourly `archive` job (minute 37, ShedLock, chunks of 500) moves `CLOSED` cases past their type's `RETENTION_YEARS` to `ARCHIVED` with `ARCHIVED_AT` and `PURGE_AFTER` (`app.retention.purge-grace`, 30 days), audited `CASE_ARCHIVED`; archived cases are read-only, not reopenable, and listed only when a Manager or Compliance Admin filters for them; no migration (the columns and both indexes date from V4). b, #126: the `LEGAL_HOLD` matrix action for Compliance Admins in every status, a reason of 1 to 500 characters, row lock and re-check (409), lifting pushes `PURGE_AFTER` to at least now plus the grace; audited `LEGAL_HOLD_PLACED` and `LEGAL_HOLD_LIFTED`. b2, #127: `V8__legal_hold_events`, the readable hold history shown to Compliance Admins. c, #128: the purge under the `purge` profile as `TRAILKEEP_PURGE`: chunks of 100 re-read `FOR UPDATE` (a hold placed meanwhile wins), content deleted in foreign-key order, the case tombstoned (`PURGED_AT`, description and subject `NULL`), one `CASE_PURGED` audit row of counts per case, report runs older than `app.retention.report-runs` deleted after the mail that names them, a `JOB_RUN` row, counts-only log; the purged case still opens with a notice | #125, #126, #127, #128 | `io.trailkeep.retention` (`ArchiveJob`, `ArchiveHealthIndicator`, `PurgeJdbcDao`, `PurgeJob`, `PurgeRunner`), `CaseRetentionService`, `LegalHoldService`, `LegalHoldController`, `application-purge.yml`, `deploy/base/purge-cronjob.yaml`, `deploy/README.md` step 6, `ArchiveJobIT`, `LegalHoldIT`, `PurgeIT` and their Oracle twins, `PurgeProfileIT`, `PurgedCasePageIT`, `LegalHoldAccessibilityIT`, both `DatabaseGrantsIT`s (the negative ITs) |
+| WP-25 | System screen and operational alerts. a, #139: `/admin/system` for System and Compliance Admins (everyone else 403, no case content): each job's last success from `JOB_RUN` (on time, late against its health grace, not run yet, or not watched for the purge), the outbox's waiting and failed counts and oldest waiting mail, the scanner (clamd `VERSION` over the scan's TLS, bounded to 3 s, or "external scanning"). b, #140: the durable role-conflict list read from the audit trail (latest `LOGIN` or `ROLE_CONFLICT` per user), replacing the in-memory list and `UserSignInService.roleConflicts()`. c, #144: the optional `PrometheusRule` component (`TrailkeepSlaEvaluatorLate`, `TrailkeepRemindersLate`, `TrailkeepReportDeliveryLate`, `TrailkeepArchiveLate`, `TrailkeepMailNotSending`, `TrailkeepMailBacklog`, `TrailkeepMailFailed`, `TrailkeepDbPoolExhausted`), each with a runbook anchor. f, #153: a per-replica clamd probe every minute (`trailkeep_scanner_up`) and `TrailkeepScannerDown`. e, #159 (superseding #145): "send me a test" of any of the 11 mails to the person's own address through the outbox, audited `TEST_MAIL_QUEUED`, one per 5 minutes per person. d, #160 (superseding #156): the last import run, through `ImportRunService`, the importer's public read API | #139, #140, #144, #153, #159, #160 | `SystemController`, `TestMailController`, `templates/web/system.html`, `ScannerProbe`, `deploy/components/prometheus-rules/`, `deploy/README.md` "Alerts", `ManagementEndpointsIT`, `SystemAccessibilityIT` |
+| WP-26 | The generic importer, designed in `docs/design/importer.md` and ADR-0014: the `importer` profile as a `Job` under `TRAILKEEP_IMPORT`; commands `status`, `validate-mapping`, `extract`, `dry-run`, `load`, `relink-owners`, `reconcile`, `purge-staging`; sources SQL Server, Oracle and PostgreSQL (read-only snapshot, query validation with JSqlParser and per-vendor function allow-lists, URL allow-list) and CSV, TSV and JSON Lines exports with a manifest; a YAML mapping checked against a JSON Schema, a closed transform set and keyed (HMAC) hashes; staging with checkpoints and a TTL; the dry run's issues, figures, people matching, default owners and go-live SLA forecast, signed off by a Compliance Admin; a load idempotent through `IMPORT_LEDGER`, with attachments through the synchronous scan, comments, closures by the two import principals (ADR-0015), legacy history in `CASE_IMPORTED_EVENT`, go-live alerts pre-marked (ADR-0016) and holds for legacy-held or past-retention cases; delta runs and the closure worklist; `relink-owners`; reconcile from written hashes to a `RECONCILED` verdict; owner-only CSV and HTML report files; the Import runs screen; the History tab's imported rows; export recipes and a worked example, each run by a test | 53 PRs, #134 to #202 (table below) | `io.trailkeep.importer`, `CaseImportService`, `ClosureImportService`, `AttachmentImportService`, `ImportRunController`, `application-importer.yml`, `src/main/resources/importer/mapping-v1.schema.json`, `deploy/jobs/`, `deploy/README.md` "Importer", `docs/importer/` (`export-recipes.md`, `source-accounts.md`, `worked-example.md`), ADR-0014, ADR-0015, ADR-0016, `WorkedExampleIT` and `OracleWorkedExampleIT` |
+| WP-27 | Preferences, shortcuts and i18n. a, #132: `V9__user_preference` and `/preferences` with the single-key shortcuts switch (on by default), audited `PREFERENCES_CHANGED`; `/` focuses the cases search (from any page), `N` opens `/cases/new`, both ignored while typing, in a dialog or with a modifier. b, #135: the subject, alert, text and HTML of all 11 mails as 91 `tk.mail.*` messages, compared against a golden file, and `TemplateTextTest`, a guard against literal wording in any template (its allow-list is empty). c, #138: `app.js` takes its announcements from the layout only. The time-zone audit's one finding, legal hold times rendered in the JVM zone, was fixed by #133 | #132, #135, #138 (and #133) | `UserPreferenceService`, `PreferencesController`, `PreferenceNav`, `app.js` (`wireShortcuts`), `MailTemplates`, `messages.properties`, `MailTemplatesTest`, `TemplateTextTest`, `ShortcutsAccessibilityIT` |
+
+WP-26 by design row (`docs/design/importer.md` §12; every split and its deviations are in the PR):
+
+| Row | PRs | Row | PRs |
+|---|---|---|---|
+| 26a import runs, `TRAILKEEP_IMPORT`, `status` (V10) | #134 | 26p SQL Server source, `-Psqlserver-it` | #167 |
+| 26b mapping JSON Schema, `validate-mapping` | #146 | 26q dry run: case and child rules | #170, #171 |
+| 26c the two import principals (V11) | #137 | 26r dry-run figures, people and default owners, SLA forecast | #172, #173, #174 |
+| 26d legacy number and owner on cases (V12) | #142 | 26s Import runs screen, run request and sign-off | #175, #176 |
+| 26e `CaseImportService` | #157 | 26t `IMPORT_LEDGER` (V17), load of cases and closures, run lock | #177, #179 |
+| 26f imported comments | #163 | 26u load of comments and attachments, scan-mode check | #180, #181, #182 |
+| 26g imported attachments, uploader snapshot (V14) | #149 | 26v `CASE_IMPORTED_EVENT` (V16) | #152 |
+| 26h imported closure marker (V15) | #150 | 26w load of legacy history | #183 |
+| 26i transforms, text normalisation | #154 | 26x History tab's imported rows | #200 |
+| 26j staging tables (V13) | #147 | 26y delta runs, closure worklist | #184, #185, #186 |
+| 26k JSON Lines source, `extract` | #158, #161, #164 | 26z owners pending (V18), `relink-owners` | #187, #188, #189 |
+| 26l CSV and TSV source, lookup files | #168, #169 | 26aa written hashes (V19), reconcile, report files | #190, #191, #192, #193 |
+| 26m query validation | #155 | 26ab importer `Job`, dry-run report files | #194, #195 |
+| 26n JDBC source query, PostgreSQL source | #162, #165 | 26ac go-live alerts pre-marked | #196 |
+| 26o Oracle source | #166 | 26ad import holds | #198 |
+| | | 26ae export recipes and the worked example | #197, #199, #201, #202 |
+
+Fixes and CI changes merged during Phase 5, outside the work packages: #133 (legal hold times in `app.timezone`),
+#143 (published UBI errata applied in the runtime image, CVE-2026-53613), #148 (every merge to `main` gets its own
+complete `main.yml` run, never cancelled by the next), #151 (the at-risk SLA walk kept off the day boundary), #178
+(`app.db.schema` becomes every pooled connection's default schema, found by the importer's Oracle load IT), #136
+(Dependabot ignore rules for the `tika-core` 3.x and bnd annotation 4.3.1 pins) and #129 (commonmark 0.32).
 
 Schema on `main`: `V1__identity`, `V2__audit`, `V3__admin`, `V3_1__sessions`, `V4__case`, `V4_1__comment`,
 `V4_2__comment_pin`, `V4_3__attachment`, `V4_4__attachment_not_scanned`, `V4_5__search_text_lowercase` (#70),
 `V4_6__sla_check_ceilings` (#77), `V4_7__saved_view` (#78), `V4_8__notification_outbox` (#94), `V4_9__user_alert` (#96),
 `V4_10__update_request` (#97), `V5__closure` (#100), `V5_1__case_reopen` (#103), `V6__sla_alerts` (#111),
-`V7__report_delivery` (#120), plus the repeatable `R__grants` per vendor. WP-15 part 4, WP-16, #95, #98, WP-19's
-other parts and every Phase 4 PR except #111 and #120 added no migration. The next migration is `V8`, WP-24's first; a
-later Phase 4 fix that needs one takes `V7_1`. The number is assigned in the PR that ships it.
+`V7__report_delivery` (#120), `V8__legal_hold_events` (#127), `V9__user_preference` (#132), `V10__import_runs` (#134),
+`V11__import_principals` (#137), `V12__case_legacy_number` (#142), `V13__import_staging` (#147),
+`V14__attachment_uploader_snapshot` (#149), `V15__closure_imported` (#150), `V16__case_imported_event` (#152),
+`V17__import_ledger` (#177), `V18__import_owner_pending` (#187), `V19__import_ledger_written` (#190), plus the
+repeatable `R__grants` per vendor. Every migration is in `db/migration/common`; the vendor folders hold only
+`R__grants.sql`. Other PRs added no migration. The next migration is `V20`, assigned in the PR that ships it.
+
+### Database users, profiles and Jobs
+
+Four database users, named per deployment (BUILD_PLAN §8 rule 7; the vendor `R__grants.sql` is the matrix and both
+`DatabaseGrantsIT`s execute every statement as every user):
+
+| User (example name) | Used by | May |
+|---|---|---|
+| schema owner | Flyway | own every table and run the migrations; nothing at run time connects as it |
+| `TRAILKEEP_APP` (`app.db.app-user`) | the web `Deployment` | the application's tables, with no UPDATE or DELETE on comments, attachment content, the audit trail, the alert ledger or imported history and no DELETE of case data (it deletes only pins, saved views, alerts, sessions, ShedLock rows, memberships and outcome lists); SELECT only on the importer's tables, except INSERT of run requests and UPDATE of the sign-off columns on `IMPORT_RUN`; nothing on staging |
+| `TRAILKEEP_PURGE` (`app.db.purge-user`) | the purge `CronJob` | SELECT and DELETE on the content it purges (comments, pins, attachments and chunks, search text, update and closure requests, reopens, imported history, the case's mail) and on `REPORT_RUN`; on `CASE_RECORD` SELECT and an UPDATE of `DESCRIPTION`, `SUBJECT_TEXT`, `PURGED_AT` and `VERSION` only; INSERT on `AUDIT_EVENT` and `JOB_RUN`; nothing on people, configuration, sessions, the alert ledger or the hold history |
+| `TRAILKEEP_IMPORT` (`app.db.import-user`) | the importer `Job` | SELECT, INSERT and DELETE on the staging tables, which no other user can read; SELECT on every mapped table (so Hibernate validates); INSERT of what a load writes (cases, SLA rows, search text, comments, attachments, closures, imported history, ledger, alert ledger, hold events, audit); UPDATE only of `IMPORT_RUN`'s progress columns (never the sign-off), the search text append and, for `relink-owners`, a case's owner. It may stay locked while nothing is imported |
+
+The three run-time users own no table, so on Oracle `app.db.schema` names the owner: it is Hibernate's default schema
+and, since #178, every pooled connection's default schema (`ALTER SESSION SET CURRENT_SCHEMA` on Oracle,
+`SET search_path` on PostgreSQL), which covers native SQL, ShedLock and Spring Session. Native SQL stays in `*JdbcDao`
+classes, each saying why JPA cannot express it: `casefile` (`CaseNumberJdbcDao`, `CaseSearchJdbcDao`,
+`CaseWrittenJdbcDao`), `document` (`AttachmentContentJdbcDao`, `AttachmentWrittenJdbcDao`), `notification`
+(`OutboxJdbcDao`), `closure` (`ClosureWrittenJdbcDao`), `audit` (`ImportedEventWrittenJdbcDao`), `retention`
+(`PurgeJdbcDao`, every statement the purge user runs) and `importer` (`SourceQueryJdbcDao`, the legacy source). The
+`*WrittenJdbcDao` classes read back what a load wrote, as the database holds it, for reconcile's written hashes.
+
+Profiles: `local`, `test`, `oracle-test` and `prod` as before; the vendor profiles `oracle` and `postgresql`
+(through the profile groups in `application.yml`); and two batch profiles, combined with `prod`, both
+`web-application-type: none`, with no OIDC client and Flyway off: **`purge`** (`PurgeRunner` runs once and the process
+exits with its code; Hibernate does not validate, since the purge user sees only what it purges) and **`importer`**
+(`ImportCommandRunner` runs the one `--import.command` given; Hibernate validates, and only this profile maps the
+staging entities).
+
+Kubernetes objects beside the web `Deployment`: the purge `CronJob` (`deploy/base/purge-cronjob.yaml`, `suspend: true`
+until an overlay enables retention; Secret `trailkeep-purge`) and the importer `Job` (`deploy/jobs/importer`, or
+`importer-external-scanning`), applied by hand per command, with its own `NetworkPolicy` (DNS, database and clamd only),
+three claims (`trailkeep-import-data` read-only, `trailkeep-import-content` and `trailkeep-import-reports` writable) and
+the Secrets `trailkeep-import` and `trailkeep-import-hash-key`, plus `app.audit.hmac-key` alone from `trailkeep-web`. Only `validate-mapping` and `extract` read the source:
+for those the `jobs/components/source-access` component adds the source password (`trailkeep-import-source`) and the
+egress label in one step (`jobs/importer-source-access`, `jobs/importer-external-scanning-source-access`).
+`deploy/README.md` says migrations run as a separate pre-deploy `Job` with the owner credential; `deploy/` ships no
+manifest for that step yet (section 6).
 
 ### Not built yet
 
-Retention, archive, legal hold and purge (WP-24); System screen (WP-25); importer (WP-26, designed in
-`docs/design/importer.md` and ADR-0014, not started); preferences and shortcuts (WP-27); DAST, 508 conformance pass,
-performance and runbook (WP-28 to 30).
+Authenticated DAST and the security E2E suite (WP-28), the Section 508 conformance pass and ACR (WP-29), and
+performance at 500k, the restore drill, the runbook, the evidence pack and 1.0.0 (WP-30). Two Part G checks have no
+job yet: the ZAP scan (a placeholder in `nightly.yml` until WP-28) and the Nu HTML validator (section 4).
 
 Consequences for local development today: `compose.yaml` runs PostgreSQL, Keycloak, ClamAV with its TLS sidecar (the
 `local` profile trusts the dev-only CA that `clamav-tls-init` generates, so run `docker compose up -d` before
 `spring-boot:run`), Mailpit (the mail catcher the outbox dispatcher sends to; read the mail at
-`http://localhost:8025`) and an optional Oracle. `README.md` and `CONTRIBUTING.md` are updated to
-match in the same change as this refresh.
+`http://localhost:8025`) and an optional Oracle. Phase 5 added nothing to it. `README.md`'s status is updated in the
+same change as this refresh.
 
 ## 3. How to run and verify
 
@@ -147,6 +248,14 @@ Sign in at `http://localhost:8080` with a dev-realm user (`deploy/local/keycloak
 `/admin/case-types` and `/admin/report-schedules`. The `local` profile seeds two SLA policies, three case types, the teams Alpha and Beta and the
 dev-realm users' team roles on start-up (`app.seed` in `application-local.yml`; #29), so `alpha.analyst` can create
 a case at `/cases/new` and work it from `/cases`. Further memberships are granted at `/admin/teams`.
+`system.admin` and `compliance.admin` both reach `/admin/system` and `/admin/import-runs`; only `compliance.admin` places
+a legal hold (from the case page) or signs off a dry run. Everyone signed in has `/preferences`.
+
+The batch profiles are exercised by tests rather than by hand: `PurgeProfileIT` and `AbstractPurgeIT` start `purge`
+(the latter as the purge user), `AbstractImporterProfileIT` starts `importer` and the web application as their own
+users, and `WorkedExampleIT` runs every importer command of `docs/importer/worked-example.md` against a synthetic
+legacy database. Locally the compose PostgreSQL creates the three run-time roles without a login
+(`deploy/local/postgres/01-roles.sql`), so `spring-boot:run` connects as the owner.
 
 Mail: the `local` profile points the outbox dispatcher at the compose Mailpit (SMTP on `localhost:1025`, mail at
 `http://localhost:8025`) and sets `app.base-url`, the start of every deep link in a mail. Outside `local` and `test`
@@ -156,9 +265,12 @@ refuses to start without them (`app.base-url` always; the other two while `app.m
 is true again.
 
 Oracle parity, two separate options: `./mvnw verify -Poracle-it` starts its own Testcontainers for both public
-images (xe 21 and free 23) and runs the schema and grants ITs on each; `docker compose --profile oracle up -d` starts
-a long-lived Oracle Free 23 for manual work against the `oracle` profile. Testcontainers ITs skip without Docker
-locally and fail in CI (`CI=true`).
+images (xe 21 and free 23) and runs every IT tagged `oracle` (the schema and grants ITs and each `Oracle*` twin) on
+each; `docker compose --profile oracle up -d` starts a long-lived Oracle Free 23 for manual work against the `oracle`
+profile. The importer's SQL Server source ITs run with
+`./mvnw -Psqlserver-it test-compile failsafe:integration-test@sqlserver failsafe:verify@sqlserver` (a SQL Server
+Developer edition container as the legacy database). Testcontainers ITs skip without Docker locally and fail in CI
+(`CI=true`).
 
 Playwright: the `e2e` suite launches Chromium; locally it skips if no browser is installed, CI installs one.
 
@@ -169,13 +281,36 @@ Playwright: the `e2e` suite launches Chromium; locally it skips if no browser is
 | `ci.yml` | every PR and push to `main` | DCO, actionlint, gitleaks, Semgrep (registry rules plus `security/semgrep/`), `./mvnw verify` with Playwright |
 | `codeql.yml` | every PR, push to `main`, weekly | CodeQL `security-extended` for Java |
 | `scorecard.yml` | push to `main`, weekly | OpenSSF Scorecard |
-| `main.yml` | push to `main` (each merge cancels the previous run); on demand with `gh workflow run main.yml` (its own concurrency group since #88, so a push does not cancel it); called by nightly and release | SonarCloud, Dependency-Check, SBOM + Trivy, image build + Trivy (`--ignore-unfixed`) + Dockle + kube-linter, `oracle-it` (both images, one job) |
+| `main.yml` | push to `main` (since #148 each merge has its own concurrency group, so every code merge gets a complete run and none is cancelled); on demand with `gh workflow run main.yml` (its own group since #88); called by nightly and release | SonarCloud, Dependency-Check, SBOM + Trivy, image build + Trivy (`--ignore-unfixed`) + Dockle + kube-linter, `oracle-it` (`./mvnw verify -Poracle-it`, both images, one job), `sqlserver-it` (the importer's SQL Server source ITs, `-Psqlserver-it`, WP-26 part p) |
 | `nightly.yml` | 04:41 UTC | `main.yml` again, and the `perf` job (`PerfCasesListIT` at 50k cases; fails at a list p95 of 500 ms or a search p95 of 1 s); the 500k-comment k6 run and ZAP are placeholders until WP-30 and WP-28 |
 | `release.yml` | tag `v*` | `main.yml` again plus its own `./mvnw verify`, image to GHCR with keyless cosign signature, SBOM attestation, SLSA provenance, GitHub Release with the evidence pack (it does not re-run the `ci.yml` jobs) |
 
 Secrets: `SONAR_TOKEN` and `NVD_API_KEY` are referenced but were not set at handoff (#30). The release workflow
 needs no secrets beyond the job token for signing and publishing, but it forwards those two to `main.yml`, so a
 release cut without them skips SonarCloud and Dependency-Check and its evidence pack has no Dependency-Check report.
+They were still absent on 2026-11-13: the `sonarcloud` job of the latest `main` run reports "Secret SONAR_TOKEN is not
+configured for this repository; the quality gate did not run." WP-28's acceptance ("Sonar gate A; Dependency-Check
+clean") cannot be shown until they are set.
+
+### Part G as it runs today
+
+| Part G check | Fork PR | `main` | Nightly | Release tag | Notes |
+|---|:-:|:-:|:-:|:-:|---|
+| Compile, Spotless, Checkstyle, Error Prone/NullAway, SPDX, licence allow-list | ✓ | ✓ | ✓ | ✓ | `ci.yml` `build` on PRs and pushes; `main.yml` `oracle-it` runs the same `verify` for nightly; `release.yml` `verify` |
+| Unit and slice tests, JaCoCo | ✓ | ✓ | ✓ | ✓ | as above |
+| PostgreSQL ITs incl. `validate` and metadata-diff | ✓ | ✓ | ✓ | ✓ | as above |
+| Oracle ITs (xe 21 and free 23) | – | ✓ | ✓ | ✓ | `main.yml` `oracle-it` |
+| SQL Server source ITs (importer) | – | ✓ | ✓ | ✓ | `main.yml` `sqlserver-it`. **Not a Part G row**: proposed in #167 (WP-26 part p) and run since, but not written into `IMPLEMENTATION_PLAN.md`; owner decision (section 6) |
+| CodeQL, Semgrep, SpotBugs/FindSecBugs, gitleaks | ✓ | ✓ | partly | partly | `codeql.yml` (PRs, pushes, weekly on Mondays) and `ci.yml` (Semgrep, gitleaks; PRs and pushes). Nightly and release get SpotBugs through `verify`, but neither runs Semgrep, gitleaks or CodeQL; a release tag is cut from a `main` commit those already passed |
+| Playwright E2E + axe + Nu validator | ✓ | ✓ | ✓ | ✓ | Playwright and axe run inside `verify`. **The Nu HTML validator is not wired anywhere** (BUILD_PLAN §10.2, §12.1); see section 6 |
+| SonarCloud, Dependency-Check | – | ✓ | ✓ | ✓ | `main.yml`; skipped with a notice while `SONAR_TOKEN` and `NVD_API_KEY` are absent (#30) |
+| CycloneDX SBOM generated | – | ✓ | ✓ | ✓ | `main.yml` `sbom`, scanned by `trivy-sbom` |
+| Container build, Trivy, Dockle, kube-linter | – | ✓ | ✓ | ✓ | `main.yml` `image` |
+| ZAP authenticated full + API scan | – | – | placeholder | – | `nightly.yml` `zap` prints a notice until WP-28 |
+| k6 at the 50k/500k seed | – | – | 50k, in process | – | `nightly.yml` `perf` runs `PerfCasesListIT` at 50k (not k6); the k6 smoke runs by hand; 500k and the release run arrive with WP-30 |
+| OpenSSF Scorecard | – | push and weekly | – | – | `scorecard.yml` |
+| SBOM signed, cosign, SLSA, evidence pack | – | – | – | ✓ | `release.yml`; exercised once, at `v0.1.0` |
+| veraPDF | – | – | – | – | v1.1 only (no PDF in v1) |
 
 Branch rules: status checks required, linear history, no force-push, zero approving reviews (single maintainer).
 Every PR gets an independent review pass on a different model from its author, recorded on the PR (Part B).
@@ -188,7 +323,8 @@ All are recorded where they were made; this is the index.
 |---|---|---|
 | Trivy image gate runs with `--ignore-unfixed` | #11, #12 | Owner chose to fail only on fixable HIGH/CRITICAL findings; unfixed base-image findings stay in the reports and evidence pack |
 | Semgrep excludes `python.django.security.django-no-csrf-token.django-no-csrf-token` | #19, `ci.yml` | False positive on Thymeleaf forms whose CSRF field Spring Security injects |
-| `config/spotbugs/exclude.xml` carries `SPRING_ENDPOINT` for every controller (`DashboardController`, `SessionController`, `TeamAdminController`, `UserAdminController`, `CaseConfigController`, `CaseController`, `CaseEditController`, `CaseAssignmentController`, `CaseAttachmentController`, `CaseListController`, `SavedViewController`, `CaseExportController`, `CaseHistoryController`, `AlertController`, `UpdateRequestController`, `ClosureController`, `ClosureDecisionController`, `ClosureApproverController`, `CaseReopenController`, `ReportController`, `ReportRunController`, `ReportScheduleController`), listed by class | #19, #20, #22, #49, #50, #59, #62, #63, #78, #84, #87, #96, #98, #104, #105, #106, #107, #116, #118, #121, #122 | The pattern reports no defect; each controller is reviewed and the approval recorded in the file; `spotbugs-annotations` is LGPL and off the license allow-list, so the file is the mechanism |
+| `config/spotbugs/exclude.xml` carries `SPRING_ENDPOINT` for every controller (`DashboardController`, `SessionController`, `TeamAdminController`, `UserAdminController`, `CaseConfigController`, `CaseController`, `CaseEditController`, `CaseAssignmentController`, `CaseAttachmentController`, `CaseListController`, `SavedViewController`, `CaseExportController`, `CaseHistoryController`, `AlertController`, `UpdateRequestController`, `ClosureController`, `ClosureDecisionController`, `ClosureApproverController`, `CaseReopenController`, `ReportController`, `ReportRunController`, `ReportScheduleController`, `LegalHoldController`, `PreferencesController`, `SystemController`, `TestMailController`, `ImportRunController`), listed by class | #19, #20, #22, #49, #50, #59, #62, #63, #78, #84, #87, #96, #98, #104, #105, #106, #107, #116, #118, #121, #122, #126, #132, #139, #145, #175, #176, #186, #188 | The pattern reports no defect; each controller is reviewed and the approval recorded in the file; `spotbugs-annotations` is LGPL and off the license allow-list, so the file is the mechanism |
+| `SourceQueryJdbcDao` runs non-constant SQL, excluded from FindSecBugs' two SQL-injection patterns by name | #162, `config/spotbugs/exclude.xml` | The importer runs the operator's own source queries from the reviewed mapping, so the SQL is not a constant by design; `run` accepts only a `ValidatedSourceQuery` (exactly one `SELECT`, no locking, `INTO`, database link or function outside the vendor allow-list), values are bound, and the session is a read-only snapshot under a read-only account (`docs/importer/source-accounts.md`) |
 | Case configuration (SLA policies, case types, outcomes) lives in `casefile`, not `sla` | ADR-0011, #21 | Keeps the module graph acyclic; `sla` reads it through `CaseConfigService`. Supersedes BUILD_PLAN §7.4's `sla/ (SlaPolicy, …)` line |
 | App user may DELETE from `CASE_TYPE_OUTCOME` | ADR-0011, both `R__grants.sql` | Configuration, not case data; closure outcomes are stored as `VARCHAR` snapshots, not foreign keys |
 | `OIDC_SESSION` keyed by `SESSION_ID`; `SID` nullable and indexed; cleanup spares rows under one hour | ADR-0008 amendment, #23 | Spring removes registrations by client session id; a provider may omit `sid`; the registry row is written before Spring Session commits the session row |
@@ -239,23 +375,72 @@ All are recorded where they were made; this is the index.
 | A stored run's HTML reaches a page only through `StoredReportSanitizer` into `SafeHtml` | #121 | `REPORT_RUN.HTML` is application output read back from a table, so it is treated as untrusted: an OWASP policy allows only the report's table elements, `a p div span`, `scope colspan class` with plain values, and `href` to `/cases/{number}`. Re-rendering from data was rejected: a run stores HTML and CSV, not the report's numbers, and should show what was sent. `shared.html` now has two `SafeHtml` producers |
 | A run is read by role: an enabled Manager of its team or a Compliance Admin; anyone else, and any malformed or unknown id, gets 404 | #121 | Runs are not case-rooted, so access is decided from the per-request `UserPermissions`, which grants what a Manager's `CaseScope` would over the team's cases; 404 keeps run ids from being probed (ADR-0005 style). Each download is audited `REPORT_RUN_DOWNLOADED` |
 | Test Keycloak containers are stopped between test classes | #115, c54f2b5 | Each `KeycloakDevRealm.start()` left its container (about 0.9 GB) running until the JVM exited; two dozen of them exhausted the 16 GB CI runner, which then died with "received a shutdown signal" at the same test every time. `start()` now stops the previous class's realm. One shared container per JVM is #117 |
+| The retention cut-off is calendar years in UTC, and archiving is a conditional bulk update, not `CaseStatusService.move` | #125 | The rule is "years after closure", where hours of zone shift do not matter. The job has no actor and the matrix does not apply to it; the update moves the version on, so an open edit form gets 409, never a lost update. A reopen clears `CLOSED_AT`, which restarts the clock |
+| "Archived" in the status filter is offered to a Manager of some team or a Compliance Admin; anyone else naming it gets 422 | #125 | The export-details rule; the list still reads through `CaseScope`. Filtering archived rows per team would need a team list in `CaseFilter` (used in URLs and saved views), so it was left out |
+| The current hold lives on the case row; its readable history is the append-only `LEGAL_HOLD_EVENT`; only Compliance Admins see reasons | #126, #127 (`V8`) | The audit copy of a reason is redacted, so it cannot be the readable record (as for `CASE_REOPEN`). Everyone who reads the case sees the "Legal hold" chip, not why. Lifting a hold does not restart the retention clock; it pushes `PURGE_AFTER` to at least now plus `app.retention.purge-grace`, so a case is never purged the moment its hold ends |
+| The purge deletes `CASE_REOPEN` **before** `CLOSURE_REQUEST`, and the mail naming a report run before the run | #128 | `FK_REOPEN_CLOSURE` and `FK_OUTBOX_REPORT_RUN`. The full order per chunk: pins, update requests, comments, attachment chunks, attachments, search text, reopens, closure requests, the case's mail, then the tombstone |
+| `REPORT_RUN` is kept 400 days (`app.retention.report-runs`) | #128 | A run is a weekly snapshot with case numbers, titles and names; 400 days keeps last year's run for the same week. The live aging report answers "as of today". A deployment under a longer records schedule raises it |
+| The purge's native SQL lives in `retention.PurgeJdbcDao`, outside Part B's three `*JdbcDao` modules | #128 | It deletes across modules under its own user, without Hibernate validation, from tables whose entities are `@Immutable`; one class mirrored statement for statement by the grants is what makes "the purge user can do exactly this" reviewable. The class says why JPA cannot express it |
+| The purge keeps the case row, `CASE_SLA`, the audit trail, the alert ledger, the hold history and `USER_ALERT`; it deletes the case's mail; it writes one `CASE_PURGED` row of counts per tombstone and a `JOB_RUN` row | #128 | Every kept table references the case, which is never deleted. An alert carries only what the tombstone keeps; a mail body may carry more. The audit row has counts only, so the purge pod needs no HMAC key. The tombstone also keeps `OWNER_NAME_SNAPSHOT` (#142), the stand-in for an imported case's legacy owner. A purged case still opens, with "Content removed on (day) under the retention policy." |
+| Four database users (owner, app, purge, import), and `app.db.schema` as every pooled connection's default schema | BUILD_PLAN §8 rule 7, #134, #178 | The import user joined in WP-26 (design §5). The run-time users own nothing, and every statement Hibernate does not write (the DAOs, ShedLock, Spring Session) used to resolve in the connecting user's own schema on Oracle; one `connectionInitSql` covers them all, and a later native statement cannot forget it. The schema must be a plain identifier, and a second `connection-init-sql` fails the start |
+| The batch profiles (`purge`, `importer`) run once and exit, with no web server, scheduler or OIDC client and Flyway off | #128, #134 | `TrailkeepApplication.main` exits with the context's exit code, so a failed run fails the pod. Spring Modulith's "moments" were the only thing starting a scheduler outside the servlet-only configuration |
+| The role-conflict list and the test-mail throttle are read from the audit trail | #140, #159 | Cluster truth without a new table: the latest `LOGIN` or `ROLE_CONFLICT` per user (closes #67 item 9), and at most one `TEST_MAIL_QUEUED` per person per 5 minutes. The role-conflict query at multi-year audit volume is #141 |
+| No cases-per-SLA-state gauge, no scan-queue metric, no "never ran" alert | WP-25 close-out | Not in BUILD_PLAN §16's list. Age gauges are `NaN` before a job's first success and the System screen shows "Has not run yet". Candidates for WP-30 |
+| Shortcuts can be turned off, not remapped; `/` goes to the cases list's search box | #132 | Off is what WCAG 2.1.4 requires; a later preference column can add remapping. No layout has a search field, so `/` opens `/cases` and focuses `#tk-q` |
+| Mail is rendered in English from `messages.properties`, one `th:text` message per line | #135 | No per-person locale is planned for v1. Keeping a `<span>` round each value needed `th:utext`, which the Semgrep gate forbids, so the HTML is simpler and the visible text identical (golden test) |
+| WP-26's 31 design rows became 53 PRs; `extract` landed with the first source (26k) | #134 to #202 | Each PR stayed under 400 net lines; every split is stated in its PR |
+| SQL Server source ITs run on `main`, nightly and release tags, not fork PRs (`-Psqlserver-it`) | #167 | The image is large, like Oracle's. Proposed as a Part G row, not written into `IMPLEMENTATION_PLAN.md` (owner decision, section 6) |
+| The mapping hash is a plain, length-prefixed SHA-256 over the mapping file and each lookup file | #169 | Lookup files can hold legacy values, but the hash covers whole files, mapping first, so guessing a value means guessing every byte of both. Row and key hashes are keyed (HMAC under `import.hash-key`) because short legacy text would be dictionary-reversible. Flagged for the Phase 6 security review |
+| `visibility.onUnrepresentableAcl: standard` keeps the mapped sensitivity (`STANDARD` when none) | #172, `CaseRules.visibility` | `restricted` (the default) restricts every case with a legacy access list; `fail` makes it an `ACL_UNREPRESENTABLE` error; `standard` leaves the case as mapped |
+| The CSV dialect is declared in the mapping; no custom row terminator; a files mapping is all CSV/TSV or all JSON Lines | #168 | Rows end at CR, LF or CRLF, the only terminators Commons CSV parses, so the `bcp` fallback with a custom row terminator is unsupported (a custom field terminator is). A lookup file follows the same dialect and encoding (#169) |
+| `import.allow-mapping-change` is also the `import.hash-key` rotation path | #184 | Without it, a delta against ledger rows loaded under another mapping is a FATAL `MAPPING_CHANGED_SINCE_LOAD`. With it, one `MAPPING_CHANGE_ALLOWED` WARNING tells the sign-off that no row hash is compared in this run, since a changed mapping or a rotated key makes every row look changed; status and closing time are still compared |
+| The importer `Job` lives under `deploy/jobs/`, with the source password and the source egress in one `source-access` component | #194 | Applying a `Job` runs it, so it is not in `base/`. Two writable claims (content area, reports) instead of one run volume, because subPath folders are root-owned. Only `validate-mapping` and `extract` mount the source password |
+| Report files go to `<import.reports-dir>/<run id>/`, owner-only, with counts, codes, keyed hashes and Trailkeep ids, never legacy keys | #193, #195 | They outlive the staging, for the approver. Reconcile and dry run share the report code and `shared.csv.CsvFormat` |
+| An imported open case's alerts already raised are recorded as sent, so go-live mails nothing about the backlog | #196, ADR-0016 (Proposed) | Imported cases arrive in their state without a transition, but the reminders tick would repeat every overdue alert at once |
+| A case on legal hold in the legacy system, or past its retention at the load, is created already on legal hold | #198 | "Past its retention" is closed at or before the load minus the type's `RETENTION_YEARS`, the archive job's boundary, inclusive; nothing imported is archived or purged unreviewed. The hold is set in the case's INSERT (the import user has no UPDATE of the hold columns), with its hold event and audit row; a Compliance Admin lifts it as usual |
+| A signed-off run keeps `STATUS = DRY_RUN` with `APPROVED_BY` set; LOAD issues are always ERROR | #176, #179 | The screen reads an approved dry run from the sign-off columns, the app user's only UPDATE on the table. A FATAL load issue would trip the start gate of a resumed load |
+| clamd's stream limit is declared (`import.attachments.clamd-stream-max`) and checked only by dry-run and load in clamd mode; the scanning mode in force must equal the dry run's | #180 | Status and staging purge never block on it. A run dry-run under `external` cannot be loaded under `clamd` or the other way round |
+| Export recipes: `sqlcmd -y 0` without `-h -1`; a SQL*Plus line over 32 767 bytes fails closed (`ROW_UNREADABLE`) and goes through JDBC; Oracle BLOBs and SQL Server attachments are JDBC-only | #199, #201 | What the tools allow, each recipe run by a test. A value over 1 MB is exported whole by mssql-tools18, which settles design §4.2.2's open question |
+| Each importer IT seeds its own synthetic legacy fixture | WP-26 | Design §11's single shared `legacy-schema/` folder was not built; not audited item by item against §11's list of awkward values |
+| New runtime dependencies for the importer: `jackson-dataformat-yaml` and `json-schema-validator` (Apache-2.0, #146), JSqlParser (LGPL-2.1 OR Apache-2.0, Apache-2.0 elected, #155), `re2j` (BSD-3-Clause published as "Go License", #154), `commons-csv` (Apache-2.0, #168), `mssql-jdbc` (MIT, #167) | those PRs, `pom.xml` | The allow-list was not widened: the "Go License" name was added to the BSD-3-Clause `licenseMerge`, after checking its text. `re2j` gives linear-time matching, so a mapping's pattern cannot hang an extract on a crafted value |
 
-## 6. Known gaps and follow-ups (all tracked)
+## 6. Known gaps and follow-ups
 
 | Issue | What |
 |---|---|
 | #30 | Phase 1 exit items: scanner secrets, real IdP login in DEV, shell ACR manual testing |
-| #92 | Owner item: the manual assistive-technology pass on the Phase 2 screens (a Phase 2 exit criterion). Still open, and it now also covers the Alerts page and the Request update dialog with its combobox (WP-17, WP-18), the WP-19 screens (the Request closure, Reject or request changes, Reassign approver and Reopen dialogs and their fallback pages, the pending banner and the dashboard's "Pending my approval"), and the WP-20 to WP-23 screens (the dashboard's tiles, My cases and paged lists, the Aging and SLA compliance reports and their print view, the scheduled report runs and the report schedules), which pass axe and a keyboard walk but have had no screen-reader pass |
+| #92 | Owner item: the manual assistive-technology pass on the Phase 2 screens (a Phase 2 exit criterion). Still open, and it now also covers the Alerts page and the Request update dialog with its combobox (WP-17, WP-18), the WP-19 screens (the Request closure, Reject or request changes, Reassign approver and Reopen dialogs and their fallback pages, the pending banner and the dashboard's "Pending my approval"), the WP-20 to WP-23 screens (the dashboard's tiles, My cases and paged lists, the Aging and SLA compliance reports and their print view, the scheduled report runs and the report schedules), and the Phase 5 screens (the legal hold dialog, its fallback page and the hold history; the purged case page; the System screen and "send me a test"; the Import runs list, run page, run request and sign-off; the History tab's imported rows; `/preferences` and the `/` and `N` shortcuts), which pass axe and a keyboard walk but have had no screen-reader pass |
 | #24 | Spring Session license tracker (stay on 4.1.0) |
-| #67 | Bug-hunt triage of 2026-11-05 (report under `docs/bug-hunts/`, eleven suspicions). Rejected with evidence: 1, 2, 3, 5, 8, 9 (inactive-team memberships count toward the System Admin conflict, by design), 10, and the session-boundary part of 11. Fixed: 4 (local seed names compared stripped, #73), 6 (multipart headroom, #76), 7 (CHECK ceilings, #77), 11 (CRLF counted once in the description limit and surrogate pairs kept whole in the audit name, #74). Carried forward: 9's in-memory role-conflict list is replaced when WP-25 reads the durable `ROLE_CONFLICT` audit rows (latest per user, cleared by a later conflict-free `LOGIN`), and then `UserSignInService.roleConflicts()` goes away; item 1 is a note for WP-24 (a purge path that rewrites search text must handle a null description); the attachment size display shows 1,048,525 to 1,048,575 bytes as "1024.0 KB" (deferred, cosmetic) |
-| WP-24 notes (from WP-19, WP-22 and WP-23) | `CASE_REOPEN` joins the purge list of BUILD_PLAN §4.6 ("update and closure requests"): the purge job deletes it with them, and deletes it **before** `CLOSURE_REQUEST`, which its `FK_REOPEN_CLOSURE` references; the reason is case content, like the closure summary. The outbox now references `REPORT_RUN` (`FK_OUTBOX_REPORT_RUN`), so outbox rows naming a run are deleted or detached **before** any run is deleted. `REPORT_RUN` holds case numbers and titles, so it needs a retention rule of its own (the purge user has no grant on it today). The compliance report counts `CLOSED` cases only, not `ARCHIVED` ones (#116) |
 | #117 | One shared Keycloak container per test JVM (about 5.5 minutes off CI); deferred to Phase 6 |
+| #141 | Phase 6 performance: measure the System screen's role-conflict query (latest `LOGIN` or `ROLE_CONFLICT` per user over the whole audit trail) at multi-year audit volume |
+
+Follow-ups without an issue yet, each recorded in the PR or close-out that found it:
+
+| Area | What | For |
+|---|---|---|
+| Performance | The dry run's `PeopleMatcher` looks people up one by one (#173); batch it before a 500k-person source | WP-30 |
+| Performance | The cases-list index recommendations of `docs/perf/cases-list-50k.md` (`CASE_RECORD (OPENED_AT, ID)`, an expression index on `LOWER(TITLE)`) still wait for the 500k run | WP-30 |
+| Performance | The importer's dry run, load and staging purge have not been measured at volume | WP-30 |
+| Tests | Some tests that place times relative to "now" leave a window of seconds around midnight in which they can fail (#151 moved one, the at-risk SLA walk, off the day boundary); the others are not yet swept | Phase 6 |
+| Security review | The plain SHA-256 mapping hash (section 5, #169) is flagged for the Phase 6 security review | WP-28 |
+| CI | The Nu HTML validator that BUILD_PLAN §10.2 and §12.1 and Part G list beside axe is not wired into any job | WP-28 or WP-29 |
+| Deploy | `deploy/` ships no migration `Job`: `deploy/README.md` "Runtime properties" says migrations run as a separate pre-deploy `Job` with the owner credential, and the web profile does not turn Flyway off. `trailkeep-config` has no `APP_DB_SCHEMA` entry and "What an overlay must set" does not name it, although the importer `Job`'s header says it comes from `trailkeep-config` and every run-time user on Oracle needs it (#178) | WP-30 (runbook) |
+| Operations | After an import: lock `TRAILKEEP_IMPORT` again, and keep `trailkeep-import-hash-key` while a delta may still compare with the ledger (`deploy/README.md` "Importer" step 5) | the deploying team |
+| Archive filter | "Include archived" lists archived cases from every team the person's scope reads, not per team (#125, deviation 3) | if wanted |
+| Design text | `docs/design/importer.md` has drifted from what was built, and is not edited by builders (CLAUDE.md rule 11): §6.1's example `people` block lacks `fields` (display name, email), without which email matching and name snapshots have nothing (the worked example's mapping has them, #202); §4.2.2 gives `sqlcmd -y 0 -h -1`, which `sqlcmd` refuses (`-y 0` alone, #201), and leaves the 1 MB question open; §2.1 still names `deploy/jobs/importer-job.yaml` (it is `deploy/jobs/importer/importer-job.yaml` with its kustomizations, #194); §8.1 says the hold lives in `retention` (it is in `casefile`, #198); §9 says no CSV writer exists (`shared.csv.CsvFormat` is reused, #193); §11's shared legacy-schema folder was not built | a docs PR |
+| Export recipes | `docs/importer/export-recipes.md` should say that the Oracle recipe's `TIMESTAMP_TO_SCN(SYSTIMESTAMP)` is approximate (Oracle maps timestamps to SCNs at a granularity of seconds), so the recorded SCN marks the snapshot only roughly | a docs PR |
+| ADRs | ADR-0014, ADR-0015 and ADR-0016 are still "Proposed" | owner (item 11 below) |
 
 Closed since 0.1.0: #26 (the OIDC session registry IT runs on the Oracle leg, #38), #27 (`ConstraintViolationException`
 maps to 422, #36), #28 (back-channel `logoutUri` follows the bound port, #37), #29 (local seed names the unknown
 policy and seeds teams Alpha and Beta, #40), #31 (disabling a user ends their sessions, #63), #66 (the htmx 403
 redirect no longer doubles the servlet context path, #72), #69 (the Oracle leg on `lower()` of the `CLOB`, #70) and
-#82 (`VIEW_RESTRICTED` was never written; now it is, #83).
+#82 (`VIEW_RESTRICTED` was never written; now it is, #83). #67, the bug-hunt triage of 2026-11-05, was closed early by
+GitHub's keyword parser when #73 merged; its last carried-forward items are now done: item 9's durable role-conflict
+list is WP-25's (#140, and `UserSignInService.roleConflicts()` is gone), item 1's null description is what the purge
+writes on purpose (#128, which deletes the search text rather than rewriting it), and item 11d's size display was
+fixed by #81. The WP-24 notes of the Phase 4 refresh (the `CASE_REOPEN` and report-run purge order, a retention rule for
+`REPORT_RUN`) are done in #128; the compliance report still counts `CLOSED` cases only, not `ARCHIVED` ones (#116).
 
 ### Open owner items
 
@@ -281,7 +466,9 @@ code change.
    declare one string, `(Apache-2.0 OR EPL-2.0)`, which the check does not recognise. Decide: keep the pin as is; or
    before upgrading, add a `licenseMerge` for that string or list it in the allow-list (a gate change, so recorded in
    its own PR); or drop the dependency, which needs another way to compile `tika-core`'s annotated classes without
-   the warning. Nothing is required while the pin stays.
+   the warning. Nothing is required while the pin stays. Since #136, `dependabot.yml` ignores bnd annotation releases
+   from 5 on (after #131, 7.4, was declined for this reason) and `tika-core` from 4 on (#130 was declined: 4.x breaks
+   `MimeTypes.detect`, and the 3.x line is a deliberate pin), so neither is proposed again until the rule is removed.
 7. **ClamAV signature updates in a cluster.** `deploy/base/clamav.yaml` runs clamd from the official image with no
    `freshclam` and no egress (ADR-0012), so signatures are those baked into the image tag (the file's header says the
    same). Decide how they stay current: roll the image tag on a fixed cadence (rebuild or re-pull with current
@@ -289,6 +476,17 @@ code change.
    which also relaxes the pod's no-egress `NetworkPolicy`; or point `freshclam` at a private mirror. Setting
    `app.attachments.scanning: external` (ADR-0013, `deploy/overlays/external-scanning`) removes the ClamAV pod and
    with it this decision, at the cost of files being stored `NOT_SCANNED`.
+8. **Tag 0.2.0.** `main` carries Phases 2 to 5 since `v0.1.0`. A `v0.2.0` tag runs `release.yml` again: the image
+   to GHCR with its signature, SBOM attestation and provenance, and a GitHub Release with the evidence pack (without
+   the Dependency-Check report while #30's secrets are absent). `CHANGELOG.md`'s Unreleased block becomes 0.2.0.
+9. **The named certified tester for WP-29.** The Section 508 conformance pass needs a Trusted Tester v5 (or the
+   deploying organization's equivalent) for a 3-week window (Part F); the remediation and the ACR depend on it. #92's
+   screen-reader pass is the same kind of work and can be folded into it.
+10. **The SQL Server row in Part G.** `-Psqlserver-it` has run on `main`, nightly and release tags since #167, but
+    `IMPLEMENTATION_PLAN.md` Part G has no row for it. Decide whether to add the row (the plans are changed only by
+    their owner) or record that the importer's third source stays outside the plan's CI table.
+11. **ADR-0014, ADR-0015 and ADR-0016** (the importer's sources and canonical model, the two import principals, the
+    go-live alerts pre-marked) are "Proposed". They describe what is built; accept them, or say what should change.
 
 Items 2 to 4 are the open Phase 1 exit items from #30; until they are done Phase 1 is not complete in the plan's own
 terms.
@@ -304,21 +502,26 @@ Not defects, but worth knowing:
 
 ## 7. What comes next, in plan order
 
-1. **Phase 5, admin, retention, importer and polish**, in this order:
-   - **WP-24, retention, archive, legal hold and the purge `CronJob`**: the archive job, `ARCHIVED` behaviour, legal
-     hold, `PURGE_AFTER`, the `purge` profile with its own credential and the `PURGED_AT` tombstone, with the purge
-     order of section 6. Its first migration is `V8`;
-   - **WP-26, the generic importer** (designed in `docs/design/importer.md` and ADR-0014): staging tables, YAML
-     mapping, idempotent by `LEGACY_REF`, attachments through the synchronous scan, the reconciliation report;
-   - **WP-25, the System screen and operational alerts**, after WP-26, whose last import run it shows: job last runs
-     from `JOB_RUN` (the three Phase 4 jobs already write it), outbox backlog and failures, clamd status, the durable
-     role-conflict list of section 6, Prometheus rules;
-   - **WP-27, preferences, shortcuts and i18n**, which depends only on WP-05 and can run beside the others.
-2. Then Phase 6 (WP-28 to 30: DAST, the Section 508 conformance pass with the named tester, performance at 500k and
-   the runbook). WP-25 owns the role-conflict list described in section 6; WP-24 owns purge, including the orders
-   noted there.
-3. Carried forward from Phase 2: the index recommendations of `docs/perf/cases-list-50k.md` wait for WP-30's 500k
-   run, and rows open on click only (the case-number link is the keyboard path, #84).
+1. **Phase 6, hardening and conformance** (3 weeks in Part F; the tester's window runs all three):
+   - **WP-28, authenticated DAST and security E2E** (M): Playwright signs in to the dev realm and hands the session to
+     ZAP for a full scan and an API scan against an ephemeral stack, nightly and on release tags (replacing the
+     `nightly.yml` placeholder), and a security E2E suite: CSP, CSRF, 404-not-403 enumeration, no restricted leak,
+     upload abuse, and forwarded-header spoofing from a private address that is not the router. Acceptance: 0 Medium+
+     findings, Sonar gate A and Dependency-Check clean; the last two need owner item 2. The plain SHA-256 mapping hash
+     (#169) is on its review list, and the Nu validator gap (section 6) sits beside it;
+   - **WP-29, the Section 508 conformance pass and ACR** (L, plus the 3-week tester window): Trusted Tester v5 by the
+     named certified tester (owner item 9), remediation, and the ACR (VPAT 2.5) with the manual test matrix in
+     `accessibility/`. Acceptance: no "Does Not Support", and dated tickets for any "Partially Supports";
+   - **WP-30, performance, restore drill, runbook, evidence pack and 1.0.0** (M): k6 at the 50k and 500k seeds, pool
+     sizing, a restore drill, `docs/RUNBOOK.md`, the release workflow and evidence pack, `CHANGELOG`, a signed tag.
+     It inherits the performance follow-ups of section 6 (#141, `PeopleMatcher`, the importer at volume, the cases-list
+     indexes, the export's connection hold of section 5) and the deploy gaps (the migration `Job`, `APP_DB_SCHEMA`).
+2. **Owner-only items** that gate Phase 6 or the release, none of them code: the scanner secrets for WP-28's
+   acceptance (item 2, #30), the named certified tester for WP-29 (item 9), the screen-reader pass of #92, the
+   `v0.2.0` tag (item 8), the Part G SQL Server row (item 10), the ADRs (item 11), and the open Phase 1 items of #30
+   (real IdP sign-in, shell ACR manual testing). #24 (Spring Session pin) needs no action while the pin stays.
+3. Carried forward: rows of the cases list open on click only (the case-number link is the keyboard path, #84), and
+   #117 (one shared Keycloak container per test JVM, about 5.5 minutes off CI) is Phase 6 housekeeping.
 
 Two conventions the receiving team inherits and should keep: one migration per PR shipped with its entity, and the
 independent review on a different model recorded on the PR.
