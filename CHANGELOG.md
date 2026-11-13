@@ -9,6 +9,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- The Oracle export recipe (WP-26 part ae2, docs/design/importer.md §4.2.2, §11): `docs/importer/export-recipes.md`
+  gives the one-session SQL\*Plus script (time zone and NLS formats pinned, one `SET TRANSACTION READ ONLY`, each
+  entity spooled as JSON Lines with `JSON_OBJECT(* RETURNING CLOB)` over the mapping's own query, the SCN as the fixed
+  point) and its manifest script, with `BLOB` attachments read through JDBC only. `OracleExportRecipeIT` (Free 23 and
+  XE 21) runs both unchanged with the image's SQL\*Plus as the source account: the file and JDBC extracts stage every
+  person, case and comment with the same keyed row hash, and a row longer than SQL\*Plus's 32 767-byte line makes the
+  file extract refuse the file (`ROW_UNREADABLE`) rather than stage a broken row, as the page now warns.
 - The PostgreSQL export recipe (WP-26 part ae1, docs/design/importer.md §4.2.2, §11): `docs/importer/export-recipes.md`
   gives the one-session `psql` script (every `\copy` in one `REPEATABLE READ READ ONLY` transaction, the snapshot
   recorded as the fixed point) and a manifest script, and the mapping change from `query:` to `file:`.

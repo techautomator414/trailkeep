@@ -47,9 +47,6 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 @Import(PostgresTestcontainersConfiguration.class)
 class PostgresExportRecipeIT extends ExtractJobSupport {
 
-    /** The page the recipe is read from, relative to the project, where Failsafe runs. */
-    static final Path RECIPES = Path.of("docs/importer/export-recipes.md");
-
     private static final byte[] SCAN = "synthetic scan exported as bytea hex".getBytes(StandardCharsets.UTF_8);
 
     private static final String DETAILS = "First line\nSecond line, with a comma\n\"Quoted\" third";
@@ -140,8 +137,8 @@ class PostgresExportRecipeIT extends ExtractJobSupport {
 
     @Test
     void recipeFilesStageTheRowsTheJdbcSourceStagesRowForRow(@TempDir Path directory) throws Exception {
-        String script = recipe("postgresql/export.sql");
-        export(script, recipe("postgresql/manifest.sh"), directory);
+        String script = ExportRecipes.block("postgresql/export.sql");
+        export(script, ExportRecipes.block("postgresql/manifest.sh"), directory);
         assertThat(Files.readString(directory.resolve("manifest.yaml")))
                 .as("the export's own snapshot is its fixed point")
                 .contains("fixedPoint: { kind: snapshot, value: \"")
@@ -164,7 +161,9 @@ class PostgresExportRecipeIT extends ExtractJobSupport {
         assertThat(staged(live)).containsExactly(2, 3, 2, 1, 0);
         for (String table :
                 List.of("IMPORT_STG_PERSON", "IMPORT_STG_CASE", "IMPORT_STG_COMMENT", "IMPORT_STG_ATTACHMENT")) {
-            assertThat(rowHashes(table, files)).as(table).isEqualTo(rowHashes(table, live));
+            assertThat(ExportRecipes.rowHashes(jdbc, table, files))
+                    .as(table)
+                    .isEqualTo(ExportRecipes.rowHashes(jdbc, table, live));
         }
         assertThat(issues(files))
                 .as("the same issues: none")
@@ -241,27 +240,7 @@ class PostgresExportRecipeIT extends ExtractJobSupport {
         return mapping;
     }
 
-    /** A command block of the recipe page: the fenced block under the {@code <!-- recipe: name ... -->} marker. */
-    static String recipe(String name) throws Exception {
-        String page = Files.readString(RECIPES);
-        int marker = page.indexOf("<!-- recipe: " + name + " ");
-        assertThat(marker).as("recipe " + name + " on " + RECIPES).isNotNegative();
-        int open = page.indexOf('\n', page.indexOf("```", marker)) + 1;
-        return page.substring(open, page.indexOf("```", open));
-    }
-
     private static Path area(Path directory, String name) throws Exception {
         return Files.createDirectories(directory.resolve(name));
-    }
-
-    /** A run's staged rows of one table: each key with its keyed row hash. */
-    private Map<String, String> rowHashes(String table, long run) {
-        Map<String, String> hashes = new LinkedHashMap<>();
-        // Test-only read over the fixed table names the test passes.
-        jdbc.query(
-                "SELECT LEGACY_KEY, ROW_HASH FROM " + table + " WHERE RUN_ID = ? ORDER BY LEGACY_KEY",
-                (row, index) -> hashes.put(row.getString(1), row.getString(2)),
-                run);
-        return hashes;
     }
 }

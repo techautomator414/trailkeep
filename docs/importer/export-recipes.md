@@ -109,7 +109,97 @@ commas, quotes and line breaks, NULL next to the empty string, non-ASCII text, f
 `bytea` content all arrive intact; and the file extract and the JDBC extract of the same database stage every person,
 case, comment and attachment with the same keyed row hash and the same issues.
 
-## Oracle and SQL Server
+## Oracle
 
-Their recipes (SQL\*Plus with one read-only transaction and pinned NLS formats; `sqlcmd` writing JSON Lines from a
-database snapshot) are added with their recipe tests. Until then, read these databases through the JDBC source.
+Run one script in **one SQL\*Plus session**, as the source account of [source-accounts.md](source-accounts.md). It
+pins the session's time zone and NLS formats, opens one `SET TRANSACTION READ ONLY` transaction (every query then
+reads the same point in time) and spools each entity as **JSON Lines**: `JSON_OBJECT(* RETURNING CLOB)` over the
+mapping's own query writes one JSON object per row on one line, with line breaks inside values escaped, dates and
+timestamps in ISO-8601 whatever the NLS settings, and column names as keys (the importer reads keys
+case-insensitively). SQL\*Plus's own column output is not used: it pads, wraps and truncates.
+
+<!-- recipe: oracle/export.sql (OracleExportRecipeIT) -->
+```sql
+WHENEVER SQLERROR EXIT SQL.SQLCODE ROLLBACK
+WHENEVER OSERROR EXIT FAILURE ROLLBACK
+SET DEFINE OFF ECHO OFF TERMOUT OFF FEEDBACK OFF HEADING OFF VERIFY OFF TAB OFF
+SET PAGESIZE 0 LINESIZE 32767 LONG 2000000000 LONGCHUNKSIZE 32767 TRIMSPOOL ON
+ALTER SESSION SET TIME_ZONE = 'UTC';
+ALTER SESSION SET NLS_DATE_FORMAT = 'YYYY-MM-DD"T"HH24:MI:SS';
+ALTER SESSION SET NLS_TIMESTAMP_FORMAT = 'YYYY-MM-DD"T"HH24:MI:SS.FF6';
+ALTER SESSION SET NLS_TIMESTAMP_TZ_FORMAT = 'YYYY-MM-DD"T"HH24:MI:SS.FF6TZH:TZM';
+ALTER SESSION SET NLS_NUMERIC_CHARACTERS = '.,';
+SET TRANSACTION READ ONLY;
+SPOOL scn.txt
+SELECT TO_CHAR(TIMESTAMP_TO_SCN(SYSTIMESTAMP)) FROM DUAL;
+SPOOL people.jsonl
+SELECT JSON_OBJECT(* RETURNING CLOB) FROM (SELECT user_id, name, mail FROM legacy.people);
+SPOOL cases.jsonl
+SELECT JSON_OBJECT(* RETURNING CLOB) FROM (SELECT case_id, subject, details, state, opened, found_on, owner FROM legacy.cases);
+SPOOL notes.jsonl
+SELECT JSON_OBJECT(* RETURNING CLOB) FROM (SELECT note_id, case_id, author, created, body FROM legacy.notes);
+SPOOL counts.csv
+SELECT 'people.jsonl,person,' || COUNT(*) FROM legacy.people UNION ALL SELECT 'cases.jsonl,case,' || COUNT(*) FROM legacy.cases UNION ALL SELECT 'notes.jsonl,comment,' || COUNT(*) FROM legacy.notes;
+SPOOL OFF
+COMMIT;
+EXIT
+```
+
+Run it in an empty folder with the client's character set pinned to UTF-8, then write the manifest:
+
+```sh
+NLS_LANG=AMERICAN_AMERICA.AL32UTF8 sqlplus -S -L trailkeep_source@//<legacy host>:<port>/<service> @export.sql
+sh manifest.sh
+```
+
+<!-- recipe: oracle/manifest.sh (OracleExportRecipeIT) -->
+```sh
+#!/bin/sh
+# Writes manifest.yaml for the files export.sql left in this folder: the SCN, and each file's entity, row count and
+# SHA-256. Row counts come from the database, in the export's read-only transaction.
+set -eu
+{
+  printf 'version: 1\n'
+  printf 'fixedPoint: { kind: scn, value: "%s" }\n' "$(tr -d ' \r\n' < scn.txt)"
+  printf 'files:\n'
+  while IFS=, read -r file entity rows; do
+    printf '  - { file: %s, entity: %s, rows: %s, sha256: %s }\n' \
+      "$file" "$entity" "$(printf '%s' "$rows" | tr -d ' \r')" "$(sha256sum "$file" | cut -d ' ' -f 1)"
+  done < counts.csv
+} > manifest.yaml
+rm scn.txt counts.csv
+```
+
+**What the settings do.** `SET LONG` and `LONGCHUNKSIZE` stop SQL\*Plus truncating a CLOB at its default 80
+characters; `PAGESIZE 0`, `HEADING OFF`, `FEEDBACK OFF` and `TRIMSPOOL ON` leave nothing in the files but the rows.
+`DEFINE OFF` keeps an `&` in a query from being read as a substitution variable. `NLS_LANG` makes the client write
+UTF-8 whatever the database's character set. The NLS formats and the time zone do not change what `JSON_OBJECT` writes
+(always ISO-8601) but keep anything else the script prints, such as the SCN, unambiguous.
+
+**Rows longer than 32 767 bytes.** SQL\*Plus cannot write a line longer than `LINESIZE`, at most 32 767: it breaks
+the row's JSON across lines. The broken lines are not JSON objects, so the extract refuses the file
+(`ROW_UNREADABLE`) and nothing corrupt is loaded, but such rows cannot be exported this way: read the table through
+the JDBC source.
+
+**Attachments.** A `BLOB` is read **through the JDBC source only**: `DBMS_LOB` writes files on the database server
+through a directory object, which a read-only account cannot do, and SQL\*Plus cannot spool binary data. Leave the
+attachment entity out of a files export, or export the documents themselves to a folder by other means and read them
+with `content: { path: ... }` under `attachments.root`.
+
+**The mapping for these files.** As for PostgreSQL, with `.jsonl` files and no CSV dialect:
+
+```yaml
+source: { id: legacy1, kind: files, timezone: UTC, manifest: manifest.yaml }
+```
+
+**What the test verified** (`OracleExportRecipeIT`, Oracle Free 23 and XE 21, `-Poracle-it`): the script and the
+manifest script run unchanged with each image's SQL\*Plus as the source account; the files pass the manifest checks;
+CLOB values with commas, quotes and line breaks, non-ASCII text, `DATE` and fractional `TIMESTAMP` values and an
+integer key arrive intact; the file extract and the JDBC extract of the same schema stage every person, case and
+comment with the same keyed row hash and the same issues; and a row over 32 767 bytes makes the extract refuse the
+file rather than stage a broken row.
+
+## SQL Server
+
+Its recipe (`sqlcmd` writing JSON Lines from a database snapshot) is added with its recipe test. Until then, read SQL
+Server through the JDBC source.
