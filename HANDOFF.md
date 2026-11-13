@@ -221,7 +221,8 @@ the Secrets `trailkeep-import` and `trailkeep-import-hash-key`, plus `app.audit.
 for those the `jobs/components/source-access` component adds the source password (`trailkeep-import-source`) and the
 egress label in one step (`jobs/importer-source-access`, `jobs/importer-external-scanning-source-access`).
 `deploy/README.md` says migrations run as a separate pre-deploy `Job` with the owner credential; `deploy/` ships no
-manifest for that step yet (section 6).
+manifest for that step yet (#205, an open bug), and `trailkeep-config` lacks the `APP_DB_SCHEMA` entry the run-time
+users need on Oracle (#204, an open bug).
 
 ### Not built yet
 
@@ -413,6 +414,8 @@ All are recorded where they were made; this is the index.
 | #24 | Spring Session license tracker (stay on 4.1.0) |
 | #117 | One shared Keycloak container per test JVM (about 5.5 minutes off CI); deferred to Phase 6 |
 | #141 | Phase 6 performance: measure the System screen's role-conflict query (latest `LOGIN` or `ROLE_CONFLICT` per user over the whole audit trail) at multi-year audit volume |
+| #204 | Open deploy bug: `trailkeep-config` has no `APP_DB_SCHEMA` entry and `deploy/README.md` "What an overlay must set" does not name it, although the importer `Job`'s header says it comes from `trailkeep-config` and every run-time user on Oracle needs it since #178 |
+| #205 | Open deploy bug: `deploy/` ships no migration `Job`. `deploy/README.md` "Runtime properties" says migrations run as a separate pre-deploy `Job` with the owner credential, but the web profile does not turn Flyway off, so the web pods would run Flyway as the app user |
 
 Follow-ups without an issue yet, each recorded in the PR or close-out that found it:
 
@@ -424,7 +427,6 @@ Follow-ups without an issue yet, each recorded in the PR or close-out that found
 | Tests | Some tests that place times relative to "now" leave a window of seconds around midnight in which they can fail (#151 moved one, the at-risk SLA walk, off the day boundary); the others are not yet swept | Phase 6 |
 | Security review | The plain SHA-256 mapping hash (section 5, #169) is flagged for the Phase 6 security review | WP-28 |
 | CI | The Nu HTML validator that BUILD_PLAN §10.2 and §12.1 and Part G list beside axe is not wired into any job | WP-28 or WP-29 |
-| Deploy | `deploy/` ships no migration `Job`: `deploy/README.md` "Runtime properties" says migrations run as a separate pre-deploy `Job` with the owner credential, and the web profile does not turn Flyway off. `trailkeep-config` has no `APP_DB_SCHEMA` entry and "What an overlay must set" does not name it, although the importer `Job`'s header says it comes from `trailkeep-config` and every run-time user on Oracle needs it (#178) | WP-30 (runbook) |
 | Operations | After an import: lock `TRAILKEEP_IMPORT` again, and keep `trailkeep-import-hash-key` while a delta may still compare with the ledger (`deploy/README.md` "Importer" step 5) | the deploying team |
 | Archive filter | "Include archived" lists archived cases from every team the person's scope reads, not per team (#125, deviation 3) | if wanted |
 | Design text | `docs/design/importer.md` has drifted from what was built, and is not edited by builders (CLAUDE.md rule 11): §6.1's example `people` block lacks `fields` (display name, email), without which email matching and name snapshots have nothing (the worked example's mapping has them, #202); §4.2.2 gives `sqlcmd -y 0 -h -1`, which `sqlcmd` refuses (`-y 0` alone, #201), and leaves the 1 MB question open; §2.1 still names `deploy/jobs/importer-job.yaml` (it is `deploy/jobs/importer/importer-job.yaml` with its kustomizations, #194); §8.1 says the hold lives in `retention` (it is in `casefile`, #198); §9 says no CSV writer exists (`shared.csv.CsvFormat` is reused, #193); §11's shared legacy-schema folder was not built | a docs PR |
@@ -515,7 +517,8 @@ Not defects, but worth knowing:
    - **WP-30, performance, restore drill, runbook, evidence pack and 1.0.0** (M): k6 at the 50k and 500k seeds, pool
      sizing, a restore drill, `docs/RUNBOOK.md`, the release workflow and evidence pack, `CHANGELOG`, a signed tag.
      It inherits the performance follow-ups of section 6 (#141, `PeopleMatcher`, the importer at volume, the cases-list
-     indexes, the export's connection hold of section 5) and the deploy gaps (the migration `Job`, `APP_DB_SCHEMA`).
+     indexes, the export's connection hold of section 5). The two deploy gaps are open bugs, not runbook notes: #204
+     (`APP_DB_SCHEMA`) and #205 (the migration `Job`).
 2. **Owner-only items** that gate Phase 6 or the release, none of them code: the scanner secrets for WP-28's
    acceptance (item 2, #30), the named certified tester for WP-29 (item 9), the screen-reader pass of #92, the
    `v0.2.0` tag (item 8), the Part G SQL Server row (item 10), the ADRs (item 11), and the open Phase 1 items of #30
