@@ -343,7 +343,7 @@ LT-1005 OPEN   RESTRICTED analyst snapshot=-                        opened=2025-
   notes as plain text. Its attachment is stored `NOT_SCANNED`. Its two legacy history rows are stored as imported
   history (`CASE_IMPORTED_EVENT`, design §7.5): the state change in clear (`New` to `Open`), the description change
   redacted, because a description may hold personal data. The case's History tab does not show imported history
-  yet; that is design §12 row 26x.
+  yet; that is design §12 row 26x, pending in #200.
 - **LT-1002** goes to the manager, the team's default owner, with the former officer's name kept. `relink-owners`
   hands it back if that person ever signs in. Its missing description became the mapping's placeholder, and its
   identified-on day is its opening day in Chicago.
