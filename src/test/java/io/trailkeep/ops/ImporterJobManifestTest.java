@@ -158,7 +158,7 @@ class ImporterJobManifestTest {
 
         assertThat(exclusion.path("key").asString()).isEqualTo("app.kubernetes.io/component");
         assertThat(exclusion.path("operator").asString()).isEqualTo("NotIn");
-        assertThat(exclusion.path("values").toString()).isEqualTo("[\"importer\"]");
+        assertThat(exclusion.path("values").toString()).isEqualTo("[\"importer\",\"migrate\"]");
         assertThat(job().at("/spec/template/metadata/labels/app.kubernetes.io~1component")
                         .asString())
                 .isEqualTo("importer");

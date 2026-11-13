@@ -1,0 +1,20 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Charlie Genova and contributors
+# Batch profile, combined with prod (SPRING_PROFILES_ACTIVE=prod,migrate): the schema migration Job
+# (deploy/jobs/migrate, BUILD_PLAN section 8 rule 7 and section 16). It is the one process that runs Flyway, as the
+# schema owner (TRAILKEEP_OWNER), so it is the one place prod turns Flyway back on. It validates the applied
+# migrations, applies the pending ones, re-runs R__grants.sql for the runtime, purge and import users, lets Hibernate
+# validate the migrated schema (ddl-auto: validate from application.yml, so a mapping that does not match fails the
+# Job and not the rollout), and ends. No web server, no scheduler, no OIDC client: nobody signs in, and the pod holds
+# no OIDC secret, audit key or import key (AuditConfig, TrailkeepApplication).
+spring:
+  main:
+    web-application-type: none
+  autoconfigure:
+    exclude: org.springframework.boot.security.oauth2.client.autoconfigure.OAuth2ClientAutoConfiguration
+  flyway:
+    enabled: true
+  # As for the purge and importer profiles: the "moments" events would start a scheduler.
+  modulith:
+    moments:
+      enabled: false

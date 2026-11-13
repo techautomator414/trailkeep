@@ -863,6 +863,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - `deploy/base`'s `trailkeep-config` now carries an `APP_DB_SCHEMA` placeholder (#204), which every runtime user on
   Oracle needs since #178 (the web pods, the purge `CronJob` and the importer `Job` all read it from the ConfigMap);
   the deploy README's overlay list names it, and `DatabaseSchemaConfigManifestTest` proves each workload receives it.
+- A migration `Job` now ships (#205): `deploy/jobs/migrate` (and `migrate-external-scanning`) runs the `prod,migrate`
+  profile with the schema owner's credential from its own Secret, `trailkeep-migrate`, which no other workload mounts,
+  hardened like the importer `Job` and with its own `NetworkPolicy` that reaches DNS and the database only (the base
+  egress excludes the pod). The `prod` profile now runs Flyway **off**, so web pods, the purge and the importer never
+  run DDL as a user that has no DDL rights (before, the web pods ran Flyway as `TRAILKEEP_APP` and either failed to
+  start or invited a DDL grant); Hibernate's `validate` still runs everywhere, and Flyway's own validation runs in the
+  `Job` on every migrate. The deploy README documents the order: migrate `Job`, then the web rollout.
+  `MigrationJobIT` (PostgreSQL, and Oracle on Free 23 and XE 21) migrates a fresh schema as its owner and starts the
+  application against it as the runtime user, which cannot create a table. Anyone who relied on a `prod` pod migrating
+  on start-up must now run the `Job` first.
 - On a deployment where the application connects as a user that does not own the tables and names the owner in
   `app.db.schema` (BUILD_PLAN §8 rule 7, as on Oracle), every statement Hibernate does not write failed with
   ORA-00942 or ORA-02289: creating a case (the case-number sequence), posting a comment (the search text), uploading
