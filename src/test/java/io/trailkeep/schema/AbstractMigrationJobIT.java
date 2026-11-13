@@ -21,6 +21,9 @@ import org.springframework.boot.WebApplicationType;
 import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.ConfigurableApplicationContext;
+import org.springframework.scheduling.annotation.ScheduledAnnotationBeanPostProcessor;
+import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
+import org.springframework.web.context.WebApplicationContext;
 
 /**
  * The migration Job (issue #205, BUILD_PLAN §8 rule 7, once per vendor): on a fresh install, the runtime user cannot
@@ -57,7 +60,15 @@ abstract class AbstractMigrationJobIT {
                     .as("the runtime profile with Flyway on, as the app user, cannot create the schema")
                     .isInstanceOf(RuntimeException.class);
 
-            migrationJob(owner).close();
+            try (ConfigurableApplicationContext job = migrationJob(owner)) {
+                assertThat(job).as("no web application").isNotInstanceOf(WebApplicationContext.class);
+                assertThat(job.getBeanNamesForType(ScheduledAnnotationBeanPostProcessor.class))
+                        .as("no scheduler, so no web job runs under the owner credential")
+                        .isEmpty();
+                assertThat(job.getBeanNamesForType(ClientRegistrationRepository.class))
+                        .as("no OIDC client, so the pod needs no client secret")
+                        .isEmpty();
+            }
 
             try (Connection connection =
                             DriverManager.getConnection(users.jdbcUrl(), owner.username(), owner.password());

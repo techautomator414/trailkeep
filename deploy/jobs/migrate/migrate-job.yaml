@@ -6,7 +6,7 @@
 # that changes the image, then wait for it, then roll the web Deployment out (deploy/README.md, "Migrations"):
 #   kubectl -n <namespace> apply -k deploy/jobs/migrate                     (clamd scanning, the default)
 #   kubectl -n <namespace> apply -k deploy/jobs/migrate-external-scanning   (APP_ATTACHMENTS_SCANNING=external)
-#   kubectl -n <namespace> wait --for=condition=complete --timeout=30m job/trailkeep-migrate
+#   kubectl -n <namespace> wait --for=condition=complete --timeout=60m job/trailkeep-migrate
 # A finished Job cannot be changed: delete it (kubectl delete job trailkeep-migrate) before the next run. Same image,
 # prod,migrate profiles, no web server. It validates the applied migrations' checksums, applies the pending ones,
 # re-runs the repeatable R__grants.sql for the three runtime users, lets Hibernate validate the result, and exits.

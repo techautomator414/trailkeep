@@ -146,7 +146,7 @@ The order for a fresh install and for every release:
 
    ```sh
    kubectl -n <namespace> apply -k deploy/jobs/migrate            # or deploy/jobs/migrate-external-scanning
-   kubectl -n <namespace> wait --for=condition=complete --timeout=30m job/trailkeep-migrate
+   kubectl -n <namespace> wait --for=condition=complete --timeout=60m job/trailkeep-migrate
    ```
 
    Its `NetworkPolicy` admits egress only to DNS and the database; `trailkeep-egress` excludes the pod.
