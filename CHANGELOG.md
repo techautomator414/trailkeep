@@ -191,6 +191,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   Events with an ERROR are left out; one that fails the event rules at the load's moment keeps its case out as an
   `EVENT_<code>` `LOAD` issue, tried again by the next load. No grant changes: the import user already has SELECT and
   INSERT on `CASE_IMPORTED_EVENT` (V16).
+- `dry-run` of a delta run (WP-26 part y1, docs/design/importer.md §3.1, R10): against a source an earlier load wrote
+  rows of, a staged row the import ledger holds is no longer checked against its entity's rules, since no load writes
+  it again; instead an open case now closed in the source is `CLOSED_IN_SOURCE`, and a case whose status or closing
+  time otherwise differs, or a row whose keyed hash differs from the one it was loaded with, is `CHANGED_AFTER_IMPORT`
+  (WARNINGs carrying the Trailkeep case id; nothing is overwritten). Each ledger row this run did not stage is
+  `MISSING_IN_SOURCE` (WARNING, with the case id). A comment, attachment or event whose case the ledger holds is no
+  longer `PARENT_NOT_STAGED`. Ledger rows of the source loaded under another mapping make a FATAL
+  `MAPPING_CHANGED_SINCE_LOAD` with their number, unless the dry run sets `import.allow-mapping-change`: then one
+  `MAPPING_CHANGE_ALLOWED` WARNING says that no row hash is compared in the run, while status and closing time still
+  are. The run's figures add `LOADED_BEFORE` per entity, and the error rate is of the rows not loaded before. No
+  migration and no grant changes.
 - The Oracle source (WP-26 part o, docs/design/importer.md §4.1): a `kind: jdbc` Oracle mapping is test-fetched by
   `validate-mapping` and extracted in one `SET TRANSACTION READ ONLY` transaction, with the session in UTC and ISO
   date, timestamp and number formats; `DATE` and `TIMESTAMP` read as local date-times, `TIMESTAMP WITH TIME ZONE` with

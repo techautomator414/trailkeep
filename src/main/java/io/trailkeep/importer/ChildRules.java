@@ -24,8 +24,8 @@ import tools.jackson.databind.JsonNode;
  * value.
  *
  * <ul>
- *   <li>a row whose case this run did not stage: {@code PARENT_NOT_STAGED} (ERROR; a delta's child-only load, whose
- *       case an earlier run loaded, needs the import ledger and comes with it);
+ *   <li>a row whose case this run did not stage and the import ledger does not hold: {@code PARENT_NOT_STAGED}
+ *       (ERROR; a delta's child of a case an earlier run loaded has its parent, {@link LedgerDelta});
  *   <li>a required field that is empty, {@code <FIELD>_MISSING} (ERROR): a comment's time and body, an attachment's
  *       file name and upload time, an event's time and kind; a time in the future: {@code DATE_IN_FUTURE} (ERROR);
  *   <li>a comment longer, as a comment holds it, than one comment takes: {@code COMMENT_SPLIT} (WARNING) with the
@@ -94,7 +94,7 @@ final class ChildRules {
      * Checks one staged comment.
      *
      * @param row the comment
-     * @param parentStaged whether this run staged its case
+     * @param parentStaged whether this run staged its case or the import ledger holds it
      * @return its findings; empty when the load would take it
      */
     List<Finding> comment(StagedComment row, boolean parentStaged) {
@@ -115,7 +115,7 @@ final class ChildRules {
      * Checks one staged attachment.
      *
      * @param row the attachment
-     * @param parentStaged whether this run staged its case
+     * @param parentStaged whether this run staged its case or the import ledger holds it
      * @return its findings; empty when the load would take it
      */
     List<Finding> attachment(StagedAttachment row, boolean parentStaged) {
@@ -136,7 +136,7 @@ final class ChildRules {
      * Checks one staged legacy history event.
      *
      * @param row the event
-     * @param parentStaged whether this run staged its case
+     * @param parentStaged whether this run staged its case or the import ledger holds it
      * @return its findings; empty when the load would take it
      */
     List<Finding> event(StagedEvent row, boolean parentStaged) {

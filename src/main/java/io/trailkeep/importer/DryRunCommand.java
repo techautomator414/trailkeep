@@ -24,7 +24,9 @@ import java.time.Instant;
 import java.time.InstantSource;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.function.BiFunction;
@@ -46,9 +48,11 @@ import tools.jackson.dataformat.yaml.YAMLMapper;
  * with open cases has an eligible default owner ({@link PeopleMatcher}, 26r2), writes each problem as a {@code DRY_RUN}
  * issue (a code, a severity and the keyed hash of the row's key, never a value), and records the attachment scanning
  * mode in force on the run ({@code app.attachments.scanning}, read as the attachment intake reads it), which the
- * sign-off approves and the load must still find (R1). It writes nothing to the domain. A dry run may be repeated until
- * the sign-off: each replaces the last one's issues. The mapping file and its lookup files must be the ones {@code
- * validate-mapping} accepted ({@link LookupFiles#hash}).
+ * sign-off approves and the load must still find (R1). Against a source an earlier load wrote rows of, rows the import
+ * ledger holds are checked only for what changed in the source, and the ledger's rows this run did not stage are
+ * reported ({@link LedgerDelta}, 26y1). It writes nothing to the domain. A dry run may be repeated until the sign-off:
+ * each replaces the last one's issues. The mapping file and its lookup files must be the ones {@code validate-mapping}
+ * accepted ({@link LookupFiles#hash}).
  */
 @Component
 @Profile("importer")
@@ -75,6 +79,7 @@ class DryRunCommand {
     private final ImportRunRepository runs;
     private final ImportIssueRepository issues;
     private final ImportRunSummaryRepository figures;
+    private final ImportLedgerRepository ledger;
     private final TransactionTemplate transactions;
     private final CaseImportService caseImports;
     private final UserDirectoryService directory;
@@ -90,6 +95,7 @@ class DryRunCommand {
             ImportRunRepository runs,
             ImportIssueRepository issues,
             ImportRunSummaryRepository figures,
+            ImportLedgerRepository ledger,
             TransactionTemplate transactions,
             CaseImportService caseImports,
             UserDirectoryService directory,
@@ -102,6 +108,7 @@ class DryRunCommand {
         this.runs = runs;
         this.issues = issues;
         this.figures = figures;
+        this.ledger = ledger;
         this.transactions = transactions;
         this.caseImports = caseImports;
         this.directory = directory;
@@ -130,7 +137,8 @@ class DryRunCommand {
         }
         JsonNode mapping = yaml.readTree(content);
         LookupFiles lookups = LookupFiles.read(file, mapping);
-        if (!lookups.problems().isEmpty() || !found.hasMappingHash(lookups.hash(content))) {
+        String hash = lookups.hash(content);
+        if (!lookups.problems().isEmpty() || !found.hasMappingHash(hash)) {
             throw new IllegalStateException(
                     "The mapping file or a lookup file changed after validate-mapping; validate it again");
         }
@@ -145,7 +153,6 @@ class DryRunCommand {
                 now,
                 app.timezone());
         PeopleMatcher matcher = new PeopleMatcher(people, caseImports, mapping, lookups.defaultOwners());
-        DryRunSummary summary = summary(rules, teams, mapping, matcher, now);
         transactions.executeWithoutResult(status -> {
             issues.deleteByRunIdAndStage(runId, ImportIssue.Stage.DRY_RUN);
             figures.deleteByRunId(runId);
@@ -155,22 +162,26 @@ class DryRunCommand {
         });
         ChildRules children =
                 new ChildRules(mapping, properties.attachments().maxBytes().toBytes(), now);
-        Outcome checked = checkRows(
-                new Pass(runId, rules.maxErrorRate(), children.accepted(), properties.hashKeySpec(), now, summary),
-                rules,
-                children,
-                matcher);
+        Pass pass = new Pass(
+                runId,
+                rules.maxErrorRate(),
+                children.accepted(),
+                properties.hashKeySpec(),
+                now,
+                summary(rules, teams, mapping, matcher, now),
+                LedgerDelta.of(ledger, found.getSourceId(), hash, properties.allowMappingChange()));
+        Outcome checked = checkRows(pass, rules, children, matcher).plus(deltaIssues(pass));
         checked = checked.plus(runIssues(
                 runId,
                 matcher.teamsWithoutDefaultOwner(
                         teams.stream().collect(Collectors.toMap(TeamSummary::id, TeamSummary::name))),
-                mode == ImportRun.ScanMode.EXTERNAL ? summary.loadableFiles() : 0,
+                mode == ImportRun.ScanMode.EXTERNAL ? pass.summary().loadableFiles() : 0,
                 now));
         for (Object[] count : issues.countByCode(runId)) {
-            summary.issues((Subject) count[0], (Severity) count[1], (String) count[2], (Long) count[3]);
+            pass.summary().issues((Subject) count[0], (Severity) count[1], (String) count[2], (Long) count[3]);
         }
         transactions.executeWithoutResult(status -> {
-            summary.figures(runId, mode).forEach(figures::save);
+            pass.summary().figures(runId, mode).forEach(figures::save);
             ImportRun run = load(runId);
             run.dryRunDone(mode, now);
             runs.save(run);
@@ -208,7 +219,8 @@ class DryRunCommand {
 
     /**
      * One dry run's settings: {@code limits.maxErrorRate}, the codes {@code limits.acceptSkip} keeps out of it, the
-     * key that hashes each row's key into its issues, the run's time, and the aggregates it counts.
+     * key that hashes each row's key into its issues, the run's time, the aggregates it counts, and what the import
+     * ledger holds of its source.
      */
     private record Pass(
             long runId,
@@ -216,7 +228,33 @@ class DryRunCommand {
             Set<String> accepted,
             SecretKey hashKey,
             Instant now,
-            DryRunSummary summary) {}
+            DryRunSummary summary,
+            LedgerDelta delta) {}
+
+    /**
+     * The delta's issues about no staged row: the finding about the mapping the ledger's rows were loaded under, and a
+     * {@code MISSING_IN_SOURCE} WARNING for each ledger row of the source this run did not stage, a page at a time.
+     */
+    private Outcome deltaIssues(Pass pass) {
+        long recorded = 0;
+        Finding mapping = pass.delta().mapping();
+        if (mapping != null) {
+            transactions.executeWithoutResult(
+                    status -> issues.save(issue(pass.runId(), Subject.MAPPING, null, mapping, pass.now())));
+            recorded++;
+        }
+        for (Subject subject : LedgerDelta.ENTITIES) {
+            recorded += pass.delta().missing(subject, staging, pass.runId(), absent -> keyed(pass, subject, absent));
+        }
+        boolean fatal = mapping != null && mapping.severity() == Severity.FATAL;
+        return new Outcome(0, recorded, fatal ? 1 : 0);
+    }
+
+    /** Records each row's finding under its key's keyed hash, in one transaction. */
+    private void keyed(Pass pass, Subject subject, Map<String, Finding> found) {
+        transactions.executeWithoutResult(status -> found.forEach((key, finding) ->
+                issues.save(issue(pass.runId(), subject, KeyedHash.hex(pass.hashKey(), key), finding, pass.now()))));
+    }
 
     /**
      * The run's issues about no single row: a FATAL {@code DEFAULT_OWNER_MISSING} per team with open cases and no
@@ -245,44 +283,65 @@ class DryRunCommand {
         long runId = pass.runId();
         Instant now = pass.now();
         long rows = 0;
+        long held = 0;
         long recorded = 0;
         long fatal = 0;
         @Nullable String after = null;
         for (List<T> page = staging.page(type, runId, null, PAGE);
                 !page.isEmpty();
                 page = staging.page(type, runId, after, PAGE)) {
-            Set<String> parents = staging.stagedKeys(
-                    StagedEntity.CASE,
-                    runId,
+            Set<String> parents = parents(
+                    pass,
                     page.stream()
                             .map(parent)
                             .filter(Objects::nonNull)
                             .distinct()
                             .toList());
+            Map<String, ImportLedgerEntry> loaded = pass.delta()
+                    .held(
+                            subject,
+                            page.stream().map(row -> row.getKey().legacyKey()).toList());
             List<ImportIssue> found = new ArrayList<>();
             for (T row : page) {
                 String keyHash = KeyedHash.hex(pass.hashKey(), row.getKey().legacyKey());
                 String caseKey = parent.apply(row);
-                for (Finding problem : rules.apply(row, caseKey == null || parents.contains(caseKey))) {
+                ImportLedgerEntry before = loaded.get(row.getKey().legacyKey());
+                List<Finding> findings = before != null
+                        ? pass.delta().changed(row, before)
+                        : rules.apply(row, caseKey == null || parents.contains(caseKey));
+                for (Finding problem : findings) {
                     found.add(issue(runId, subject, keyHash, problem, now));
                     fatal += problem.severity() == Severity.FATAL ? 1 : 0;
                 }
             }
             transactions.executeWithoutResult(status -> found.forEach(issues::save));
             rows += page.size();
+            held += loaded.size();
             recorded += found.size();
             after = page.getLast().getKey().legacyKey();
         }
-        pass.summary().rows(subject, rows);
+        pass.summary().rows(subject, rows, held);
         long failed = issues.countFailedRows(runId, subject, Severity.ERROR, pass.accepted());
-        // People are never loaded, so they have no error rate: an unmatched person is a name snapshot.
-        if (subject != Subject.PERSON && failed > pass.maxErrorRate() * rows) {
+        // People are never loaded, so they have no error rate: an unmatched person is a name snapshot. Rows an earlier
+        // load wrote are not loaded again, so the rate is of the others.
+        if (subject != Subject.PERSON && failed > pass.maxErrorRate() * (rows - held)) {
             Finding rate = new Finding("ERROR_RATE_EXCEEDED", Severity.FATAL, failed);
             transactions.executeWithoutResult(status -> issues.save(issue(runId, subject, null, rate, now)));
             recorded++;
             fatal++;
         }
         return new Outcome(rows, recorded, fatal);
+    }
+
+    /** The cases among these that this run staged or, for a delta's children of loaded cases, the ledger holds. */
+    private Set<String> parents(Pass pass, List<String> caseKeys) {
+        Set<String> found = new HashSet<>(staging.stagedKeys(StagedEntity.CASE, pass.runId(), caseKeys));
+        found.addAll(pass.delta()
+                .held(
+                        Subject.CASE,
+                        caseKeys.stream().filter(key -> !found.contains(key)).toList())
+                .keySet());
+        return found;
     }
 
     /** An empty summary of this dry run, with its SLA forecast for the go-live day. */

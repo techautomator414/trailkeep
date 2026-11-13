@@ -136,6 +136,28 @@ class ImportLedgerEntry {
      */
     record Loaded(long runId, String sourceId, String mappingHash) {}
 
+    String getLegacyKey() {
+        return legacyKey;
+    }
+
+    long getCaseId() {
+        return caseId;
+    }
+
+    String getRowHash() {
+        return rowHash;
+    }
+
+    @Nullable
+    String getStatus() {
+        return status;
+    }
+
+    @Nullable
+    Instant getClosedAt() {
+        return closedAt;
+    }
+
     @Override
     public boolean equals(@Nullable Object other) {
         return this == other || (other instanceof ImportLedgerEntry that && id != null && id.equals(that.id));
