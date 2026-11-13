@@ -292,6 +292,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   is followed: the reports directory and the run's folder must be directories themselves, and an existing report file
   is deleted, never written through, before the new one is created; folder and files are owner-only where POSIX
   permissions exist. `reconcile` refuses to start without `import.reports-dir` naming a directory.
+- `dry-run`'s preview report files (WP-26 part ab2, docs/design/importer.md §9): `dry-run.csv` and `dry-run.html` in
+  the same `<import.reports-dir>/<run id>/`, written after the dry run's figures and issues are committed: every
+  `IMPORT_RUN_SUMMARY` figure (metric, dimension, value) and every issue of the run (entity, stage, severity, code,
+  keyed hash, numeric detail), never a legacy key or value, with the same CSV writer, page rules, symlink refusal and
+  owner-only permissions as `reconcile`'s, which now share one implementation. `dry-run` now also refuses to start
+  without `import.reports-dir` naming a directory.
 - The Oracle source (WP-26 part o, docs/design/importer.md §4.1): a `kind: jdbc` Oracle mapping is test-fetched by
   `validate-mapping` and extracted in one `SET TRANSACTION READ ONLY` transaction, with the session in UTC and ISO
   date, timestamp and number formats; `DATE` and `TIMESTAMP` read as local date-times, `TIMESTAMP WITH TIME ZONE` with

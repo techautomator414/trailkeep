@@ -49,4 +49,9 @@ interface ImportIssueRepository extends Repository<ImportIssue, Long> {
     @Query("select i.subject, i.severity, i.code, count(i) from ImportIssue i where i.runId = :runId"
             + " group by i.subject, i.severity, i.code")
     List<Object[]> countByCode(long runId);
+
+    /** A run's issues for its report files: stage, entity, severity, code, keyed hash and detail, in order. */
+    @Query("select i.stage, i.subject, i.severity, i.code, i.keyHash, i.detail from ImportIssue i"
+            + " where i.runId = :runId order by i.id")
+    List<Object[]> reportRows(long runId);
 }

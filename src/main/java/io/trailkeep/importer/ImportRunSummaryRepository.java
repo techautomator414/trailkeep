@@ -2,6 +2,7 @@
 // Copyright 2026 Charlie Genova and contributors
 package io.trailkeep.importer;
 
+import java.util.List;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.Repository;
@@ -20,4 +21,8 @@ interface ImportRunSummaryRepository extends Repository<ImportRunSummary, Long> 
     @Modifying
     @Query("delete from ImportRunSummary s where s.runId = :runId and s.metric like 'RECONCILE%'")
     int deleteReconcileFigures(long runId);
+
+    /** A run's figures for its report files: metric, dimension and value, in the order written. */
+    @Query("select s.metric, s.dimension, s.value from ImportRunSummary s where s.runId = :runId order by s.id")
+    List<Object[]> reportRows(long runId);
 }

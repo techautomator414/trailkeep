@@ -6,8 +6,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.trailkeep.importer.ImportIssue.Severity;
+import io.trailkeep.shared.csv.CsvFormat;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -78,6 +80,7 @@ abstract class AbstractDryRunIT extends DryRunSupport {
                         "NOT_SCANNED_FILES - 0",
                         "SLA_FORECAST OVERDUE 501")
                 .noneMatch(figure -> figure.startsWith("HOLDS") || figure.startsWith("LEGACY_ACL"));
+        assertThePreviewHoldsFiguresAndKeyedIssuesOnly(directory.resolve(Long.toString(run)));
 
         dryRun(run, mapping, "--import.go-live=2100-01-04").close();
 
@@ -93,6 +96,26 @@ abstract class AbstractDryRunIT extends DryRunSupport {
         assertThat(count("SELECT COUNT(*) FROM CASE_RECORD WHERE TEAM_ID = ?", team))
                 .as("nothing reaches the domain")
                 .isZero();
+    }
+
+    /** The preview report files (part ab2): figures and issues by code and keyed hash, no value, owner-only. */
+    private void assertThePreviewHoldsFiguresAndKeyedIssuesOnly(Path folder) throws Exception {
+        String csv = Files.readString(folder.resolve("dry-run.csv"));
+        String html = Files.readString(folder.resolve("dry-run.html"));
+        assertThat(csv)
+                .startsWith(CsvFormat.BOM + "\"row\",\"metric\",")
+                .contains("\"figure\",\"CASES\",\"OPEN\",\"501\",")
+                .contains("\"issue\",\"\",\"\",\"\",\"CASE\",\"DRY_RUN\",\"ERROR\",\"TITLE_MISSING\",\"" + hash("z2")
+                        + "\",\"\"");
+        assertThat(html)
+                .contains("<th scope=\"row\">CASE</th><td>DRY_RUN</td><td>FATAL</td>"
+                        + "<td>CLOSURE_OUTCOME_NOT_ALLOWED</td><td>" + hash("z1") + "</td>");
+        assertThat(csv + html).as("no staged value or key").doesNotContain("Synthetic", "\"z1\"", ">z2<", "c0001");
+        if (folder.getFileSystem().supportedFileAttributeViews().contains("posix")) {
+            assertThat(Files.getPosixFilePermissions(folder)).isEqualTo(PosixFilePermissions.fromString("rwx------"));
+            assertThat(Files.getPosixFilePermissions(folder.resolve("dry-run.csv")))
+                    .isEqualTo(PosixFilePermissions.fromString("rw-------"));
+        }
     }
 
     @Test
@@ -233,6 +256,9 @@ abstract class AbstractDryRunIT extends DryRunSupport {
                 .hasMessage("Import run " + validated + " is VALIDATED, not extracted and awaiting its sign-off");
 
         long extracted = extractedRun(mapping);
+        assertThatThrownBy(() -> command("dry-run", extracted, mapping))
+                .as("no reports directory, refused before anything is read")
+                .hasStackTraceContaining("import.reports-dir must name a directory");
         assertThatThrownBy(() -> dryRun(extracted, mapping, "--import.attachments.clamd-stream-max=24MB"))
                 .as("clamd's declared stream limit is below the importer's cap")
                 .hasMessage("In clamd scanning mode, import.attachments.clamd-stream-max must declare clamd's"

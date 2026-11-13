@@ -76,8 +76,11 @@ abstract class DryRunSupport extends ExtractJobSupport {
         };
     }
 
+    /** Starts {@code dry-run} with the test's folder, which holds the mapping, as the reports directory. */
     ConfigurableApplicationContext dryRun(long run, Path mapping, String... more) throws SQLException {
-        return command("dry-run", run, mapping, more);
+        List<String> args = new ArrayList<>(List.of(more));
+        args.add("--import.reports-dir=" + Objects.requireNonNull(mapping.getParent()));
+        return command("dry-run", run, mapping, args.toArray(String[]::new));
     }
 
     /** Starts an importer command that reads the mapping and the hash key, with any further arguments. */

@@ -127,7 +127,7 @@ class ReconcileCommand {
     Outcome run(long runId) {
         ImportRun run = runs.findById(runId).orElseThrow(() -> new IllegalStateException("No import run " + runId));
         refuseUnlessFinished(run);
-        final Path folder = ReconcileReport.folder(properties.reportsDir(), runId);
+        final Path folder = ReportFiles.folder(properties.reportsDir(), runId);
         SecretKey key = properties.hashKeySpec();
         Reconciliation found = new Reconciliation(runId, key, clock.instant());
         boolean staged = run.getStagingPurgedAt() == null;
