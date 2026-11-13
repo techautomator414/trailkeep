@@ -122,6 +122,11 @@ abstract class ExtractJobSupport {
         return file;
     }
 
+    /** Removes a run the test requested otherwise, with everything it staged, after the test. */
+    void removeAfter(long run) {
+        seeded.add(run);
+    }
+
     /** A requested {@code RELINK} run of the test source (WP-26 part z2), removed after the test. */
     long relinkRun() {
         long run = runs.save(new ImportRun(ImportRun.Kind.RELINK, "memory1", new CaseSeed(jdbc).user(), Instant.now()))

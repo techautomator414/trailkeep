@@ -82,6 +82,7 @@ people:
   key: user_id
   match: [externalId, email]
   unmatched: snapshot
+  fields: { displayName: display_name, email: email }
 defaults:
   owner: { byTeam: lookups/default-owners.csv }
 visibility:

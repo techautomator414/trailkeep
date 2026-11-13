@@ -76,13 +76,23 @@ abstract class LoadSupport extends DryRunSupport {
         seed.member(manager, team, TeamRole.MANAGER);
     }
 
+    /**
+     * The source whose loaded cases and ledger rows are removed after each test: the test mapping's.
+     *
+     * @return the mapping's {@code source.id}
+     */
+    String sourceId() {
+        return "memory1";
+    }
+
     @AfterEach
     void removeWhatTheLoadWrote() {
         List<Long> cases =
-                jdbc.queryForList("SELECT ID FROM CASE_RECORD WHERE LEGACY_REF LIKE 'memory1:%'", Long.class);
-        jdbc.update("DELETE FROM IMPORT_LEDGER_PART WHERE LEDGER_ID IN"
-                + " (SELECT ID FROM IMPORT_LEDGER WHERE SOURCE_ID = 'memory1')");
-        jdbc.update("DELETE FROM IMPORT_LEDGER WHERE SOURCE_ID = 'memory1'");
+                jdbc.queryForList("SELECT ID FROM CASE_RECORD WHERE LEGACY_REF LIKE ?", Long.class, sourceId() + ":%");
+        jdbc.update(
+                "DELETE FROM IMPORT_LEDGER_PART WHERE LEDGER_ID IN (SELECT ID FROM IMPORT_LEDGER WHERE SOURCE_ID = ?)",
+                sourceId());
+        jdbc.update("DELETE FROM IMPORT_LEDGER WHERE SOURCE_ID = ?", sourceId());
         for (long id : cases) {
             jdbc.update(
                     "DELETE FROM CASE_ATTACHMENT_CHUNK WHERE ATTACHMENT_ID IN"
