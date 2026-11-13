@@ -121,4 +121,14 @@ class CaseImportedEvent {
     Long getId() {
         return id;
     }
+
+    /**
+     * What the History tab may show: plain values as stored, and only whether each redacted value exists.
+     *
+     * @return the record, with no HMAC and no length
+     */
+    AuditTrailService.ImportedRecord toRecord() {
+        return new AuditTrailService.ImportedRecord(
+                at, who, kind, field, oldValue, newValue, oldHmac != null, newHmac != null, runId);
+    }
 }

@@ -24,6 +24,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   XE 21) runs both unchanged with the image's SQL\*Plus as the source account: the file and JDBC extracts stage every
   person, case and comment with the same keyed row hash, and a row longer than SQL\*Plus's 32 767-byte line makes the
   file extract refuse the file (`ROW_UNREADABLE`) rather than stage a broken row, as the page now warns.
+- The History page shows a case's imported legacy history (WP-26 part x, docs/design/importer.md §7.5). Imported
+  events join the audit events in one timeline, newest first (an audit event first at the same instant), each marked
+  with an "Imported" chip in text, never colour alone, and "From the legacy tracker, import run N"; the actor is the
+  name the legacy system recorded, or "Not recorded". Plain values (status, owner, priority, team, due, title) are
+  shown as stored and escaped; every redacted value (a description, a subject, a note, an unplaced field) reads only
+  "set" or "changed", never its text, digest or length, as for audit events. The kind filter gains "All except
+  imported history" and "Imported history"; "All events" includes the imported rows and the other kinds stay sets of
+  audit actions. The rows are read through a new `@CaseRooted` `CaseImportedEventRepository` held only by the audit
+  read path, so a case the person may not read is still 404 under every filter and its imported rows are in no count.
+  Pages stay database-paged: a page of the merged timeline finds where it starts in each source by a binary search
+  that reads one event of each per step, never the events before it.
 - The PostgreSQL export recipe (WP-26 part ae1, docs/design/importer.md §4.2.2, §11): `docs/importer/export-recipes.md`
   gives the one-session `psql` script (every `\copy` in one `REPEATABLE READ READ ONLY` transaction, the snapshot
   recorded as the fixed point) and a manifest script, and the mapping change from `query:` to `file:`.

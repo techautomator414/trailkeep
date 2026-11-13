@@ -7,6 +7,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Reads the audit trail through a {@link CaseScope} (ADR-0005). Events with no case (logins, admin changes, exports)
@@ -45,6 +46,62 @@ public interface AuditTrailService {
      * @return the page and how many events match in all
      */
     AuditPage pageForCase(CaseScope scope, long caseId, Set<String> actions, int offset, int limit);
+
+    /**
+     * One page of a case's imported legacy history ({@code CASE_IMPORTED_EVENT}, WP-26 part x, design §7.5), newest
+     * legacy time first, for the History tab. Empty, with a total of zero, if the scope may not read the case. A
+     * redacted value leaves this module only as the fact that it is redacted: never its HMAC or its length.
+     *
+     * @param scope the caller's scope
+     * @param caseId the case id
+     * @param offset how many of the newest imported events to skip
+     * @param limit the page size, 1 to 500
+     * @return the page and how many imported events the case has in all
+     */
+    ImportedPage importedPageForCase(CaseScope scope, long caseId, int offset, int limit);
+
+    /**
+     * One imported legacy event, as the History tab may show it.
+     *
+     * @param at the legacy event time
+     * @param who the legacy actor's name as recorded, or {@code null} if the source had none
+     * @param kind what kind of change it was
+     * @param field its canonical field, or {@code null} for an event about no field
+     * @param before the value before as stored text, or {@code null} if there was none or it is redacted
+     * @param after the value after as stored text, or {@code null} if there is none or it is redacted
+     * @param beforeRedacted whether there was a value before that is stored redacted
+     * @param afterRedacted whether there is a value after that is stored redacted
+     * @param runId the import run that brought it in
+     */
+    record ImportedRecord(
+            Instant at,
+            @Nullable String who,
+            ImportedHistoryService.Kind kind,
+            @Nullable String field,
+            @Nullable String before,
+            @Nullable String after,
+            boolean beforeRedacted,
+            boolean afterRedacted,
+            long runId) {}
+
+    /**
+     * One page of imported legacy events.
+     *
+     * @param records the events of the page, newest first
+     * @param total how many imported events the case has in all
+     */
+    record ImportedPage(List<ImportedRecord> records, long total) {
+
+        /**
+         * Copies the list, so the record holds nothing mutable.
+         *
+         * @param records the events of the page
+         * @param total how many imported events there are in all
+         */
+        public ImportedPage {
+            records = List.copyOf(records);
+        }
+    }
 
     /**
      * An entity whose event still stands, and when that event happened; no payload, actor or request detail.

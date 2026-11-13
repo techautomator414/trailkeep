@@ -11,9 +11,9 @@ import java.util.List;
 import org.jspecify.annotations.Nullable;
 
 /**
- * The History page of a case (BUILD_PLAN §4.3): its audit events, newest first, 50 to a page, read through the
- * person's scope. Reading history is itself a read of the case, so for a restricted case it records {@code
- * VIEW_RESTRICTED} like the case page does.
+ * The History page of a case (BUILD_PLAN §4.3): its audit events and its imported legacy history (WP-26 part x,
+ * design §7.5) in one timeline, newest first, 50 to a page, read through the person's scope. Reading history is itself
+ * a read of the case, so for a restricted case it records {@code VIEW_RESTRICTED} like the case page does.
  */
 public interface CaseHistoryService {
 
@@ -61,14 +61,17 @@ public interface CaseHistoryService {
     }
 
     /**
-     * One event.
+     * One event: an audit event, or an imported legacy one (WP-26 part x), which carries its import run.
      *
      * @param at when it happened
      * @param local the same moment in {@code app.timezone}, to the minute
-     * @param who the person's name at the time, or {@code null} for the system
-     * @param origin what initiated it
-     * @param action the audit action, such as {@code CASE_UPDATED}
+     * @param who the person's name at the time, or {@code null} for the system (for an imported event: the legacy
+     *     actor's name as recorded, or {@code null} if the source had none)
+     * @param origin what initiated it; {@code IMPORT} for an imported event
+     * @param action the audit action, such as {@code CASE_UPDATED}, or {@code LEGACY_} and the kind of an imported
+     *     event, such as {@code LEGACY_STATUS_CHANGE}
      * @param changes the fields it changed
+     * @param importRun the import run of an imported event, or {@code null} for an audit event
      */
     record Entry(
             Instant at,
@@ -76,7 +79,8 @@ public interface CaseHistoryService {
             @Nullable String who,
             AuditOrigin origin,
             String action,
-            List<Change> changes) {
+            List<Change> changes,
+            @Nullable Long importRun) {
 
         /**
          * Copies the list, so the record holds nothing mutable.
@@ -85,8 +89,9 @@ public interface CaseHistoryService {
          * @param local the same moment in the application time zone
          * @param who the person's name at the time, or {@code null}
          * @param origin what initiated it
-         * @param action the audit action
+         * @param action the audit action, or {@code LEGACY_} and the kind
          * @param changes the fields it changed
+         * @param importRun the import run of an imported event, or {@code null}
          */
         public Entry {
             changes = List.copyOf(changes);

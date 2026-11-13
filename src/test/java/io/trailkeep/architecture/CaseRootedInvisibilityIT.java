@@ -18,6 +18,7 @@ import io.trailkeep.shared.Sensitivity;
 import io.trailkeep.shared.access.CaseRooted;
 import io.trailkeep.shared.access.CaseScope;
 import io.trailkeep.testsupport.CaseSeed;
+import io.trailkeep.testsupport.HistorySeed;
 import io.trailkeep.testsupport.PostgresTestcontainersConfiguration;
 import io.trailkeep.testsupport.RequiresDocker;
 import io.trailkeep.user.TeamRole;
@@ -108,7 +109,8 @@ class CaseRootedInvisibilityIT {
                         "CaseRecordRepository",
                         "CaseCommentRepository",
                         "CaseCommentPinRepository",
-                        "CaseAttachmentRepository");
+                        "CaseAttachmentRepository",
+                        "CaseImportedEventRepository");
         int distinguishing = 0;
         for (Rooted rooted : methods) {
             Method method = rooted.method();
@@ -140,7 +142,10 @@ class CaseRootedInvisibilityIT {
                 .isPositive();
     }
 
-    /** An open case with a pinned comment, an attachment and, like every case the application creates, its SLA row. */
+    /**
+     * An open case with a pinned comment, an attachment, an imported legacy event and, like every case the application
+     * creates, its SLA row.
+     */
     private CaseNumber seeded(
             CaseSeed seed, long team, long owner, Sensitivity sensitivity, String where, String scanStatus) {
         CaseNumber number = seed.caseRow(team, owner, sensitivity, CaseStatus.OPEN);
@@ -148,6 +153,9 @@ class CaseRootedInvisibilityIT {
         seed.pin(seed.comment(id, owner, "A synthetic comment " + where), id, owner);
         seed.attachment(id, owner, "synthetic-" + scanStatus.toLowerCase(Locale.ROOT) + ".txt", scanStatus);
         jdbc.update("INSERT INTO CASE_SLA (CASE_ID, SLA_STATE) VALUES (?, 'NOT_APPLICABLE')", id);
+        HistorySeed history = new HistorySeed(jdbc);
+        history.plain(
+                id, history.run(owner), Instant.parse("2019-05-06T07:08:09Z"), null, "OTHER", "status", null, where);
         return number;
     }
 
