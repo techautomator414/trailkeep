@@ -261,6 +261,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   §9 N-i) and is counted as `RELINKED` when `relink-owners` changed it last, else `CHANGED_IN_TRAILKEEP`; its
   insert-only rows still are. The counts replace the run's `RECONCILE_*` figures, per entity; each run replaces its own
   issues and figures. The comparison with staging and the verdict follow in part aa2b.
+- `reconcile`, the source side and the verdict (WP-26 part aa2b, docs/design/importer.md §9): while the run's staging
+  exists, every staged case, comment, attachment and history row is counted as loaded by this run (`ROW_HASH_DIFFERS`
+  if its staged row hash is not the one the ledger recorded), loaded earlier (`CHANGED_AFTER_IMPORT` when it differs),
+  failed with an ERROR issue of its own, failed with its case (`PARENT_FAILED`), or `UNACCOUNTED`. The verdict
+  (`RECONCILE_VERDICT`, 1 or 0) is 1, and the run `RECONCILED`, only when staging was there and no row differs on
+  either side; otherwise the run stays `LOADED`. Once staging is purged, `RECONCILE_STAGING_PURGED` says the source
+  could not be compared and nothing reconciles. `RECONCILE` issues only report: neither a later load nor the next
+  reconcile treats them as a row's failure.
 - The Oracle source (WP-26 part o, docs/design/importer.md §4.1): a `kind: jdbc` Oracle mapping is test-fetched by
   `validate-mapping` and extracted in one `SET TRANSACTION READ ONLY` transaction, with the session in UTC and ISO
   date, timestamp and number formats; `DATE` and `TIMESTAMP` read as local date-times, `TIMESTAMP WITH TIME ZONE` with

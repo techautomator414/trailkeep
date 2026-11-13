@@ -34,9 +34,14 @@ interface ImportIssueRepository extends Repository<ImportIssue, Long> {
     long countFailedRows(
             long runId, ImportIssue.Subject subject, ImportIssue.Severity severity, Collection<String> accepted);
 
-    /** Those of these keyed hashes whose rows have an issue of a severity, at any stage; the load skips them. */
+    /**
+     * Those of these keyed hashes whose rows have an issue of a severity, at any stage but {@code reconcile}'s: the
+     * load skips them, and {@code reconcile} counts them as failed. A {@code RECONCILE} issue only reports, so it never
+     * changes what a later load does, nor hides a difference from the next reconcile (WP-26 part aa2b).
+     */
     @Query("select distinct i.keyHash from ImportIssue i where i.runId = :runId and i.subject = :subject"
-            + " and i.severity = :severity and i.keyHash in :keyHashes")
+            + " and i.severity = :severity and i.keyHash in :keyHashes"
+            + " and i.stage <> io.trailkeep.importer.ImportIssue.Stage.RECONCILE")
     List<String> keyHashesWith(
             long runId, ImportIssue.Subject subject, ImportIssue.Severity severity, Collection<String> keyHashes);
 
