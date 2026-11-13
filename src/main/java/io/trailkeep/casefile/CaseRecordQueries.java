@@ -88,4 +88,13 @@ interface CaseRecordQueries {
      * @return the readable cases, in no order
      */
     List<CaseService.CaseRef> refs(CaseScope scope, Collection<Long> caseIds);
+
+    /**
+     * Several cases by id, number and archive and purge state, those the scope reads, for the importer's delta.
+     *
+     * @param scope the caller's scope
+     * @param caseIds the ids, at most a page's worth
+     * @return the readable cases, in no order
+     */
+    List<CaseImportService.Existing> importStates(CaseScope scope, Collection<Long> caseIds);
 }

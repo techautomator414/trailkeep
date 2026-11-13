@@ -22,10 +22,12 @@ import java.time.Instant;
 import java.time.InstantSource;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
@@ -157,6 +159,16 @@ class DefaultCaseImportService implements CaseImportService {
                     : CaseSla.importedOpen(0, SlaClock.start(policy, identifiedOn, openedAt, zone), at)
                             .getState();
         };
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Map<Long, Existing> existing(Collection<Long> caseIds) {
+        // The system scope: the ids come from the import ledger, which only the load writes, never from a request.
+        return caseIds.isEmpty()
+                ? Map.of()
+                : cases.importStates(CaseScope.system(), caseIds).stream()
+                        .collect(Collectors.toMap(found -> found.created().caseId(), Function.identity()));
     }
 
     @Override

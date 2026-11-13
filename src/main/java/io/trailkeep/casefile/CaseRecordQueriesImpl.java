@@ -165,6 +165,27 @@ class CaseRecordQueriesImpl implements CaseRecordQueries {
                 .toList();
     }
 
+    @Override
+    public List<CaseImportService.Existing> importStates(CaseScope scope, Collection<Long> caseIds) {
+        CriteriaBuilder cb = entityManager.getCriteriaBuilder();
+        CriteriaQuery<Tuple> query = cb.createTupleQuery();
+        Root<CaseRecord> root = query.from(CaseRecord.class);
+        query.select(cb.tuple(root.get("id"), root.get("caseNumber"), root.get("archivedAt"), root.get("purgedAt")))
+                .where(root.get("id").in(caseIds), scope.toPredicate(root, query, cb));
+        return entityManager
+                .createQuery(query)
+                .getResultStream()
+                .map(row -> new CaseImportService.Existing(
+                        new CaseImportService.Created(
+                                row.get(0, Long.class), CaseNumber.parse(row.get(1, String.class))),
+                        row.get(3) != null
+                                ? CaseImportService.Existing.State.PURGED
+                                : row.get(2) != null
+                                        ? CaseImportService.Existing.State.ARCHIVED
+                                        : CaseImportService.Existing.State.ACTIVE))
+                .toList();
+    }
+
     /** The scope and the filter, as one conjunction; archived cases only when a status filter names them. */
     private Predicate[] where(
             CaseScope scope, CaseFilter filter, Root<CaseRecord> root, CriteriaQuery<?> query, CriteriaBuilder cb) {

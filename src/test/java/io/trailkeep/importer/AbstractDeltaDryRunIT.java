@@ -17,7 +17,8 @@ import org.junit.jupiter.api.io.TempDir;
  * closed there is {@code CLOSED_IN_SOURCE}, another change of status or closing time or of the row hash {@code
  * CHANGED_AFTER_IMPORT}, each carrying the Trailkeep case id; ledger rows the run did not stage are {@code
  * MISSING_IN_SOURCE}; a comment of a loaded case the run did not stage has its parent. A run under another mapping is
- * FATAL unless {@code import.allow-mapping-change} is set, which turns off the row-hash comparison and nothing else.
+ * FATAL unless {@code import.allow-mapping-change} is set, which turns off the row-hash comparison and nothing else. A
+ * loaded case archived or purged since, and each new child of it, is a WARNING carrying the case id (26y2).
  */
 // "IT" is the Failsafe suffix Part B mandates for integration tests, not an abbreviation.
 @SuppressWarnings("checkstyle:AbbreviationAsWordInName")
@@ -122,6 +123,42 @@ abstract class AbstractDeltaDryRunIT extends LoadSupport {
                         List.of("CASE", "WARNING", "CLOSED_IN_SOURCE", hash("c1")),
                         List.of("CASE", "WARNING", "CHANGED_AFTER_IMPORT", hash("c2")));
         assertThat(details(delta)).contains("MAPPING_CHANGE_ALLOWED 3", "CLOSED_IN_SOURCE " + caseId("c1"));
+    }
+
+    @Test
+    void deltaWarnsOfLoadedCasesArchivedOrPurgedSinceAndOfTheirNewChildren(@TempDir Path directory) throws Exception {
+        Path mapping = ownedMapping(directory, TOLERANT);
+        long first = signedOffRun(mapping);
+        stage(first, "c1", "CLOSED", "p1");
+        stage(first, "c2", "CLOSED", "p1");
+        stage(first, "c3", "OPEN", "p1");
+        load(first, mapping).close();
+        archive(caseId("c1"), false);
+        archive(caseId("c2"), true);
+        long delta = extractedRun(mapping);
+        stage(delta, "c1", "CLOSED", "p1");
+        jdbc.update(
+                "UPDATE IMPORT_STG_CASE SET ROW_HASH = ? WHERE RUN_ID = ? AND LEGACY_KEY = 'c1'", CHANGED_HASH, delta);
+        stage(delta, "c3", "OPEN", "p1");
+        comment(delta, "n1", "c1", "ab".repeat(32));
+        comment(delta, "n2", "c2", "ab".repeat(32));
+        comment(delta, "n3", "c3", "ab".repeat(32));
+
+        dryRun(delta, mapping).close();
+
+        assertThat(dryRunIssues(delta))
+                .as("the archive state in place of any other change, and of the children's rules")
+                .containsExactlyInAnyOrder(
+                        List.of("CASE", "WARNING", "CASE_ARCHIVED", hash("c1")),
+                        List.of("CASE", "WARNING", "MISSING_IN_SOURCE", hash("c2")),
+                        List.of("COMMENT", "WARNING", "PARENT_ARCHIVED", hash("n1")),
+                        List.of("COMMENT", "WARNING", "PARENT_PURGED", hash("n2")));
+        assertThat(details(delta))
+                .containsExactlyInAnyOrder(
+                        "CASE_ARCHIVED " + caseId("c1"),
+                        "MISSING_IN_SOURCE " + caseId("c2"),
+                        "PARENT_ARCHIVED " + caseId("c1"),
+                        "PARENT_PURGED " + caseId("c2"));
     }
 
     private void comment(long run, String key, String caseKey, String rowHash) {

@@ -6,7 +6,9 @@ import io.trailkeep.shared.CaseNumber;
 import io.trailkeep.shared.CaseStatus;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import org.jspecify.annotations.Nullable;
 
@@ -176,4 +178,36 @@ public interface CaseImportService {
      * @throws CaseException {@code INVALID} for a case the rules refuse
      */
     Created importCase(ImportRun run, ImportedCase imported);
+
+    /**
+     * A case an earlier load created, as a delta finds it (WP-26 part y2): its id and number, and whether it may still
+     * take imported children. An archived case is read-only and a purged one a tombstone whose content the retention
+     * purge removed, so neither takes any; a case on legal hold still does (a hold keeps history, it does not freeze
+     * it).
+     *
+     * @param created its id and number
+     * @param state {@code ACTIVE}, {@code ARCHIVED} or {@code PURGED}; a purged case, also archived, is {@code PURGED}
+     */
+    record Existing(Created created, State state) {
+
+        /** Whether the case may take imported children, and if not, why. */
+        public enum State {
+            /** Neither archived nor purged: it takes imported children. */
+            ACTIVE,
+            /** Archived ({@code ARCHIVED_AT} set), not purged: read-only. */
+            ARCHIVED,
+            /** Purged ({@code PURGED_AT} set): a tombstone. */
+            PURGED
+        }
+    }
+
+    /**
+     * Cases an earlier load created, for a delta's child-only load and its dry run (WP-26 parts y1, y2, design §3.1):
+     * their ids, their numbers, which the comment import API names a case by, and their state; archived and purged
+     * cases take no imported children.
+     *
+     * @param caseIds case ids from the import ledger, at most a page's worth
+     * @return those that exist, by id
+     */
+    Map<Long, Existing> existing(Collection<Long> caseIds);
 }

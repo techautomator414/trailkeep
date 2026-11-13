@@ -108,6 +108,19 @@ final class CaseComments {
             comments.add(
                     new Comment(null, parts(rest), importer, Objects.requireNonNull(row.getOpenedAt(), "checked")));
         }
+        comments.addAll(of(staged, people));
+        return comments;
+    }
+
+    /**
+     * Staged comments as they are written, for a case loaded before (a delta's child-only load, WP-26 part y2).
+     *
+     * @param staged the comments to load, in the order they were written
+     * @param people the matched people
+     * @return the comments
+     */
+    List<Comment> of(List<StagedComment> staged, PeopleMatcher people) {
+        List<Comment> comments = new ArrayList<>();
         for (StagedComment comment : staged) {
             comments.add(new Comment(
                     comment,
