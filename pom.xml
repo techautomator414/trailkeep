@@ -862,8 +862,9 @@
         <configuration>
           <!-- Oracle ITs run only in the oracle-it profile's per-image executions; heap ITs only in heap-256m;
                perf ITs (a 50 000-case seed, minutes long) only in the perf-it profile's perf-50k execution;
-               SQL Server source ITs only in the sqlserver-it profile's sqlserver execution. -->
-          <excludedGroups>oracle,heap,perf,sqlserver</excludedGroups>
+               SQL Server source ITs only in the sqlserver-it profile's sqlserver execution; the DAST seeding step,
+               which needs a running stack, only in the dast profile's dast execution. -->
+          <excludedGroups>oracle,heap,perf,sqlserver,dast</excludedGroups>
         </configuration>
         <executions>
           <execution>
@@ -920,6 +921,38 @@
                   <excludedGroups combine.self="override"/>
                   <reportsDirectory>${project.build.directory}/failsafe-reports/perf-50k</reportsDirectory>
                   <summaryFile>${project.build.directory}/failsafe-reports/perf-50k/failsafe-summary.xml</summaryFile>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+    <profile>
+      <!--
+        The DAST harness's seeding step (WP-28 part c): DastSessionIT, tagged dast, against a stack that is already
+        running (.github/workflows/zap.yml starts it with .github/scripts/dast-app.sh). It writes the scan sessions to
+        target/dast. By hand, with the stack up:
+          ./mvnw -Pdast test-compile failsafe:integration-test@dast failsafe:verify@dast
+      -->
+      <id>dast</id>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-failsafe-plugin</artifactId>
+            <executions>
+              <execution>
+                <id>dast</id>
+                <goals>
+                  <goal>integration-test</goal>
+                  <goal>verify</goal>
+                </goals>
+                <configuration>
+                  <groups>dast</groups>
+                  <excludedGroups combine.self="override"/>
+                  <reportsDirectory>${project.build.directory}/failsafe-reports/dast</reportsDirectory>
+                  <summaryFile>${project.build.directory}/failsafe-reports/dast/failsafe-summary.xml</summaryFile>
                 </configuration>
               </execution>
             </executions>

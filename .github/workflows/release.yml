@@ -1,9 +1,9 @@
 # SPDX-License-Identifier: Apache-2.0
 # Copyright 2026 Charlie Genova and contributors
 #
-# Release column of IMPLEMENTATION_PLAN Part G, on a v* tag: every main gate, a full verify, the image pushed to
-# GHCR, a keyless cosign signature and SBOM attestation, SLSA provenance, and a GitHub Release carrying the evidence
-# pack (BUILD_PLAN §12.3). GHCR and cosign use only the job token and GitHub's OIDC token; no secrets are needed.
+# Release column of IMPLEMENTATION_PLAN Part G, on a v* tag: every main gate, a full verify, the authenticated ZAP
+# scan (a Medium or higher finding stops the release), the image pushed to GHCR, a keyless cosign signature and SBOM
+# attestation, SLSA provenance, and a GitHub Release carrying the evidence pack (BUILD_PLAN §12.3). GHCR and cosign use only the job token and GitHub's OIDC token; no secrets are needed.
 name: release
 
 on:
@@ -64,9 +64,17 @@ jobs:
           if-no-files-found: ignore
           retention-days: 90
 
+  # The authenticated ZAP full scan of this commit's image (WP-28). Publishing waits for it, so any alert of Medium
+  # or higher that security/zap/suppressions.yaml does not suppress fails the release (decision Q4).
+  zap:
+    name: zap
+    uses: ./.github/workflows/zap.yml
+    permissions:
+      contents: read
+
   publish:
     name: image (push, sign, attest)
-    needs: [main-gates, verify]
+    needs: [main-gates, verify, zap]
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     permissions:
@@ -173,7 +181,8 @@ jobs:
           set -euo pipefail
           mkdir -p pack
           cp artifacts/image-evidence/* pack/
-          for dir in test-reports trivy-sbom-report image-scan-reports dependency-check-report oracle-it-reports sqlserver-it-reports; do
+          for dir in test-reports trivy-sbom-report image-scan-reports dependency-check-report oracle-it-reports sqlserver-it-reports \
+            zap-reports-compliance.admin zap-reports-alpha.analyst; do
             if [ -d "artifacts/${dir}" ]; then
               (cd artifacts && zip -qr "../pack/${dir}.zip" "${dir}")
             fi
