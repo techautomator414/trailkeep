@@ -249,7 +249,7 @@
     bind parameters only), and each id is resolved through CaseService.refs under the viewer's own CaseScope, so a case
     the viewer may not read is never named: it is only counted on the page. Case numbers and titles are shown through
     th:text and linked to /cases/{number}. Covered by ImportRunServiceIT, OracleImportRunServiceIT,
-    ImportRunControllerIT and ImportRunsAccessibilityIT. Needs security-reviewer approval.
+    ImportRunControllerIT and ImportRunsAccessibilityIT. Approved in the security-reviewer role on #186.
     WP-26 part s2 adds GET /admin/import-runs/new, POST /admin/import-runs and POST /admin/import-runs/{id}/sign-off,
     both POSTs with CSRF (403 without). The request takes only the source id: ImportRunService refuses (403) anyone
     but a System or Compliance Admin, then anything but 1 to 16 of [a-z0-9-] (422, echoed back through th:value), and
