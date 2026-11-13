@@ -124,10 +124,12 @@ class ImportCommandRunner implements ApplicationRunner {
                     properties.apply() ? "" : " in the dry run");
         }
         if ("reconcile".equals(command)) {
+            ReconcileCommand.Outcome outcome = reconcile.run(runId);
             LOG.info(
-                    "Import run {}: {} written rows differ",
+                    "Import run {}: {}, {} rows differ",
                     runId,
-                    reconcile.run(runId).differences());
+                    outcome.reconciled() ? "reconciled" : "not reconciled",
+                    outcome.differences());
         }
     }
 

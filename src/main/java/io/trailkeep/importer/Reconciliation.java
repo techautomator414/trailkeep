@@ -21,9 +21,20 @@ import org.jspecify.annotations.Nullable;
  */
 final class Reconciliation {
 
+    /** The figure that holds the verdict: 1 when the run reconciles, else 0. */
+    static final String VERDICT = "RECONCILE_VERDICT";
+
+    /** The figure, 1, that says staging was purged, so the source side could not be compared and nothing reconciles. */
+    static final String STAGING_PURGED = "RECONCILE_STAGING_PURGED";
+
     /** The outcomes that are differences: each is an issue, and any one fails the verdict. */
-    static final Set<String> DIFFERENCES =
-            Set.of("WRITTEN_DIFFERS", "WRITTEN_MISSING", "CLOSURE_DIFFERS", "CLOSURE_MISSING");
+    static final Set<String> DIFFERENCES = Set.of(
+            "UNACCOUNTED",
+            "ROW_HASH_DIFFERS",
+            "WRITTEN_DIFFERS",
+            "WRITTEN_MISSING",
+            "CLOSURE_DIFFERS",
+            "CLOSURE_MISSING");
 
     private static final String PREFIX = "RECONCILE_";
 
@@ -78,14 +89,20 @@ final class Reconciliation {
     }
 
     /**
-     * The run's figures, one per entity and outcome.
+     * The run's figures: each count, then the verdict, and the purged-staging marker when it applies.
      *
+     * @param staged whether staging was there to compare with
+     * @param reconciled the verdict
      * @return the figures, numbers and codes only
      */
-    List<ImportRunSummary> figures() {
+    List<ImportRunSummary> figures(boolean staged, boolean reconciled) {
         List<ImportRunSummary> figures = new ArrayList<>();
         counts.forEach((entity, byOutcome) -> byOutcome.forEach(
                 (outcome, count) -> figures.add(new ImportRunSummary(runId, PREFIX + outcome, entity.name(), count))));
+        figures.add(new ImportRunSummary(runId, VERDICT, null, reconciled ? 1 : 0));
+        if (!staged) {
+            figures.add(new ImportRunSummary(runId, STAGING_PURGED, null, 1));
+        }
         return figures;
     }
 }
