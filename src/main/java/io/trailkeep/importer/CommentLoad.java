@@ -68,6 +68,15 @@ final class CommentLoad {
     }
 
     /**
+     * What the load's children share.
+     *
+     * @return the load's context
+     */
+    Context context() {
+        return context;
+    }
+
+    /**
      * The mapping's rules for a case's description and comments.
      *
      * @return them

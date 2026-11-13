@@ -202,6 +202,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   `MAPPING_CHANGE_ALLOWED` WARNING says that no row hash is compared in the run, while status and closing time still
   are. The run's figures add `LOADED_BEFORE` per entity, and the error rate is of the rows not loaded before. No
   migration and no grant changes.
+- `load` of a delta run writes new children onto cases loaded before (WP-26 part y2, docs/design/importer.md §3.1,
+  §8.2): after the cases it creates, it reads the cases earlier runs of the source loaded from the import ledger and
+  writes each one's staged comments, attachments and history events that the ledger does not hold yet, whether or not
+  the run staged the case again, onto the existing Trailkeep case, in one transaction per case with their ledger rows,
+  search text and audit events, attachments scanned before it. Children with an ERROR are left out, as on a first
+  load; an attachment a first load left out is tried again. A case whose new children fail now (an event failing its
+  rules, a changed file, a comment refused) is a `LOAD` issue on the case, tried again by the next load. The run's
+  loaded count stays the cases it created; the log line adds the cases given new children. `CaseImportService` gains
+  `existing(ids)`, the ids and numbers of cases by id. No migration and no grant changes.
 - The Oracle source (WP-26 part o, docs/design/importer.md §4.1): a `kind: jdbc` Oracle mapping is test-fetched by
   `validate-mapping` and extracted in one `SET TRANSACTION READ ONLY` transaction, with the session in UTC and ISO
   date, timestamp and number formats; `DATE` and `TIMESTAMP` read as local date-times, `TIMESTAMP WITH TIME ZONE` with

@@ -6,7 +6,9 @@ import io.trailkeep.shared.CaseNumber;
 import io.trailkeep.shared.CaseStatus;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import org.jspecify.annotations.Nullable;
 
@@ -176,4 +178,13 @@ public interface CaseImportService {
      * @throws CaseException {@code INVALID} for a case the rules refuse
      */
     Created importCase(ImportRun run, ImportedCase imported);
+
+    /**
+     * Cases an earlier load created, for a delta's child-only load (WP-26 part y2, design §3.1): their ids and numbers,
+     * the number being what the comment import API names a case by.
+     *
+     * @param caseIds case ids from the import ledger, at most a page's worth
+     * @return those that exist, by id
+     */
+    Map<Long, Created> existing(Collection<Long> caseIds);
 }

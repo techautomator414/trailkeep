@@ -54,15 +54,16 @@ import tools.jackson.dataformat.yaml.YAMLMapper;
  * EventLoad}), ledger rows and the run's count, so a case is either fully in or absent. It refuses to start ({@link
  * LoadRefusal}) unless the run is signed off, has no FATAL issue, is loaded with the mapping and lookup files it was
  * dry-run with, and the scanning mode in force is the one its dry run recorded ({@link ScanModeInForce}, R1). It writes
- * only cases the ledger does not hold for the run's source, so a crashed load resumes at the next case, and skips every
- * row with an ERROR from the extract or the dry run. Owners are chosen as the dry run forecast them ({@link
- * PeopleMatcher}); each case is checked again against the rules and reference data of the load's moment ({@link
- * CaseRules}). A case they refuse, whose team has no eligible owner now, whose attachment changed or event fails its
- * rules now, or that the import APIs refuse as invalid, is written nowhere but as a {@code LOAD} issue (an ERROR with
- * its code and the case's keyed hash), and the load goes on; the next load drops those issues and tries their cases
- * again. Anything else stops the load, closed: the run is {@code FAILED}, and the next load resumes at that case. The
- * run lock ({@link LoadRunLock}) keeps one load per run, and one loading run per source, on any number of nodes; a load
- * that died is taken over once it has not moved its run for {@link #LEASE}.
+ * only cases the ledger does not hold for the run's source, so a crashed load resumes at the next case, then the new
+ * children of cases it holds ({@link ChildOnlyLoad}), and skips every row with an ERROR from the extract or dry run.
+ * Owners are chosen as the dry run forecast them ({@link PeopleMatcher}); each case is checked again against the rules
+ * and reference data of the load's moment ({@link CaseRules}). A case they refuse, whose team has no eligible owner
+ * now, whose attachment changed or event fails its rules now, or that the import APIs refuse as invalid, is written
+ * nowhere but as a {@code LOAD} issue (an ERROR with its code and the case's keyed hash), and the load goes on; the
+ * next load drops those issues and tries their cases again. Anything else stops the load, closed: the run is {@code
+ * FAILED}, and the next load resumes at that case. The run lock ({@link LoadRunLock}) keeps one load per run, and one
+ * loading run per source, on any number of nodes; a load that died is taken over once it has not moved its run for
+ * {@link #LEASE}.
  */
 @Component
 @Profile("importer")
@@ -77,8 +78,11 @@ class LoadCommand {
     /** The {@code LOAD} issue code of a case the import APIs refuse as invalid. */
     static final String CASE_REFUSED = "CASE_REFUSED";
 
-    /** What a load did: the cases it wrote, left (in the ledger, or with an ERROR) and refused now as LOAD issues. */
-    record Outcome(long loaded, long skipped, long refused) {}
+    /**
+     * What a load did: the cases it wrote, left (in the ledger, or with an ERROR) and refused now as LOAD issues, and
+     * the cases loaded before that it wrote new children onto ({@link ChildOnlyLoad}).
+     */
+    record Outcome(long loaded, long skipped, long refused, long extended) {}
 
     /** One load's run, its hold on it, settings and reference data. */
     private record Pass(
@@ -99,6 +103,7 @@ class LoadCommand {
         private long loaded;
         private long skipped;
         private long refused;
+        private long extended;
     }
 
     private final StagingStore staging;
@@ -188,6 +193,10 @@ class LoadCommand {
         try {
             pages(StagedPerson.class, runId, page -> page.forEach(pass.people()::person));
             pages(StagedCase.class, runId, page -> loadPage(pass, progress, page));
+            ChildOnlyLoad.Extended extended =
+                    new ChildOnlyLoad(pass.children()).load(pass.lock(), pass.people(), pass.importer());
+            progress.extended = extended.cases();
+            progress.refused += extended.refused();
             pass.lock().end(false);
         } catch (RuntimeException e) {
             try {
@@ -197,7 +206,7 @@ class LoadCommand {
             }
             throw new IllegalStateException("Import run " + runId + ": the load stopped; the next load resumes it", e);
         }
-        return new Outcome(progress.loaded, progress.skipped, progress.refused);
+        return new Outcome(progress.loaded, progress.skipped, progress.refused, progress.extended);
     }
 
     /** This load's run, hold, settings and reference data, read once at its start. */
