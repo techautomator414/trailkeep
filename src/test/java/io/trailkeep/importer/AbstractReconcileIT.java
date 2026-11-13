@@ -168,15 +168,7 @@ abstract class AbstractReconcileIT extends LoadSupport {
         stage(run, "c8", "OPEN", "p1");
         stage(run, "c9", "OPEN", "p1");
         comment(run, "n9", "c9");
-        transactions.executeWithoutResult(status -> issueRows.save(new ImportIssue(
-                run,
-                ImportIssue.Stage.LOAD,
-                ImportIssue.Subject.CASE,
-                hash("c9"),
-                ImportIssue.Severity.ERROR,
-                "CASE_REFUSED",
-                null,
-                Instant.now())));
+        refused(run, "c9");
         jdbc.update(
                 "UPDATE IMPORT_STG_CASE SET ROW_HASH = ? WHERE RUN_ID = ? AND LEGACY_KEY = 'c2'", "ef".repeat(32), run);
 
@@ -198,14 +190,39 @@ abstract class AbstractReconcileIT extends LoadSupport {
                         "CASE ERROR ROW_HASH_DIFFERS " + hash("c2") + " " + changed,
                         "CASE ERROR UNACCOUNTED " + hash("c8") + " -");
 
+        command("reconcile", run, mapping).close();
+        assertThat(reconcileFigures(run))
+                .as("its own issues hide nothing from the next reconcile")
+                .containsEntry("UNACCOUNTED CASE", 1L)
+                .containsEntry("FAILED CASE", 1L);
+        // A resumed load drops the run's earlier LOAD issues and tries again, so c9 and its comment load too.
+        load(run, mapping).close();
+        assertThat(loadedCases("memory1:c8"))
+                .as("nor change what a resumed load does")
+                .isEqualTo(1);
+
         jdbc.update("UPDATE IMPORT_RUN SET STAGING_PURGED_AT = ? WHERE ID = ?", Timestamp.from(Instant.now()), run);
         command("reconcile", run, mapping).close();
 
         assertThat(status(run)).isEqualTo("LOADED");
         assertThat(reconcileFigures(run))
-                .containsAllEntriesOf(Map.of("WRITTEN_MATCH CASE", 2L, "STAGING_PURGED -", 1L, "VERDICT -", 0L))
-                .hasSize(3);
+                .containsAllEntriesOf(Map.of(
+                        "WRITTEN_MATCH CASE", 4L, "WRITTEN_MATCH COMMENT", 1L, "STAGING_PURGED -", 1L, "VERDICT -", 0L))
+                .hasSize(4);
         assertThat(reconcileIssues(run)).isEmpty();
+    }
+
+    /** A {@code LOAD} ERROR on a staged case, as a load that refused it records. */
+    private void refused(long run, String key) {
+        transactions.executeWithoutResult(status -> issueRows.save(new ImportIssue(
+                run,
+                ImportIssue.Stage.LOAD,
+                ImportIssue.Subject.CASE,
+                hash(key),
+                ImportIssue.Severity.ERROR,
+                "CASE_REFUSED",
+                null,
+                Instant.now())));
     }
 
     private void comment(long run, String key, String caseKey) {
