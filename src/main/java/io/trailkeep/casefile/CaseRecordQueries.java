@@ -21,6 +21,15 @@ interface CaseRecordQueries {
     Optional<CaseRecord> findOne(CaseScope scope, CaseNumber caseNumber);
 
     /**
+     * One case by id, if the scope reads it, for the importer's relink, which knows cases by id (WP-26 part z2).
+     *
+     * @param scope the caller's scope
+     * @param caseId the case's id
+     * @return the case, or empty
+     */
+    Optional<CaseRecord> findById(CaseScope scope, long caseId);
+
+    /**
      * Whether the scope reads a case, without loading it.
      *
      * @param scope the caller's scope

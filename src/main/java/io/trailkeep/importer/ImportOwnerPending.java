@@ -11,6 +11,7 @@ import jakarta.persistence.SequenceGenerator;
 import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.Optional;
 import javax.crypto.SecretKey;
 import org.jspecify.annotations.Nullable;
@@ -101,6 +102,28 @@ class ImportOwnerPending {
      */
     static String externalIdHmac(SecretKey key, String externalId) {
         return KeyedHash.hex(key, "external-id:" + externalId);
+    }
+
+    long getId() {
+        return Objects.requireNonNull(id, "not persisted");
+    }
+
+    long getCaseId() {
+        return caseId;
+    }
+
+    long getDefaultOwnerId() {
+        return defaultOwnerId;
+    }
+
+    @Nullable
+    String getEmailHmac() {
+        return emailHmac;
+    }
+
+    @Nullable
+    String getExternalIdHmac() {
+        return externalIdHmac;
     }
 
     @Override

@@ -70,6 +70,18 @@ class DefaultCaseImportService implements CaseImportService {
             long runId,
             long approverId) {}
 
+    /** The audit snapshot of a relink (WP-26 part z2): the owner, and the run that changed it (none before). */
+    record RelinkSnapshot(long ownerId, @Nullable Long runId) {}
+
+    /**
+     * Changes the owner and the change stamp of a case still open and still the default owner's, and nothing else:
+     * the import user may update only these columns of a case (R__grants.sql), and a reassignment made since the case
+     * was read leaves it unchanged.
+     */
+    private static final String RELINK = "update CaseRecord c set c.ownerId = :owner, c.updatedAt = :now,"
+            + " c.updatedBy = :by, c.version = c.version + 1"
+            + " where c.id = :id and c.ownerId = :from and c.status = :open";
+
     /** {@code CASE_COMMENT.AUTHOR_NAME_SNAPSHOT}; the importer shortens longer legacy names with an issue. */
     private static final int MAX_AUTHOR_NAME = 200;
 
@@ -142,6 +154,44 @@ class DefaultCaseImportService implements CaseImportService {
     public boolean eligibleOwner(long userId, long teamId) {
         return userId != people.principals().legacyApproval()
                 && permissions.mayOwn(directory.permissionsOf(userId), teamId);
+    }
+
+    @Override
+    public Relinked relinkOwner(long runId, long caseId, long defaultOwnerId, @Nullable Long ownerId) {
+        // The system scope: the id comes from the importer's pending owners, which only the load writes.
+        CaseRecord record = cases.findById(CaseScope.system(), caseId).orElse(null);
+        Relinked waits = waits(record, defaultOwnerId);
+        if (waits != Relinked.WAITING || record == null || ownerId == null || ownerId == defaultOwnerId) {
+            return waits == Relinked.WAITING && ownerId != null ? Relinked.RELINKED : waits;
+        }
+        if (!eligibleOwner(ownerId, record.getTeamId())) {
+            return Relinked.INELIGIBLE;
+        }
+        long principal = people.principals().importer();
+        int changed = entityManager
+                .createQuery(RELINK)
+                .setParameter("owner", ownerId)
+                .setParameter("now", clock.instant())
+                .setParameter("by", principal)
+                .setParameter("id", caseId)
+                .setParameter("from", defaultOwnerId)
+                .setParameter("open", CaseStatus.OPEN)
+                .executeUpdate();
+        if (changed == 0) {
+            return Relinked.OWNER_CHANGED;
+        }
+        // The statement bypassed the persistence context; the copy read above takes the row as it now is.
+        entityManager.refresh(record);
+        audit.record(new AuditEntry(
+                principal,
+                directory.displayName(principal).orElse("Trailkeep import"),
+                AuditOrigin.IMPORT,
+                caseId,
+                "CASE",
+                caseId,
+                "CASE_OWNER_RELINKED",
+                audit.diff(new RelinkSnapshot(defaultOwnerId, null), new RelinkSnapshot(ownerId, runId))));
+        return Relinked.RELINKED;
     }
 
     @Override
@@ -257,6 +307,18 @@ class DefaultCaseImportService implements CaseImportService {
                                 run.runId(),
                                 run.approverId()))));
         return commentId;
+    }
+
+    /** Whether a case still waits for its legacy owner: open, not purged and still the default owner's. */
+    private static Relinked waits(@Nullable CaseRecord record, long defaultOwnerId) {
+        if (record == null || record.getPurgedAt() != null) {
+            return Relinked.CLOSED;
+        }
+        return switch (record.getStatus()) {
+            case OPEN -> record.getOwnerId() == defaultOwnerId ? Relinked.WAITING : Relinked.OWNER_CHANGED;
+            case PENDING_CLOSURE -> Relinked.CLOSURE_PENDING;
+            default -> Relinked.CLOSED;
+        };
     }
 
     /** Only {@code OPEN} or {@code CLOSED}, with dates in order and none in the future; true for {@code CLOSED}. */

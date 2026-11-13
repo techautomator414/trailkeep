@@ -191,15 +191,18 @@ public interface ImportRunService {
     boolean signsOff(Actor actor);
 
     /**
-     * Requests an import run for a source (design §3 step 0): the run starts {@code REQUESTED}, the importer Job's
-     * {@code validate-mapping} takes it from there. Audited as {@code IMPORT_RUN_REQUESTED}.
+     * Requests a run for a source (design §3 step 0): the run starts {@code REQUESTED}, and the importer Job's {@code
+     * validate-mapping} takes an import run from there, its {@code relink-owners} a relink run (§7.3, WP-26 part z2).
+     * Audited as {@code IMPORT_RUN_REQUESTED}, with the kind.
      *
-     * @param actor who requests it: a System Admin or a Compliance Admin
+     * @param actor who requests it: a System Admin or a Compliance Admin; a relink run, a Compliance Admin
      * @param sourceId the mapping's {@code source.id}: 1 to 16 lowercase letters, digits or hyphens
+     * @param relink whether it is a {@code RELINK} run, which hands the source's open cases given a default owner to
+     *     their legacy owners, rather than an {@code IMPORT} run
      * @return the new run's id
      * @throws ImportRunException {@code FORBIDDEN} for anyone else, {@code INVALID} for a malformed source id
      */
-    long request(Actor actor, String sourceId);
+    long request(Actor actor, String sourceId, boolean relink);
 
     /**
      * Signs a run off (design §3 step 4): any Compliance Admin, the requester included, approves the run as the page

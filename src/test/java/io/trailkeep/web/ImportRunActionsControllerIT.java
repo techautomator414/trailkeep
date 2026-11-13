@@ -109,6 +109,50 @@ class ImportRunActionsControllerIT {
 
     @Test
     @WithAppUser(id = COMPLIANCE_ADMIN, globalRole = GlobalRole.COMPLIANCE_ADMIN)
+    void complianceAdminsMayRequestARelinkRun() throws Exception {
+        assertThat(html(get("/admin/import-runs/new"), 200))
+                .contains("<legend class=\"form-label fs-6\">Kind of run</legend>")
+                .contains("id=\"tk-kind-import\" name=\"kind\" type=\"radio\" value=\"IMPORT\" checked=\"checked\"")
+                .contains("<label class=\"form-check-label\" for=\"tk-kind-relink\">Relink owners</label>");
+        assertThat(html(
+                        post("/admin/import-runs")
+                                .with(csrf())
+                                .param("sourceId", "Bad")
+                                .param("kind", "RELINK"),
+                        422))
+                .as("a refused relink request keeps the choice")
+                .contains("value=\"RELINK\" aria-describedby=\"tk-kind-relink-hint\" checked=\"checked\"");
+
+        mvc.perform(post("/admin/import-runs")
+                        .with(csrf())
+                        .param("sourceId", "legacy-r1")
+                        .param("kind", "RELINK"))
+                .andExpect(status().isFound());
+        entityManager.flush();
+        assertThat(jdbc.queryForList("SELECT KIND FROM IMPORT_RUN WHERE SOURCE_ID = 'legacy-r1'", String.class))
+                .containsExactly("RELINK");
+    }
+
+    @Test
+    @WithAppUser(id = SYSTEM_ADMIN, globalRole = GlobalRole.SYSTEM_ADMIN)
+    void systemAdminsAreNotOfferedARelinkRunAndMayNotPostOne() throws Exception {
+        assertThat(html(get("/admin/import-runs/new"), 200)).doesNotContain("tk-kind-relink");
+        assertThat(html(get("/admin/import-runs"), 200)).doesNotContain("tk-kind-relink");
+        mvc.perform(post("/admin/import-runs")
+                        .with(csrf())
+                        .param("sourceId", "legacy-r1")
+                        .param("kind", "RELINK"))
+                .andExpect(status().isForbidden());
+        // Without a CSRF token.
+        mvc.perform(post("/admin/import-runs").param("sourceId", "legacy-r1").param("kind", "RELINK"))
+                .andExpect(status().isForbidden());
+        entityManager.flush();
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM IMPORT_RUN WHERE SOURCE_ID = 'legacy-r1'", Long.class))
+                .isZero();
+    }
+
+    @Test
+    @WithAppUser(id = COMPLIANCE_ADMIN, globalRole = GlobalRole.COMPLIANCE_ADMIN)
     void malformedSourceIdComesBackEscapedWith422() throws Exception {
         assertThat(html(post("/admin/import-runs").with(csrf()).param("sourceId", "<b>Legacy"), 422))
                 .contains("data-tk-error-summary", "aria-invalid=\"true\"", "value=\"&lt;b&gt;Legacy\"")

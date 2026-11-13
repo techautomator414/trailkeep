@@ -209,13 +209,19 @@ class DefaultImportRunService implements ImportRunService {
 
     @Override
     @Transactional
-    public long request(Actor actor, String sourceId) {
+    public long request(Actor actor, String sourceId, boolean relink) {
         allowed(actor);
+        if (relink && !signsOff(actor)) {
+            throw new ImportRunException(Kind.FORBIDDEN, "only a Compliance Admin requests a relink run");
+        }
         if (!SOURCE_ID.matcher(sourceId).matches()) {
             throw new ImportRunException(Kind.INVALID, "a source id is 1 to 16 lowercase letters, digits or hyphens");
         }
         ImportRun run = runs.save(new ImportRun(
-                ImportRun.Kind.IMPORT, sourceId, actor.permissions().userId(), clock.instant()));
+                relink ? ImportRun.Kind.RELINK : ImportRun.Kind.IMPORT,
+                sourceId,
+                actor.permissions().userId(),
+                clock.instant()));
         record(
                 actor,
                 run,

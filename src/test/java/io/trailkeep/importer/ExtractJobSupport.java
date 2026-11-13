@@ -122,6 +122,14 @@ abstract class ExtractJobSupport {
         return file;
     }
 
+    /** A requested {@code RELINK} run of the test source (WP-26 part z2), removed after the test. */
+    long relinkRun() {
+        long run = runs.save(new ImportRun(ImportRun.Kind.RELINK, "memory1", new CaseSeed(jdbc).user(), Instant.now()))
+                .getId();
+        seeded.add(run);
+        return run;
+    }
+
     /** A run that passed {@code validate-mapping} with this file and its lookup files, as the schema owner seeds it. */
     long validatedRun(Path mapping) throws Exception {
         long run = runs.save(new ImportRun(ImportRun.Kind.IMPORT, "memory1", new CaseSeed(jdbc).user(), Instant.now()))

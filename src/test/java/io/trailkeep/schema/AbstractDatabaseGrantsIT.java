@@ -281,6 +281,22 @@ abstract class AbstractDatabaseGrantsIT {
                 .isEqualTo(Outcome.DENIED);
     }
 
+    /**
+     * {@code relink-owners} (WP-26 part z2) hands a case to its legacy owner: the import user may change a case's owner
+     * and its change stamp, and nothing else of it, so it cannot move, retitle, close or tombstone a case.
+     */
+    @Test
+    void theImportUserMayChangeOnlyTheOwnerOfACase() throws SQLException {
+        String cases = users.ownerSchema() + ".CASE_RECORD";
+        for (String column : List.of("OWNER_ID", "UPDATED_AT", "UPDATED_BY", "VERSION")) {
+            assertThat(update(importUser, cases, column)).as(column).isEqualTo(Outcome.ALLOWED);
+        }
+        for (String column : List.of(
+                "TEAM_ID", "TITLE", "STATUS", "SENSITIVITY", "DESCRIPTION", "LEGAL_HOLD", "PURGED_AT", "CREATED_BY")) {
+            assertThat(update(importUser, cases, column)).as(column).isEqualTo(Outcome.DENIED);
+        }
+    }
+
     /** A tombstone (WP-24 part c): four columns and the row lock, nothing else; the matrix covers DELETE. */
     @Test
     void thePurgeUserMayChangeACaseOnlyIntoATombstone() throws SQLException {
