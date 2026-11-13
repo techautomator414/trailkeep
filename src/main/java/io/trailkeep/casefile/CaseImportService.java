@@ -220,8 +220,11 @@ public interface CaseImportService {
      *
      * @param created its id and number
      * @param state {@code ACTIVE}, {@code ARCHIVED} or {@code PURGED}; a purged case, also archived, is {@code PURGED}
+     * @param changedBy who last changed the case since its import created it, by any route (an edit, a decision,
+     *     {@link #relinkOwner} as the import principal), or {@code null} when it is unchanged since (WP-26 part aa2):
+     *     {@code reconcile} then compares its written form no more
      */
-    record Existing(Created created, State state) {
+    record Existing(Created created, State state, @Nullable Long changedBy) {
 
         /** Whether the case may take imported children, and if not, why. */
         public enum State {

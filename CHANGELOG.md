@@ -252,6 +252,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   context, so Oracle's empty-string-as-`NULL` and microsecond timestamps hash the same at load and later. Grants: the
   import user may insert and read the new columns and the part rows, the runtime user may only read them, nobody may
   change them, and the purge user cannot see them (both vendors). Rows loaded before V19 have no written hash.
+- `reconcile`, the written comparison (WP-26 part aa2a, docs/design/importer.md §9): for an import run whose load
+  finished, every ledger row the run wrote has its written hash recomputed through the same import-API reads the load
+  hashed, and compared in constant time. A row that differs or is gone (`WRITTEN_DIFFERS`, `WRITTEN_MISSING`, and
+  `CLOSURE_*` for an imported closure) is a `RECONCILE` ERROR issue holding the row's keyed hash and Trailkeep id,
+  never a value. Rows of cases archived or purged since (`CASE_ARCHIVED`, `CASE_PURGED`) and rows loaded before V19
+  (`WRITTEN_HASH_MISSING`) are counted and skipped. A case changed since its load by anyone is not compared (design
+  §9 N-i) and is counted as `RELINKED` when `relink-owners` changed it last, else `CHANGED_IN_TRAILKEEP`; its
+  insert-only rows still are. The counts replace the run's `RECONCILE_*` figures, per entity; each run replaces its own
+  issues and figures. The comparison with staging and the verdict follow in part aa2b.
 - The Oracle source (WP-26 part o, docs/design/importer.md §4.1): a `kind: jdbc` Oracle mapping is test-fetched by
   `validate-mapping` and extracted in one `SET TRANSACTION READ ONLY` transaction, with the session in UTC and ISO
   date, timestamp and number formats; `DATE` and `TIMESTAMP` read as local date-times, `TIMESTAMP WITH TIME ZONE` with

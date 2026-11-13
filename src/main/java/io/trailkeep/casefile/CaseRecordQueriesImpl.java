@@ -19,6 +19,7 @@ import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
 import jakarta.persistence.criteria.Selection;
 import jakarta.persistence.criteria.Subquery;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -179,7 +180,15 @@ class CaseRecordQueriesImpl implements CaseRecordQueries {
         CriteriaBuilder cb = entityManager.getCriteriaBuilder();
         CriteriaQuery<Tuple> query = cb.createTupleQuery();
         Root<CaseRecord> root = query.from(CaseRecord.class);
-        query.select(cb.tuple(root.get("id"), root.get("caseNumber"), root.get("archivedAt"), root.get("purgedAt")))
+        query.select(cb.tuple(
+                        root.get("id"),
+                        root.get("caseNumber"),
+                        root.get("archivedAt"),
+                        root.get("purgedAt"),
+                        root.get("version"),
+                        root.get("createdAt"),
+                        root.get("updatedAt"),
+                        root.get("updatedBy")))
                 .where(root.get("id").in(caseIds), scope.toPredicate(root, query, cb));
         return entityManager
                 .createQuery(query)
@@ -191,7 +200,12 @@ class CaseRecordQueriesImpl implements CaseRecordQueries {
                                 ? CaseImportService.Existing.State.PURGED
                                 : row.get(2) != null
                                         ? CaseImportService.Existing.State.ARCHIVED
-                                        : CaseImportService.Existing.State.ACTIVE))
+                                        : CaseImportService.Existing.State.ACTIVE,
+                        // An import creates a case at version 0 with equal stamps; every later change moves both on.
+                        row.get(4, Integer.class) == 0
+                                        && row.get(5, Instant.class).equals(row.get(6, Instant.class))
+                                ? null
+                                : row.get(7, Long.class)))
                 .toList();
     }
 
