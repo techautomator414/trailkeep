@@ -139,6 +139,27 @@ abstract class LoadSupport extends DryRunSupport {
         throw new AssertionError("load was not refused", failure);
     }
 
+    /**
+     * Archives a loaded case as the archive job does and, with {@code purge}, tombstones it as the purge job does: its
+     * comments and search text deleted, description and subject cleared, {@code PURGED_AT} set. Its ledger rows stay.
+     */
+    void archive(long caseId, boolean purge) {
+        Timestamp now = Timestamp.from(Instant.now());
+        jdbc.update(
+                "UPDATE CASE_RECORD SET STATUS = 'ARCHIVED', ARCHIVED_AT = ?, PURGE_AFTER = ? WHERE ID = ?",
+                now,
+                now,
+                caseId);
+        if (purge) {
+            jdbc.update("DELETE FROM CASE_COMMENT WHERE CASE_ID = ?", caseId);
+            jdbc.update("DELETE FROM CASE_SEARCH WHERE CASE_ID = ?", caseId);
+            jdbc.update(
+                    "UPDATE CASE_RECORD SET DESCRIPTION = NULL, SUBJECT_TEXT = NULL, PURGED_AT = ? WHERE ID = ?",
+                    now,
+                    caseId);
+        }
+    }
+
     int loadedCases(String legacyRefs) {
         Integer cases = jdbc.queryForObject(
                 "SELECT COUNT(*) FROM CASE_RECORD WHERE LEGACY_REF LIKE ?", Integer.class, legacyRefs);

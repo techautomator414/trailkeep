@@ -20,7 +20,8 @@ import org.junit.jupiter.api.io.TempDir;
  * the delta staged the case again or not; children the ledger holds are not written again, one with an ERROR is left
  * out, an attachment the first load left out is tried again, each new child gets its ledger row, no case is created
  * and a second load writes nothing more. A case whose new children fail now is a {@code LOAD} issue, retried by the
- * next load.
+ * next load. A case archived or purged since it was loaded takes nothing, which every load records as a {@code LOAD}
+ * issue.
  */
 // "IT" is the Failsafe suffix Part B mandates for integration tests, not an abbreviation.
 @SuppressWarnings("checkstyle:AbbreviationAsWordInName")
@@ -114,6 +115,51 @@ abstract class AbstractChildOnlyLoadIT extends LoadSupport {
 
         assertThat(loadIssues(delta)).isEmpty();
         assertThat(children(c1)).containsExactly(1, 0, 1);
+    }
+
+    @Test
+    void archivedOrPurgedCaseTakesNothingAcrossLoadsAndIsALoadIssueEachTime(@TempDir Path directory) throws Exception {
+        Path mapping = mapping(directory);
+        long first = signedOffRun(mapping);
+        stage(first, "c1", "CLOSED", "p1");
+        stage(first, "c2", "CLOSED", "p1");
+        stage(first, "c3", "OPEN", "p1");
+        comment(first, "n1", "c2");
+        load(first, mapping).close();
+        final long c1 = number(loadedCase("c1"), "ID");
+        final long c2 = number(loadedCase("c2"), "ID");
+        final long c3 = number(loadedCase("c3"), "ID");
+        archive(c1, false);
+        archive(c2, true);
+        long delta = signedOffRun(mapping);
+        stage(delta, "c2", "CLOSED", "p1");
+        comment(delta, "n1", "c2");
+        for (String key : List.of("c1", "c2", "c3")) {
+            comment(delta, "n" + key, key);
+            event(delta, "e" + key, key, "FIELD_CHANGE");
+        }
+
+        load(delta, mapping).close();
+
+        assertThat(loadIssues(delta)).containsExactly("CASE_ARCHIVED " + hash("c1"), "CASE_PURGED " + hash("c2"));
+        assertThat(children(c1)).as("an archived case is read-only").containsExactly(0, 0, 0);
+        assertThat(children(c2)).as("a purged case's content stays gone").containsExactly(0, 0, 0);
+        assertThat(children(c3)).containsExactly(1, 0, 1);
+        assertThat(ledgerRows(delta)).containsExactly("COMMENT nc3", "EVENT ec3");
+        assertThat(count("SELECT COUNT(*) FROM CASE_SEARCH WHERE CASE_ID = ?", c2))
+                .as("no search text either")
+                .isZero();
+        assertThat(count("SELECT COUNT(*) FROM CASE_RECORD WHERE ID = ? AND DESCRIPTION IS NULL", c2))
+                .isEqualTo(1);
+
+        load(delta, mapping).close();
+
+        assertThat(loadIssues(delta))
+                .as("recorded again by every load while the case stays so")
+                .containsExactly("CASE_ARCHIVED " + hash("c1"), "CASE_PURGED " + hash("c2"));
+        assertThat(children(c1)).containsExactly(0, 0, 0);
+        assertThat(children(c2)).containsExactly(0, 0, 0);
+        assertThat(children(c3)).containsExactly(1, 0, 1);
     }
 
     /** A signed-off run whose dry run recorded the {@code external} scanning mode. */

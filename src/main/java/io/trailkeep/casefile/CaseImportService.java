@@ -180,11 +180,34 @@ public interface CaseImportService {
     Created importCase(ImportRun run, ImportedCase imported);
 
     /**
-     * Cases an earlier load created, for a delta's child-only load (WP-26 part y2, design §3.1): their ids and numbers,
-     * the number being what the comment import API names a case by.
+     * A case an earlier load created, as a delta finds it (WP-26 part y2): its id and number, and whether it may still
+     * take imported children. An archived case is read-only and a purged one a tombstone whose content the retention
+     * purge removed, so neither takes any; a case on legal hold still does (a hold keeps history, it does not freeze
+     * it).
+     *
+     * @param created its id and number
+     * @param state {@code ACTIVE}, {@code ARCHIVED} or {@code PURGED}; a purged case, also archived, is {@code PURGED}
+     */
+    record Existing(Created created, State state) {
+
+        /** Whether the case may take imported children, and if not, why. */
+        public enum State {
+            /** Neither archived nor purged: it takes imported children. */
+            ACTIVE,
+            /** Archived ({@code ARCHIVED_AT} set), not purged: read-only. */
+            ARCHIVED,
+            /** Purged ({@code PURGED_AT} set): a tombstone. */
+            PURGED
+        }
+    }
+
+    /**
+     * Cases an earlier load created, for a delta's child-only load and its dry run (WP-26 parts y1, y2, design §3.1):
+     * their ids, their numbers, which the comment import API names a case by, and their state; archived and purged
+     * cases take no imported children.
      *
      * @param caseIds case ids from the import ledger, at most a page's worth
      * @return those that exist, by id
      */
-    Map<Long, Created> existing(Collection<Long> caseIds);
+    Map<Long, Existing> existing(Collection<Long> caseIds);
 }

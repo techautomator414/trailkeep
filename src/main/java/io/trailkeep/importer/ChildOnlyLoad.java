@@ -3,6 +3,7 @@
 package io.trailkeep.importer;
 
 import io.trailkeep.casefile.CaseImportService.Created;
+import io.trailkeep.casefile.CaseImportService.Existing;
 import io.trailkeep.document.AttachmentRejectedException;
 import io.trailkeep.importer.ImportIssue.Severity;
 import io.trailkeep.importer.ImportIssue.Subject;
@@ -28,7 +29,10 @@ import org.springframework.data.domain.Limit;
  * ChildLoads}); the run's count of loaded cases does not move. A case whose children cannot be written now (an event
  * failing its rules, a changed file, a comment the import API refuses) is a {@code LOAD} issue on the case's keyed
  * hash, as on a first load, which the next load drops and tries again. An attachment a first load left out without a
- * ledger row is staged again by a delta and tried again here.
+ * ledger row is staged again by a delta and tried again here. Nothing is ever written to a case archived (read-only)
+ * or purged (a tombstone) since it was loaded: its new children are a {@code CASE_ARCHIVED} or {@code CASE_PURGED}
+ * {@code LOAD} issue on its keyed hash, recorded again by every load while the case stays so, which in Trailkeep is
+ * for good. A case on legal hold still takes them.
  */
 final class ChildOnlyLoad {
 
@@ -71,7 +75,7 @@ final class ChildOnlyLoad {
         while (!page.isEmpty()) {
             Map<String, ChildLoads.Staged> fresh = unloaded(children.staged(
                     page.stream().map(ImportLedgerEntry::getLegacyKey).toList()));
-            Map<Long, Created> existing = context.cases()
+            Map<Long, Existing> existing = context.cases()
                     .existing(page.stream()
                             .filter(entry -> fresh.containsKey(entry.getLegacyKey()))
                             .map(ImportLedgerEntry::getCaseId)
@@ -81,8 +85,12 @@ final class ChildOnlyLoad {
                 if (staged == null) {
                     continue;
                 }
-                Created created = Objects.requireNonNull(existing.get(entry.getCaseId()), "a ledger case exists");
-                String refusal = extend(lock, created, staged, people, importer);
+                Existing found = Objects.requireNonNull(existing.get(entry.getCaseId()), "a ledger case exists");
+                String refusal = switch (found.state()) {
+                    case ACTIVE -> extend(lock, found.created(), staged, people, importer);
+                    case ARCHIVED -> "CASE_ARCHIVED";
+                    case PURGED -> "CASE_PURGED";
+                };
                 if (refusal == null) {
                     cases++;
                     continue;

@@ -3,11 +3,11 @@
 package io.trailkeep.importer;
 
 import io.trailkeep.casefile.CaseImportService;
+import io.trailkeep.casefile.CaseImportService.Existing.State;
 import io.trailkeep.casefile.CaseImportService.ImportCaseType;
 import io.trailkeep.importer.ChildRules.Finding;
 import io.trailkeep.importer.ImportIssue.Severity;
 import io.trailkeep.importer.ImportIssue.Subject;
-import io.trailkeep.importer.staging.RunCheckpoint.StagedEntity;
 import io.trailkeep.importer.staging.StagedAttachment;
 import io.trailkeep.importer.staging.StagedCase;
 import io.trailkeep.importer.staging.StagedComment;
@@ -24,7 +24,6 @@ import java.time.Instant;
 import java.time.InstantSource;
 import java.time.LocalDate;
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -169,7 +168,7 @@ class DryRunCommand {
                 properties.hashKeySpec(),
                 now,
                 summary(rules, teams, mapping, matcher, now),
-                LedgerDelta.of(ledger, found.getSourceId(), hash, properties.allowMappingChange()));
+                LedgerDelta.of(ledger, caseImports, found.getSourceId(), hash, properties.allowMappingChange()));
         Outcome checked = checkRows(pass, rules, children, matcher).plus(deltaIssues(pass));
         checked = checked.plus(runIssues(
                 runId,
@@ -290,25 +289,29 @@ class DryRunCommand {
         for (List<T> page = staging.page(type, runId, null, PAGE);
                 !page.isEmpty();
                 page = staging.page(type, runId, after, PAGE)) {
-            Set<String> parents = parents(
-                    pass,
-                    page.stream()
-                            .map(parent)
-                            .filter(Objects::nonNull)
-                            .distinct()
-                            .toList());
+            LedgerDelta.Parents parents = pass.delta()
+                    .parents(
+                            staging,
+                            runId,
+                            page.stream()
+                                    .map(parent)
+                                    .filter(Objects::nonNull)
+                                    .distinct()
+                                    .toList());
             Map<String, ImportLedgerEntry> loaded = pass.delta()
                     .held(
                             subject,
                             page.stream().map(row -> row.getKey().legacyKey()).toList());
+            Map<Long, State> closed = pass.delta().closed(subject, loaded.values());
             List<ImportIssue> found = new ArrayList<>();
             for (T row : page) {
                 String keyHash = KeyedHash.hex(pass.hashKey(), row.getKey().legacyKey());
                 String caseKey = parent.apply(row);
                 ImportLedgerEntry before = loaded.get(row.getKey().legacyKey());
+                Finding closedParent = parents.closed(caseKey);
                 List<Finding> findings = before != null
-                        ? pass.delta().changed(row, before)
-                        : rules.apply(row, caseKey == null || parents.contains(caseKey));
+                        ? pass.delta().changed(row, before, closed)
+                        : closedParent != null ? List.of(closedParent) : rules.apply(row, parents.found(caseKey));
                 for (Finding problem : findings) {
                     found.add(issue(runId, subject, keyHash, problem, now));
                     fatal += problem.severity() == Severity.FATAL ? 1 : 0;
@@ -331,17 +334,6 @@ class DryRunCommand {
             fatal++;
         }
         return new Outcome(rows, recorded, fatal);
-    }
-
-    /** The cases among these that this run staged or, for a delta's children of loaded cases, the ledger holds. */
-    private Set<String> parents(Pass pass, List<String> caseKeys) {
-        Set<String> found = new HashSet<>(staging.stagedKeys(StagedEntity.CASE, pass.runId(), caseKeys));
-        found.addAll(pass.delta()
-                .held(
-                        Subject.CASE,
-                        caseKeys.stream().filter(key -> !found.contains(key)).toList())
-                .keySet());
-        return found;
     }
 
     /** An empty summary of this dry run, with its SLA forecast for the go-live day. */
