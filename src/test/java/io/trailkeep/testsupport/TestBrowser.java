@@ -108,6 +108,37 @@ public final class TestBrowser {
                 HttpResponse.BodyHandlers.ofString());
     }
 
+    /**
+     * Sends a request with this browser's cookies and extra headers, without following redirects. A non-empty form is
+     * sent URL-encoded; an empty one sends no body.
+     *
+     * @param method the HTTP method
+     * @param url the URL
+     * @param form the form fields, possibly empty
+     * @param headers extra request headers, possibly empty
+     * @return the response
+     * @throws IOException on I/O failure
+     * @throws InterruptedException if interrupted
+     */
+    public HttpResponse<String> send(String method, String url, Map<String, String> form, Map<String, String> headers)
+            throws IOException, InterruptedException {
+        String body = form.entrySet().stream()
+                .map(e -> e.getKey() + "=" + URLEncoder.encode(e.getValue(), StandardCharsets.UTF_8))
+                .collect(Collectors.joining("&"));
+        HttpRequest.Builder request = HttpRequest.newBuilder(URI.create(url))
+                .timeout(TIMEOUT)
+                .method(
+                        method,
+                        body.isEmpty()
+                                ? HttpRequest.BodyPublishers.noBody()
+                                : HttpRequest.BodyPublishers.ofString(body));
+        if (!body.isEmpty()) {
+            request.header("Content-Type", "application/x-www-form-urlencoded");
+        }
+        headers.forEach(request::header);
+        return client.send(request.build(), HttpResponse.BodyHandlers.ofString());
+    }
+
     private HttpResponse<String> follow(HttpResponse<String> first) throws IOException, InterruptedException {
         HttpResponse<String> response = first;
         for (int hop = 0; hop < 10 && response.statusCode() / 100 == 3; hop++) {
