@@ -70,5 +70,7 @@ jobs:
   zap:
     name: zap
     uses: ./.github/workflows/zap.yml
+    with:
+      mode: nightly
     permissions:
       contents: read

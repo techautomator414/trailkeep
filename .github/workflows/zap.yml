@@ -17,7 +17,20 @@ name: zap
 
 on:
   workflow_call:
+    inputs:
+      mode:
+        # release: a partial scan (the active scan cut off at its cap, or the plan stopped by a High insight) fails.
+        # nightly: it warns. Every other check fails in both (dast-verdict.sh, pinned by DastVerdictTest).
+        description: release or nightly
+        type: string
+        required: true
   workflow_dispatch:
+    inputs:
+      mode:
+        description: release or nightly
+        type: choice
+        options: [nightly, release]
+        default: nightly
 
 permissions: {}
 
@@ -36,6 +49,8 @@ jobs:
       IMAGE: localhost/trailkeep:dast
       ZAP_IMAGE: ghcr.io/zaproxy/zaproxy@sha256:9624669db72f54d86c4b46a7064518bd9bf79d8c61a4c31befa9923489f328af # 2.17.0
       SCAN_IDENTITY: ${{ matrix.identity }}
+      ZAP_MODE: ${{ inputs.mode }}
+      ZAP_HEAP: 6g
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
