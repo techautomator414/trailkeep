@@ -860,6 +860,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- Saving a view under a name the person's other view already has, when a concurrent save took the name between the
+  check and the write, is now the same 422 "name taken" refusal as the check, not a 500 (#215). The save is flushed
+  inside the service; because saving returns a result and does not throw, a unique violation (recognised with
+  `UniqueViolations`, as for #213) marks the transaction for rollback by hand and returns `NAME_TAKEN`, so it ends in a
+  clean rollback with no view and no audit event, not in a commit that fails. The screen and its message are
+  unchanged. `SavedViewRaceIT` (and `OracleSavedViewRaceIT`) make the check miss, on committed rows, and prove it.
 - A name another row already has is now a field error on every admin form whose entity has a unique name (#213): the
   SLA policy, case type and team forms, on create and on rename, answer 422 with the form shown again, the typed name
   kept, `aria-invalid` on `name` and a message tied to it, instead of the 409 error page. The check "is this name
