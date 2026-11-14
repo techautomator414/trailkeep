@@ -7,7 +7,9 @@
 #   - fails if the scan lost its session, which would make every later request a scan of the sign-in redirect;
 #   - removes the session value from every report before they are uploaded;
 #   - lists every alert of Medium or higher in the job summary.
-# The plan's exitStatus job makes ZAP exit non-zero on any such alert; this script exits with ZAP's status.
+# ZAP 2.17.0's exit status (checked against the pinned image): 0 when no alert reaches Low, 1 when one reaches the
+# plan's errorLevel (Medium) or the plan fails, 2 when the worst is Low or the plan only warns. This script maps it:
+# 0 passes, 2 passes with a warning, 1 and anything else fail.
 # The alertFilter job is filled from security/zap/suppressions.yaml, keeping only entries whose expiry has not passed;
 # ZapPlanTest checks every entry's justification, review link and expiry on each PR.
 # Usage: dast-zap.sh <identity>   (needs target/dast/<identity>.cookie and $ZAP_IMAGE)
@@ -59,4 +61,23 @@ if [ "${still}" != "200" ]; then
   echo "::error::The scan lost its session (the dashboard answered ${still}); its results do not cover the application."
   exit 1
 fi
-exit "${status}"
+case "${status}" in
+  0)
+    echo "ZAP as ${identity}: no alert of Low or higher."
+    exit 0
+    ;;
+  2)
+    echo "::warning title=ZAP (${identity})::Low alerts or plan warnings only (ZAP exit 2); the gate is Medium, so it passes."
+    echo "ZAP as ${identity}: passed with Low alerts or plan warnings (exit 2); see the reports." \
+      >> "${GITHUB_STEP_SUMMARY:-/dev/stdout}"
+    exit 0
+    ;;
+  1)
+    echo "::error title=ZAP (${identity})::An alert of Medium or higher, or a plan error (ZAP exit 1)."
+    exit 1
+    ;;
+  *)
+    echo "::error title=ZAP (${identity})::ZAP exited ${status}, which is not one of its documented statuses."
+    exit 1
+    ;;
+esac

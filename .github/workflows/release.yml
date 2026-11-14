@@ -64,8 +64,9 @@ jobs:
           if-no-files-found: ignore
           retention-days: 90
 
-  # The authenticated ZAP full scan of this commit's image (WP-28). Publishing waits for it, so any alert of Medium
-  # or higher that security/zap/suppressions.yaml does not suppress fails the release (decision Q4).
+  # The authenticated ZAP full scan of an image built from this commit (WP-28): not the published image itself, which
+  # publish builds again (the Containerfile's microdnf upgrade can make two builds differ). Publishing waits for it,
+  # so any alert of Medium or higher that security/zap/suppressions.yaml does not suppress fails the release (Q4).
   zap:
     name: zap
     uses: ./.github/workflows/zap.yml
