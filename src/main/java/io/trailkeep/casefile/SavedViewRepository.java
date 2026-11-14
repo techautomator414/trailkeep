@@ -11,6 +11,9 @@ interface SavedViewRepository extends Repository<SavedView, Long> {
 
     SavedView save(SavedView view);
 
+    /** Writes pending changes now, so a unique-name violation surfaces inside the service's transaction. */
+    void flush();
+
     void delete(SavedView view);
 
     Optional<SavedView> findByIdAndUserId(Long id, long userId);

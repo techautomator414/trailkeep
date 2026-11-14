@@ -7,14 +7,17 @@ import io.trailkeep.audit.AuditOrigin;
 import io.trailkeep.audit.AuditRecorder;
 import io.trailkeep.casefile.CaseService.Actor;
 import io.trailkeep.shared.DomainException.Kind;
+import io.trailkeep.shared.persistence.UniqueViolations;
 import java.time.InstantSource;
 import java.util.List;
 import java.util.Objects;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.interceptor.TransactionAspectSupport;
 
 /**
  * Saves, lists and deletes a person's views. Every lookup carries the owner's id, so another person's view is
@@ -61,8 +64,32 @@ class DefaultSavedViewService implements SavedViewService {
                 id,
                 "SAVED_VIEW_CREATED",
                 audit.diff(null, new ViewName(stripped))));
+        if (lostNameRace()) {
+            return new Refused(Problem.NAME_TAKEN);
+        }
         LOG.info("Saved view {} created", id);
         return new Created(new View(id, stripped, canonical));
+    }
+
+    /**
+     * The name check is not atomic: a concurrent save can take the name before this one writes. The unique constraint
+     * decides, so the write (and its audit event, which a refusal rolls back with it) is flushed here. Saving
+     * answers with a result and does not throw, so on a violation the transaction is marked for rollback by hand
+     * (the failed flush has left the persistence context unusable and PostgreSQL's transaction aborted) and the
+     * same refusal as the check is returned; the transaction then ends in a clean rollback, not in a commit that
+     * fails. Any other integrity failure is thrown as before.
+     */
+    private boolean lostNameRace() {
+        try {
+            views.flush();
+            return false;
+        } catch (DataIntegrityViolationException failure) {
+            if (!UniqueViolations.isUnique(failure)) {
+                throw failure;
+            }
+            TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
+            return true;
+        }
     }
 
     private @Nullable Problem problem(long userId, String name, String canonical) {
