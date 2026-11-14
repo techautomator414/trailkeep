@@ -57,6 +57,34 @@ class ZapPlanTest {
                 .isEqualTo("exitStatus");
     }
 
+    /**
+     * The gate and the reports count the same alerts (review of #211). Without an {@code insights} job, ZAP exits
+     * itself on a High insight and discards the session mid-plan, so the reports come out empty while exitStatus still
+     * counts the active scan's alerts; with it, the plan stops instead and the jobs after the active scan still run.
+     * The scanning jobs stay inside the context, to which ZAP limits the reports.
+     */
+    @Test
+    void theGateAndTheReportsCountTheSameAlerts() throws IOException {
+        List<Map<String, Object>> jobs = list(load(PLAN).get("jobs"));
+        assertThat(jobs.getFirst()).containsEntry("type", "insights");
+        assertThat(map(jobs.getFirst().get("parameters"))).containsEntry("exitAutoLevel", "high");
+        int activeScan = jobs.indexOf(jobs.stream()
+                .filter(job -> "activeScan".equals(job.get("type")))
+                .findFirst()
+                .orElseThrow());
+        assertThat(jobs.subList(activeScan + 1, jobs.size()))
+                .isNotEmpty()
+                .allSatisfy(job -> assertThat(job).containsEntry("alwaysRun", true));
+        assertThat(jobs)
+                .filteredOn(job -> List.of("spider", "spiderAjax", "activeScan").contains(job.get("type")))
+                .hasSize(3)
+                .allSatisfy(job -> assertThat(map(job.get("parameters"))).containsEntry("context", "trailkeep"));
+        assertThat(jobs)
+                .filteredOn(job -> "spiderAjax".equals(job.get("type")))
+                .singleElement()
+                .satisfies(job -> assertThat(map(job.get("parameters"))).containsEntry("inScopeOnly", true));
+    }
+
     @Test
     void everySuppressionIsJustifiedReviewedAndExpires() throws IOException {
         List<String> problems = new ArrayList<>();

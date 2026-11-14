@@ -25,9 +25,20 @@ env:
     progressToStdout: true
 
 jobs:
+  # Without this job, ZAP's Insights add-on answers a High insight (the heap at 95% after a GC, in the first CI run of
+  # #211) by exiting ZAP in the middle of the plan: it discards the session, so the report jobs that still run find no
+  # alert, while exitStatus counts the active scan's alerts it read before. With it, a High insight stops the plan
+  # instead, ZAP stays up, and the jobs marked alwaysRun below report the whole alert tree. dast-zap.sh fails a run
+  # the plan stopped this way, because its scan is partial.
+  - type: insights
+    parameters:
+      exitAutoLevel: high
+
   - type: alertFilter
     alertFilters: []
 
+  # Every scanning job stays inside the trailkeep context, so the alerts the gate counts are the ones the reports
+  # (which ZAP limits to the plan's contexts) show.
   - type: spider
     parameters:
       context: trailkeep
@@ -37,6 +48,7 @@ jobs:
   - type: spiderAjax
     parameters:
       context: trailkeep
+      inScopeOnly: true
       maxDuration: 10
       browserId: firefox-headless
 
@@ -51,27 +63,32 @@ jobs:
       maxScanDurationInMins: 120
 
   - type: passiveScan-wait
+    alwaysRun: true
     parameters:
       maxDuration: 10
 
   - type: report
+    alwaysRun: true
     parameters:
       template: traditional-html
       reportDir: /zap/wrk/reports
       reportFile: zap-${SCAN_IDENTITY}
       reportTitle: Trailkeep authenticated full scan (${SCAN_IDENTITY})
   - type: report
+    alwaysRun: true
     parameters:
       template: traditional-json
       reportDir: /zap/wrk/reports
       reportFile: zap-${SCAN_IDENTITY}
   - type: report
+    alwaysRun: true
     parameters:
       template: sarif-json
       reportDir: /zap/wrk/reports
       reportFile: zap-${SCAN_IDENTITY}.sarif
 
   - type: exitStatus
+    alwaysRun: true
     parameters:
       errorLevel: Medium
       warnLevel: Low

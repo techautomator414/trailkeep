@@ -992,7 +992,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   seeds a synthetic data set and exports the scan sessions. Any alert of Medium or higher fails the run; the release
   does not publish until both scans pass, and the nightly run reports without blocking merges. Suppressions live only
   in `security/zap/suppressions.yaml`, empty, and `ZapPlanTest` requires each to carry a justification, the PR that
-  approved it and an expiry within 90 days.
+  approved it and an expiry within 90 days. The gate and the reports count the same alerts: every scanning job stays
+  in the context, ZAP never exits itself on a High insight (the plan stops instead, and the run fails as partial), and
+  `dast-zap.sh` fails with its own error if the exit status and the report disagree. ZAP's `zap.log` is uploaded with
+  the reports.
 
 ### Documentation
 
