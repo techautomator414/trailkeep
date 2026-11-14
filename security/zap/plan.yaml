@@ -1,0 +1,94 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Charlie Genova and contributors
+#
+# ZAP Automation Framework plan for the authenticated full scan (WP-28 part c, BUILD_PLAN §12.1 "DAST"). Run by
+# .github/workflows/zap.yml once per scan identity, against the built image in the prod profile on the runner's
+# host network. The scan identity's session is not in this file: dast-zap.sh passes the "SESSION=..." cookie that
+# DastSessionIT exported after a real sign-in at the dev realm through ZAP's ZAP_AUTH_HEADER, ZAP_AUTH_HEADER_VALUE and
+# ZAP_AUTH_HEADER_SITE environment variables, which add it to every request to localhost. The alertFilter job is filled
+# from security/zap/suppressions.yaml by dast-zap.sh (empty today); nothing else suppresses an alert.
+env:
+  contexts:
+    - name: trailkeep
+      urls:
+        - http://localhost:8080/
+      includePaths:
+        - "http://localhost:8080.*"
+      excludePaths:
+        # Ending the scan's own session would turn the rest of the scan into a scan of the sign-in redirect.
+        - "http://localhost:8080/logout"
+        - "http://localhost:8080/oauth2/.*"
+        - "http://localhost:8080/login/.*"
+  parameters:
+    failOnError: true
+    failOnWarning: false
+    progressToStdout: true
+
+jobs:
+  # Without this job, ZAP's Insights add-on answers a High insight (the heap at 95% after a GC, in the first CI run of
+  # #211) by exiting ZAP in the middle of the plan: it discards the session, so the report jobs that still run find no
+  # alert, while exitStatus counts the active scan's alerts it read before. With it, a High insight stops the plan
+  # instead, ZAP stays up, and the jobs marked alwaysRun below report the whole alert tree. dast-zap.sh fails a run
+  # the plan stopped this way, because its scan is partial.
+  - type: insights
+    parameters:
+      exitAutoLevel: high
+
+  - type: alertFilter
+    alertFilters: []
+
+  # Every scanning job stays inside the trailkeep context, so the alerts the gate counts are the ones the reports
+  # (which ZAP limits to the plan's contexts) show.
+  - type: spider
+    parameters:
+      context: trailkeep
+      maxDuration: 10
+      maxDepth: 10
+
+  - type: spiderAjax
+    parameters:
+      context: trailkeep
+      inScopeOnly: true
+      maxDuration: 10
+      browserId: firefox-headless
+
+  - type: passiveScan-wait
+    parameters:
+      maxDuration: 10
+
+  - type: activeScan
+    parameters:
+      context: trailkeep
+      maxRuleDurationInMins: 5
+      maxScanDurationInMins: 120
+
+  - type: passiveScan-wait
+    alwaysRun: true
+    parameters:
+      maxDuration: 10
+
+  - type: report
+    alwaysRun: true
+    parameters:
+      template: traditional-html
+      reportDir: /zap/wrk/reports
+      reportFile: zap-${SCAN_IDENTITY}
+      reportTitle: Trailkeep authenticated full scan (${SCAN_IDENTITY})
+  - type: report
+    alwaysRun: true
+    parameters:
+      template: traditional-json
+      reportDir: /zap/wrk/reports
+      reportFile: zap-${SCAN_IDENTITY}
+  - type: report
+    alwaysRun: true
+    parameters:
+      template: sarif-json
+      reportDir: /zap/wrk/reports
+      reportFile: zap-${SCAN_IDENTITY}.sarif
+
+  - type: exitStatus
+    alwaysRun: true
+    parameters:
+      errorLevel: Medium
+      warnLevel: Low

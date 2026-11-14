@@ -2,7 +2,7 @@
 # Copyright 2026 Charlie Genova and contributors
 #
 # Nightly column of IMPLEMENTATION_PLAN Part G: every main gate (including the Oracle matrix) against the head of
-# main, plus the DAST and performance runs once their work packages land. A red nightly Oracle run blocks the next
+# main, the authenticated DAST scan, and the performance run. A red nightly Oracle run blocks the next
 # merge until fixed (Part E).
 name: nightly
 
@@ -64,12 +64,11 @@ jobs:
           if-no-files-found: ignore
           retention-days: 30
 
+  # The authenticated ZAP full scan (WP-28), one job per scan identity on its own ephemeral stack. Here it reports:
+  # a red ZAP run blocks no merge (decision Q4, unlike a red Oracle run). release.yml runs the same workflow and
+  # fails the release on any Medium or higher finding.
   zap:
-    name: zap (authenticated full + API scan)
-    runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    name: zap
+    uses: ./.github/workflows/zap.yml
     permissions:
       contents: read
-    steps:
-      - name: Placeholder until WP-28
-        run: echo "::notice title=ZAP not yet active::The ephemeral stack and authenticated scan arrive with WP-28; nothing to run yet."

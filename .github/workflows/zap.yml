@@ -1,0 +1,85 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Charlie Genova and contributors
+#
+# Authenticated ZAP full scan (WP-28 part c; IMPLEMENTATION_PLAN Part G "ZAP authenticated full + API scan", nightly
+# and release tag; BUILD_PLAN §12.1 "DAST", gate 0 Medium+). Called by nightly.yml (reports; a red run blocks no
+# merge) and release.yml (publishing waits for it, so any Medium or higher finding fails the release), and runnable by
+# hand. One job per scan identity (decision Q3), each on its own ephemeral stack:
+#   - the image built from this commit by build-image.sh, run in the prod profile on the host network, wired to the
+#     compose PostgreSQL, Keycloak dev realm and ClamAV with dev-only values; the audit HMAC key is generated per run;
+#   - DastSessionIT (-Pdast) signs the dev-realm people in through Chromium, seeds a small synthetic data set and
+#     writes the identity's SESSION cookie to target/dast (never uploaded);
+#   - ZAP, pinned by digest, runs security/zap/plan.yaml with that cookie and fails on any alert of Medium or higher
+#     that security/zap/suppressions.yaml does not suppress (empty today; every entry carries a reviewed
+#     justification and an expiry).
+# No secret is used: the job token reads the repository and nothing else.
+name: zap
+
+on:
+  workflow_call:
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  scan:
+    name: zap (${{ matrix.identity }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        identity: [compliance.admin, alpha.analyst]
+    env:
+      IMAGE: localhost/trailkeep:dast
+      ZAP_IMAGE: ghcr.io/zaproxy/zaproxy@sha256:9624669db72f54d86c4b46a7064518bd9bf79d8c61a4c31befa9923489f328af # 2.17.0
+      SCAN_IDENTITY: ${{ matrix.identity }}
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Temurin 21
+        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      - name: Install the Playwright browser for DastSessionIT
+        # Same Playwright version as playwright.version in pom.xml (as in ci.yml).
+        run: npx --yes playwright@1.63.0 install --with-deps chromium
+
+      - name: Build the image from digest-pinned UBI 9 bases
+        run: .github/scripts/build-image.sh "${IMAGE}" "0.0.0-dast+${GITHUB_SHA::12}"
+
+      - name: Start PostgreSQL, Keycloak, ClamAV and Mailpit
+        run: docker compose up --detach --wait postgres keycloak mailpit clamav clamav-tls
+
+      - name: Start the image in the prod profile
+        run: .github/scripts/dast-app.sh start "${IMAGE}"
+
+      - name: Seed the stack and export the scan sessions
+        run: ./mvnw -B -ntp -Pdast test-compile failsafe:integration-test@dast failsafe:verify@dast
+
+      - name: Scan as ${{ matrix.identity }}
+        run: .github/scripts/dast-zap.sh "${SCAN_IDENTITY}"
+
+      - name: Stop the image and keep its log
+        if: always()
+        run: .github/scripts/dast-app.sh stop
+
+      - name: Upload the reports
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: zap-reports-${{ matrix.identity }}
+          # Never target/dast: it holds the session cookies.
+          path: |
+            target/zap
+            target/failsafe-reports/dast
+          if-no-files-found: ignore
+          retention-days: 90

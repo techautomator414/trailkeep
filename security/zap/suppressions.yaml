@@ -1,0 +1,16 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Charlie Genova and contributors
+#
+# ZAP alert suppressions (BUILD_PLAN §12: fixed, or suppressed with a written justification a maintainer approves;
+# the file is reviewed in PRs and suppressions expire). The only way to suppress a ZAP alert: dast-zap.sh turns each
+# unexpired entry into a False Positive filter of the plan's alertFilter job, and ZapPlanTest fails a PR whose entry
+# lacks any field below. It starts empty (decision Q4, WP-28).
+#
+# Each entry:
+#   ruleId:        the ZAP rule (plugin) id, e.g. 10202
+#   url:           a regular expression for the URLs it covers; as narrow as the finding
+#   justification: why this alert is not a vulnerability here, in full sentences
+#   reviewedIn:    the pull request in which the security reviewer approved it
+#   reviewed:      that approval's date (YYYY-MM-DD)
+#   expires:       at most 90 days after reviewed; an expired entry stops suppressing and the alert fails again
+suppressions: []
