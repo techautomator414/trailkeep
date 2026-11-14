@@ -234,6 +234,20 @@ class UploadIntakeTest {
     }
 
     @Test
+    void controlCharactersInTheNameAreRefusedBeforeAnythingIsWritten() throws IOException {
+        for (String name :
+                new String[] {"a" + (char) 0 + ".txt", "a\r\nb.txt", "a\nb.txt", "a\tb.txt", "a" + (char) 0x7F + ".txt"
+                }) {
+            assertThatThrownBy(() -> clean().receive(name, bytes(UploadSamples.ascii("abc"))))
+                    .isInstanceOfSatisfying(
+                            AttachmentRejectedException.class,
+                            e -> assertThat(e.reason()).isEqualTo(Reason.NAME));
+        }
+        assertThat(tempFiles()).isZero();
+        assertThat(scanned.get()).isNull();
+    }
+
+    @Test
     void missingTempDirectoryFailsWithoutScanning() {
         UploadIntake intake =
                 new UploadIntake(properties(tempDir.resolve("missing"), ScanMode.CLAMD), Optional.of(file -> {
