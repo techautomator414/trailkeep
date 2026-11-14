@@ -870,6 +870,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   points and `ControlCharacterSweepIT` every mapped route, in a value and in a name. A multipart file's name is not a
   parameter, so `UploadIntake` refuses a name with a control character (tab, CR and LF included) as the existing
   `NAME` 422, with nothing stored; before, U+0000 in it was the same PostgreSQL 500 and line breaks were stored.
+  For operators: the importer goes through the same intake, so a legacy attachment whose name holds a control
+  character is no longer stored. While the case is loaded, the run records an `ATTACHMENT_NAME` ERROR issue for that
+  file, in the run's issue list like any attachment the intake refuses (the case itself is still loaded, without that
+  file; the code is not one `limits.acceptSkip` can skip), so legacy data with such names needs attention: fix the name
+  in the source and reload, or attach the file by hand.
 - `deploy/base`'s `trailkeep-config` now carries an `APP_DB_SCHEMA` placeholder (#204), which every runtime user on
   Oracle needs since #178 (the web pods, the purge `CronJob` and the importer `Job` all read it from the ConfigMap);
   the deploy README's overlay list names it, and `DatabaseSchemaConfigManifestTest` proves each workload receives it.
