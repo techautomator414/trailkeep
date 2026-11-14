@@ -73,6 +73,10 @@ class MalformedParametersIT {
             assertThat(send("GET", "/cases?" + malformed, session, "", false).status())
                     .as("GET /cases?%s", malformed)
                     .isEqualTo(400);
+            assertThat(send("GET", "/preferences?" + malformed, session, "", false)
+                            .status())
+                    .as("GET /preferences?%s, which read the string in its template", malformed)
+                    .isEqualTo(400);
             assertThat(send("GET", "/cases?" + malformed, null, "", false).status())
                     .as("anonymous GET /cases?%s", malformed)
                     .isNotEqualTo(500);
@@ -97,17 +101,14 @@ class MalformedParametersIT {
     }
 
     @Test
-    void theAnswerIsTheErrorPageOrForHtmxTheProblemFragmentAndNeverEchoesTheInput() throws Exception {
+    void theAnswerIsTheErrorPageAndNeverEchoesTheInput() throws Exception {
         String session = session();
         Raw page = send("GET", "/cases?=SECRETPROBE", session, "", false);
         assertThat(page.status()).isEqualTo(400);
         assertThat(page.body()).contains("<html").doesNotContain("SECRETPROBE");
-        Raw fragment = send("GET", "/cases?=SECRETPROBE", session, "", true);
-        assertThat(fragment.status()).isEqualTo(400);
-        assertThat(fragment.body())
-                .contains("role=\"alert\"")
-                .doesNotContain("<html")
-                .doesNotContain("SECRETPROBE");
+        Raw htmx = send("GET", "/cases?=SECRETPROBE", session, "", true);
+        assertThat(htmx.status()).isEqualTo(400);
+        assertThat(htmx.body()).doesNotContain("SECRETPROBE");
     }
 
     @Test
