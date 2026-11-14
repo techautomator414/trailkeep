@@ -18,6 +18,9 @@ name: zap
 on:
   workflow_call:
   workflow_dispatch:
+  # TEMPORARY (review of #211): one run on this branch before merge; removed in the next commit.
+  push:
+    branches: [wp-28c-dast-harness]
 
 permissions: {}
 
