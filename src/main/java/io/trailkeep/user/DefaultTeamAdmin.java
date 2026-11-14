@@ -122,11 +122,11 @@ class DefaultTeamAdmin implements TeamAdminService {
                 .isPresent()) {
             throw new TeamAdminException(Kind.CONFLICT, "a team with this name exists");
         }
-        final TeamSnapshot before = snapshot(team);
+        TeamSnapshot before = snapshot(team);
         team.rename(clean);
         team.setActive(active);
-        flushOrNameTaken();
         AuditChanges changes = audit.diff(before, snapshot(team));
+        flushOrNameTaken();
         if (!changes.equals(AuditChanges.none())) {
             record(actor, teamId, "TEAM", "TEAM_UPDATED", changes);
         }

@@ -6,7 +6,7 @@
 <main id="main" class="container tk-main" tabindex="-1">
   <p><a th:href="@{/admin/teams}" th:text="#{tk.teams.all}">All teams</a></p>
   <h1 th:text="${team.name}">Team</h1>
-  <p th:if="${invalid}" class="alert alert-danger" role="alert" th:text="#{tk.team.invalid}">Nothing changed.</p>
+  <p th:if="${invalid}" class="alert alert-danger" role="alert" th:text="${nameTaken} ? #{tk.config.name.taken.banner} : #{tk.team.invalid}">Nothing changed.</p>
 
   <h2 th:text="#{tk.team.details}">Team details</h2>
   <form method="post" th:action="@{/admin/teams/{id}(id=${team.id})}">

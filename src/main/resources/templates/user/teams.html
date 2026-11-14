@@ -7,7 +7,7 @@
   <p><a th:href="@{/admin/users}" th:text="#{tk.users.title}">Users</a>
     <a class="ms-3" th:href="@{/admin/system}" th:text="#{tk.system.title}">System</a></p>
   <h1 th:text="#{tk.teams.title}">Teams</h1>
-  <p th:if="${invalid}" class="alert alert-danger" role="alert" th:text="#{tk.teams.invalid}">Not created.</p>
+  <p th:if="${invalid}" class="alert alert-danger" role="alert" th:text="${nameTaken} ? #{tk.config.name.taken.banner} : #{tk.teams.invalid}">Not created.</p>
   <table class="table">
     <caption th:text="#{tk.teams.caption}">All teams</caption>
     <thead><tr><th scope="col" th:text="#{tk.teams.name}">Name</th>
