@@ -860,6 +860,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- A name another row already has is now a field error on every admin form whose entity has a unique name (#213): the
+  SLA policy, case type and team forms, on create and on rename, answer 422 with the form shown again, the typed name
+  kept, `aria-invalid` on `name` and a message tied to it, instead of the 409 error page. The check "is this name
+  free?" is not atomic, so a request that lost the race to a concurrent one ended at commit as an unhandled
+  `DataIntegrityViolationException`, a 500 (the authenticated ZAP scan reported it as SQL Injection on `name`, though
+  the value was bound). The write is now flushed inside the service and a unique violation, recognised by Hibernate's
+  classification of the vendor error code (no message parsing), is answered with the same `CONFLICT` as the check.
+  `DuplicateNameFormsIT` covers every form; `ConfigNameRaceIT` and `TeamNameRaceIT` (and their Oracle variants) make the
+  check miss and prove the constraint's refusal.
 - `deploy/base`'s `trailkeep-config` now carries an `APP_DB_SCHEMA` placeholder (#204), which every runtime user on
   Oracle needs since #178 (the web pods, the purge `CronJob` and the importer `Job` all read it from the ConfigMap);
   the deploy README's overlay list names it, and `DatabaseSchemaConfigManifestTest` proves each workload receives it.

@@ -11,6 +11,9 @@ interface CaseTypeRepository extends Repository<CaseType, Long> {
 
     CaseType save(CaseType caseType);
 
+    /** Writes pending changes now, so a unique-name violation surfaces inside the service's transaction. */
+    void flush();
+
     Optional<CaseType> findById(Long id);
 
     Optional<CaseType> findByName(String name);

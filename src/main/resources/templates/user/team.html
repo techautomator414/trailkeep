@@ -11,7 +11,11 @@
   <h2 th:text="#{tk.team.details}">Team details</h2>
   <form method="post" th:action="@{/admin/teams/{id}(id=${team.id})}">
     <label class="form-label" for="name" th:text="#{tk.teams.name}">Team name</label>
-    <input class="form-control" id="name" name="name" type="text" required maxlength="120" th:value="${team.name}">
+    <input class="form-control" id="name" name="name" type="text" required maxlength="120"
+           th:value="${typedName ?: team.name}"
+           th:attr="aria-invalid=${nameTaken} ? 'true' : null,aria-describedby=${nameTaken} ? 'name-error' : null">
+    <div th:if="${nameTaken}" class="invalid-feedback d-block" id="name-error" th:text="#{tk.teams.name.taken}">
+      Taken</div>
     <div class="form-check mt-2">
       <input type="hidden" name="_active" value="on">
       <input class="form-check-input" id="active" name="active" type="checkbox" value="true"

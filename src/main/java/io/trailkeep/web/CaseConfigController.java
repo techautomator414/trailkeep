@@ -2,6 +2,7 @@
 // Copyright 2026 Charlie Genova and contributors
 package io.trailkeep.web;
 
+import io.trailkeep.casefile.CaseConfigException;
 import io.trailkeep.casefile.CaseConfigService;
 import io.trailkeep.casefile.CaseConfigService.Actor;
 import io.trailkeep.casefile.CaseTypeCommand;
@@ -9,6 +10,7 @@ import io.trailkeep.casefile.EscalateTo;
 import io.trailkeep.casefile.SlaAnchor;
 import io.trailkeep.casefile.SlaPolicyCommand;
 import io.trailkeep.security.TrailkeepOidcUser;
+import io.trailkeep.shared.DomainException.Kind;
 import io.trailkeep.user.UserDirectoryService;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
@@ -97,7 +99,18 @@ class CaseConfigController {
         if (binding.hasErrors()) {
             return invalid(response, model, id == null ? policies(principal, model) : policy(principal, id, model));
         }
-        return "redirect:/admin/sla-policies/" + config.savePolicy(actor(principal), id, command);
+        try {
+            return "redirect:/admin/sla-policies/" + config.savePolicy(actor(principal), id, command);
+        } catch (CaseConfigException refused) {
+            if (refused.kind() != Kind.CONFLICT) {
+                throw refused;
+            }
+            return nameTaken(
+                    response,
+                    model,
+                    command.name(),
+                    id == null ? policies(principal, model) : policy(principal, id, model));
+        }
     }
 
     @GetMapping("/case-types")
@@ -128,7 +141,18 @@ class CaseConfigController {
         if (command == null || !validator.validate(command).isEmpty()) {
             return invalid(response, model, id == null ? caseTypes(principal, model) : caseType(principal, id, model));
         }
-        return "redirect:/admin/case-types/" + config.saveCaseType(actor(principal), id, command);
+        try {
+            return "redirect:/admin/case-types/" + config.saveCaseType(actor(principal), id, command);
+        } catch (CaseConfigException refused) {
+            if (refused.kind() != Kind.CONFLICT) {
+                throw refused;
+            }
+            return nameTaken(
+                    response,
+                    model,
+                    command.name(),
+                    id == null ? caseTypes(principal, model) : caseType(principal, id, model));
+        }
     }
 
     private Actor actor(TrailkeepOidcUser principal) {
@@ -139,6 +163,13 @@ class CaseConfigController {
         model.addAttribute("anchors", SlaAnchor.values());
         model.addAttribute("escalations", EscalateTo.values());
         return view;
+    }
+
+    /** A taken name is a field error on {@code name}: the form is shown again with what was typed. */
+    private static String nameTaken(HttpServletResponse response, Model model, String typed, String view) {
+        model.addAttribute("nameTaken", true);
+        model.addAttribute("typedName", typed);
+        return invalid(response, model, view);
     }
 
     private static String invalid(HttpServletResponse response, Model model, String view) {

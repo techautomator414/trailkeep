@@ -12,6 +12,9 @@ interface TeamRepository extends Repository<Team, Long> {
 
     Team save(Team team);
 
+    /** Writes pending changes now, so a unique-name violation surfaces inside the service's transaction. */
+    void flush();
+
     Optional<Team> findById(Long id);
 
     Optional<Team> findByName(String name);

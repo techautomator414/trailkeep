@@ -1,7 +1,11 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <form th:fragment="form(action, t, submit)" method="post" th:action="${action}" xmlns:th="http://www.thymeleaf.org">
   <label class="form-label" for="name" th:text="#{tk.config.name}">Name</label>
-  <input class="form-control" id="name" name="name" type="text" required maxlength="120" th:value="${t?.name}">
+  <input class="form-control" id="name" name="name" type="text" required maxlength="120"
+         th:value="${typedName ?: t?.name}"
+         th:attr="aria-invalid=${nameTaken} ? 'true' : null,aria-describedby=${nameTaken} ? 'name-error' : null">
+  <div th:if="${nameTaken}" class="invalid-feedback d-block" id="name-error" th:text="#{tk.types.name.taken}">
+    Taken</div>
   <label class="form-label mt-2" for="slaPolicyId" th:text="#{tk.types.policy}">SLA policy</label>
   <select class="form-select" id="slaPolicyId" name="slaPolicyId" required>
     <option th:each="p : ${policies}" th:value="${p.id}" th:selected="${t?.slaPolicyId == p.id}"

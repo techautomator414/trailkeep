@@ -7,6 +7,7 @@ import io.trailkeep.audit.AuditEntry;
 import io.trailkeep.audit.AuditOrigin;
 import io.trailkeep.audit.AuditRecorder;
 import io.trailkeep.shared.DomainException.Kind;
+import io.trailkeep.shared.persistence.UniqueViolations;
 import io.trailkeep.user.GlobalRole;
 import io.trailkeep.user.UserPermissions;
 import java.util.HashSet;
@@ -16,6 +17,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import org.jspecify.annotations.Nullable;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
@@ -72,6 +74,7 @@ class DefaultCaseConfigService implements CaseConfigService {
         } else {
             policy.apply(command);
         }
+        flushOrNameTaken(policies::flush);
         long savedId = id(policy.getId());
         record(
                 actor,
@@ -115,6 +118,7 @@ class DefaultCaseConfigService implements CaseConfigService {
         } else {
             caseType.apply(command);
         }
+        flushOrNameTaken(caseTypes::flush);
         long savedId = id(caseType.getId());
         outcomes.deleteAllOfType(savedId);
         for (int i = 0; i < cleanOutcomes.size(); i++) {
@@ -140,6 +144,22 @@ class DefaultCaseConfigService implements CaseConfigService {
     private static void requireFreeName(Optional<@Nullable Long> holder, @Nullable Long id) {
         if (holder.isPresent() && !Objects.equals(holder.get(), id)) {
             throw new CaseConfigException(Kind.CONFLICT, "the name is taken");
+        }
+    }
+
+    /**
+     * The name check above is not atomic: a concurrent request can take the name before this one writes. The unique
+     * constraint decides, so the write is flushed here and its violation answered like the check, never left to fail
+     * at commit as a 500.
+     */
+    private static void flushOrNameTaken(Runnable flush) {
+        try {
+            flush.run();
+        } catch (DataIntegrityViolationException failure) {
+            if (UniqueViolations.isUnique(failure)) {
+                throw new CaseConfigException(Kind.CONFLICT, "the name is taken");
+            }
+            throw failure;
         }
     }
 

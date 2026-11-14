@@ -3,6 +3,8 @@
 package io.trailkeep.web;
 
 import io.trailkeep.security.TrailkeepOidcUser;
+import io.trailkeep.shared.DomainException.Kind;
+import io.trailkeep.user.TeamAdminException;
 import io.trailkeep.user.TeamAdminService;
 import io.trailkeep.user.TeamAdminService.Actor;
 import io.trailkeep.user.TeamRole;
@@ -65,7 +67,15 @@ class TeamAdminController {
             model.addAttribute("teams", admin.teams(actor(principal)));
             return invalid(model, response, TEAMS);
         }
-        return "redirect:/admin/teams/" + admin.createTeam(actor(principal), form.name());
+        try {
+            return "redirect:/admin/teams/" + admin.createTeam(actor(principal), form.name());
+        } catch (TeamAdminException refused) {
+            if (refused.kind() != Kind.CONFLICT) {
+                throw refused;
+            }
+            model.addAttribute("teams", admin.teams(actor(principal)));
+            return nameTaken(model, response, form.name(), TEAMS);
+        }
     }
 
     @GetMapping("/{teamId}")
@@ -89,7 +99,14 @@ class TeamAdminController {
         if (binding.hasErrors()) {
             return invalid(model, response, team(principal, teamId, model));
         }
-        admin.updateTeam(actor(principal), teamId, form.name(), form.active());
+        try {
+            admin.updateTeam(actor(principal), teamId, form.name(), form.active());
+        } catch (TeamAdminException refused) {
+            if (refused.kind() != Kind.CONFLICT) {
+                throw refused;
+            }
+            return nameTaken(model, response, form.name(), team(principal, teamId, model));
+        }
         return "redirect:/admin/teams/" + teamId;
     }
 
@@ -121,6 +138,13 @@ class TeamAdminController {
 
     private Actor actor(TrailkeepOidcUser principal) {
         return new Actor(directory.permissionsOf(principal.userId()), principal.displayName());
+    }
+
+    /** A taken name is a field error on {@code name}: the form is shown again with what was typed. */
+    private static String nameTaken(Model model, HttpServletResponse response, String typed, String view) {
+        model.addAttribute("nameTaken", true);
+        model.addAttribute("typedName", typed);
+        return invalid(model, response, view);
     }
 
     private static String invalid(Model model, HttpServletResponse response, String view) {

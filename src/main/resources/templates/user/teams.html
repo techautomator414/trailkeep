@@ -23,7 +23,11 @@
   <h2 th:text="#{tk.teams.create}">Create a team</h2>
   <form method="post" th:action="@{/admin/teams}">
     <label class="form-label" for="name" th:text="#{tk.teams.name}">Team name</label>
-    <input class="form-control" id="name" name="name" type="text" required maxlength="120" autocomplete="off">
+    <input class="form-control" id="name" name="name" type="text" required maxlength="120" autocomplete="off"
+           th:value="${typedName}"
+           th:attr="aria-invalid=${nameTaken} ? 'true' : null,aria-describedby=${nameTaken} ? 'name-error' : null">
+    <div th:if="${nameTaken}" class="invalid-feedback d-block" id="name-error" th:text="#{tk.teams.name.taken}">
+      Taken</div>
     <input type="hidden" name="active" value="true">
     <button class="btn btn-primary mt-2" type="submit" th:text="#{tk.teams.create.submit}">Create team</button>
   </form>
