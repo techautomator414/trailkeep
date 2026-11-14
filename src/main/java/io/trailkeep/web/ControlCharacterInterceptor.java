@@ -2,6 +2,7 @@
 // Copyright 2026 Charlie Genova and contributors
 package io.trailkeep.web;
 
+import jakarta.servlet.DispatcherType;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.util.Map;
@@ -39,12 +40,17 @@ class ControlCharacterInterceptor implements HandlerInterceptor, WebMvcConfigure
 
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) {
+        if (request.getDispatcherType() != DispatcherType.REQUEST) {
+            // An error or async dispatch repeats a request this interceptor already saw. Reading the parameters of an
+            // upload the container refused (413) would raise that refusal again and break the error page.
+            return true;
+        }
         for (Map.Entry<String, String[]> parameter : request.getParameterMap().entrySet()) {
             if (hasControlCharacter(parameter.getKey())) {
                 throw new ControlCharacterException();
             }
             for (String value : parameter.getValue()) {
-                if (hasControlCharacter(value)) {
+                if (value != null && hasControlCharacter(value)) {
                     throw new ControlCharacterException();
                 }
             }
