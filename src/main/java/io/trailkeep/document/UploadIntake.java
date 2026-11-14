@@ -78,9 +78,7 @@ final class UploadIntake {
      * @throws UncheckedIOException if the upload or the temp file cannot be read or written
      */
     ScannedUpload receive(String fileName, InputStream content) {
-        if (fileName.isBlank() || fileName.length() > CaseAttachment.MAX_FILE_NAME) {
-            throw new AttachmentRejectedException(Reason.NAME, "file name blank or too long");
-        }
+        requireUsableName(fileName);
         Path temp = createTempFile();
         boolean handedOver = false;
         try {
@@ -113,9 +111,7 @@ final class UploadIntake {
      *     file is above the scanner's own limit)
      */
     ScannedUpload receive(String fileName, Path file, long maxBytes) {
-        if (fileName.isBlank() || fileName.length() > CaseAttachment.MAX_FILE_NAME) {
-            throw new AttachmentRejectedException(Reason.NAME, "file name blank or too long");
-        }
+        requireUsableName(fileName);
         try {
             long size = Files.size(file);
             if (size > maxBytes) {
@@ -193,6 +189,23 @@ final class UploadIntake {
             return MessageDigest.getInstance("SHA-256");
         } catch (NoSuchAlgorithmException e) {
             throw new IllegalStateException("every Java platform provides SHA-256", e);
+        }
+    }
+
+    /**
+     * A file name is not a request parameter, so the web layer's control-character check never sees it. It is stored
+     * as written in {@code FILE_NAME} and shown back, so U+0000 (a PostgreSQL 500) and any other control character,
+     * line breaks and tabs included (header and log injection), are refused like a blank or overlong name.
+     */
+    private static void requireUsableName(String fileName) {
+        if (fileName.isBlank() || fileName.length() > CaseAttachment.MAX_FILE_NAME) {
+            throw new AttachmentRejectedException(Reason.NAME, "file name blank or too long");
+        }
+        for (int i = 0; i < fileName.length(); i++) {
+            char c = fileName.charAt(i);
+            if (c < 0x20 || c == 0x7F) {
+                throw new AttachmentRejectedException(Reason.NAME, "file name holds a control character");
+            }
         }
     }
 

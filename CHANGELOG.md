@@ -867,7 +867,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   value once Spring has resolved the request, so the query string, form fields and multipart text parts are all
   covered and a new form needs nothing; it refuses U+0000 to U+001F except tab, line feed and carriage return, and
   U+007F, and `ErrorAdvice` renders the 400 (the problem fragment for htmx). `ControlCharactersIT` covers the entry
-  points and `ControlCharacterSweepIT` every mapped route, in a value and in a name.
+  points and `ControlCharacterSweepIT` every mapped route, in a value and in a name. A multipart file's name is not a
+  parameter, so `UploadIntake` refuses a name with a control character (tab, CR and LF included) as the existing
+  `NAME` 422, with nothing stored; before, U+0000 in it was the same PostgreSQL 500 and line breaks were stored.
 - `deploy/base`'s `trailkeep-config` now carries an `APP_DB_SCHEMA` placeholder (#204), which every runtime user on
   Oracle needs since #178 (the web pods, the purge `CronJob` and the importer `Job` all read it from the ConfigMap);
   the deploy README's overlay list names it, and `DatabaseSchemaConfigManifestTest` proves each workload receives it.
