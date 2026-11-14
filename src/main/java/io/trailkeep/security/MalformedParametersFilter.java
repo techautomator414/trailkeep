@@ -34,12 +34,12 @@ public final class MalformedParametersFilter extends OncePerRequestFilter {
         try {
             chain.doFilter(request, response);
         } catch (InvalidParameterException malformed) {
-            if (response.isCommitted()) {
+            if (!isBadRequest(malformed) || response.isCommitted()) {
                 throw malformed;
             }
             refuse(response);
         } catch (ServletException failed) {
-            if (!isMalformed(failed) || response.isCommitted()) {
+            if (!isBadRequest(failed) || response.isCommitted()) {
                 throw failed;
             }
             refuse(response);
@@ -51,9 +51,15 @@ public final class MalformedParametersFilter extends OncePerRequestFilter {
         response.sendError(HttpServletResponse.SC_BAD_REQUEST);
     }
 
-    private static boolean isMalformed(Throwable failure) {
+    /**
+     * Whether the failure holds an {@link InvalidParameterException} that Tomcat itself classes as a 400. The class
+     * also carries other codes, notably the 413 of an upload part over the size limit, which the application answers
+     * through {@code UploadTooLargeErrorView} and which must go on as before.
+     */
+    private static boolean isBadRequest(Throwable failure) {
         for (Throwable cause = failure; cause != null; cause = cause.getCause()) {
-            if (cause instanceof InvalidParameterException) {
+            if (cause instanceof InvalidParameterException invalid
+                    && invalid.getErrorCode() == HttpServletResponse.SC_BAD_REQUEST) {
                 return true;
             }
         }
