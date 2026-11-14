@@ -20,6 +20,7 @@ import org.springframework.web.servlet.ModelAndView;
  * {@code problem} fragment for htmx requests (the fragment contract in {@code app.js}) and the error page otherwise.
  * An unreadable case is a 404 exactly like an absent one. A {@link ConstraintViolationException} that reaches the web
  * layer (a controller that skipped form validation before calling a {@code @Validated} service) is a 422, not a 5xx.
+ * A request parameter with a control character is a 400 ({@link ControlCharacterInterceptor}).
  * A download refused because every slot is taken is a 503 with {@code Retry-After} (an upload the container refused
  * for its size never reaches here: see {@link UploadTooLargeErrorView}). The exception message never reaches the
  * response.
@@ -29,7 +30,12 @@ class ErrorAdvice {
 
     private static final Logger LOG = LoggerFactory.getLogger(ErrorAdvice.class);
 
-    @ExceptionHandler({DomainException.class, ConstraintViolationException.class, DownloadsBusyException.class})
+    @ExceptionHandler({
+        DomainException.class,
+        ConstraintViolationException.class,
+        DownloadsBusyException.class,
+        ControlCharacterException.class
+    })
     ModelAndView domain(Exception exception, HttpServletRequest request, HttpServletResponse response) {
         HttpStatus status = HttpStatus.UNPROCESSABLE_CONTENT;
         if (exception instanceof DomainException domain) {
@@ -39,6 +45,9 @@ class ErrorAdvice {
                 case CONFLICT -> HttpStatus.CONFLICT;
                 case INVALID -> HttpStatus.UNPROCESSABLE_CONTENT;
             };
+        }
+        if (exception instanceof ControlCharacterException) {
+            status = HttpStatus.BAD_REQUEST;
         }
         if (exception instanceof DownloadsBusyException) {
             status = HttpStatus.SERVICE_UNAVAILABLE;

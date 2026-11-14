@@ -287,6 +287,20 @@ class CaseAttachmentUploadIT {
 
     @Test
     @WithAppUser(id = ANALYST, team = TEAM, teamRole = TeamRole.ANALYST)
+    void controlCharactersInTheFileNameAreRefusedAsTheNameAndNothingIsStored() throws Exception {
+        for (String name : new String[] {
+            "report" + (char) 0 + ".txt", "report\r\nX-Injected: 1.txt", "report\t.txt", "report" + (char) 0x7F + ".txt"
+        }) {
+            mvc.perform(upload(name, UploadSamples.ascii("abc")))
+                    .andExpect(status().isUnprocessableContent())
+                    .andExpect(content().string(containsString("whose name is 1 to 255 characters")));
+        }
+        assertAttachments(0);
+        verifyNoInteractions(scanner);
+    }
+
+    @Test
+    @WithAppUser(id = ANALYST, team = TEAM, teamRole = TeamRole.ANALYST)
     void anUnavailableScannerRefusesTheUploadWithTryAgainAndStoresNothing() throws Exception {
         doThrow(new ScannerUnavailableException("synthetic outage"))
                 .when(scanner)
