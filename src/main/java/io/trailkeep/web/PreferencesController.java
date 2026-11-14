@@ -4,6 +4,7 @@ package io.trailkeep.web;
 
 import io.trailkeep.security.TrailkeepOidcUser;
 import io.trailkeep.user.UserPreferenceService;
+import java.util.Map;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
@@ -27,8 +28,14 @@ class PreferencesController {
     }
 
     @GetMapping("/preferences")
-    String show(@AuthenticationPrincipal TrailkeepOidcUser principal, Model model) {
+    String show(
+            @AuthenticationPrincipal TrailkeepOidcUser principal,
+            @RequestParam Map<String, String> parameters,
+            Model model) {
         model.addAttribute("shortcuts", preferences.shortcutsEnabled(principal.userId()));
+        // Read here and not as ${param.saved} in the template: a malformed query string makes the first read throw,
+        // and thrown while rendering it was logged by Thymeleaf at ERROR with a stack trace for every probe.
+        model.addAttribute("saved", parameters.containsKey("saved"));
         return "web/preferences";
     }
 
