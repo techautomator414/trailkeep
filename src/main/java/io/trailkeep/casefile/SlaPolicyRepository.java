@@ -11,6 +11,9 @@ interface SlaPolicyRepository extends Repository<SlaPolicy, Long> {
 
     SlaPolicy save(SlaPolicy policy);
 
+    /** Writes pending changes now, so a unique-name violation surfaces inside the service's transaction. */
+    void flush();
+
     Optional<SlaPolicy> findById(Long id);
 
     Optional<SlaPolicy> findByName(String name);

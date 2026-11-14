@@ -120,6 +120,37 @@ class CaseConfigAccessibilityIT {
         assertInvalid(type);
     }
 
+    @Test
+    void takenPolicyNameIsAFieldErrorOnTheListAndOnThePolicyPage() {
+        String taken = createPolicy();
+        page.navigate(KEYCLOAK.app("/admin/sla-policies"));
+        assertNameTaken("SLA policies", taken);
+
+        String other = createPolicy();
+        assertNameTaken(other, taken);
+    }
+
+    @Test
+    void takenCaseTypeNameIsAFieldErrorOnTheListAndOnTheTypePage() {
+        createPolicy();
+        String taken = createCaseType();
+        page.navigate(KEYCLOAK.app("/admin/case-types"));
+        assertNameTaken("Case types", taken);
+
+        String other = createCaseType();
+        assertNameTaken(other, taken);
+    }
+
+    private String createCaseType() {
+        String type = "Type " + UUID.randomUUID().toString().substring(0, 8);
+        page.navigate(KEYCLOAK.app("/admin/case-types"));
+        page.fill("#name", type);
+        page.fill("#outcomes", "Resolved");
+        page.click("main form button[type=submit]");
+        page.waitForURL(url -> url.matches(".*/admin/case-types/\\d+$"));
+        return type;
+    }
+
     private String createPolicy() {
         String name = "Policy " + UUID.randomUUID().toString().substring(0, 8);
         page.navigate(KEYCLOAK.app("/admin/sla-policies"));
@@ -137,6 +168,21 @@ class CaseConfigAccessibilityIT {
         Response invalid = submit("#name", "   ", "main form button[type=submit]");
         assertThat(invalid.status()).isEqualTo(422);
         assertThat(page.isVisible("[role=alert]")).isTrue();
+        assertClean(heading);
+    }
+
+    /** Submits {@code taken} as the name: refused as a field error, the banner saying so, axe clean. */
+    private void assertNameTaken(String heading, String taken) {
+        if (page.isVisible("#outcomes") && page.inputValue("#outcomes").isBlank()) {
+            page.fill("#outcomes", "Resolved"); // valid, so only the name is refused
+        }
+        Response refused = submit("#name", taken, "main form button[type=submit]");
+        assertThat(refused.status()).isEqualTo(422);
+        assertThat(page.locator("[role=alert]").innerText())
+                .isEqualTo("Not saved: that name is already taken. See the field marked below.");
+        assertThat(page.getAttribute("#name", "aria-invalid")).isEqualTo("true");
+        assertThat(page.getAttribute("#name", "aria-describedby")).isEqualTo("name-error");
+        assertThat(page.isVisible("#name-error")).isTrue();
         assertClean(heading);
     }
 

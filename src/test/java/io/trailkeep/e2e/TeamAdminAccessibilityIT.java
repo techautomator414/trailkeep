@@ -122,6 +122,25 @@ class TeamAdminAccessibilityIT {
     }
 
     @Test
+    void takenTeamNameIsAFieldErrorOnTheListAndOnTheTeamPage() {
+        String taken = createTeam();
+        page.navigate(KEYCLOAK.app("/admin/teams"));
+        assertNameTaken("Teams", taken, "main form button[type=submit]");
+
+        String other = createTeam();
+        assertNameTaken(other, taken, "main form button[type=submit] >> nth=0");
+    }
+
+    private String createTeam() {
+        page.navigate(KEYCLOAK.app("/admin/teams"));
+        String name = "Accessibility " + UUID.randomUUID().toString().substring(0, 8);
+        page.fill("#name", name);
+        page.click("main form button[type=submit]");
+        page.waitForURL(url -> url.matches(".*/admin/teams/\\d+$"));
+        return name;
+    }
+
+    @Test
     void userListHasNoViolationsAndItsButtonsAreReachableByKeyboard() {
         // A second user must exist: the admin's own row has no Disable button.
         Page other = browser.newContext().newPage();
@@ -146,6 +165,18 @@ class TeamAdminAccessibilityIT {
                 .isTrue();
         assertThat(page.locator("main form button[type=submit]:focus").innerText())
                 .matches("(Disable|Enable) .+");
+    }
+
+    /** Submits {@code taken} as the name: refused as a field error, the banner saying so, axe clean. */
+    private void assertNameTaken(String heading, String taken, String button) {
+        Response refused = submit("#name", taken, button);
+        assertThat(refused.status()).isEqualTo(422);
+        assertThat(page.locator("[role=alert]").innerText())
+                .isEqualTo("Not saved: that name is already taken. See the field marked below.");
+        assertThat(page.getAttribute("#name", "aria-invalid")).isEqualTo("true");
+        assertThat(page.getAttribute("#name", "aria-describedby")).isEqualTo("name-error");
+        assertThat(page.isVisible("#name-error")).isTrue();
+        assertClean(heading);
     }
 
     private Response submit(String field, String value, String button) {

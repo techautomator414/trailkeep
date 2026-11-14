@@ -7,6 +7,7 @@ import io.trailkeep.audit.AuditEntry;
 import io.trailkeep.audit.AuditOrigin;
 import io.trailkeep.audit.AuditRecorder;
 import io.trailkeep.shared.DomainException.Kind;
+import io.trailkeep.shared.persistence.UniqueViolations;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -14,6 +15,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -104,6 +106,7 @@ class DefaultTeamAdmin implements TeamAdminService {
             throw new TeamAdminException(Kind.CONFLICT, "a team with this name exists");
         }
         Team team = teams.save(new Team(clean));
+        flushOrNameTaken();
         long id = id(team.getId());
         record(actor, id, "TEAM", "TEAM_CREATED", audit.diff(null, snapshot(team)));
         return id;
@@ -123,6 +126,7 @@ class DefaultTeamAdmin implements TeamAdminService {
         team.rename(clean);
         team.setActive(active);
         AuditChanges changes = audit.diff(before, snapshot(team));
+        flushOrNameTaken();
         if (!changes.equals(AuditChanges.none())) {
             record(actor, teamId, "TEAM", "TEAM_UPDATED", changes);
         }
@@ -190,6 +194,22 @@ class DefaultTeamAdmin implements TeamAdminService {
 
     private static TeamSummary summary(Team team) {
         return new TeamSummary(id(team.getId()), team.getName(), team.isActive());
+    }
+
+    /**
+     * The name check is not atomic: a concurrent request can take the name before this one writes. The unique
+     * constraint decides, so the write is flushed here and its violation answered like the check, never left to fail
+     * at commit as a 500.
+     */
+    private void flushOrNameTaken() {
+        try {
+            teams.flush();
+        } catch (DataIntegrityViolationException failure) {
+            if (UniqueViolations.isUnique(failure)) {
+                throw new TeamAdminException(Kind.CONFLICT, "a team with this name exists");
+            }
+            throw failure;
+        }
     }
 
     private static long id(@Nullable Long id) {
