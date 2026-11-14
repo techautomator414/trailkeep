@@ -860,6 +860,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- A control character in any text a request sends is now a 400 on every route (#212), the same on PostgreSQL and
+  Oracle. PostgreSQL rejects U+0000 in a text parameter ("invalid byte sequence for encoding UTF8: 0x00"), which was a
+  500 on the case list filters, the SLA policy and case type forms and comments (56 of the 62 server errors in the
+  authenticated ZAP scan). One `HandlerInterceptor` (`ControlCharacterInterceptor`) checks every parameter name and
+  value once Spring has resolved the request, so the query string, form fields and multipart text parts are all
+  covered and a new form needs nothing; it refuses U+0000 to U+001F except tab, line feed and carriage return, and
+  U+007F, and `ErrorAdvice` renders the 400 (the problem fragment for htmx). `ControlCharactersIT` covers the entry
+  points and `ControlCharacterSweepIT` every mapped route, in a value and in a name.
 - `deploy/base`'s `trailkeep-config` now carries an `APP_DB_SCHEMA` placeholder (#204), which every runtime user on
   Oracle needs since #178 (the web pods, the purge `CronJob` and the importer `Job` all read it from the ConfigMap);
   the deploy README's overlay list names it, and `DatabaseSchemaConfigManifestTest` proves each workload receives it.
