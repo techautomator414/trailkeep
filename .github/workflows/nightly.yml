@@ -51,7 +51,7 @@ jobs:
           cache: maven
 
       - name: Measure the cases list at 50k
-        run: ./mvnw -B -ntp -Pperf-it test-compile failsafe:integration-test@perf-50k failsafe:verify@perf-50k
+        run: ./mvnw -B -ntp -Pperf-it test-compile org.apache.maven.plugins:maven-failsafe-plugin:integration-test@perf-50k org.apache.maven.plugins:maven-failsafe-plugin:verify@perf-50k
 
       - name: Upload the measurements
         if: always()

@@ -900,7 +900,7 @@
       <!--
         Performance on a synthetic 50 000-case seed (WP-15 part 5, docs/perf/cases-list-50k.md): the ITs tagged perf,
         in a JVM of their own, with their own PostgreSQL container. Run by hand and by the nightly workflow with
-          ./mvnw -Pperf-it test-compile failsafe:integration-test@perf-50k failsafe:verify@perf-50k
+          ./mvnw -Pperf-it test-compile org.apache.maven.plugins:maven-failsafe-plugin:integration-test@perf-50k org.apache.maven.plugins:maven-failsafe-plugin:verify@perf-50k
         The p50/p95/max table is written to target/perf/cases-list-50k.md.
       -->
       <id>perf-it</id>
@@ -933,7 +933,7 @@
         The DAST harness's seeding step (WP-28 part c): DastSessionIT, tagged dast, against a stack that is already
         running (.github/workflows/zap.yml starts it with .github/scripts/dast-app.sh). It writes the scan sessions to
         target/dast. By hand, with the stack up:
-          ./mvnw -Pdast test-compile failsafe:integration-test@dast failsafe:verify@dast
+          ./mvnw -Pdast test-compile org.apache.maven.plugins:maven-failsafe-plugin:integration-test@dast org.apache.maven.plugins:maven-failsafe-plugin:verify@dast
       -->
       <id>dast</id>
       <build>
@@ -965,7 +965,7 @@
         The importer's SQL Server source (WP-26 part p, design §11): the ITs tagged sqlserver, against a SQL Server
         Developer edition container as the legacy database. Runs on main, nightly and release tags in CI, not on fork
         PRs, because the image is large. By hand:
-          ./mvnw -Psqlserver-it test-compile failsafe:integration-test@sqlserver failsafe:verify@sqlserver
+          ./mvnw -Psqlserver-it test-compile org.apache.maven.plugins:maven-failsafe-plugin:integration-test@sqlserver org.apache.maven.plugins:maven-failsafe-plugin:verify@sqlserver
       -->
       <id>sqlserver-it</id>
       <build>

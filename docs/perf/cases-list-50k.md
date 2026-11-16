@@ -31,7 +31,7 @@ each scenario 10 times to warm up and 60 times measured, through MockMvc. It wri
 `target/perf/cases-list-50k.md` and fails if `GET /cases` reaches a p95 of 500 ms or the search reaches 1 s. It is
 tagged `perf`, so it never runs in the PR build. Run it by hand with:
 
-    ./mvnw -Pperf-it test-compile failsafe:integration-test@perf-50k failsafe:verify@perf-50k
+    ./mvnw -Pperf-it test-compile org.apache.maven.plugins:maven-failsafe-plugin:integration-test@perf-50k org.apache.maven.plugins:maven-failsafe-plugin:verify@perf-50k
 
 The nightly workflow's `perf` job runs the same command and uploads the table as the `perf-50k` artifact.
 
