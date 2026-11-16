@@ -117,8 +117,8 @@ class ReportRunsAccessibilityIT {
 
     @BeforeEach
     void signInAsAManagerWithOneStoredRun() {
-        page = browser.newContext(new Browser.NewContextOptions().setAcceptDownloads(true))
-                .newPage();
+        page = ShellPage.recorded(browser.newContext(new Browser.NewContextOptions().setAcceptDownloads(true))
+                .newPage());
         page.onConsoleMessage(message -> {
             if (message.text().contains("Content Security Policy")
                     || message.text().contains("Refused to")) {

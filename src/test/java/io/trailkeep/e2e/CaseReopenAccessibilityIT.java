@@ -240,7 +240,7 @@ class CaseReopenAccessibilityIT {
 
     /** A page in a fresh browser context (its own cookies, so its own login), its console watched. */
     private Page newPage() {
-        Page fresh = browser.newContext().newPage();
+        Page fresh = ShellPage.recorded(browser.newContext().newPage());
         fresh.onConsoleMessage(message -> {
             if (message.text().contains("Content Security Policy")
                     || message.text().contains("Refused to")) {

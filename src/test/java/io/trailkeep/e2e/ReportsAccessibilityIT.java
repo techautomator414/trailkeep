@@ -98,7 +98,7 @@ class ReportsAccessibilityIT {
 
     @BeforeEach
     void signInAsAManagerOfTheFixturesTeam() {
-        page = browser.newContext().newPage();
+        page = ShellPage.recorded(browser.newContext().newPage());
         page.onConsoleMessage(message -> {
             if (message.text().contains("Content Security Policy")
                     || message.text().contains("Refused to")) {

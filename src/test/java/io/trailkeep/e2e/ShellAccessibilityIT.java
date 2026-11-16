@@ -83,7 +83,7 @@ class ShellAccessibilityIT {
     @BeforeEach
     void signIn() {
         BrowserContext context = browser.newContext();
-        page = context.newPage();
+        page = ShellPage.recorded(context.newPage());
         // CSP violations are reported on the console; uncaught script errors as page errors. (The browser also logs
         // a console error for the document's own 404/500 status, which is the point of those pages, not a problem.)
         page.onConsoleMessage(message -> {

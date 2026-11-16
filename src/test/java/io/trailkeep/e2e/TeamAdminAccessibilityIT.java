@@ -80,7 +80,7 @@ class TeamAdminAccessibilityIT {
 
     @BeforeEach
     void signInAsSystemAdmin() {
-        page = browser.newContext().newPage();
+        page = ShellPage.recorded(browser.newContext().newPage());
         page.onConsoleMessage(message -> {
             if (message.text().contains("Content Security Policy")
                     || message.text().contains("Refused to")) {
@@ -143,7 +143,7 @@ class TeamAdminAccessibilityIT {
     @Test
     void userListHasNoViolationsAndItsButtonsAreReachableByKeyboard() {
         // A second user must exist: the admin's own row has no Disable button.
-        Page other = browser.newContext().newPage();
+        Page other = ShellPage.recorded(browser.newContext().newPage());
         other.navigate(KEYCLOAK.app("/"));
         new SignInPage(other).signIn("alpha.reader", KeycloakDevRealm.PASSWORD, KEYCLOAK.app(""));
         other.waitForLoadState();

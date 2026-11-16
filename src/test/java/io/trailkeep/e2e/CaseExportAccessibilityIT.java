@@ -107,9 +107,9 @@ class CaseExportAccessibilityIT {
     @BeforeEach
     void signInAsComplianceAdmin() {
         // Reduced motion makes app.css end transitions at once, so axe never samples a colour mid-transition.
-        page = browser.newContext(
+        page = ShellPage.recorded(browser.newContext(
                         new Browser.NewContextOptions().setAcceptDownloads(true).setReducedMotion(ReducedMotion.REDUCE))
-                .newPage();
+                .newPage());
         page.onConsoleMessage(message -> {
             if (message.text().contains("Content Security Policy")
                     || message.text().contains("Refused to")) {
