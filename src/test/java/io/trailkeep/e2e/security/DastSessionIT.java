@@ -13,6 +13,7 @@ import com.microsoft.playwright.options.FilePayload;
 import com.microsoft.playwright.options.FormData;
 import com.microsoft.playwright.options.RequestOptions;
 import io.trailkeep.e2e.pages.SignInPage;
+import io.trailkeep.shared.CaseNumber;
 import io.trailkeep.testsupport.CaseSeed;
 import io.trailkeep.user.TeamRole;
 import java.io.IOException;
@@ -42,9 +43,10 @@ import org.springframework.jdbc.datasource.DriverManagerDataSource;
  * synthetic case configuration as the schema owner (the {@code prod} profile seeds nothing, and the {@code local}
  * profile is deliberately not active under the scan), creates a small synthetic data set through the application's
  * own forms as those people (cases in two teams, one restricted, a comment, an attachment, an update request and a
- * pending closure), and writes one {@code SESSION} cookie per scan identity to {@code target/dast/<person>.cookie}
- * for ZAP. Each exported session is checked to reach the dashboard without the browser. The cookie files are never
- * uploaded.
+ * pending closure), and writes one {@code SESSION} cookie per scan identity to {@code target/dast/<person>.cookie},
+ * that session's CSRF token to {@code <person>.csrf}, and the data set's identifiers to {@code api-values.txt}, for
+ * ZAP and the API scan's description (part d). Each exported session is checked to reach the dashboard without the
+ * browser. None of these files is ever uploaded.
  *
  * <p>System properties: {@code dast.base-url} (default {@code http://localhost:8080}), {@code dast.jdbc-url},
  * {@code dast.jdbc-user} and {@code dast.jdbc-password} (default the compose PostgreSQL's dev-only owner).
@@ -85,8 +87,13 @@ class DastSessionIT {
                 pages.put(person.getKey(), signIn(browser.newContext(), person.getKey()));
                 ids.put(person.getKey(), userId(jdbc, person.getValue()));
             }
-            seed(jdbc);
+            Map<String, String> values = seed(jdbc);
             Files.createDirectories(OUT);
+            // The data set's identifiers, for the placeholders of the API scan's description (part d).
+            StringBuilder lines = new StringBuilder();
+            values.forEach(
+                    (key, value) -> lines.append(key).append('=').append(value).append('\n'));
+            Files.writeString(OUT.resolve("api-values.txt"), lines, StandardCharsets.US_ASCII);
             for (String identity : new String[] {"compliance.admin", "alpha.analyst"}) {
                 String session = page(identity).context().cookies(BASE).stream()
                         .filter(cookie -> "SESSION".equals(cookie.name))
@@ -98,6 +105,8 @@ class DastSessionIT {
                         .as(identity + "'s exported session")
                         .isEqualTo(200);
                 Files.writeString(OUT.resolve(identity + ".cookie"), header, StandardCharsets.US_ASCII);
+                // The session's CSRF token, for the API scan's requests (part d), which no page hands ZAP.
+                Files.writeString(OUT.resolve(identity + ".csrf"), token(page(identity)), StandardCharsets.US_ASCII);
             }
         }
     }
@@ -105,8 +114,10 @@ class DastSessionIT {
     /**
      * Teams and a case type as the schema owner (what an administrator would have set up), then the data set through
      * the application's own forms as the people who would enter it.
+     *
+     * @return the identifiers security/zap/openapi.yaml's placeholders name, by placeholder
      */
-    private void seed(JdbcTemplate jdbc) {
+    private Map<String, String> seed(JdbcTemplate jdbc) {
         CaseSeed seed = new CaseSeed(jdbc);
         long alpha = seed.team();
         final long beta = seed.team();
@@ -136,6 +147,37 @@ class DastSessionIT {
                         "outcome", "Resolved",
                         "summary", "Synthetic summary",
                         "approverId", Long.toString(id("alpha.manager1"))));
+
+        long openId = seed.caseId(CaseNumber.parse(open));
+        Map<String, String> values = new LinkedHashMap<>();
+        values.put("CASE", open);
+        values.put("CLOSING_CASE", closing);
+        values.put("COMMENT", first(jdbc, "SELECT MIN(ID) FROM CASE_COMMENT WHERE CASE_ID = ?", openId));
+        values.put("ATTACHMENT", first(jdbc, "SELECT MIN(ID) FROM CASE_ATTACHMENT WHERE CASE_ID = ?", openId));
+        values.put("UPDATE_REQUEST", first(jdbc, "SELECT MIN(ID) FROM UPDATE_REQUEST WHERE CASE_ID = ?", openId));
+        values.put(
+                "CLOSURE",
+                first(
+                        jdbc,
+                        "SELECT MIN(ID) FROM CLOSURE_REQUEST WHERE CASE_ID = ?",
+                        seed.caseId(CaseNumber.parse(closing))));
+        values.put("ALERT", first(jdbc, "SELECT MIN(ID) FROM USER_ALERT WHERE USER_ID = ?", owner));
+        values.put("CASE_TYPE", Long.toString(type));
+        values.put("SLA_POLICY", first(jdbc, "SELECT SLA_POLICY_ID FROM CASE_TYPE WHERE ID = ?", type));
+        values.put("TEAM", Long.toString(alpha));
+        values.put("OTHER_TEAM", Long.toString(beta));
+        values.put("OWNER", Long.toString(owner));
+        values.put("APPROVER", Long.toString(id("alpha.manager1")));
+        // Never a scan identity: the user and team administration examples act on this person.
+        values.put("OTHER_USER", Long.toString(id("beta.analyst")));
+        return values;
+    }
+
+    /** The one value a query of the seeded data returns; the data set guarantees it exists. */
+    private static String first(JdbcTemplate jdbc, String sql, long id) {
+        Long value = jdbc.queryForObject(sql, Long.class, id);
+        assertThat(value).as(sql).isNotNull();
+        return String.valueOf(value);
     }
 
     private Page page(String person) {

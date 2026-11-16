@@ -1,19 +1,23 @@
 # SPDX-License-Identifier: Apache-2.0
 # Copyright 2026 Charlie Genova and contributors
 #
-# ZAP Automation Framework plan for the authenticated full scan (WP-28 part c, BUILD_PLAN §12.1 "DAST"). Run by
-# .github/workflows/zap.yml once per scan identity, against the built image in the prod profile on the runner's
-# host network. The scan identity's session is not in this file: dast-zap.sh passes the "SESSION=..." cookie that
-# DastSessionIT exported after a real sign-in at the dev realm through ZAP's ZAP_AUTH_HEADER, ZAP_AUTH_HEADER_VALUE and
-# ZAP_AUTH_HEADER_SITE environment variables, which add it to every request to localhost. The alertFilter job is filled
-# from security/zap/suppressions.yaml by dast-zap.sh (empty today); nothing else suppresses an alert.
+# ZAP Automation Framework plan for the authenticated full and API scan (WP-28 parts c and d, BUILD_PLAN §12.1
+# "DAST"). Run by .github/workflows/zap.yml once per scan identity, against the built image in the prod profile on
+# the runner's host network. The scan identity's session is not in this file: dast-zap.sh passes the "SESSION=..."
+# cookie that DastSessionIT exported after a real sign-in at the dev realm through ZAP's ZAP_AUTH_HEADER,
+# ZAP_AUTH_HEADER_VALUE and ZAP_AUTH_HEADER_SITE environment variables, which add it to every request to localhost. The
+# alertFilter job is filled from security/zap/suppressions.yaml by dast-zap.sh; nothing else suppresses an alert.
 env:
   contexts:
+    # The application on 8080, and the management server's actuator on 8081 (the API scan's description names its
+    # operations; in a deployment the port is reachable on the pod network only).
     - name: trailkeep
       urls:
         - http://localhost:8080/
+        - http://localhost:8081/actuator
       includePaths:
         - "http://localhost:8080.*"
+        - "http://localhost:8081/actuator.*"
       excludePaths:
         # Ending the scan's own session would turn the rest of the scan into a scan of the sign-in redirect.
         - "http://localhost:8080/logout"
@@ -61,6 +65,16 @@ jobs:
       maxDuration: 10
       browserId: firefox-headless
 
+  # The API scan (WP-28 part d, decision Q2): every operation of security/zap/openapi.yaml, which OpenApiCoverageTest
+  # keeps complete, is requested once with the session's CSRF token and the seeded identifiers (dast-zap.sh fills
+  # them in), so the active scan attacks each operation and every parameter it binds even where no page links to it
+  # or the crawl caps cut it. No targetUrl: it would replace the description's per-path server, port 8081 for the
+  # actuator.
+  - type: openapi
+    parameters:
+      apiFile: /zap/wrk/openapi.yaml
+      context: trailkeep
+
   - type: passiveScan-wait
     parameters:
       maxDuration: 10
@@ -91,7 +105,7 @@ jobs:
       template: traditional-html
       reportDir: /zap/wrk/reports
       reportFile: zap-${SCAN_IDENTITY}
-      reportTitle: Trailkeep authenticated full scan (${SCAN_IDENTITY})
+      reportTitle: Trailkeep authenticated full and API scan (${SCAN_IDENTITY})
   - type: report
     alwaysRun: true
     parameters:

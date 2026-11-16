@@ -58,6 +58,32 @@ class ZapPlanTest {
     }
 
     /**
+     * The API scan (WP-28 part d, decision Q2): the hand-written description, which {@link OpenApiCoverageTest} keeps
+     * complete, is imported into the scan's context after the crawl and before the active scan, so the active scan
+     * attacks every operation it names. It has no {@code targetUrl}, which would move the actuator's operations off the
+     * management port, and the context covers that port.
+     */
+    @Test
+    void theApiDescriptionIsImportedBeforeTheActiveScanWithTheManagementPortInScope() throws IOException {
+        Map<String, Object> plan = load(PLAN);
+        List<Map<String, Object>> jobs = list(plan.get("jobs"));
+        List<Object> types = jobs.stream().map(job -> job.get("type")).toList();
+        assertThat(types.indexOf("openapi"))
+                .as("the openapi job's place")
+                .isGreaterThan(types.indexOf("spiderAjax"))
+                .isLessThan(types.indexOf("activeScan"));
+        assertThat(jobs)
+                .filteredOn(job -> "openapi".equals(job.get("type")))
+                .singleElement()
+                .satisfies(job -> assertThat(map(job.get("parameters")))
+                        .containsOnly(
+                                Map.entry("apiFile", "/zap/wrk/openapi.yaml"), Map.entry("context", "trailkeep")));
+        Map<String, Object> context = list(map(plan.get("env")).get("contexts")).getFirst();
+        assertThat(strings(context.get("urls"))).contains("http://localhost:8080/", "http://localhost:8081/actuator");
+        assertThat(strings(context.get("includePaths"))).contains("http://localhost:8081/actuator.*");
+    }
+
+    /**
      * The gate and the reports count the same alerts (review of #211). Without an {@code insights} job, ZAP exits
      * itself on a High insight and discards the session mid-plan, so the reports come out empty while exitStatus still
      * counts the active scan's alerts; with it, the plan stops instead and the jobs after the active scan still run.
@@ -157,6 +183,12 @@ class ZapPlanTest {
     private static Map<String, Object> map(@Nullable Object value) {
         assertThat(value).isInstanceOf(Map.class);
         return (Map<String, Object>) Objects.requireNonNull(value);
+    }
+
+    @SuppressWarnings("unchecked") // as above
+    private static List<String> strings(@Nullable Object value) {
+        assertThat(value).isInstanceOf(List.class);
+        return (List<String>) Objects.requireNonNull(value);
     }
 
     @SuppressWarnings("unchecked") // as above

@@ -3,8 +3,9 @@
 # Copyright 2026 Charlie Genova and contributors
 #
 # Runs ZAP's Automation Framework plan (security/zap/plan.yaml) as one scan identity against the stack dast-app.sh
-# started (WP-28 parts c and e), then:
-#   - copies ZAP's own zap.log next to the reports, and removes the session value from all of them before upload;
+# started (WP-28 parts c, d and e), with security/zap/openapi.yaml filled in for the plan's API import, then:
+#   - copies ZAP's own zap.log next to the reports, and removes the session value and its CSRF token from all of them
+#     before upload;
 #   - lists every alert of Medium or higher in the job summary, with the active scan's duration and the peak heap;
 #   - hands what it read to dast-verdict.sh, which decides pass or fail (in release, a partial scan fails; in
 #     nightly, it warns) and is unit-tested by DastVerdictTest.
@@ -13,7 +14,8 @@
 # the report jobs (#211); the plan's insights job stops the plan instead.
 # The alertFilter job is filled from security/zap/suppressions.yaml, keeping only entries whose expiry has not passed;
 # ZapPlanTest checks every entry's justification, review link and expiry on each PR.
-# Usage: dast-zap.sh <identity>   (needs target/dast/<identity>.cookie, $ZAP_IMAGE and $ZAP_MODE: release|nightly)
+# Usage: dast-zap.sh <identity>   (needs target/dast/<identity>.cookie, <identity>.csrf and api-values.txt, which
+# DastSessionIT writes, $ZAP_IMAGE and $ZAP_MODE: release|nightly)
 set -euo pipefail
 
 identity="$1"
@@ -34,6 +36,20 @@ filters="${work}/filters.yaml" identity="${identity}" yq '
   (.jobs[] | select(.type == "alertFilter") | .alertFilters) = load(strenv(filters))
   | (.jobs[] | select(.parameters.reportTitle != null) | .parameters.reportTitle) |= sub("\$\{SCAN_IDENTITY\}"; strenv(identity))
 ' security/zap/plan.yaml > "${work}/plan.yaml"
+
+# The API description (part d), with this session's CSRF token where ZAP's requests send it (X-CSRF-TOKEN) and the
+# seeded data set's identifiers DastSessionIT wrote. A placeholder left unfilled would send a literal to every
+# operation that names it, so it stops the run.
+csrf="$(cat "target/dast/${identity}.csrf")"
+cp security/zap/openapi.yaml "${work}/openapi.yaml"
+while IFS='=' read -r key value; do
+  sed -i "s|__${key}__|${value}|g" "${work}/openapi.yaml"
+done < target/dast/api-values.txt
+sed -i "s|__CSRF_TOKEN__|${csrf}|g" "${work}/openapi.yaml"
+if left="$(grep -o -E '__[A-Z_]+__' "${work}/openapi.yaml" | sort -u | tr '\n' ' ')" && [ -n "${left}" ]; then
+  echo "::error title=ZAP (${identity})::security/zap/openapi.yaml has placeholders nothing filled in: ${left}"
+  exit 1
+fi
 
 # ZAP's authentication variables add the cookie to every request to localhost (the site is matched by host name; a
 # host:port value matches nothing). Its own proxy listens on 18080, because the application holds 8080 on the host.
@@ -61,11 +77,13 @@ touch "${work}/zap.log"
 
 still="$(curl -s -o /dev/null -w '%{http_code}' -H "Cookie: ${cookie}" http://localhost:8080/)"
 
-# The session dies with this job's stack, but no report leaves the runner carrying it.
+# The session dies with this job's stack, but no report leaves the runner carrying it or its CSRF token.
 session="${cookie#SESSION=}"
-# grep -l exits 1 when no report carries the value, which pipefail would turn into a failed scan.
-{ grep -rlF "${session}" "${work}" || true; } | while read -r file; do
-  sed -i "s|${session}|[session removed]|g" "${file}"
+for value in "${session}" "${csrf}"; do
+  # grep -l exits 1 when no report carries the value, which pipefail would turn into a failed scan.
+  { grep -rlF "${value}" "${work}" || true; } | while read -r file; do
+    sed -i "s|${value}|[removed]|g" "${file}"
+  done
 done
 
 report="${work}/reports/zap-${identity}.json"
@@ -77,9 +95,20 @@ if [ -s "${report}" ]; then
   gating="$(jq '[.site[].alerts[] | select((.riskcode | tonumber) >= 2 and .confidence != "0")] | length' "${report}")"
   stopped="$(jq -r '.stoppingInsight // empty | "\(.key) at \(.statistic) (\(.reason))"' "${report}")"
 fi
-# The scanner logs "completed host <site> in <seconds>s" when it ends, whether it finished or reached its cap.
-active="$({ grep -o -E 'completed host http://localhost:8080 in [0-9.]+s' "${work}/zap.log" || true; } \
-  | tail -1 | sed -E 's/.* in ([0-9.]+)s/\1/')"
+# The scanner logs "completed host <site> in <seconds>s" for each host when it ends, whether it finished or reached its
+# cap. The context scans two hosts, the application and its management server: the scan's time is the longer one,
+# and a host with no completion means no completion for the scan.
+active=""
+for host in $(yq '.env.contexts[0].urls[] | capture("^(?P<host>https?://[^/]+)").host' security/zap/plan.yaml); do
+  seconds="$({ grep -o -E "completed host ${host} in [0-9.]+s" "${work}/zap.log" || true; } \
+    | tail -1 | sed -E 's/.* in ([0-9.]+)s/\1/')"
+  if [ -z "${seconds}" ]; then
+    active="none"
+  elif [ "${active}" != "none" ]; then
+    active="$(printf '%s\n%s\n' "${active:-0}" "${seconds}" | sort -g | tail -1)"
+  fi
+done
+[ "${active}" = "none" ] && active=""
 cap="$(yq '.jobs[] | select(.type == "activeScan") | .parameters.maxScanDurationInMins * 60' security/zap/plan.yaml)"
 # When the scanner overruns its cap, the Automation Framework terminates the job itself and the scanner logs no
 # completion: that is a cut-off scan too.
