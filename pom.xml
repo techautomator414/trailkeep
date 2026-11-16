@@ -861,10 +861,12 @@
         <artifactId>maven-failsafe-plugin</artifactId>
         <configuration>
           <!-- Oracle ITs run only in the oracle-it profile's per-image executions; heap ITs only in heap-256m;
-               perf ITs (a 50 000-case seed, minutes long) only in the perf-it profile's perf-50k execution;
+               perf ITs (a 50 000-case seed, minutes long) only in the perf-it profile's perf-50k execution; the
+               role-conflict perf ITs (a 6-million-row audit seed, tens of minutes on Oracle) only in its opt-in
+               role-conflict execution, which no workflow runs;
                SQL Server source ITs only in the sqlserver-it profile's sqlserver execution; the DAST seeding step,
                which needs a running stack, only in the dast profile's dast execution. -->
-          <excludedGroups>oracle,heap,perf,sqlserver,dast</excludedGroups>
+          <excludedGroups>oracle,heap,perf,perf-role-conflict,sqlserver,dast</excludedGroups>
         </configuration>
         <executions>
           <execution>
@@ -921,6 +923,24 @@
                   <excludedGroups combine.self="override"/>
                   <reportsDirectory>${project.build.directory}/failsafe-reports/perf-50k</reportsDirectory>
                   <summaryFile>${project.build.directory}/failsafe-reports/perf-50k/failsafe-summary.xml</summaryFile>
+                </configuration>
+              </execution>
+              <execution>
+                <!-- Opt-in, not in any workflow: ./mvnw -Pperf-it test-compile
+                     org.apache.maven.plugins:maven-failsafe-plugin:integration-test@role-conflict
+                     org.apache.maven.plugins:maven-failsafe-plugin:verify@role-conflict
+                     (add -Dit.test=PostgresRoleConflictPerfIT or OracleRoleConflictPerfIT for one vendor);
+                     see docs/perf/role-conflict.md. -->
+                <id>role-conflict</id>
+                <goals>
+                  <goal>integration-test</goal>
+                  <goal>verify</goal>
+                </goals>
+                <configuration>
+                  <groups>perf-role-conflict</groups>
+                  <excludedGroups combine.self="override"/>
+                  <reportsDirectory>${project.build.directory}/failsafe-reports/role-conflict</reportsDirectory>
+                  <summaryFile>${project.build.directory}/failsafe-reports/role-conflict/failsafe-summary.xml</summaryFile>
                 </configuration>
               </execution>
             </executions>

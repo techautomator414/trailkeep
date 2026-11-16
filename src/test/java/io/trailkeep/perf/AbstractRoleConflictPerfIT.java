@@ -39,7 +39,7 @@ import org.springframework.test.web.servlet.MockMvc;
  */
 // "IT" is the Failsafe suffix Part B mandates for integration tests, not an abbreviation.
 @SuppressWarnings("checkstyle:AbbreviationAsWordInName")
-@Tag("perf")
+@Tag("perf-role-conflict")
 @RequiresDocker
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -56,12 +56,20 @@ abstract class AbstractRoleConflictPerfIT {
     private static final AtomicBoolean SEEDED = new AtomicBoolean();
     private static final List<String> REPORT = Collections.synchronizedList(new ArrayList<>());
 
-    /** The standing query as the JPQL of {@code StandingEventQueries} becomes in SQL, with the literals inlined. */
-    private static final String STANDING_SQL = "SELECT e.ENTITY_ID, e.AT_TS FROM AUDIT_EVENT e"
+    private static final String STANDING_HEAD = "SELECT e.ENTITY_ID, e.AT_TS FROM AUDIT_EVENT e"
             + " WHERE e.CASE_ID IS NULL AND e.ENTITY_TYPE = 'USER' AND e.ACTION = 'ROLE_CONFLICT'"
             + " AND e.ENTITY_ID IS NOT NULL AND NOT EXISTS (SELECT l.ID FROM AUDIT_EVENT l WHERE l.CASE_ID IS NULL"
-            + " AND l.ENTITY_TYPE = 'USER' AND l.ENTITY_ID = e.ENTITY_ID AND l.ACTION IN ('LOGIN', 'ROLE_CONFLICT')"
-            + " AND (l.AT_TS > e.AT_TS OR (l.AT_TS = e.AT_TS AND l.ID > e.ID))) ORDER BY e.AT_TS, e.ID";
+            + " AND l.ENTITY_TYPE = 'USER' AND l.ENTITY_ID = e.ENTITY_ID AND l.ACTION IN ('LOGIN', 'ROLE_CONFLICT')";
+
+    private static final String STANDING_TAIL = ") ORDER BY e.AT_TS, e.ID";
+
+    /** The query as it was before issue 141: AT_TS is only a filter on the entity index (the OR hides the range). */
+    private static final String OLD_SQL =
+            STANDING_HEAD + " AND (l.AT_TS > e.AT_TS OR (l.AT_TS = e.AT_TS AND l.ID > e.ID))" + STANDING_TAIL;
+
+    /** The query now (the JPQL of {@code StandingEventQueries} in SQL): the same rows, with AT_TS as a range. */
+    private static final String NEW_SQL =
+            STANDING_HEAD + " AND l.AT_TS >= e.AT_TS AND (l.AT_TS > e.AT_TS OR l.ID > e.ID)" + STANDING_TAIL;
 
     @Autowired
     private MockMvc mvc;
@@ -93,7 +101,7 @@ abstract class AbstractRoleConflictPerfIT {
     abstract void gatherStatistics();
 
     /**
-     * The vendor's execution plan of {@link #STANDING_SQL}, actually executed, as lines of text.
+     * The vendor's execution plan of {@link #NEW_SQL} as lines of text (PostgreSQL: actually executed).
      *
      * @param sql the statement
      * @return the plan lines
@@ -107,7 +115,7 @@ abstract class AbstractRoleConflictPerfIT {
         if (!SEEDED.compareAndSet(false, true)) {
             return;
         }
-        long started = System.nanoTime();
+        final long started = System.nanoTime();
         jdbc.update(
                 "INSERT INTO APP_USER (ID, EXTERNAL_ID, DISPLAY_NAME, EMAIL, DISABLED, CREATED_AT)"
                         + " VALUES (?, 'perf-sysadmin', 'Perf System Admin', 'perf@example.invalid', ?, ?)",
@@ -167,7 +175,11 @@ abstract class AbstractRoleConflictPerfIT {
                 throw new IllegalStateException(e);
             }
         }));
-        REPORT.add("Plan of the standing query:\n" + String.join("\n", plan(STANDING_SQL)));
+        REPORT.add(timed("old query as SQL, alone", () -> jdbc.queryForList(OLD_SQL)));
+        REPORT.add(timed("new query as SQL, alone", () -> jdbc.queryForList(NEW_SQL)));
+        assertThat(jdbc.queryForList(OLD_SQL)).as("the same standing rows").isEqualTo(jdbc.queryForList(NEW_SQL));
+        REPORT.add("Plan of the old query:\n" + String.join("\n", plan(OLD_SQL)));
+        REPORT.add("Plan of the new query:\n" + String.join("\n", plan(NEW_SQL)));
         String candidate = System.getProperty("perf.index.ddl", "");
         if (!candidate.isBlank()) {
             for (String ddl : candidate.split(";;", -1)) {
@@ -183,7 +195,10 @@ abstract class AbstractRoleConflictPerfIT {
                     throw new IllegalStateException(e);
                 }
             }));
-            REPORT.add("Plan of the standing query:\n" + String.join("\n", plan(STANDING_SQL)));
+            REPORT.add(timed("old query as SQL, alone", () -> jdbc.queryForList(OLD_SQL)));
+            REPORT.add(timed("new query as SQL, alone", () -> jdbc.queryForList(NEW_SQL)));
+            REPORT.add("Plan of the old query:\n" + String.join("\n", plan(OLD_SQL)));
+            REPORT.add("Plan of the new query:\n" + String.join("\n", plan(NEW_SQL)));
         }
         Path out = Path.of("target", "perf", "role-conflict-" + vendor() + ".md");
         try {

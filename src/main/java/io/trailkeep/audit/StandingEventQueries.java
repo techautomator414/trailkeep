@@ -25,7 +25,7 @@ class StandingEventQueries {
             + " WHERE e.caseId IS NULL AND e.entityType = :type AND e.action = :action AND e.entityId IS NOT NULL"
             + " AND NOT EXISTS (SELECT l.id FROM AuditEvent l WHERE l.caseId IS NULL AND l.entityType = :type"
             + " AND l.entityId = e.entityId AND l.action IN :actions"
-            + " AND (l.at > e.at OR (l.at = e.at AND l.id > e.id)))"
+            + " AND l.at >= e.at AND (l.at > e.at OR l.id > e.id))"
             + " ORDER BY e.at, e.id";
 
     private static final String LATEST = "SELECT MAX(e.at) FROM AuditEvent e WHERE e.caseId IS NULL"
