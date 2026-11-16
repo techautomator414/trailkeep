@@ -78,7 +78,7 @@
     <tika.version>3.3.3</tika.version>
     <!-- Scheduled-job locks (WP-21, BUILD_PLAN 6 and 7.3): the JDBC provider over the SHEDLOCK table, database time.
          The 7.x line is the one built against Spring Framework 7. -->
-    <shedlock.version>7.10.1</shedlock.version>
+    <shedlock.version>7.11.0</shedlock.version>
     <!-- Empty unless JaCoCo's prepare-agent sets it, so the heap-256m execution's @{argLine} resolves with
          -Djacoco.skip too. -->
     <argLine/>
