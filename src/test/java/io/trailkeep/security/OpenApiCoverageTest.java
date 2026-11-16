@@ -42,7 +42,7 @@ import org.yaml.snakeyaml.constructor.SafeConstructor;
 
 /**
  * Keeps {@code security/zap/openapi.yaml}, the hand-written description ZAP's API scan imports (WP-28 part d, decision
- * Q2), complete and exact without a runtime generator:
+ * Q2), complete and exact without a runtime generator. It checks that:
  *
  * <ul>
  *   <li>every operation a controller maps is in it with each request parameter it binds, and so are the endpoints
