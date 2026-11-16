@@ -9,6 +9,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- HTML validity on every PR (WP-28, BUILD_PLAN §10 and §12 "HTML validity (Nu validator)", IMPLEMENTATION_PLAN Part
+  G): every accessibility test now also runs the Nu Html Checker on the HTML of each state axe checks, the document as
+  served, each htmx fragment inside a minimal document, and the live DOM while a dialog is open. Any error fails the
+  build; warnings are printed. The checker is the project's official image pinned by digest (26.11.14, revision
+  c1619cc), one container per test JVM, not a build dependency: the `nu.validator:validator` library would bring
+  log4j 1.2, which the enforcer bans, and two licences the allow-list does not hold. A page opened without recording
+  its HTML fails rather than passing unvalidated. The markup it found is fixed: htmx attributes use their valid
+  `data-hx-*` form, the six single-choice selects that always have a value use `aria-required` instead of
+  `required` (a required select must start with an empty option), `<time datetime>` values have whole seconds, and
+  the case page's long leading comment no longer pushes `<meta charset>` past the first 1024 bytes.
 - The importer's worked example (WP-26 part ae4, docs/design/importer.md §3, §11 "End to end"):
   `docs/importer/worked-example.md` follows the example mapping through a five-case synthetic legacy tracker, the
   Trailkeep data it needs, the `Job` directory per command, and run request → `validate-mapping` → `extract` →
