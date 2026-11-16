@@ -63,7 +63,7 @@ jobs:
         run: .github/scripts/dast-app.sh start "${IMAGE}"
 
       - name: Seed the stack and export the scan sessions
-        run: ./mvnw -B -ntp -Pdast test-compile failsafe:integration-test@dast failsafe:verify@dast
+        run: ./mvnw -B -ntp -Pdast test-compile org.apache.maven.plugins:maven-failsafe-plugin:integration-test@dast org.apache.maven.plugins:maven-failsafe-plugin:verify@dast
 
       - name: Scan as ${{ matrix.identity }}
         run: .github/scripts/dast-zap.sh "${SCAN_IDENTITY}"

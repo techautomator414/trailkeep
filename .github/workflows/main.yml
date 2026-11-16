@@ -352,7 +352,7 @@ jobs:
           cache: maven
 
       - name: Run the SQL Server source ITs
-        run: ./mvnw -B -ntp -Psqlserver-it test-compile failsafe:integration-test@sqlserver failsafe:verify@sqlserver
+        run: ./mvnw -B -ntp -Psqlserver-it test-compile org.apache.maven.plugins:maven-failsafe-plugin:integration-test@sqlserver org.apache.maven.plugins:maven-failsafe-plugin:verify@sqlserver
 
       - name: Upload test reports
         if: always()

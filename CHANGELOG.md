@@ -865,6 +865,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- The CI jobs that run a Failsafe execution by name (the SQL Server source ITs, the ZAP scan's `dast` execution and the
+  nightly 50 000-case perf run) now call it by the plugin's full coordinates,
+  `org.apache.maven.plugins:maven-failsafe-plugin:integration-test@<id>`, instead of the `failsafe:` prefix (#224).
+  Resolving a prefix asks Maven Central for the plugin-group metadata, and a rate-limit answer (HTTP 429) there failed a
+  job with "No plugin found for prefix 'failsafe'" before any test ran; the full coordinates need no lookup and take
+  their version from the parent's plugin management. The commands in `docs/perf/cases-list-50k.md` and the profile
+  comments in `pom.xml` match.
 - Saving a view under a name the person's other view already has, when a concurrent save took the name between the
   check and the write, is now the same 422 "name taken" refusal as the check, not a 500 (#215). The save is flushed
   inside the service; because saving returns a result and does not throw, a unique violation (recognised with
