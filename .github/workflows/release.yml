@@ -46,7 +46,8 @@ jobs:
         with:
           distribution: temurin
           java-version: "21"
-          cache: maven
+          # No Maven cache here on purpose: this job signs and publishes, and a cache restored by key prefix from any
+          # earlier main-branch workflow would put its contents into the artifact (issue 224).
 
       - name: Verify
         run: ./mvnw -B -ntp verify

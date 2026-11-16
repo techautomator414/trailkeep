@@ -64,7 +64,17 @@ jobs:
         with:
           distribution: temurin
           java-version: "21"
-          cache: maven
+
+      - name: Restore the Maven repository and wrapper
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.m2/repository
+            ~/.m2/wrapper
+          key: maven-${{ runner.os }}-${{ hashFiles('**/pom.xml', '.mvn/wrapper/maven-wrapper.properties') }}
+          # A pom change starts from the newest earlier cache instead of an empty repository, so Maven Central
+          # is asked for what changed, not for everything (issue 224).
+          restore-keys: maven-${{ runner.os }}-
 
       - name: Install the Playwright browser for DastSessionIT
         # Same Playwright version as playwright.version in pom.xml (as in ci.yml).
