@@ -220,7 +220,8 @@ public final class CasesListPage {
 
     private void waitForFocusOn(String id) {
         page.waitForFunction(
-                // htmx binds hx-get on swapped content only once it has settled; until then Enter navigates plainly.
+                // htmx binds data-hx-get on swapped content only once it has settled; until then Enter navigates
+                // plainly.
                 "id => !document.querySelector('[data-test-stale], .htmx-request, .htmx-swapping, .htmx-settling')"
                         + " && document.activeElement && document.activeElement.id === id",
                 id);

@@ -24,7 +24,7 @@
       </thead>
       <tbody>
       <tr th:each="alert : ${a.alerts}">
-        <td><time th:datetime="${alert.at}"
+        <td><time th:datetime="${#temporals.format(alert.at, 'yyyy-MM-dd''T''HH:mm:ss''Z''', 'UTC')}"
             th:text="${#temporals.format(alert.local, 'yyyy-MM-dd HH:mm')}">2026-11-06 10:30</time></td>
         <th scope="row"><a th:href="@{${alert.link}}" th:text="${alert.message}">Someone commented</a></th>
         <td th:text="${alert.read} ? #{tk.alerts.read} : #{tk.alerts.unread}">Unread</td>

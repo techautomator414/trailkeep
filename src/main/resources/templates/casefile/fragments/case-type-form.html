@@ -7,7 +7,8 @@
   <div th:if="${nameTaken}" class="invalid-feedback d-block" id="name-error" th:text="#{tk.types.name.taken}">
     Taken</div>
   <label class="form-label mt-2" for="slaPolicyId" th:text="#{tk.types.policy}">SLA policy</label>
-  <select class="form-select" id="slaPolicyId" name="slaPolicyId" required>
+  <!--/* aria-required, not required: a policy is always selected, and a required select must start empty. */-->
+  <select class="form-select" id="slaPolicyId" name="slaPolicyId" aria-required="true">
     <option th:each="p : ${policies}" th:value="${p.id}" th:selected="${t?.slaPolicyId == p.id}"
             th:text="${p.values.name}">Policy</option>
   </select>

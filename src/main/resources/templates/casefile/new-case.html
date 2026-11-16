@@ -36,14 +36,16 @@
     </div>
     <div class="mb-3">
       <label class="form-label" for="teamId" th:text="#{tk.new.team}">Team (required)</label>
-      <select class="form-select" id="teamId" name="teamId" required>
+      <!--/* aria-required, not required, here and for the owner: a team and an owner are always selected, and a
+           required select must start with an empty option (HTML; the Nu Html Checker). */-->
+      <select class="form-select" id="teamId" name="teamId" aria-required="true">
         <option th:each="t : ${choices.teams}" th:value="${t.id}" th:text="${t.name}"
                 th:selected="${values['teamId'] == '' + t.id}">Team</option>
       </select>
     </div>
     <div class="mb-3">
       <label class="form-label" for="ownerId" th:text="#{tk.new.owner}">Owner (required)</label>
-      <select class="form-select" id="ownerId" name="ownerId" required aria-describedby="owner-hint">
+      <select class="form-select" id="ownerId" name="ownerId" aria-required="true" aria-describedby="owner-hint">
         <optgroup th:each="t : ${choices.teams}" th:label="${t.name}">
           <option th:each="o : ${t.owners}" th:value="${o.id}" th:text="${o.name}"
                   th:selected="${values['ownerId'] == '' + o.id}">Owner</option>

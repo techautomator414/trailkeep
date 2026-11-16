@@ -78,7 +78,8 @@ class ReconcileReportAccessibilityIT {
         try (Page page = Objects.requireNonNull(browser).newPage()) {
             List<String> console = new ArrayList<>();
             page.onConsoleMessage(message -> console.add(message.text()));
-            page.setContent(html);
+            // Recorded as the page's HTML, so the Nu Html Checker validates the report file as written.
+            ShellPage.setContent(page, html);
 
             assertThat(page.title()).startsWith(title);
             assertThat(new ShellPage(page).heading()).startsWith(title);

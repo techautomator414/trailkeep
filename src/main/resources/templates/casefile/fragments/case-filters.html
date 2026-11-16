@@ -1,12 +1,12 @@
 <!DOCTYPE html>
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- The cases list's filter controls (BUILD_PLAN §4.4), rendered in the page and, with oob=true, again in every htmx
-     response with hx-swap-oob, so a chip removed or a header sorted leaves the form showing what the URL says. The
+     response with data-hx-swap-oob, so a chip removed or a header sorted leaves the form showing what the URL says. The
      first status box carries data-tk-dialog-focus: app.js focuses it when the dialog opens. -->
 <html lang="en" xmlns:th="http://www.thymeleaf.org">
 <body>
 <div th:fragment="search(oob)" id="tk-search-field" class="col-12 col-lg-6"
-     th:attr="hx-swap-oob=${oob ? 'true' : null}">
+     th:attr="data-hx-swap-oob=${oob ? 'true' : null}">
   <label class="form-label" for="tk-q" th:text="#{tk.list.q}">Search</label>
   <input id="tk-q" class="form-control" type="search" name="q" th:value="${query.filter.text}"
          th:maxlength="${maxText}" aria-describedby="tk-q-hint">
@@ -14,7 +14,7 @@
 </div>
 
 <div th:fragment="fields(oob)" id="tk-filter-fields" class="row g-3" th:with="f=${query.filter}"
-     th:attr="hx-swap-oob=${oob ? 'true' : null}">
+     th:attr="data-hx-swap-oob=${oob ? 'true' : null}">
   <fieldset th:replace="~{casefile/fragments/case-filters :: checks('status', ${statuses}, ${f.statuses},
                          'tk.case.status.', #{tk.list.status}, #{tk.list.status.hint})}"></fieldset>
   <fieldset th:replace="~{casefile/fragments/case-filters :: checks('sla', ${slaStates}, ${f.slaStates},

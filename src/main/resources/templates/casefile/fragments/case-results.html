@@ -11,8 +11,8 @@
   <ul th:unless="${chips.isEmpty()}" class="tk-chips" th:aria-label="#{tk.list.active}">
     <li th:each="c : ${chips}" th:with="what=#{'tk.list.chip.' + ${c.name}},
         value=${c.key.isEmpty()} ? ${c.value} : #{${c.key}}, url=@{/cases} + (${c.without.isEmpty()} ? '' : '?' + ${c.without})">
-      <a class="tk-chip tk-chip-remove" th:href="${url}" th:attr="hx-get=${url}" hx-target="#tk-case-results"
-         hx-push-url="true" th:aria-label="#{tk.list.chip.remove(${what},${value})}"><span
+      <a class="tk-chip tk-chip-remove" th:href="${url}" th:attr="data-hx-get=${url}" data-hx-target="#tk-case-results"
+         data-hx-push-url="true" th:aria-label="#{tk.list.chip.remove(${what},${value})}"><span
          th:text="#{tk.list.chip(${what},${value})}">Status: Open</span> <span aria-hidden="true">×</span></a></li>
   </ul>
   <p id="tk-results-status" class="tk-results-status" tabindex="-1"
@@ -64,14 +64,14 @@
   <nav th:if="${list.pages > 1}" th:aria-label="#{tk.list.pages}">
     <ul class="pagination">
       <li class="page-item" th:if="${list.page > 1}" th:with="url=@{/cases} + '?' + ${query.onPage(list.page - 1).toQueryString()}">
-        <a id="tk-page-previous" class="page-link" rel="prev" th:href="${url}" th:attr="hx-get=${url},
-           data-tk-focus=${focus == 'tk-page-previous' ? 'true' : null}" hx-target="#tk-case-results"
-           hx-push-url="true" th:text="#{tk.list.previous}">Previous page</a></li>
+        <a id="tk-page-previous" class="page-link" rel="prev" th:href="${url}" th:attr="data-hx-get=${url},
+           data-tk-focus=${focus == 'tk-page-previous' ? 'true' : null}" data-hx-target="#tk-case-results"
+           data-hx-push-url="true" th:text="#{tk.list.previous}">Previous page</a></li>
       <li class="page-item" th:if="${list.page < list.pages}"
           th:with="url=@{/cases} + '?' + ${query.onPage(list.page + 1).toQueryString()}">
-        <a id="tk-page-next" class="page-link" rel="next" th:href="${url}" th:attr="hx-get=${url},
-           data-tk-focus=${focus == 'tk-page-next' ? 'true' : null}" hx-target="#tk-case-results"
-           hx-push-url="true" th:text="#{tk.list.next}">Next page</a></li>
+        <a id="tk-page-next" class="page-link" rel="next" th:href="${url}" th:attr="data-hx-get=${url},
+           data-tk-focus=${focus == 'tk-page-next' ? 'true' : null}" data-hx-target="#tk-case-results"
+           data-hx-push-url="true" th:text="#{tk.list.next}">Next page</a></li>
     </ul>
   </nav>
   <form th:unless="${list.total == 0}" id="tk-export" class="mt-3" method="get" th:action="@{/cases/export.csv}"
@@ -97,7 +97,7 @@
     th:with="active=${query.sort == column}, id='tk-sort-' + ${#strings.toLowerCase(column)},
              url=@{/cases} + '?' + ${query.sortedBy(column).toQueryString()}"
     th:attr="aria-sort=${active ? (query.descending ? 'descending' : 'ascending') : null}">
-  <a th:id="${id}" th:href="${url}" th:attr="hx-get=${url},data-tk-focus=${focus == id ? 'true' : null}"
-     hx-target="#tk-case-results" hx-push-url="true"><span th:text="${label}">Title</span><span aria-hidden="true"
+  <a th:id="${id}" th:href="${url}" th:attr="data-hx-get=${url},data-tk-focus=${focus == id ? 'true' : null}"
+     data-hx-target="#tk-case-results" data-hx-push-url="true"><span th:text="${label}">Title</span><span aria-hidden="true"
      th:if="${active}" th:text="${query.descending} ? ' ▼' : ' ▲'"> ▲</span></a>
 </th>

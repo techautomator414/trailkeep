@@ -92,7 +92,7 @@ class ReportSchedulesAccessibilityIT {
     @BeforeEach
     void signInAsComplianceAdmin() {
         jdbc.update("INSERT INTO TEAM (ID, NAME) VALUES (?, ?)", TEAM, TEAM_NAME);
-        page = browser.newContext().newPage();
+        page = ShellPage.recorded(browser.newContext().newPage());
         page.onConsoleMessage(message -> {
             if (message.text().contains("Content Security Policy")
                     || message.text().contains("Refused to")) {

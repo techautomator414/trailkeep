@@ -343,8 +343,8 @@ class CaseListControllerIT {
                 .header("HX-Trigger", "tk-case-filter"));
         assertThat(fragment)
                 .containsPattern(chip("Status", "Closed", ""))
-                .contains("<div id=\"tk-search-field\" class=\"col-12 col-lg-6\" hx-swap-oob=\"true\">")
-                .contains("<div id=\"tk-filter-fields\" class=\"row g-3\" hx-swap-oob=\"true\">")
+                .contains("<div id=\"tk-search-field\" class=\"col-12 col-lg-6\" data-hx-swap-oob=\"true\">")
+                .contains("<div id=\"tk-filter-fields\" class=\"row g-3\" data-hx-swap-oob=\"true\">")
                 .containsPattern("id=\"tk-status-CLOSED\"\\s+value=\"CLOSED\"[^>]*checked=\"checked\"")
                 .doesNotContain("<dialog", "<h1", "<h2")
                 .containsPattern("id=\"tk-results-status\"[^>]*data-tk-focus=\"true\"");
@@ -359,12 +359,12 @@ class CaseListControllerIT {
                 .getContentAsString();
     }
 
-    /** A pattern for a chip's link: plain href and hx-get to the same URL, its accessible name and its text. */
+    /** A pattern for a chip's link: plain href and data-hx-get to the same URL, its accessible name and its text. */
     private static String chip(String what, String value, String without) {
         String url = without.isEmpty() ? "/cases" : "/cases?" + without;
         return Pattern.quote("<a class=\"tk-chip tk-chip-remove\" href=\"" + url + "\"")
                 + "[^>]*"
-                + Pattern.quote(" aria-label=\"Remove filter: " + what + " " + value + "\" hx-get=\"" + url
+                + Pattern.quote(" aria-label=\"Remove filter: " + what + " " + value + "\" data-hx-get=\"" + url
                         + "\"><span>" + what + ": " + value + "</span>");
     }
 

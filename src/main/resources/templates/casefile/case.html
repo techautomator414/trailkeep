@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <!-- SPDX-License-Identifier: Apache-2.0 -->
-<!-- The case page (BUILD_PLAN §4.3). Chips carry an icon and text, never colour alone. Each action is offered only
+<!--/* The case page (BUILD_PLAN §4.3). A parser-level comment, left out of the page: as markup it pushed the layout's
+     <meta charset> past the first 1024 bytes, where HTML requires it (the Nu Html Checker). Chips carry an icon and text, never colour alone. Each action is offered only
      when the server would allow it. Reassign and Mark restricted / standard open native dialogs; their openers are
      links to the same forms as pages, which is how they work without JavaScript. Comments are listed oldest first,
      their Markdown shown only as SafeHtml through tk:safe, and posted with a plain form (422 re-renders this page
@@ -12,7 +13,7 @@
      one button and Reject or request changes for the named approver, Reassign approver for Managers; once decided,
      an open case sent back shows "Requires Changes" until the next comment and a closed case its locked closure. A
      closed case offers Reopen to Managers (a reason dialog); once reopened it shows "Reopened" with who, when and why
-     until the next closure request, and its SLA chip is the new cycle's. -->
+     until the next closure request, and its SLA chip is the new cycle's. */-->
 <html lang="en" xmlns:th="http://www.thymeleaf.org" th:replace="~{web/layout :: page(~{::title}, ~{::main})}">
 <head><title th:text="${c.number} + ' ' + ${c.title} + ' · ' + ${@branding.name()}">Case</title></head>
 <body>

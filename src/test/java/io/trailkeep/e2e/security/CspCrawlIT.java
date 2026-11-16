@@ -274,12 +274,12 @@ class CspCrawlIT {
 
     /** Follows the first htmx link in the main content, if there is one, and waits for the swap to settle. */
     private static void htmxSwap(Page page, PolicyWatch watch, String where, List<String> failures) {
-        if (page.querySelector("main a[hx-get]") == null) {
+        if (page.querySelector("main a[data-hx-get]") == null) {
             return;
         }
         page.waitForResponse(
                 response -> "true".equals(response.request().headers().get("hx-request")),
-                () -> page.evaluate("() => document.querySelector('main a[hx-get]').click()"));
+                () -> page.evaluate("() => document.querySelector('main a[data-hx-get]').click()"));
         page.waitForFunction("() => !document.querySelector('.htmx-request, .htmx-swapping, .htmx-settling')");
         report(watch.drain(page), where + " (after an htmx swap)", failures);
     }

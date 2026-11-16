@@ -10,14 +10,16 @@
   <input type="hidden" name="version" th:value="${r.version}">
   <div class="mb-3">
     <label class="form-label" for="teamId" th:text="#{tk.new.team}">Team (required)</label>
-    <select class="form-select" id="teamId" name="teamId" required aria-describedby="teamId-hint">
+    <!--/* aria-required, not required, here and for the owner: a team and an owner are always selected, and a
+         required select must start with an empty option (HTML; the Nu Html Checker). */-->
+    <select class="form-select" id="teamId" name="teamId" aria-required="true" aria-describedby="teamId-hint">
       <option th:each="t : ${r.teams}" th:value="${t.id}" th:text="${t.name}" th:selected="${t.id == team}">T</option>
     </select>
     <div class="form-text" id="teamId-hint" th:text="#{tk.assign.team.hint}">Teams you may open cases in.</div>
   </div>
   <div class="mb-3">
     <label class="form-label" for="ownerId" th:text="#{tk.new.owner}">Owner (required)</label>
-    <select class="form-select" id="ownerId" name="ownerId" required
+    <select class="form-select" id="ownerId" name="ownerId" aria-required="true"
             th:attr="aria-invalid=${invalid},aria-describedby=${invalid} ? 'ownerId-error owner-hint' : 'owner-hint'">
       <optgroup th:each="t : ${r.teams}" th:label="${t.name}">
         <option th:each="o : ${t.owners}" th:value="${o.id}" th:text="${o.name}"
