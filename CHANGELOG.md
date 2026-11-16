@@ -884,6 +884,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   forms return the same rows on both vendors, including every tie of time and id. An opt-in perf execution
   (`role-conflict` in the `perf-it` profile, in no workflow) and `docs/perf/role-conflict.md` record the method, the
   numbers and the plans.
+- Builds now resolve from Maven Central only (#237). `flyway-parent` 12.4.0 declares five repositories (among them
+  `maven.pkg.github.com/flyway/flyway-community-db-support` and an Azure DevOps feed), and Maven adds a dependency
+  POM's repositories to its own, so every build asked them for their prefix list and got `HTTP 401` warnings; a
+  repository that one day served anonymously would have been a dependency-confusion route. `.mvn/maven.config` now
+  enables Maven Resolver's group-id remote-repository filter with no input file as "deny" and Central as "allow"
+  (`aether.remoteRepositoryFilter.groupId`, `.noInputOutcome=false`, `.noInputOutcome.central=true`, supported by the
+  resolver 2.0.24 of the pinned Maven 3.10.0), so any repository other than Central, whoever declares it, is asked for
+  nothing. It needs no settings file (this Maven does not read `.mvn/settings.xml`, and `-s` would depend on the
+  working directory) and holds locally, in CI and in the image build, which runs `./mvnw` on a copy of the repository.
+  A clean-repository resolution downloads the same 825 files, all from Central, with the two 401 warnings gone.
 - A malformed or truncated multipart body (one that stops before its closing boundary, a part header cut off, a
   missing boundary) is now a 400 on the application's error page on every endpoint, never a 500 and never an ERROR with
   a stack trace in the log, and nothing sent is echoed (#234, found by the API scan as "Buffer Overflow"). Tomcat
