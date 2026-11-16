@@ -80,7 +80,8 @@ example) is caught by Mailpit and readable at `http://localhost:8025`; nothing l
 
 Static analysis, dependency, secret, container and authenticated dynamic scans are build gates from the
 first commit, and the evidence (SBOM, scan reports, accessibility conformance report) is attached to every
-release. See `IMPLEMENTATION_PLAN.md` Part G.
+release. See `IMPLEMENTATION_PLAN.md` Part G. The security test map,
+[`security/TEST_MAP.md`](security/TEST_MAP.md), names the check behind each control and lists the gaps.
 
 ## License
 

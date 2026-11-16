@@ -43,3 +43,7 @@ Every pull request runs static analysis (CodeQL, Semgrep, SpotBugs/FindSecBugs),
 dependency checks; `main` additionally runs SonarCloud, Dependency-Check and container scans; nightly builds
 run an authenticated OWASP ZAP scan. A software bill of materials and signed provenance ship with every
 release. Details: `IMPLEMENTATION_PLAN.md` Part G and `BUILD_PLAN.md` §9 and §12.
+
+Which test or scanner verifies each control, where and how often it runs, what is only configured, and the known
+gaps (SonarCloud and Dependency-Check, for one, are skipped until their secrets are set): see
+[`security/TEST_MAP.md`](security/TEST_MAP.md).
