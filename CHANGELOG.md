@@ -865,6 +865,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- A malformed or truncated multipart body (one that stops before its closing boundary, a part header cut off, a
+  missing boundary) is now a 400 on the application's error page on every endpoint, never a 500 and never an ERROR with
+  a stack trace in the log, and nothing sent is echoed (#234, found by the API scan as "Buffer Overflow"). Tomcat
+  answers such a body with a 400 itself only when a filter reads the parameters first (a CSRF token in a form part);
+  with the token in the `X-CSRF-TOKEN` header, as htmx and scanners send it, the dispatcher parses first and Spring's
+  `MultipartException` was unmapped. `MalformedParametersFilter` (#218) now also answers it, recording the failure
+  where Spring looks for it so the error page is rendered without a second parse. It does this in the filter and
+  not in an `@ExceptionHandler`, which would also take `MaxUploadSizeExceededException` and turn the 413 of an oversized
+  part into a 400; the size and part-count limits are excluded explicitly and `OversizedUploadIT` and
+  `UploadAbuseBrowserIT` stay green. `MalformedMultipartIT` sends the bodies on raw sockets and sweeps every POST route.
 - The CI jobs that run a Failsafe execution by name (the SQL Server source ITs, the ZAP scan's `dast` execution and the
   nightly 50 000-case perf run) now call it by the plugin's full coordinates,
   `org.apache.maven.plugins:maven-failsafe-plugin:integration-test@<id>`, instead of the `failsafe:` prefix (#224).
