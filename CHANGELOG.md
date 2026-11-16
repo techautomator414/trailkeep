@@ -865,6 +865,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- The System screen's role-conflict query no longer scans every sign-in of a person to find a later one (#141). At
+  seven years of audit history (6.1 million events, 1 000 people signing in twice a day) `GET /admin/system` took a p95
+  of 855 ms on PostgreSQL and 2.3 s on Oracle; the query's `OR` kept `AT_TS` out of the index's access condition. The
+  same predicate written as a range (`l.at >= e.at AND (l.at > e.at OR l.id > e.id)`, identical because `AT_TS` is
+  `NOT NULL`) brings it to 238 ms and 261 ms with the existing `IX_AUDIT_ENTITY`: no migration and no new index (an
+  `ACTION`-led index measured only 754 ms and 1.8 s on its own). `AbstractStandingEventEquivalenceIT` proves the two
+  forms return the same rows on both vendors, including every tie of time and id. An opt-in perf execution
+  (`role-conflict` in the `perf-it` profile, in no workflow) and `docs/perf/role-conflict.md` record the method, the
+  numbers and the plans.
 - A malformed or truncated multipart body (one that stops before its closing boundary, a part header cut off, a
   missing boundary) is now a 400 on the application's error page on every endpoint, never a 500 and never an ERROR with
   a stack trace in the log, and nothing sent is echoed (#234, found by the API scan as "Buffer Overflow"). Tomcat
