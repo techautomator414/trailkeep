@@ -1023,6 +1023,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   in the context, ZAP never exits itself on a High insight (the plan stops instead, and the run fails as partial), and
   `dast-zap.sh` fails with its own error if the exit status and the report disagree. ZAP's `zap.log` is uploaded with
   the reports.
+- DAST findings and scan limits (WP-28 part e): Tomcat's own error pages, for requests it refuses before Spring (a URL
+  with an encoded backslash, for one), now carry a Content-Security-Policy, `nosniff`, `X-Frame-Options`, the
+  Referrer-Policy and `no-store` (ZAP rule 10038). A partial scan, i.e. an active scan cut off at its cap or a plan
+  stopped by a High insight, fails a release and warns in the nightly run (`zap.yml`'s `mode` input,
+  `dast-verdict.sh`, pinned by `DastVerdictTest`). ZAP runs with an explicit heap and the HTML report names the scan
+  identity. The spider is capped (parameter values ignored for revisits, at most 50 children per node), which keeps
+  every route while cutting the crawled sites tree by about 90%, and the crawled routes are uploaded with the reports.
+  Two reviewed false positives are suppressed until 2027-02-14: 90035 on the cases list and 40018 on SLA policy names.
 
 ### Documentation
 

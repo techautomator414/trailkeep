@@ -13,4 +13,41 @@
 #   reviewedIn:    the pull request in which the security reviewer approved it
 #   reviewed:      that approval's date (YYYY-MM-DD)
 #   expires:       at most 90 days after reviewed; an expired entry stops suppressing and the alert fails again
-suppressions: []
+suppressions:
+  - ruleId: 90035
+    url: '^http://localhost:8080/cases(\?.*)?$'
+    justification: >-
+      Server Side Template Injection (High) on GET /cases with a filters payload such as zj{{21180|add:48150}}zj, in
+      nightly run 43872426475, is a false positive. The page ZAP took as proof, /cases?filters=1, lists case types,
+      teams and owners as filter options, and earlier in the same scan ZAP had created entries through the admin
+      forms whose names are its own payloads (zj{{41120|add:69330}}zj, a th:text expression). Those names are shown
+      as escaped literal text and never evaluated; ZAP found its expected number as an operand inside one of its own
+      stored payloads. The options are rendered with th:text, which escapes them, no template uses th:utext, and no
+      user value is ever parsed as a template.
+    reviewedIn: https://github.com/techautomator414/trailkeep/pull/225
+    reviewed: 2026-11-16
+    expires: 2027-02-14
+  - ruleId: 40014
+    url: '^http://localhost:8080/cases/export\.csv(\?.*)?$'
+    justification: >-
+      Cross Site Scripting (Persistent, High, Medium confidence) on GET /cases/export.csv, parameter title, in the
+      #225 proof run 43926027838 (alpha.analyst), is a false positive. ZAP stored a script tag as a case title through
+      the case form and found it in the CSV export, which carries case titles verbatim by design. The export is
+      served as text/csv with Content-Disposition attachment and X-Content-Type-Options nosniff
+      (CaseExportController), so no browser renders it as HTML; ZAP itself reported no evidence in the response.
+      Every HTML page that shows the title escapes it (th:text). Proposed by the builder in #225 for the release
+      manager's review.
+    reviewedIn: https://github.com/techautomator414/trailkeep/pull/225
+    reviewed: 2026-11-16
+    expires: 2027-02-14
+  - ruleId: 40018
+    url: '^http://localhost:8080/admin/sla-policies/\d+$'
+    justification: >-
+      SQL Injection (High, Medium confidence) on POST /admin/sla-policies/{id}, parameter name, in nightly run
+      43712623813, is a false positive. ZAP compared the boolean payloads "ZAP AND 1=1 -- " and "ZAP OR 1=1 -- " and
+      saw different responses. Since #214 a name another policy already has answers 422 with a field error and a free
+      name saves and redirects, so the difference comes from which names exist, not from SQL. The name reaches the
+      database only as a bound parameter of a JPA update.
+    reviewedIn: https://github.com/techautomator414/trailkeep/pull/225
+    reviewed: 2026-11-16
+    expires: 2027-02-14

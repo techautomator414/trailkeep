@@ -39,11 +39,20 @@ jobs:
 
   # Every scanning job stays inside the trailkeep context, so the alerts the gate counts are the ones the reports
   # (which ZAP limits to the plan's contexts) show.
+  # Crawl caps (WP-28 part e). The cases list links every combination of its optional filters, sort and page, and
+  # without caps the spider crawled about 12,000 URLs and the active scan ran into its cap on every compliance.admin
+  # run. ignore_value treats a URL whose parameter names were seen already as visited, whatever their values, and
+  # maxChildren keeps at most 50 children per node. In the local measurement in the PR the two together kept every
+  # route path and cut the sites tree from 3,194 to 222 nodes (compliance.admin) and from 1,964 to 188
+  # (alpha.analyst); 10 children lost whole sections, 25 kept them but with no margin. Every route keeps its
+  # parameters, so the active scan still attacks each of them.
   - type: spider
     parameters:
       context: trailkeep
       maxDuration: 10
       maxDepth: 10
+      maxChildren: 50
+      handleParameters: ignore_value
 
   - type: spiderAjax
     parameters:
@@ -66,6 +75,15 @@ jobs:
     alwaysRun: true
     parameters:
       maxDuration: 10
+
+  # The crawled routes, uploaded with the reports, so that each run shows what the scan covered.
+  - type: export
+    alwaysRun: true
+    parameters:
+      context: trailkeep
+      type: yaml
+      source: sitestree
+      fileName: /zap/wrk/reports/sites-tree.yaml
 
   - type: report
     alwaysRun: true
