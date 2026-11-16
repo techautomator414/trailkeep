@@ -819,6 +819,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- ShedLock 7.10.1 to 7.11.0 (`shedlock-spring` and `shedlock-provider-jdbc-template`), split out of Dependabot's grouped
+  bump #220 because that group's other update, `json-schema-validator` 3.0.9, fails the Jackson upper-bound rule until
+  Spring Boot manages a newer Jackson. The 7.11.0 release notes list no change to the JDBC lock provider; the one
+  core change, retrying a keep-alive lock extension after a transient failure, does not apply here, which uses no
+  keep-alive lock provider.
 - `app.js` carries no English of its own (WP-27 part c, which closes WP-27): the server-error and session-extended
   announcements read only the layout's `data-tk-error-text` and `data-tk-extended-text`, which come from
   `messages.properties`; the two hard-coded fallbacks are gone.
