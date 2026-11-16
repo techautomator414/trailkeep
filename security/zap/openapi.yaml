@@ -1,0 +1,727 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Charlie Genova and contributors
+#
+# Every HTTP operation Trailkeep serves, for ZAP's API scan (WP-28 part d, decision Q2): each controller operation with
+# the parameters it binds, the two Spring Security endpoints and the management server's actuator. Written by hand,
+# without a runtime generator, and kept exact by OpenApiCoverageTest, which fails when an operation or a bound
+# parameter is missing here, when an operation here is served by nothing, when a POST lacks the CSRF header, or when
+# an operation names the wrong port. Trailkeep has no JSON API in v1 (BUILD_PLAN §7): requests are HTML forms and
+# links, responses are pages, fragments, redirects, CSV or file bytes.
+#
+# dast-zap.sh fills in the placeholders before ZAP imports the file, and refuses to scan if one is left:
+#   - the CSRF placeholder in components.parameters.csrf: the scan session's token, sent as X-CSRF-TOKEN, so that
+#     ZAP's requests pass the CSRF check and reach the handlers instead of Spring Security's 403;
+#   - the others: identifiers of the data set DastSessionIT seeded (target/dast/api-values.txt), so that the requests
+#     reach real cases, attachments, closures and alerts instead of a 404 on an unknown id. Example values a scan
+#     identity may not use are still sent: the refusal is part of what the scan tests.
+# Examples are chosen so that ZAP's one import request per operation cannot end the scan's own session: /logout
+# carries no token, and the user and team administration examples name a person who is not a scan identity.
+# Dates are plain strings: a "format: date" example reaches ZAP as a Java date string.
+openapi: 3.0.3
+info:
+  title: Trailkeep HTTP surface for DAST
+  version: "1"
+  description: The operations of the web application and of its management server, for the authenticated ZAP scan.
+  license:
+    name: Apache-2.0
+    url: https://www.apache.org/licenses/LICENSE-2.0
+servers:
+  - url: http://localhost:8080
+paths:
+  # ---- Spring Security
+  /logout:
+    post:
+      summary: Sign out, then the provider's end-session redirect. No token here, so the import cannot end the scan.
+      responses: {"302": {description: To the provider}, "403": {description: Without a CSRF token}}
+  /logout/connect/back-channel/idp:
+    post:
+      summary: OIDC back-channel logout from the provider (no session, exempt from CSRF)
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema: {type: object, properties: {logout_token: {type: string, example: eyJhbGciOiJub25lIn0.e30.}}}
+      responses: {"200": {description: Sessions of the token's sid ended}, "400": {description: Invalid token}}
+
+  # ---- Dashboard, session, preferences, alerts
+  /:
+    get:
+      summary: Dashboard
+      parameters:
+        - {name: approvals, in: query, schema: {type: string, example: "1"}}
+        - {name: requests, in: query, schema: {type: string, example: "1"}}
+      responses: {"200": {description: Page}}
+  /session/extend:
+    post:
+      summary: Extend the idle session (the expiry warning's button)
+      parameters: [{$ref: "#/components/parameters/csrf"}]
+      responses: {"204": {description: Extended}}
+  /preferences:
+    get:
+      summary: Preferences
+      responses: {"200": {description: Page}}
+    post:
+      summary: Save the person's preferences
+      parameters: [{$ref: "#/components/parameters/csrf"}]
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema: {type: object, properties: {shortcuts: {type: string, example: "on"}}}
+      responses: {"302": {description: Back to the preferences}}
+  /alerts:
+    get:
+      summary: The person's alerts
+      parameters: [{$ref: "#/components/parameters/page"}]
+      responses: {"200": {description: Page}}
+  /alerts/{id}/read:
+    post:
+      summary: Mark an alert read
+      parameters: [{$ref: "#/components/parameters/alert"}, {$ref: "#/components/parameters/csrf"}]
+      requestBody: {$ref: "#/components/requestBodies/page"}
+      responses: {"302": {description: Back to the alerts}}
+  /alerts/{id}/delete:
+    post:
+      summary: Delete an alert
+      parameters: [{$ref: "#/components/parameters/alert"}, {$ref: "#/components/parameters/csrf"}]
+      requestBody: {$ref: "#/components/requestBodies/page"}
+      responses: {"302": {description: Back to the alerts}}
+
+  # ---- Cases: list, export, saved views, create
+  /cases:
+    get:
+      summary: The cases list, filtered, sorted and paged
+      parameters:
+        - {$ref: "#/components/parameters/q"}
+        - {$ref: "#/components/parameters/status"}
+        - {$ref: "#/components/parameters/sla"}
+        - {$ref: "#/components/parameters/priority"}
+        - {$ref: "#/components/parameters/sensitivity"}
+        - {$ref: "#/components/parameters/from"}
+        - {$ref: "#/components/parameters/to"}
+        - {$ref: "#/components/parameters/type"}
+        - {$ref: "#/components/parameters/team"}
+        - {$ref: "#/components/parameters/owner"}
+        - {$ref: "#/components/parameters/ids"}
+        - {$ref: "#/components/parameters/sort"}
+        - {$ref: "#/components/parameters/dir"}
+        - {$ref: "#/components/parameters/page"}
+      responses: {"200": {description: Page or results fragment}, "400": {description: An invalid filter}}
+    post:
+      summary: Create a case
+      parameters: [{$ref: "#/components/parameters/csrf"}]
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                caseTypeId: {type: string, example: "__CASE_TYPE__"}
+                title: {type: string, example: Synthetic DAST case created by the API scan}
+                priority: {type: string, example: NORMAL}
+                identifiedOn: {type: string, example: "2026-11-01"}
+                teamId: {type: string, example: "__TEAM__"}
+                ownerId: {type: string, example: "__OWNER__"}
+                subjectText: {type: string, example: Synthetic subject}
+                description: {type: string, example: Synthetic description}
+                sensitivity: {type: string, example: STANDARD}
+                titleConfirmed: {type: boolean, example: true}
+      responses: {"302": {description: To the new case}, "422": {description: The form with errors}}
+  /cases/new:
+    get:
+      summary: The new-case form
+      responses: {"200": {description: Page}}
+  /cases/export.csv:
+    get:
+      summary: The cases list as CSV, for the list's filters
+      parameters:
+        - {$ref: "#/components/parameters/q"}
+        - {$ref: "#/components/parameters/status"}
+        - {$ref: "#/components/parameters/sla"}
+        - {$ref: "#/components/parameters/priority"}
+        - {$ref: "#/components/parameters/sensitivity"}
+        - {$ref: "#/components/parameters/from"}
+        - {$ref: "#/components/parameters/to"}
+        - {$ref: "#/components/parameters/type"}
+        - {$ref: "#/components/parameters/team"}
+        - {$ref: "#/components/parameters/owner"}
+        - {$ref: "#/components/parameters/ids"}
+        - {$ref: "#/components/parameters/sort"}
+        - {$ref: "#/components/parameters/dir"}
+        - {name: details, in: query, schema: {type: string, example: "true"}}
+      responses: {"200": {description: CSV}, "422": {description: Too many rows}}
+  /cases/views:
+    get:
+      summary: The person's saved views
+      responses: {"200": {description: Page}}
+    post:
+      summary: Save the list's current filters as a named view
+      parameters: [{$ref: "#/components/parameters/csrf"}]
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                name: {type: string, example: Synthetic view}
+                query: {type: string, example: "status=OPEN"}
+      responses: {"302": {description: To the saved view}}
+  /cases/views/{id}/delete:
+    post:
+      summary: Delete a saved view (none is seeded)
+      parameters: [{$ref: "#/components/parameters/unseeded"}, {$ref: "#/components/parameters/csrf"}]
+      responses: {"302": {description: To the views}}
+
+  # ---- One case
+  /cases/{number}:
+    get:
+      summary: A case
+      parameters:
+        - {$ref: "#/components/parameters/case"}
+        - {name: created, in: query, schema: {type: string, example: "1"}}
+      responses: {"200": {description: Page}, "404": {description: Unreadable}}
+  /cases/{number}/history:
+    get:
+      summary: A case's history
+      parameters:
+        - {$ref: "#/components/parameters/case"}
+        - {name: kind, in: query, schema: {type: string, example: all}}
+        - {$ref: "#/components/parameters/page"}
+      responses: {"200": {description: Page}}
+  /cases/{number}/edit:
+    get:
+      summary: The edit form
+      parameters: [{$ref: "#/components/parameters/case"}]
+      responses: {"200": {description: Page}}
+    post:
+      summary: Edit a case's fields
+      parameters: [{$ref: "#/components/parameters/case"}, {$ref: "#/components/parameters/csrf"}]
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                title: {type: string, example: Synthetic DAST case}
+                priority: {type: string, example: NORMAL}
+                subjectText: {type: string, example: Synthetic subject}
+                description: {type: string, example: Synthetic description}
+                version: {type: string, example: "0"}
+                titleConfirmed: {type: boolean, example: true}
+      responses: {"302": {description: To the case}, "409": {description: Edited meanwhile}}
+  /cases/{number}/comments:
+    post:
+      summary: Comment on a case
+      parameters: [{$ref: "#/components/parameters/case"}, {$ref: "#/components/parameters/csrf"}]
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema: {type: object, properties: {body: {type: string, example: Synthetic comment}}}
+      responses: {"302": {description: To the case}}
+  /cases/{number}/comments/pin:
+    post:
+      summary: Pin a comment
+      parameters: [{$ref: "#/components/parameters/case"}, {$ref: "#/components/parameters/csrf"}]
+      requestBody: {$ref: "#/components/requestBodies/comment"}
+      responses: {"302": {description: To the case}}
+  /cases/{number}/comments/unpin:
+    post:
+      summary: Unpin a comment
+      parameters: [{$ref: "#/components/parameters/case"}, {$ref: "#/components/parameters/csrf"}]
+      requestBody: {$ref: "#/components/requestBodies/comment"}
+      responses: {"302": {description: To the case}}
+  /cases/{number}/attachments:
+    post:
+      summary: Upload an attachment (scanned before it is stored)
+      parameters: [{$ref: "#/components/parameters/case"}, {$ref: "#/components/parameters/csrf"}]
+      requestBody:
+        content:
+          multipart/form-data:
+            schema: {type: object, properties: {file: {type: string, format: binary}}}
+      responses: {"302": {description: To the case}, "422": {description: Refused}, "503": {description: No scanner}}
+  /cases/{number}/attachments/{id}:
+    get:
+      summary: Download an attachment (always as an attachment, nosniff)
+      parameters: [{$ref: "#/components/parameters/case"}, {$ref: "#/components/parameters/attachment"}]
+      responses: {"200": {description: The file}, "403": {description: Quarantined}, "404": {description: Unreadable}}
+  /cases/{number}/attachments/{id}/release:
+    get:
+      summary: The release form for a quarantined attachment
+      parameters: [{$ref: "#/components/parameters/case"}, {$ref: "#/components/parameters/attachment"}]
+      responses: {"200": {description: Page}}
+    post:
+      summary: Release a quarantined attachment with a reason (Compliance Admin)
+      parameters:
+        - {$ref: "#/components/parameters/case"}
+        - {$ref: "#/components/parameters/attachment"}
+        - {$ref: "#/components/parameters/csrf"}
+      requestBody: {$ref: "#/components/requestBodies/reason"}
+      responses: {"302": {description: To the case}}
+  /cases/{number}/reassign:
+    get:
+      summary: The reassign form
+      parameters: [{$ref: "#/components/parameters/case"}]
+      responses: {"200": {description: Page}}
+    post:
+      summary: Move a case to a team and owner (the example keeps its team and owner)
+      parameters: [{$ref: "#/components/parameters/case"}, {$ref: "#/components/parameters/csrf"}]
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                teamId: {type: string, example: "__TEAM__"}
+                ownerId: {type: string, example: "__OWNER__"}
+                version: {type: string, example: "0"}
+      responses: {"302": {description: To the case}}
+  /cases/{number}/restrict:
+    get:
+      summary: The restrict form
+      parameters: [{$ref: "#/components/parameters/case"}]
+      responses: {"200": {description: Page}}
+    post:
+      summary: Restrict a case
+      parameters: [{$ref: "#/components/parameters/case"}, {$ref: "#/components/parameters/csrf"}]
+      requestBody: {$ref: "#/components/requestBodies/version"}
+      responses: {"302": {description: To the case}}
+  /cases/{number}/unrestrict:
+    get:
+      summary: The form that lifts a restriction
+      parameters: [{$ref: "#/components/parameters/case"}]
+      responses: {"200": {description: Page}}
+    post:
+      summary: Lift a case's restriction
+      parameters: [{$ref: "#/components/parameters/case"}, {$ref: "#/components/parameters/csrf"}]
+      requestBody: {$ref: "#/components/requestBodies/version"}
+      responses: {"302": {description: To the case}}
+  /cases/{number}/request-update:
+    get:
+      summary: The update-request form
+      parameters: [{$ref: "#/components/parameters/case"}]
+      responses: {"200": {description: Page}}
+    post:
+      summary: Ask someone for an update on the case
+      parameters: [{$ref: "#/components/parameters/case"}, {$ref: "#/components/parameters/csrf"}]
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                recipientId: {type: string, example: "__OWNER__"}
+                message: {type: string, example: Synthetic question}
+      responses: {"302": {description: To the case}}
+  /cases/{number}/update-requests/{id}/answered:
+    post:
+      summary: Mark an update request answered
+      parameters:
+        - {$ref: "#/components/parameters/case"}
+        - {$ref: "#/components/parameters/updateRequest"}
+        - {$ref: "#/components/parameters/csrf"}
+      responses: {"302": {description: To the case}}
+  /cases/{number}/request-closure:
+    get:
+      summary: The closure-request form
+      parameters: [{$ref: "#/components/parameters/case"}]
+      responses: {"200": {description: Page}}
+    post:
+      summary: Request closure, naming an approver (the example's case already has a pending closure)
+      parameters: [{$ref: "#/components/parameters/closingCase"}, {$ref: "#/components/parameters/csrf"}]
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                outcome: {type: string, example: Resolved}
+                summary: {type: string, example: Synthetic summary}
+                followUps: {type: string, example: Synthetic follow-up}
+                approverId: {type: string, example: "__APPROVER__"}
+      responses: {"302": {description: To the case}}
+  /cases/{number}/closure/{id}/decision:
+    get:
+      summary: The decision form for a pending closure
+      parameters: [{$ref: "#/components/parameters/closingCase"}, {$ref: "#/components/parameters/closure"}]
+      responses: {"200": {description: Page}}
+    post:
+      summary: Approve, reject or request changes to a closure (its approver)
+      parameters:
+        - {$ref: "#/components/parameters/closingCase"}
+        - {$ref: "#/components/parameters/closure"}
+        - {$ref: "#/components/parameters/csrf"}
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                decision: {type: string, example: CHANGES_REQUESTED}
+                reason: {type: string, example: Synthetic reason}
+      responses: {"302": {description: To the case}}
+  /cases/{number}/closure/{id}/approver:
+    get:
+      summary: The form that reassigns a pending closure's approver
+      parameters: [{$ref: "#/components/parameters/closingCase"}, {$ref: "#/components/parameters/closure"}]
+      responses: {"200": {description: Page}}
+    post:
+      summary: Reassign a pending closure's approver (the example keeps the approver)
+      parameters:
+        - {$ref: "#/components/parameters/closingCase"}
+        - {$ref: "#/components/parameters/closure"}
+        - {$ref: "#/components/parameters/csrf"}
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema: {type: object, properties: {approverId: {type: string, example: "__APPROVER__"}}}
+      responses: {"302": {description: To the case}}
+  /cases/{number}/reopen:
+    get:
+      summary: The reopen form
+      parameters: [{$ref: "#/components/parameters/case"}]
+      responses: {"200": {description: Page}}
+    post:
+      summary: Reopen a closed case with a reason (the example's case is open)
+      parameters: [{$ref: "#/components/parameters/case"}, {$ref: "#/components/parameters/csrf"}]
+      requestBody: {$ref: "#/components/requestBodies/reason"}
+      responses: {"302": {description: To the case}}
+  /cases/{number}/legal-hold:
+    get:
+      summary: The legal-hold form
+      parameters: [{$ref: "#/components/parameters/case"}]
+      responses: {"200": {description: Page}}
+    post:
+      summary: Place or lift a legal hold (Compliance Admin)
+      parameters: [{$ref: "#/components/parameters/case"}, {$ref: "#/components/parameters/csrf"}]
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                hold: {type: boolean, example: true}
+                reason: {type: string, example: Synthetic reason}
+      responses: {"302": {description: To the case}}
+
+  # ---- Reports
+  /reports/aging:
+    get:
+      summary: The aging report
+      responses: {"200": {description: Page}}
+  /reports/aging.csv:
+    get:
+      summary: The aging report as CSV
+      responses: {"200": {description: CSV}}
+  /reports/compliance:
+    get:
+      summary: The SLA compliance report, for a period
+      parameters: [{$ref: "#/components/parameters/periodFrom"}, {$ref: "#/components/parameters/periodTo"}]
+      responses: {"200": {description: Page}}
+  /reports/compliance.csv:
+    get:
+      summary: The SLA compliance report as CSV, for a period
+      parameters: [{$ref: "#/components/parameters/periodFrom"}, {$ref: "#/components/parameters/periodTo"}]
+      responses: {"200": {description: CSV}}
+  /reports/runs:
+    get:
+      summary: Stored scheduled report runs
+      parameters: [{$ref: "#/components/parameters/page"}]
+      responses: {"200": {description: Page}}
+  /reports/runs/{id}:
+    get:
+      summary: A stored report run (none is seeded)
+      parameters: [{$ref: "#/components/parameters/unseeded"}]
+      responses: {"200": {description: Page}, "404": {description: Unknown}}
+  /reports/runs/{id}.csv:
+    get:
+      summary: A stored report run as CSV (none is seeded)
+      parameters: [{$ref: "#/components/parameters/unseeded"}]
+      responses: {"200": {description: CSV}, "404": {description: Unknown}}
+
+  # ---- Case configuration (Compliance Admin)
+  /admin/sla-policies:
+    get:
+      summary: SLA policies
+      responses: {"200": {description: Page}}
+    post:
+      summary: Create an SLA policy
+      parameters: [{$ref: "#/components/parameters/csrf"}]
+      requestBody: {$ref: "#/components/requestBodies/policy"}
+      responses: {"302": {description: To the policies}, "422": {description: The form with errors}}
+  /admin/sla-policies/{id}:
+    get:
+      summary: An SLA policy's form
+      parameters: [{$ref: "#/components/parameters/policy"}]
+      responses: {"200": {description: Page}}
+    post:
+      summary: Change an SLA policy
+      parameters: [{$ref: "#/components/parameters/policy"}, {$ref: "#/components/parameters/csrf"}]
+      requestBody: {$ref: "#/components/requestBodies/policy"}
+      responses: {"302": {description: To the policies}, "422": {description: The form with errors}}
+  /admin/case-types:
+    get:
+      summary: Case types
+      responses: {"200": {description: Page}}
+    post:
+      summary: Create a case type with its outcomes
+      parameters: [{$ref: "#/components/parameters/csrf"}]
+      requestBody: {$ref: "#/components/requestBodies/caseType"}
+      responses: {"302": {description: To the case types}, "422": {description: The form with errors}}
+  /admin/case-types/{id}:
+    get:
+      summary: A case type's form
+      parameters: [{$ref: "#/components/parameters/caseType"}]
+      responses: {"200": {description: Page}}
+    post:
+      summary: Change a case type
+      parameters: [{$ref: "#/components/parameters/caseType"}, {$ref: "#/components/parameters/csrf"}]
+      requestBody: {$ref: "#/components/requestBodies/caseType"}
+      responses: {"302": {description: To the case types}, "422": {description: The form with errors}}
+  /admin/report-schedules:
+    get:
+      summary: Teams' report schedules
+      responses: {"200": {description: Page}}
+  /admin/report-schedules/{team}:
+    get:
+      summary: A team's report schedule form
+      parameters: [{$ref: "#/components/parameters/scheduleTeam"}]
+      responses: {"200": {description: Page}}
+    post:
+      summary: Set a team's report schedule
+      parameters: [{$ref: "#/components/parameters/scheduleTeam"}, {$ref: "#/components/parameters/csrf"}]
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                enabled: {type: boolean, example: true}
+                weekday: {type: string, example: "1"}
+                hour: {type: string, example: "6"}
+                version: {type: string, example: "0"}
+      responses: {"302": {description: To the schedules}}
+
+  # ---- Teams, users, system (System Admin; neither scan identity is one, so these answer 403)
+  /admin/teams:
+    get:
+      summary: Teams
+      responses: {"200": {description: Page}}
+    post:
+      summary: Create a team
+      parameters: [{$ref: "#/components/parameters/csrf"}]
+      requestBody: {$ref: "#/components/requestBodies/team"}
+      responses: {"302": {description: To the team}}
+  /admin/teams/{teamId}:
+    get:
+      summary: A team and its members
+      parameters: [{$ref: "#/components/parameters/otherTeam"}]
+      responses: {"200": {description: Page}}
+    post:
+      summary: Rename, activate or deactivate a team
+      parameters: [{$ref: "#/components/parameters/otherTeam"}, {$ref: "#/components/parameters/csrf"}]
+      requestBody: {$ref: "#/components/requestBodies/team"}
+      responses: {"302": {description: To the team}}
+  /admin/teams/{teamId}/members:
+    post:
+      summary: Give a person a role in a team
+      parameters: [{$ref: "#/components/parameters/otherTeam"}, {$ref: "#/components/parameters/csrf"}]
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                userId: {type: string, example: "__OTHER_USER__"}
+                role: {type: string, example: READER}
+      responses: {"302": {description: To the team}}
+  /admin/teams/{teamId}/members/{userId}/remove:
+    post:
+      summary: Remove a person from a team
+      parameters:
+        - {$ref: "#/components/parameters/otherTeam"}
+        - {$ref: "#/components/parameters/otherUser"}
+        - {$ref: "#/components/parameters/csrf"}
+      responses: {"302": {description: To the team}}
+  /admin/users:
+    get:
+      summary: Users
+      responses: {"200": {description: Page}}
+  /admin/users/{userId}/disable:
+    post:
+      summary: Disable a person, ending their sessions
+      parameters: [{$ref: "#/components/parameters/otherUser"}, {$ref: "#/components/parameters/csrf"}]
+      responses: {"302": {description: To the users}}
+  /admin/users/{userId}/enable:
+    post:
+      summary: Enable a person again
+      parameters: [{$ref: "#/components/parameters/otherUser"}, {$ref: "#/components/parameters/csrf"}]
+      responses: {"302": {description: To the users}}
+  /admin/system:
+    get:
+      summary: The System screen
+      parameters: [{name: test, in: query, schema: {type: string, example: sent}}]
+      responses: {"200": {description: Page}}
+  /admin/system/test-mail:
+    post:
+      summary: Send the signed-in administrator a test mail
+      parameters: [{$ref: "#/components/parameters/csrf"}]
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema: {type: object, properties: {template: {type: string, example: closure-requested}}}
+      responses: {"302": {description: To the System screen}}
+
+  # ---- Import runs (Compliance or System Admin)
+  /admin/import-runs:
+    get:
+      summary: Import runs
+      parameters: [{$ref: "#/components/parameters/page"}]
+      responses: {"200": {description: Page}}
+    post:
+      summary: Request an import run
+      parameters: [{$ref: "#/components/parameters/csrf"}]
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                sourceId: {type: string, example: synthetic}
+                kind: {type: string, example: IMPORT}
+      responses: {"302": {description: To the run}}
+  /admin/import-runs/new:
+    get:
+      summary: The import-run request form
+      responses: {"200": {description: Page}}
+  /admin/import-runs/{id}:
+    get:
+      summary: An import run (none is seeded)
+      parameters:
+        - {$ref: "#/components/parameters/unseeded"}
+        - {name: worklist, in: query, schema: {type: string, example: "1"}}
+      responses: {"200": {description: Page}, "404": {description: Unknown}}
+  /admin/import-runs/{id}/sign-off:
+    post:
+      summary: Sign off a dry run (none is seeded)
+      parameters: [{$ref: "#/components/parameters/unseeded"}, {$ref: "#/components/parameters/csrf"}]
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                version: {type: string, example: "0"}
+                acknowledged: {type: string, example: SYNTHETIC_WARNING}
+      responses: {"302": {description: To the run}}
+
+  # ---- Management server (port 8081; on the pod network only in a deployment)
+  /actuator:
+    servers: [{url: "http://localhost:8081"}]
+    get:
+      summary: The actuator's links
+      responses: {"200": {description: Links}}
+  /actuator/health:
+    servers: [{url: "http://localhost:8081"}]
+    get:
+      summary: Health
+      responses: {"200": {description: Status}}
+  /actuator/health/liveness:
+    servers: [{url: "http://localhost:8081"}]
+    get:
+      summary: Liveness probe group
+      responses: {"200": {description: Status}}
+  /actuator/health/readiness:
+    servers: [{url: "http://localhost:8081"}]
+    get:
+      summary: Readiness probe group
+      responses: {"200": {description: Status}}
+  /actuator/info:
+    servers: [{url: "http://localhost:8081"}]
+    get:
+      summary: Build information
+      responses: {"200": {description: Information}}
+  /actuator/prometheus:
+    servers: [{url: "http://localhost:8081"}]
+    get:
+      summary: Metrics
+      responses: {"200": {description: Metrics}}
+
+components:
+  parameters:
+    csrf: {name: X-CSRF-TOKEN, in: header, required: true, schema: {type: string, example: __CSRF_TOKEN__}}
+    case: {name: number, in: path, required: true, schema: {type: string, example: __CASE__}}
+    closingCase: {name: number, in: path, required: true, schema: {type: string, example: __CLOSING_CASE__}}
+    attachment: {name: id, in: path, required: true, schema: {type: string, example: "__ATTACHMENT__"}}
+    updateRequest: {name: id, in: path, required: true, schema: {type: string, example: "__UPDATE_REQUEST__"}}
+    closure: {name: id, in: path, required: true, schema: {type: string, example: "__CLOSURE__"}}
+    alert: {name: id, in: path, required: true, schema: {type: string, example: "__ALERT__"}}
+    policy: {name: id, in: path, required: true, schema: {type: string, example: "__SLA_POLICY__"}}
+    caseType: {name: id, in: path, required: true, schema: {type: string, example: "__CASE_TYPE__"}}
+    scheduleTeam: {name: team, in: path, required: true, schema: {type: string, example: "__TEAM__"}}
+    otherTeam: {name: teamId, in: path, required: true, schema: {type: string, example: "__OTHER_TEAM__"}}
+    otherUser: {name: userId, in: path, required: true, schema: {type: string, example: "__OTHER_USER__"}}
+    # Saved views, report runs and import runs are not seeded: the handler answers for an unknown id.
+    unseeded: {name: id, in: path, required: true, schema: {type: string, example: "1"}}
+    page: {name: page, in: query, schema: {type: string, example: "1"}}
+    periodFrom: {name: from, in: query, schema: {type: string, example: "2026-10-01"}}
+    periodTo: {name: to, in: query, schema: {type: string, example: "2026-10-31"}}
+    # The cases list's filters (CaseListQuery), shared by the list and its CSV export.
+    q: {name: q, in: query, schema: {type: string, example: synthetic}}
+    status: {name: status, in: query, schema: {type: string, example: OPEN}}
+    sla: {name: sla, in: query, schema: {type: string, example: ON_TRACK}}
+    priority: {name: priority, in: query, schema: {type: string, example: NORMAL}}
+    sensitivity: {name: sensitivity, in: query, schema: {type: string, example: STANDARD}}
+    from: {name: from, in: query, schema: {type: string, example: "2026-01-01"}}
+    to: {name: to, in: query, schema: {type: string, example: "2026-12-31"}}
+    type: {name: type, in: query, schema: {type: string, example: "__CASE_TYPE__"}}
+    team: {name: team, in: query, schema: {type: string, example: "__TEAM__"}}
+    owner: {name: owner, in: query, schema: {type: string, example: me}}
+    ids: {name: ids, in: query, schema: {type: string, example: __CASE__}}
+    sort: {name: sort, in: query, schema: {type: string, example: opened}}
+    dir: {name: dir, in: query, schema: {type: string, example: desc}}
+  requestBodies:
+    page:
+      content:
+        application/x-www-form-urlencoded:
+          schema: {type: object, properties: {page: {type: string, example: "1"}}}
+    comment:
+      content:
+        application/x-www-form-urlencoded:
+          schema: {type: object, properties: {comment: {type: string, example: "__COMMENT__"}}}
+    reason:
+      content:
+        application/x-www-form-urlencoded:
+          schema: {type: object, properties: {reason: {type: string, example: Synthetic reason}}}
+    version:
+      content:
+        application/x-www-form-urlencoded:
+          schema: {type: object, properties: {version: {type: string, example: "0"}}}
+    policy:
+      content:
+        application/x-www-form-urlencoded:
+          schema:
+            type: object
+            properties:
+              name: {type: string, example: Synthetic policy}
+              anchor: {type: string, example: IDENTIFIED_ON}
+              targetDays: {type: string, example: "30"}
+              atRiskPct: {type: string, example: "80"}
+              overdueReminderDays: {type: string, example: "7"}
+              escalateTo: {type: string, example: OWNER_AND_MANAGERS}
+    caseType:
+      content:
+        application/x-www-form-urlencoded:
+          schema:
+            type: object
+            properties:
+              name: {type: string, example: Synthetic case type}
+              slaPolicyId: {type: string, example: "__SLA_POLICY__"}
+              retentionYears: {type: string, example: "7"}
+              active: {type: boolean, example: true}
+              outcomes: {type: string, example: Resolved}
+    team:
+      content:
+        application/x-www-form-urlencoded:
+          schema:
+            type: object
+            properties:
+              name: {type: string, example: Synthetic team}
+              active: {type: boolean, example: true}
