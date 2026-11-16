@@ -1101,6 +1101,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Documentation
 
+- The security test map (WP-28 part f): `security/TEST_MAP.md`, linked from `SECURITY.md` and the README, names for
+  every control row of BUILD_PLAN §9, every WP-28 acceptance item and the §12.1 E2E security row the test classes,
+  Semgrep rules, enforcer rules, ZAP plan and suppressions and scanners that verify it, where and how often each runs,
+  and what is only configured or left to the platform. It ends with the 25 gaps (among them the 30-minute idle
+  timeout, cookie flags and HSTS that no test asserts, no rate limiting, SonarCloud and Dependency-Check skipped
+  without their secrets) and the two documents BUILD_PLAN §9 promises that do not exist yet: the STRIDE threat model
+  and the data map. `SecurityTestMapTest` resolves every class, path, workflow job and rule the page names, so a
+  renamed test or an added suppression fails the build until the page follows. `HANDOFF.md` records WP-28 as built.
 - `HANDOFF.md` refreshed to the end of Phase 2 (WP-15 parts 1a to 4 and WP-16 merged; the p95 measurement, WP-15
   part 5, in flight): progress table, what is on `main`, four new decisions (`VIEW_RESTRICTED` through one
   `RestrictedReadAudit`, the export audit's `query`, exports and the connection cap, History as a page), #82 closed,
