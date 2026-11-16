@@ -31,7 +31,7 @@ class DastVerdictTest {
     private Path dir;
 
     @Test
-    void aCompleteCleanScanPassesInBothModes() throws IOException, InterruptedException {
+    void completeCleanScanPassesInBothModes() throws IOException, InterruptedException {
         for (String mode : List.of("release", "nightly")) {
             Verdict verdict = run(mode, "0", "0", "", FINISHED);
             assertThat(verdict.exit()).isZero();
@@ -40,7 +40,7 @@ class DastVerdictTest {
     }
 
     @Test
-    void anActiveScanCutOffAtItsCapWarnsInNightlyAndFailsInRelease() throws IOException, InterruptedException {
+    void activeScanCutOffAtItsCapWarnsInNightlyAndFailsInRelease() throws IOException, InterruptedException {
         Verdict nightly = run("nightly", "0", "0", "", CUT_OFF);
         assertThat(nightly.exit()).isZero();
         assertThat(nightly.output()).contains("::warning", "cut off at its 120-minute cap");
@@ -53,7 +53,7 @@ class DastVerdictTest {
     }
 
     @Test
-    void aMissingActiveScanCompletionCountsAsPartial() throws IOException, InterruptedException {
+    void missingActiveScanCompletionCountsAsPartial() throws IOException, InterruptedException {
         assertThat(run("nightly", "0", "0", "", "").exit()).isZero();
         Verdict release = run("release", "0", "0", "", "");
         assertThat(release.exit()).isOne();
@@ -61,7 +61,7 @@ class DastVerdictTest {
     }
 
     @Test
-    void aPlanStoppedByAHighInsightWarnsInNightlyAndFailsInRelease() throws IOException, InterruptedException {
+    void planStoppedByHighInsightWarnsInNightlyAndFailsInRelease() throws IOException, InterruptedException {
         Verdict nightly = run("nightly", "2", "0", MEMORY, FINISHED);
         assertThat(nightly.exit()).isZero();
         assertThat(nightly.output()).contains("::warning", "High insight (" + MEMORY + ")");
@@ -72,7 +72,7 @@ class DastVerdictTest {
     }
 
     @Test
-    void aMediumAlertFailsInBothModesEvenWhenTheScanIsPartial() throws IOException, InterruptedException {
+    void mediumAlertFailsInBothModesEvenWhenTheScanIsPartial() throws IOException, InterruptedException {
         for (String mode : List.of("release", "nightly")) {
             assertThat(run(mode, "1", "2", "", FINISHED).exit()).isOne();
         }
@@ -92,7 +92,7 @@ class DastVerdictTest {
     }
 
     @Test
-    void lowAlertsPassWithAWarningAndUnknownStatusesFail() throws IOException, InterruptedException {
+    void lowAlertsPassWithWarningAndUnknownStatusesFail() throws IOException, InterruptedException {
         Verdict low = run("release", "2", "0", "", FINISHED);
         assertThat(low.exit()).isZero();
         assertThat(low.output()).contains("::warning", "ZAP exit 2");
@@ -100,8 +100,9 @@ class DastVerdictTest {
     }
 
     @Test
-    void aLostSessionAMissingReportOrAnUnknownModeFails() throws IOException, InterruptedException {
-        assertThat(verdict("release", "302", "0", "1", "0", "", FINISHED, "0").output()).contains("lost its session");
+    void lostSessionMissingReportOrUnknownModeFails() throws IOException, InterruptedException {
+        assertThat(verdict("release", "302", "0", "1", "0", "", FINISHED, "0").output())
+                .contains("lost its session");
         assertThat(verdict("nightly", "200", "0", "0", "0", "", FINISHED, "0").output())
                 .contains("wrote no JSON report");
         Verdict unknown = verdict("weekly", "200", "0", "1", "0", "", FINISHED, "0");

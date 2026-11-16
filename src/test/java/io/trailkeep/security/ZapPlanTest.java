@@ -97,8 +97,9 @@ class ZapPlanTest {
                 .singleElement()
                 .satisfies(job -> assertThat(map(job.get("parameters")))
                         .containsEntry("handleParameters", "ignore_value")
-                        .hasEntrySatisfying("maxChildren", value -> assertThat((Integer) value)
-                                .isBetween(1, 100)));
+                        .hasEntrySatisfying(
+                                "maxChildren",
+                                value -> assertThat((Integer) value).isBetween(1, 100)));
         assertThat(jobs)
                 .filteredOn(job -> "export".equals(job.get("type")))
                 .singleElement()
