@@ -33,6 +33,9 @@ on:
         type: choice
         options: [nightly, release]
         default: nightly
+  # TEMPORARY (proof run for WP-28 part d): runs on this branch in release mode; removed in the last commit.
+  push:
+    branches: [wp-28d-dast-api]
 
 permissions: {}
 
@@ -51,7 +54,7 @@ jobs:
       IMAGE: localhost/trailkeep:dast
       ZAP_IMAGE: ghcr.io/zaproxy/zaproxy@sha256:9624669db72f54d86c4b46a7064518bd9bf79d8c61a4c31befa9923489f328af # 2.17.0
       SCAN_IDENTITY: ${{ matrix.identity }}
-      ZAP_MODE: ${{ inputs.mode }}
+      ZAP_MODE: ${{ inputs.mode || 'release' }}
       ZAP_HEAP: 6g
     steps:
       - name: Check out
