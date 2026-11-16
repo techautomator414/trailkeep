@@ -4,7 +4,9 @@ package io.trailkeep.testsupport;
 
 import io.trailkeep.shared.persistence.DatabaseVendor;
 import java.time.Duration;
+import java.util.HashMap;
 import java.util.Locale;
+import java.util.Map;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.jdbc.autoconfigure.JdbcConnectionDetails;
 import org.springframework.boot.test.context.TestConfiguration;
@@ -14,8 +16,9 @@ import org.testcontainers.containers.JdbcDatabaseContainer;
 import org.testcontainers.utility.DockerImageName;
 
 /**
- * The Oracle container for {@code -Poracle-it}. The image comes from the system property {@value #IMAGE_PROPERTY}
- * (set per Failsafe execution in the {@code oracle-it} profile), defaulting to {@value #DEFAULT_IMAGE}. Images named
+ * The Oracle container for {@code -Poracle-it}, one per JVM and image and shared by every context. The image comes
+ * from the system property {@value #IMAGE_PROPERTY} (set per Failsafe execution in the {@code oracle-it} profile),
+ * defaulting to {@value #DEFAULT_IMAGE}. Images named
  * {@code gvenzl/oracle-xe} use the Testcontainers {@code oracle-xe} module (PDB {@code XEPDB1}); anything else uses
  * the {@code oracle-free} module (PDB {@code FREEPDB1}). Also registers {@link TestDatabaseUsers}, so the grantees
  * exist before migration.
@@ -31,6 +34,9 @@ public class OracleTestcontainersConfiguration {
 
     private static final Duration STARTUP = Duration.ofMinutes(5);
 
+    /** The started container per image; one image per Failsafe execution, so one entry per JVM. */
+    private static final Map<String, JdbcDatabaseContainer<?>> SHARED = new HashMap<>();
+
     /**
      * The configured Oracle image name.
      *
@@ -40,15 +46,39 @@ public class OracleTestcontainersConfiguration {
         return System.getProperty(IMAGE_PROPERTY, DEFAULT_IMAGE);
     }
 
-    @Bean
+    /**
+     * The one Oracle container of this JVM for the configured image, started on first use and shared by every Spring
+     * test context. The bean must not be the container's owner: contexts differ for many reasons (a spy bean, a
+     * property, a profile), Spring's context cache keeps every one of them, and with it its container, until the JVM
+     * ends, so a container per context made a run's peak nine Oracle containers (issue 223). Sharing is safe because
+     * the tests already share one database between classes (each uses its own ids or a fresh schema, see {@code
+     * AbstractMigrationJobIT}), the test-user script and Flyway are idempotent, and the container is stopped by
+     * Testcontainers' Ryuk or, without it, by the shutdown hook below, never by a context closing (which would pull
+     * it from under the others).
+     */
+    @Bean(destroyMethod = "")
     @ServiceConnection
     JdbcDatabaseContainer<?> oracle() {
-        String image = imageName();
-        DockerImageName name = DockerImageName.parse(image);
-        if (image.toLowerCase(Locale.ROOT).contains("oracle-xe")) {
-            return new org.testcontainers.containers.OracleContainer(name).withStartupTimeout(STARTUP);
+        return shared(imageName());
+    }
+
+    private static JdbcDatabaseContainer<?> shared(String image) {
+        synchronized (SHARED) {
+            return SHARED.computeIfAbsent(image, OracleTestcontainersConfiguration::start);
         }
-        return new org.testcontainers.oracle.OracleContainer(name).withStartupTimeout(STARTUP);
+    }
+
+    private static JdbcDatabaseContainer<?> start(String image) {
+        DockerImageName name = DockerImageName.parse(image);
+        JdbcDatabaseContainer<?> container;
+        if (image.toLowerCase(Locale.ROOT).contains("oracle-xe")) {
+            container = new org.testcontainers.containers.OracleContainer(name).withStartupTimeout(STARTUP);
+        } else {
+            container = new org.testcontainers.oracle.OracleContainer(name).withStartupTimeout(STARTUP);
+        }
+        container.start();
+        Runtime.getRuntime().addShutdownHook(new Thread(container::stop, "stop-" + name.getRepository()));
+        return container;
     }
 
     @Bean
