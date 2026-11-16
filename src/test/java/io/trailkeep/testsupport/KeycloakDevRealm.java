@@ -13,6 +13,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.function.Consumer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.jspecify.annotations.Nullable;
@@ -20,17 +21,22 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.images.builder.Transferable;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 /**
- * A Keycloak container with the dev realm ({@code deploy/local/keycloak/trailkeep-dev-realm.json}) whose redirect URIs
- * name a fixed application port chosen up front, plus the properties that point the {@code idp} client at it. Used by
- * the login IT and the browser E2E tests with {@code webEnvironment = DEFINED_PORT}.
+ * The Keycloak dev realm ({@code deploy/local/keycloak/trailkeep-dev-realm.json}) shared by the login IT and the
+ * browser E2E tests ({@code webEnvironment = DEFINED_PORT}): one container per test JVM, started on first use and
+ * never owned by a test class or a Spring context (Testcontainers' Ryuk, or the shutdown hook where it is off, stops
+ * it), so a build starts Keycloak once instead of once per class (issue 117: 24 starts of about 15 s each).
  *
- * <p>Test classes run one after another in one JVM and each starts its own realm, so {@link #start()} first stops the
- * realm of the class before it. Without that, every such class left a Keycloak container (about 0.9 GB each) running
- * until the JVM ended: 24 of them by the time the last integration test started ClamAV, which is more than a 16 GB CI
- * runner holds (the runner was shut down mid-build on #115). A cached application context of an earlier class is
- * never used again, because the context cache key includes that class's own property source.
+ * <p>What differs per class is the application port: Keycloak cannot wildcard a port in the {@code trailkeep}
+ * client's redirect URIs or its single back-channel logout URL. {@link #start()} therefore picks the class's port and
+ * sets those values through the admin REST API (the pattern of {@link #logoutAtProvider(String)}), after ending every
+ * session the previous class left, so each class starts with no one signed in. The realm's users and content are the
+ * same for every class; a class that needs different realm content must not use this class. Classes run one after
+ * another in one JVM, which the single logout URL requires: parallel execution would break back-channel logout.
  */
 public final class KeycloakDevRealm {
 
@@ -56,8 +62,15 @@ public final class KeycloakDevRealm {
 
     private static final Pattern ACCESS_TOKEN = Pattern.compile("\"access_token\"\\s*:\\s*\"([^\"]+)\"");
 
-    /** The realm of the class that ran last, stopped when the next one starts. */
-    private static @Nullable KeycloakDevRealm last;
+    private static final JsonMapper JSON = JsonMapper.builder().build();
+
+    private static final Object LOCK = new Object();
+
+    /** The one container of this JVM, started on first use. */
+    private static @Nullable GenericContainer<?> shared;
+
+    /** How many containers this JVM has started: 1 once any class used the realm (read by the evidence runs). */
+    private static int starts;
 
     private final int appPort;
     private final GenericContainer<?> container;
@@ -68,22 +81,32 @@ public final class KeycloakDevRealm {
     }
 
     /**
-     * Stops the realm a previous test class started, picks a free application port and starts Keycloak with the realm
-     * rewritten for it.
+     * Starts the JVM's Keycloak if no class did yet, ends the sessions of the previous class, picks a free
+     * application port and points the {@code trailkeep} client's redirect URIs, web origins, post-logout URIs and
+     * back-channel logout URL at it.
      *
-     * @return the running realm
+     * @return the running realm, configured for this class's port
      */
-    public static synchronized KeycloakDevRealm start() {
-        if (last != null) {
-            last.container.stop();
-            last = null;
+    public static KeycloakDevRealm start() {
+        synchronized (LOCK) {
+            GenericContainer<?> container = shared();
+            int port = freePort();
+            KeycloakDevRealm realm = new KeycloakDevRealm(port, container);
+            realm.admin(admin -> {
+                admin.post("/admin/realms/" + REALM + "/logout-all");
+                admin.configureClient(port);
+            });
+            return realm;
         }
-        int port = freePort();
+    }
+
+    private static GenericContainer<?> shared() {
+        if (shared != null) {
+            return shared;
+        }
         String realm;
         try {
-            realm = Files.readString(Path.of("deploy/local/keycloak/trailkeep-dev-realm.json"))
-                    .replace("http://localhost:8080", "http://localhost:" + port)
-                    .replace("http://host.docker.internal:8080", "http://host.docker.internal:" + port);
+            realm = Files.readString(Path.of("deploy/local/keycloak/trailkeep-dev-realm.json"));
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
@@ -105,9 +128,21 @@ public final class KeycloakDevRealm {
                         .forPort(8080)
                         .withStartupTimeout(Duration.ofMinutes(3)));
         container.start();
-        KeycloakDevRealm started = new KeycloakDevRealm(port, container);
-        last = started;
-        return started;
+        starts++;
+        Runtime.getRuntime().addShutdownHook(new Thread(container::stop, "stop-keycloak"));
+        shared = container;
+        return container;
+    }
+
+    /**
+     * How many Keycloak containers this JVM has started.
+     *
+     * @return 0 before any class used the realm, otherwise 1
+     */
+    public static int startsInThisJvm() {
+        synchronized (LOCK) {
+            return starts;
+        }
     }
 
     /**
@@ -164,6 +199,11 @@ public final class KeycloakDevRealm {
      * @throws InterruptedException if interrupted
      */
     public void logoutAtProvider(String userId) throws IOException, InterruptedException {
+        admin(admin -> admin.post("/admin/realms/" + REALM + "/users/" + userId + "/logout"));
+    }
+
+    /** The admin REST calls the realm makes, as the throwaway master-realm administrator. */
+    private void admin(Consumer<Admin> calls) {
         String base = "http://localhost:" + container.getMappedPort(8080);
         try (HttpClient http = HttpClient.newHttpClient()) {
             HttpResponse<String> token = http.send(
@@ -177,15 +217,62 @@ public final class KeycloakDevRealm {
             if (!accessToken.find()) {
                 throw new IllegalStateException("No admin token: " + token.statusCode());
             }
-            HttpResponse<String> logout = http.send(
-                    HttpRequest.newBuilder(URI.create(base + "/admin/realms/" + REALM + "/users/" + userId + "/logout"))
-                            .header("Authorization", "Bearer " + accessToken.group(1))
-                            .POST(HttpRequest.BodyPublishers.noBody())
-                            .build(),
-                    HttpResponse.BodyHandlers.ofString());
-            if (logout.statusCode() / 100 != 2) {
-                throw new IllegalStateException("Provider logout failed: " + logout.statusCode() + " " + logout.body());
+            calls.accept(new Admin(http, base, accessToken.group(1)));
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException(e);
+        }
+    }
+
+    private record Admin(HttpClient http, String base, String token) {
+
+        String get(String path) {
+            return send(HttpRequest.newBuilder(URI.create(base + path)).GET());
+        }
+
+        void post(String path) {
+            send(HttpRequest.newBuilder(URI.create(base + path)).POST(HttpRequest.BodyPublishers.noBody()));
+        }
+
+        void put(String path, String json) {
+            send(HttpRequest.newBuilder(URI.create(base + path))
+                    .header("Content-Type", "application/json")
+                    .PUT(HttpRequest.BodyPublishers.ofString(json)));
+        }
+
+        private String send(HttpRequest.Builder request) {
+            try {
+                HttpResponse<String> response = http.send(
+                        request.header("Authorization", "Bearer " + token).build(),
+                        HttpResponse.BodyHandlers.ofString());
+                if (response.statusCode() / 100 != 2) {
+                    throw new IllegalStateException(
+                            "Keycloak admin call failed: " + response.statusCode() + " " + response.body());
+                }
+                return response.body();
+            } catch (IOException e) {
+                throw new UncheckedIOException(e);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException(e);
             }
+        }
+
+        /** Points the {@code trailkeep} client at the application port of the class that is starting. */
+        void configureClient(int port) {
+            JsonNode clients = JSON.readTree(get("/admin/realms/" + REALM + "/clients?clientId=trailkeep"));
+            String id = clients.get(0).get("id").asString();
+            ObjectNode client = (ObjectNode) JSON.readTree(get("/admin/realms/" + REALM + "/clients/" + id));
+            client.putArray("redirectUris").add("http://localhost:" + port + "/login/oauth2/code/idp");
+            client.putArray("webOrigins").add("http://localhost:" + port);
+            ObjectNode attributes = (ObjectNode) client.get("attributes");
+            attributes.put("post.logout.redirect.uris", "http://localhost:" + port + "/*");
+            attributes.put(
+                    "backchannel.logout.url",
+                    "http://host.docker.internal:" + port + "/logout/connect/back-channel/idp");
+            put("/admin/realms/" + REALM + "/clients/" + id, JSON.writeValueAsString(client));
         }
     }
 
