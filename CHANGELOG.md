@@ -892,8 +892,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   (`aether.remoteRepositoryFilter.groupId`, `.noInputOutcome=false`, `.noInputOutcome.central=true`, supported by the
   resolver 2.0.24 of the pinned Maven 3.10.0), so any repository other than Central, whoever declares it, is asked for
   nothing. It needs no settings file (this Maven does not read `.mvn/settings.xml`, and `-s` would depend on the
-  working directory) and holds locally, in CI and in the image build, which runs `./mvnw` on a copy of the repository.
-  A clean-repository resolution downloads the same 825 files, all from Central, with the two 401 warnings gone.
+  working directory) and holds locally and in CI. The image build runs `./mvnw` on a copy of the repository made through
+  `.dockerignore`, which kept only the wrapper properties of `.mvn`, so the file is listed there too (the first branch
+  run of the image job still printed the two warnings, which is how that was found). A clean-repository resolution
+  downloads the same 825 files, all from Central, with the two 401 warnings gone.
 - A malformed or truncated multipart body (one that stops before its closing boundary, a part header cut off, a
   missing boundary) is now a 400 on the application's error page on every endpoint, never a 500 and never an ERROR with
   a stack trace in the log, and nothing sent is echoed (#234, found by the API scan as "Buffer Overflow"). Tomcat
