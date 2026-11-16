@@ -116,6 +116,18 @@ class SecurityConfig {
         return registration;
     }
 
+    /**
+     * The malformed-parameter filter (issue 218), between the CSP nonce filter and Spring Security: it wraps the whole
+     * security chain and everything behind it, and the error page it asks for still carries the policy.
+     */
+    @Bean
+    FilterRegistrationBean<MalformedParametersFilter> malformedParametersFilter() {
+        FilterRegistrationBean<MalformedParametersFilter> registration =
+                new FilterRegistrationBean<>(new MalformedParametersFilter());
+        registration.setOrder(SecurityFilterProperties.DEFAULT_FILTER_ORDER - 5);
+        return registration;
+    }
+
     /** True for a request served by the management server's context (Spring Boot's "management" namespace). */
     static boolean isManagementServer(HttpServletRequest request) {
         WebApplicationContext context =

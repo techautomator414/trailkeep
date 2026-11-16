@@ -866,6 +866,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   `UniqueViolations`, as for #213) marks the transaction for rollback by hand and returns `NAME_TAKEN`, so it ends in a
   clean rollback with no view and no audit event, not in a commit that fails. The screen and its message are
   unchanged. `SavedViewRaceIT` (and `OracleSavedViewRaceIT`) make the check miss, on committed rows, and prove it.
+- A malformed query or form string (a parameter with no name such as `=x`, or a bad percent-encoding such as `%zz`)
+  is now a 400 with the application's error page wherever it is first read, never a 500 and never a stack trace at
+  ERROR in the log (#218). Tomcat throws `InvalidParameterException` when the parameters are first read and has no
+  setting that ignores them; read while a template rendered (`GET /preferences?=x`) it ended as a 500. A new
+  `MalformedParametersFilter` wraps the whole chain ahead of Spring Security, so it also covers filters such as the
+  CSRF check, error dispatches and whatever is added later; it does not read parameters itself and takes no action for
+  a request that nobody reads. `/preferences` now reads its `saved` flag in the controller instead of `${param.saved}`.
+  `MalformedParametersIT` sends the strings on a raw socket to a GET route, a form POST and an htmx request, in the
+  query and in an urlencoded body, and sweeps every mapped route.
 - A name another row already has is now a field error on every admin form whose entity has a unique name (#213): the
   SLA policy, case type and team forms, on create and on rename, answer 422 with the form shown again, the typed name
   kept, `aria-invalid` on `name` and a message tied to it, instead of the 409 error page. The check "is this name
