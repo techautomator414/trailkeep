@@ -1039,7 +1039,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   port 8081 is in the scan's context. `OpenApiCoverageTest` fails when a controller operation or a parameter it binds
   is missing from the description, when the description names an operation nothing serves, when a POST lacks the
   token (only sign-out and the provider's back-channel logout must not carry it), or when an operation names the wrong
-  port.
+  port. One reviewed suppression, until 2027-02-14: 40042 on the management server's `/actuator/health`, the
+  kubelet's probe, which shows only its status and probe groups on a port the Service does not expose.
 
 ### Documentation
 
