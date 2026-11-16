@@ -85,6 +85,28 @@ class ZapPlanTest {
                 .satisfies(job -> assertThat(map(job.get("parameters"))).containsEntry("inScopeOnly", true));
     }
 
+    /**
+     * The crawl stays capped (WP-28 part e): without the caps the cases list's filter combinations made the active
+     * scan run into its time cap on every run. The crawled sites tree is exported with the reports.
+     */
+    @Test
+    void theCrawlIsCappedAndItsRoutesAreExported() throws IOException {
+        List<Map<String, Object>> jobs = list(load(PLAN).get("jobs"));
+        assertThat(jobs)
+                .filteredOn(job -> "spider".equals(job.get("type")))
+                .singleElement()
+                .satisfies(job -> assertThat(map(job.get("parameters")))
+                        .containsEntry("handleParameters", "ignore_value")
+                        .hasEntrySatisfying("maxChildren", value -> assertThat((Integer) value)
+                                .isBetween(1, 100)));
+        assertThat(jobs)
+                .filteredOn(job -> "export".equals(job.get("type")))
+                .singleElement()
+                .satisfies(job -> assertThat(map(job.get("parameters")))
+                        .containsEntry("source", "sitestree")
+                        .containsEntry("fileName", "/zap/wrk/reports/sites-tree.yaml"));
+    }
+
     @Test
     void everySuppressionIsJustifiedReviewedAndExpires() throws IOException {
         List<String> problems = new ArrayList<>();

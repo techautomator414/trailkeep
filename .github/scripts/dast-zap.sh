@@ -74,22 +74,30 @@ gating=0
 stopped=""
 if [ -s "${report}" ]; then
   written=1
-  gating="$(jq '[.site[].alerts[] | select((.riskcode | tonumber) >= 2)] | length' "${report}")"
+  gating="$(jq '[.site[].alerts[] | select((.riskcode | tonumber) >= 2 and .confidence != "0")] | length' "${report}")"
   stopped="$(jq -r '.stoppingInsight // empty | "\(.key) at \(.statistic) (\(.reason))"' "${report}")"
 fi
 # The scanner logs "completed host <site> in <seconds>s" when it ends, whether it finished or reached its cap.
 active="$({ grep -o -E 'completed host http://localhost:8080 in [0-9.]+s' "${work}/zap.log" || true; } \
   | tail -1 | sed -E 's/.* in ([0-9.]+)s/\1/')"
 cap="$(yq '.jobs[] | select(.type == "activeScan") | .parameters.maxScanDurationInMins * 60' security/zap/plan.yaml)"
+# When the scanner overruns its cap, the Automation Framework terminates the job itself and the scanner logs no
+# completion: that is a cut-off scan too.
+if grep -q -F 'Job activeScan terminated' "${work}/zap.log"; then
+  active="${cap}"
+fi
 skipped="$({ grep -c -F 'skipped plugin [exceeded max rule time]' "${work}/zap.log" || true; })"
 peak="$(sort -n "${work}/heap-samples.txt" | tail -1)"
 
 {
   echo "### ZAP as ${identity} (${mode}): alerts of Medium or higher"
   if [ "${written}" = "1" ]; then
-    jq -r '[.site[].alerts[] | select((.riskcode | tonumber) >= 2)]
+    jq -r '[.site[].alerts[] | select((.riskcode | tonumber) >= 2 and .confidence != "0")]
       | if length == 0 then "None." else (.[] | "- **\(.riskdesc)** \(.name) (rule \(.pluginid)), \(.count) instance(s)") end' \
       "${report}"
+    # Suppressed alerts stay in the report as False Positive (confidence 0); they do not gate, but they are listed.
+    jq -r '.site[].alerts[] | select(.confidence == "0")
+      | "- suppressed (security/zap/suppressions.yaml): \(.name) (rule \(.pluginid))"' "${report}"
   fi
   echo "Active scan: ${active:-no completion in zap.log} s of a ${cap} s cap. Peak heap in use: $((${peak:-0} / 1024)) MiB of ${heap}."
 } >> "${GITHUB_STEP_SUMMARY:-/dev/stdout}"
