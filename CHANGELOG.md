@@ -891,6 +891,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   job with "No plugin found for prefix 'failsafe'" before any test ran; the full coordinates need no lookup and take
   their version from the parent's plugin management. The commands in `docs/perf/cases-list-50k.md` and the profile
   comments in `pom.xml` match.
+- CI is now less exposed to Maven Central's rate limit (HTTP 429) on plain artifact downloads, not only on plugin-prefix
+  lookups (#224, after #228): `.mvn/maven.config` raises Maven Resolver's retry for 429 and 503 from 3 to 6 retries,
+  honouring `Retry-After` up to 60 seconds (`aether.transport.http.retryHandler.*`, supported by the resolver 2.0.24
+  that the pinned Maven 3.10.0 ships); and the jobs that ran `setup-java` with `cache: maven` now restore
+  `~/.m2/repository` and `~/.m2/wrapper` with a SHA-pinned `actions/cache` that has `restore-keys`, so a pom change (and
+  every Dependabot bump) starts from the newest earlier cache instead of an empty repository. The dependency-check job
+  keeps its own NVD cache and is unchanged.
 - Saving a view under a name the person's other view already has, when a concurrent save took the name between the
   check and the write, is now the same 422 "name taken" refusal as the check, not a 500 (#215). The save is flushed
   inside the service; because saving returns a result and does not throw, a unique violation (recognised with
