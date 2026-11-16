@@ -70,7 +70,7 @@ class RestrictedLeakCrawlIT {
     private static final int MAX_URLS = 400;
 
     private static final int MAX_VARIANTS_PER_PATH = 8;
-    private static final Pattern LINK = Pattern.compile("\\s(?:href|hx-get|action)=\"([^\"#]*)");
+    private static final Pattern LINK = Pattern.compile("\\s(?:href|data-hx-get|action)=\"([^\"#]*)");
     private static final List<String> NOT_FOLLOWED =
             List.of("/logout", "/login", "/oauth2/", "/css/", "/js/", "/vendor/", "/session/");
 

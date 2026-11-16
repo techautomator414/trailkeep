@@ -54,7 +54,8 @@
       <option th:each="u : ${users}" th:value="${u.userId}" th:text="${u.displayName}">User</option>
     </select>
     <label class="form-label mt-2" for="role" th:text="#{tk.team.role}">Role</label>
-    <select class="form-select" id="role" name="role" required>
+    <!--/* aria-required, not required: a role is always selected, and a required select must start empty. */-->
+    <select class="form-select" id="role" name="role" aria-required="true">
       <option th:each="r : ${roles}" th:value="${r}" th:text="#{'tk.role.' + ${r}}">Reader</option>
     </select>
     <button class="btn btn-primary mt-2" type="submit" th:text="#{tk.team.grant.submit}">Save role</button>
