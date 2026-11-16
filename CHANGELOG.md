@@ -1031,6 +1031,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   identity. The spider is capped (parameter values ignored for revisits, at most 50 children per node), which keeps
   every route while cutting the crawled sites tree by about 90%, and the crawled routes are uploaded with the reports.
   Two reviewed false positives are suppressed until 2027-02-14: 90035 on the cases list and 40018 on SLA policy names.
+- Authenticated API scan (WP-28 part d): the ZAP scan also imports `security/zap/openapi.yaml`, a hand-written
+  description of every operation Trailkeep serves, with each parameter it binds, before the active scan, so every
+  operation is attacked even where no page links to it or the crawl caps cut it. Its POSTs carry the scan session's
+  CSRF token in `X-CSRF-TOKEN` and name the seeded data set's real cases, attachments, closures and alerts, which
+  `DastSessionIT` exports, so they reach the handlers rather than a 403 or a 404. The management server's actuator on
+  port 8081 is in the scan's context. `OpenApiCoverageTest` fails when a controller operation or a parameter it binds
+  is missing from the description, when the description names an operation nothing serves, when a POST lacks the
+  token (only sign-out and the provider's back-channel logout must not carry it), or when an operation names the wrong
+  port. One reviewed suppression, until 2027-02-14: 40042 on the management server's `/actuator/health`, the
+  kubelet's probe, which shows only its status and probe groups on a port the Service does not expose.
 
 ### Documentation
 

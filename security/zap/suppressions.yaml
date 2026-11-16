@@ -40,6 +40,21 @@ suppressions:
     reviewedIn: https://github.com/techautomator414/trailkeep/pull/225
     reviewed: 2026-11-16
     expires: 2027-02-14
+  - ruleId: 40042
+    url: '^http://localhost:8081/actuator/health$'
+    justification: >-
+      Spring Actuator Information Leak (Medium) on GET /actuator/health of the management server, in the local
+      validation of #233 (WP-28 part d), is the deliberate design, not a leak. The health endpoint is required by the
+      kubelet's liveness and readiness probes, and it answers only the overall status and the names of its two probe
+      groups, {"groups":["liveness","readiness"],"status":"UP"}: management.endpoint.health.show-details is left at
+      its default, never, so no component or detail is shown, and /actuator/info answers an empty object. The
+      management server listens on its own port, 8081, which the Service does not expose (deploy/base/service.yaml
+      exposes only 8080) and which the NetworkPolicy admits only from a namespace selector for cluster monitoring
+      (deploy/base/networkpolicy.yaml). The rule fires only on some runs, depending on which management node it starts
+      from.
+    reviewedIn: https://github.com/techautomator414/trailkeep/pull/233
+    reviewed: 2026-11-16
+    expires: 2027-02-14
   - ruleId: 40018
     url: '^http://localhost:8080/admin/sla-policies/\d+$'
     justification: >-
