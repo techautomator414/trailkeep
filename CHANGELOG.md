@@ -835,6 +835,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   read through `TestImages` and a new `docker` entry in `dependabot.yml` watches (one grouped weekly PR, `test-images`).
   `ImageSourcesTest` fails the build if a test names an image as a string literal. The `oracle-it` executions pass
   `oracle-xe` / `oracle-free` to `trailkeep.oracle.image`; a full image reference is still accepted there.
+- One Maven cache per CI job (#244): the cache key is now `maven-<os>-<job>-<hash of the poms and wrapper
+  properties>`, with `restore-keys` falling back first to the same job's older caches and then to any job's. The one
+  key #230 shared made the first job to finish decide what every job restored (an exact hit that still lacked the
+  enforcer plugin sent `oracle-it` to Maven Central, which answered 429). Each job now saves what it resolves.
+  `release.yml` stays uncached (#230).
 - ShedLock 7.10.1 to 7.11.0 (`shedlock-spring` and `shedlock-provider-jdbc-template`), split out of Dependabot's grouped
   bump #220 because that group's other update, `json-schema-validator` 3.0.9, fails the Jackson upper-bound rule until
   Spring Boot manages a newer Jackson. The 7.11.0 release notes list no change to the JDBC lock provider; the one
