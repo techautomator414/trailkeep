@@ -21,9 +21,9 @@ import org.testcontainers.utility.DockerImageName;
  * defaulting to {@value #DEFAULT_IMAGE}. The value is the name of an image file under {@code images/} ({@code
  * oracle-xe}, {@code oracle-free}, see {@link TestImages}), so Dependabot keeps both pinned; a deploying organization
  * may still pass a full image reference (anything with a {@code /} or a {@code :}), which is used as given. Images
- * named {@code gvenzl/oracle-xe} use the Testcontainers {@code oracle-xe} module (PDB {@code XEPDB1}); anything else uses
- * the {@code oracle-free} module (PDB {@code FREEPDB1}). Also registers {@link TestDatabaseUsers}, so the grantees
- * exist before migration.
+ * named {@code gvenzl/oracle-xe} use the Testcontainers {@code oracle-xe} module (PDB {@code XEPDB1}); anything else
+ * uses the {@code oracle-free} module (PDB {@code FREEPDB1}). Also registers {@link TestDatabaseUsers}, so the
+ * grantees exist before migration.
  */
 @TestConfiguration(proxyBeanMethods = false)
 public class OracleTestcontainersConfiguration {
