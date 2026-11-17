@@ -10,6 +10,7 @@ import io.trailkeep.importer.SourceQueryJdbcDao.Source;
 import io.trailkeep.importer.SourceQueryValidator.ValidatedSourceQuery;
 import io.trailkeep.importer.SourceQueryValidator.Vendor;
 import io.trailkeep.testsupport.PostgresTestcontainersConfiguration;
+import io.trailkeep.testsupport.TestImages;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -57,8 +58,7 @@ import org.testcontainers.utility.DockerImageName;
 @Import(PostgresTestcontainersConfiguration.class)
 class SqlServerSourceIT extends ExtractJobSupport {
 
-    private static final DockerImageName IMAGE =
-            DockerImageName.parse("mcr.microsoft.com/mssql/server:2022-CU27-ubuntu-22.04");
+    private static final DockerImageName IMAGE = TestImages.image("mssql");
     private static final Duration TIMEOUT = Duration.ofSeconds(30);
     private static final byte[] SCAN = "synthetic scan from a SQL Server IMAGE".getBytes(StandardCharsets.UTF_8);
     private static final String PASSWORD = "Tk" + HexFormat.of().formatHex(new SecureRandom().generateSeed(12));

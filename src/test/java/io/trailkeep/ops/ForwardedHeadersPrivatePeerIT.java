@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import io.trailkeep.testsupport.PostgresTestcontainersConfiguration;
 import io.trailkeep.testsupport.RequiresDocker;
+import io.trailkeep.testsupport.TestImages;
 import java.net.InetAddress;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -36,7 +37,7 @@ import org.testcontainers.utility.DockerImageName;
 class ForwardedHeadersPrivatePeerIT {
 
     /** A small public curl image, used only as a client on the bridge network. */
-    static final DockerImageName CURL = DockerImageName.parse("curlimages/curl:8.17.0");
+    static final DockerImageName CURL = TestImages.image("curl");
 
     /** The test profile's placeholder router pattern ({@code app.proxy.pattern}). */
     private static final String ROUTER = "10\\.128\\.\\d+\\.\\d+";

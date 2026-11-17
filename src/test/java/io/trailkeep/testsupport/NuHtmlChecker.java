@@ -14,6 +14,7 @@ import java.util.List;
 import org.jspecify.annotations.Nullable;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.wait.strategy.Wait;
+import org.testcontainers.utility.DockerImageName;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -30,13 +31,12 @@ import tools.jackson.databind.json.JsonMapper;
 public final class NuHtmlChecker {
 
     /**
-     * The Nu Html Checker 26.11.14 (git revision c1619cc379312770dc018376ca032771d1e39ad1), built 2026-11-14 and
-     * published as {@code ghcr.io/validator/validator:latest}; it labels no version, so it is pinned by digest. To
-     * bump it: {@code docker pull ghcr.io/validator/validator:latest}, read the version with {@code docker run --rm
-     * <image> java -jar /vnu.jar --version}, then replace the digest, the version, the revision and the date here.
+     * The Nu Html Checker, the project's official image, pinned by digest in {@code images/vnu/Dockerfile} (which also
+     * records the version it was at when pinned). The project publishes only a {@code latest} tag and labels no
+     * version, so Dependabot moves the digest; when it does, read the version with {@code docker run --rm <image> java
+     * -jar /vnu.jar --version} and update the version note in that file.
      */
-    public static final String IMAGE =
-            "ghcr.io/validator/validator@sha256:" + "ab58f1a04ce22a393725e3fd6468d2763c08be6a9dc6fcaa0b1d93dd0c5f804e";
+    public static final DockerImageName IMAGE = TestImages.image("vnu");
 
     private static final int PORT = 8888;
     private static final Duration TIMEOUT = Duration.ofSeconds(60);

@@ -829,6 +829,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- Test-container images are tracked by Dependabot (#235): each image the integration tests start (PostgreSQL,
+  Oracle XE and Free, SQL Server, ClamAV, Ghostunnel, curl, Mailpit, Keycloak, the Nu Html Checker) is now named in
+  exactly one place, `src/test/resources/images/<name>/Dockerfile` (`FROM repo:tag@sha256:digest`), which the tests
+  read through `TestImages` and a new `docker` entry in `dependabot.yml` watches (one grouped weekly PR, `test-images`).
+  `ImageSourcesTest` fails the build if a test names an image as a string literal. The `oracle-it` executions pass
+  `oracle-xe` / `oracle-free` to `trailkeep.oracle.image`; a full image reference is still accepted there.
 - ShedLock 7.10.1 to 7.11.0 (`shedlock-spring` and `shedlock-provider-jdbc-template`), split out of Dependabot's grouped
   bump #220 because that group's other update, `json-schema-validator` 3.0.9, fails the Jackson upper-bound rule until
   Spring Boot manages a newer Jackson. The 7.11.0 release notes list no change to the JDBC lock provider; the one
