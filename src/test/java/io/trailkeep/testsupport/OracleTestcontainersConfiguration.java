@@ -18,8 +18,10 @@ import org.testcontainers.utility.DockerImageName;
 /**
  * The Oracle container for {@code -Poracle-it}, one per JVM and image and shared by every context. The image comes
  * from the system property {@value #IMAGE_PROPERTY} (set per Failsafe execution in the {@code oracle-it} profile),
- * defaulting to {@value #DEFAULT_IMAGE}. Images named
- * {@code gvenzl/oracle-xe} use the Testcontainers {@code oracle-xe} module (PDB {@code XEPDB1}); anything else uses
+ * defaulting to {@value #DEFAULT_IMAGE}. The value is the name of an image file under {@code images/} ({@code
+ * oracle-xe}, {@code oracle-free}, see {@link TestImages}), so Dependabot keeps both pinned; a deploying organization
+ * may still pass a full image reference (anything with a {@code /} or a {@code :}), which is used as given. Images
+ * named {@code gvenzl/oracle-xe} use the Testcontainers {@code oracle-xe} module (PDB {@code XEPDB1}); anything else uses
  * the {@code oracle-free} module (PDB {@code FREEPDB1}). Also registers {@link TestDatabaseUsers}, so the grantees
  * exist before migration.
  */
@@ -29,8 +31,8 @@ public class OracleTestcontainersConfiguration {
     /** System property naming the Oracle image. */
     public static final String IMAGE_PROPERTY = "trailkeep.oracle.image";
 
-    /** Image used when the property is absent. */
-    public static final String DEFAULT_IMAGE = "gvenzl/oracle-free:23-slim";
+    /** Image used when the property is absent: the name of {@code images/oracle-free}. */
+    public static final String DEFAULT_IMAGE = "oracle-free";
 
     private static final Duration STARTUP = Duration.ofMinutes(5);
 
@@ -38,9 +40,9 @@ public class OracleTestcontainersConfiguration {
     private static final Map<String, JdbcDatabaseContainer<?>> SHARED = new HashMap<>();
 
     /**
-     * The configured Oracle image name.
+     * The configured Oracle image: an {@code images/} name or a full image reference.
      *
-     * @return the image name
+     * @return the property's value, or {@value #DEFAULT_IMAGE}
      */
     public static String imageName() {
         return System.getProperty(IMAGE_PROPERTY, DEFAULT_IMAGE);
@@ -69,9 +71,10 @@ public class OracleTestcontainersConfiguration {
     }
 
     private static JdbcDatabaseContainer<?> start(String image) {
-        DockerImageName name = DockerImageName.parse(image);
+        boolean fileName = image.indexOf('/') < 0 && image.indexOf(':') < 0;
+        DockerImageName name = fileName ? TestImages.image(image) : DockerImageName.parse(image);
         JdbcDatabaseContainer<?> container;
-        if (image.toLowerCase(Locale.ROOT).contains("oracle-xe")) {
+        if (name.getRepository().toLowerCase(Locale.ROOT).contains("oracle-xe")) {
             container = new org.testcontainers.containers.OracleContainer(name).withStartupTimeout(STARTUP);
         } else {
             container = new org.testcontainers.oracle.OracleContainer(name).withStartupTimeout(STARTUP);

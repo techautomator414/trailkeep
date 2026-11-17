@@ -2,6 +2,7 @@
 // Copyright 2026 Charlie Genova and contributors
 package io.trailkeep.document;
 
+import io.trailkeep.testsupport.TestImages;
 import java.nio.file.Path;
 import java.time.Duration;
 import org.jspecify.annotations.Nullable;
@@ -19,9 +20,9 @@ import org.testcontainers.utility.MountableFile;
  */
 final class RealClamd {
 
-    static final DockerImageName IMAGE = DockerImageName.parse("clamav/clamav:1.4.3");
+    static final DockerImageName IMAGE = TestImages.image("clamav");
 
-    static final DockerImageName SIDECAR = DockerImageName.parse("ghostunnel/ghostunnel:v1.8.4");
+    static final DockerImageName SIDECAR = TestImages.image("ghostunnel");
 
     private static final int TLS_PORT = 3311;
 

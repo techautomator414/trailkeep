@@ -21,6 +21,7 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.images.builder.Transferable;
+import org.testcontainers.utility.DockerImageName;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.node.ObjectNode;
@@ -40,8 +41,8 @@ import tools.jackson.databind.node.ObjectNode;
  */
 public final class KeycloakDevRealm {
 
-    /** Same image as compose.yaml. */
-    public static final String IMAGE = "keycloak/keycloak:26.0.7";
+    /** The same Keycloak version as compose.yaml (see images/keycloak/Dockerfile). */
+    public static final DockerImageName IMAGE = TestImages.image("keycloak");
 
     /** Application ports are probed in [20000, 30000), below the ephemeral range Docker publishes into. */
     private static final int PORT_RANGE_START = 20_000;

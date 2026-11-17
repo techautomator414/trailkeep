@@ -62,3 +62,23 @@ updates:
       default-days: 7
     commit-message:
       prefix: ci
+
+  # The container images the integration tests start (#235): one Dockerfile per image under
+  # src/test/resources/images/, `FROM repo:tag@sha256:digest`, read by TestImages. Dependabot proposes the tag and the
+  # digest together; one grouped PR a week for all of them. The glob lists every image directory, so a new image is
+  # covered by adding its directory (ImageSourcesTest checks this entry is present).
+  - package-ecosystem: docker
+    directories:
+      - "/src/test/resources/images/*"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: ci
+    groups:
+      test-images:
+        patterns:
+          - "*"

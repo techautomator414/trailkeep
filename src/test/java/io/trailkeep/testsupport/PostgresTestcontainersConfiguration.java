@@ -21,7 +21,7 @@ import org.testcontainers.utility.DockerImageName;
 public class PostgresTestcontainersConfiguration {
 
     /** The image every PostgreSQL integration test runs against. */
-    public static final DockerImageName IMAGE = DockerImageName.parse("postgres:16-alpine");
+    public static final DockerImageName IMAGE = TestImages.image("postgres");
 
     @Bean
     @ServiceConnection

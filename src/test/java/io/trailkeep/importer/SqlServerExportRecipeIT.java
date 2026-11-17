@@ -5,6 +5,7 @@ package io.trailkeep.importer;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.trailkeep.testsupport.PostgresTestcontainersConfiguration;
+import io.trailkeep.testsupport.TestImages;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -53,8 +54,7 @@ import org.testcontainers.utility.DockerImageName;
 @Import(PostgresTestcontainersConfiguration.class)
 class SqlServerExportRecipeIT extends ExtractJobSupport {
 
-    private static final DockerImageName IMAGE =
-            DockerImageName.parse("mcr.microsoft.com/mssql/server:2022-CU27-ubuntu-22.04");
+    private static final DockerImageName IMAGE = TestImages.image("mssql");
 
     private static final String DETAILS = "First line\nSecond line, with a comma\n\"Quoted\" third";
 

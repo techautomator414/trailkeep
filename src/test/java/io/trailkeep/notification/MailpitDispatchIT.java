@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import io.trailkeep.testsupport.PostgresTestcontainersConfiguration;
 import io.trailkeep.testsupport.RequiresDocker;
+import io.trailkeep.testsupport.TestImages;
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -44,9 +45,8 @@ import tools.jackson.databind.json.JsonMapper;
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE)
 class MailpitDispatchIT {
 
-    /** Mailpit v1.33.0, pinned by the digest {@code compose.yaml} uses. */
-    static final DockerImageName IMAGE = DockerImageName.parse(
-            "axllent/mailpit@sha256:9b3a463be15354c0f0eba91697d80e3e0d8a5623ef0e627cacc836bc17fd5231");
+    /** Mailpit, pinned by digest in images/mailpit/Dockerfile (the digest {@code compose.yaml} uses). */
+    static final DockerImageName IMAGE = TestImages.image("mailpit");
 
     private static final int SMTP = 1025;
     private static final int API = 8025;

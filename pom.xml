@@ -1015,9 +1015,12 @@
     <profile>
       <!--
         Oracle parity: the schema harness against both public Oracle images (ADR-0003). Runs on main, nightly and
-        release tags in CI (IMPLEMENTATION_PLAN Part G). A deploying organization adds its own image with
+        release tags in CI (IMPLEMENTATION_PLAN Part G). The two executions below name an image file under
+        src/test/resources/images/ (oracle-xe, oracle-free), where Dependabot keeps the tag and digest current (#235).
+        A deploying organization adds its own image with
           ./mvnw verify -Poracle-it -Dtrailkeep.oracle.image=<image>
-        by overriding one of the executions below; the dialect version comes from application-oracle.yml.
+        by overriding one of the executions below, where <image> is an images/ name or a full image reference; the
+        dialect version comes from application-oracle.yml.
       -->
       <id>oracle-it</id>
       <build>
@@ -1038,7 +1041,7 @@
                   <reportsDirectory>${project.build.directory}/failsafe-reports/oracle-xe-21</reportsDirectory>
                   <summaryFile>${project.build.directory}/failsafe-reports/oracle-xe-21/failsafe-summary.xml</summaryFile>
                   <systemPropertyVariables>
-                    <trailkeep.oracle.image>gvenzl/oracle-xe:21-slim</trailkeep.oracle.image>
+                    <trailkeep.oracle.image>oracle-xe</trailkeep.oracle.image>
                   </systemPropertyVariables>
                 </configuration>
               </execution>
@@ -1054,7 +1057,7 @@
                   <reportsDirectory>${project.build.directory}/failsafe-reports/oracle-free-23</reportsDirectory>
                   <summaryFile>${project.build.directory}/failsafe-reports/oracle-free-23/failsafe-summary.xml</summaryFile>
                   <systemPropertyVariables>
-                    <trailkeep.oracle.image>gvenzl/oracle-free:23-slim</trailkeep.oracle.image>
+                    <trailkeep.oracle.image>oracle-free</trailkeep.oracle.image>
                   </systemPropertyVariables>
                 </configuration>
               </execution>
