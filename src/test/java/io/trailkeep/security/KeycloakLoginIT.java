@@ -8,8 +8,11 @@ import io.trailkeep.testsupport.KeycloakDevRealm;
 import io.trailkeep.testsupport.PostgresTestcontainersConfiguration;
 import io.trailkeep.testsupport.RequiresDocker;
 import io.trailkeep.testsupport.TestBrowser;
+import java.net.URI;
 import java.net.http.HttpResponse;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -34,6 +37,7 @@ class KeycloakLoginIT {
 
     private static final String COMPLIANCE_ADMIN_ID = "00000000-0000-4000-8000-000000000101";
     private static final String DISABLED_USER_ID = "00000000-0000-4000-8000-000000000103";
+    private static final Pattern CSRF = Pattern.compile("<meta name=\"tk-csrf-token\" content=\"([^\"]+)\">");
 
     private static final KeycloakDevRealm KEYCLOAK = KeycloakDevRealm.start();
 
@@ -89,6 +93,29 @@ class KeycloakLoginIT {
         assertThat(jdbc.queryForObject(
                         "SELECT LAST_LOGIN_AT FROM APP_USER WHERE EXTERNAL_ID = ?", Object.class, DISABLED_USER_ID))
                 .isNull();
+    }
+
+    /**
+     * RP-initiated logout (BUILD_PLAN §9 "Identity"; security test map gap 2): signing out ends the session here and
+     * sends the browser to the provider's end-session endpoint with the ID token as the hint and this application as
+     * the place to come back to.
+     */
+    @Test
+    void signingOutSendsTheBrowserToTheProvidersEndSessionEndpointWithTheIdTokenAndTheWayBack() throws Exception {
+        TestBrowser browser = new TestBrowser();
+        HttpResponse<String> landing = browser.login(app("/"), "compliance.admin");
+        Matcher token = CSRF.matcher(landing.body());
+        assertThat(token.find()).as("the layout's CSRF token").isTrue();
+
+        HttpResponse<String> logout = browser.post(app("/logout"), Map.of("_csrf", token.group(1)));
+
+        assertThat(logout.statusCode()).isEqualTo(302);
+        URI endSession = URI.create(logout.headers().firstValue("Location").orElseThrow());
+        assertThat(endSession.toString()).startsWith(KEYCLOAK.issuer() + "/protocol/openid-connect/logout?");
+        assertThat(endSession.getQuery()).contains("id_token_hint=ey").contains("post_logout_redirect_uri=" + app("/"));
+        assertThat(browser.get(app("/")).headers().firstValue("Location"))
+                .as("the session is gone after sign-out")
+                .hasValueSatisfying(location -> assertThat(location).endsWith("/oauth2/authorization/idp"));
     }
 
     private static String app(String path) {
