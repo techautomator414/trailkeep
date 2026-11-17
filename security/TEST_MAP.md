@@ -56,11 +56,9 @@ The status column records what is in effect today, not what is planned.
 - **Back-channel logout through the custom registry, its CSRF header kept, daily cleanup, sessions shared by two instances:** `JdbcOidcSessionRegistryIT` and `OracleJdbcOidcSessionRegistryIT`, `SharedSessionsIT` (two application instances), `BackChannelLogoutUriIT`.
 - **Disabling a user ends their sessions everywhere:** `SharedSessionsIT`, `UserAdminServiceIT`.
 - **The idle-expiry warning dialog is accessible:** `ShellAccessibilityIT`.
-
-**Configured only:**
-- the 30-minute idle timeout (`spring.session.timeout` in `src/main/resources/application.yml`): no test waits it out;
-- the `SESSION` cookie name and flags (`SessionConfig`): see Browser security;
-- RP-initiated logout, which `SharedSessionsIT` passes through but which nothing asserts reaches the provider's end-session endpoint.
+- **The 30-minute idle timeout** (`spring.session.timeout`): `SessionHardeningIT` moves a stored session's last access back rather than waiting. A session idle 31 minutes is replaced; one idle 29 minutes is kept.
+- **The session cookie's flags:** `SessionHardeningIT` (see Browser security).
+- **RP-initiated logout reaches the provider's end-session endpoint** with `id_token_hint` and `post_logout_redirect_uri`, and ends the session: `KeycloakLoginIT`.
 
 **Not built:** step-up re-authentication (cut for scope in v1; admin actions are audited instead).
 
@@ -129,10 +127,10 @@ The status column records what is in effect today, not what is planned.
 - **Spring Security protections never disabled:** Semgrep `semgrep:spring-security-protection-disabled`.
 - **CSRF: a mutation without the token is a 403:** `SecurityDefaultsIT`, `RouteSweepIT` (every mutating route refuses a request without its own session's token, told apart from a handler refusal by `HandlerCalls`).
 - **Valid HTML on every page state the accessibility tests check:** `NuHtmlCheckIT` and every `*AccessibilityIT` through the shared page check (the Nu Html Checker, #239).
+- **Cookies `Secure; HttpOnly; SameSite=Lax`** (set in `SessionConfig`): `SessionHardeningIT` reads the `Set-Cookie` attributes behind the router.
+- **HSTS** on responses to requests that arrive as HTTPS behind the trusted router (`max-age=31536000 ; includeSubDomains`), and not on plain HTTP: `SessionHardeningIT`. It comes from Spring Security's default header writer, which `SecurityConfig` leaves on; the route in `deploy/base/route.yaml` sets no HSTS of its own.
 
 **Configured only:**
-- **Cookies `Secure; HttpOnly; SameSite=Lax`:** set in `SessionConfig`; no test asserts the `Set-Cookie` attributes.
-- **HSTS:** Spring Security's default header writer, which `SecurityConfig` leaves on, sends it on requests it sees as HTTPS behind the trusted router. No test asserts it, and the route in `deploy/base/route.yaml` sets no HSTS of its own.
 - **No CORS:** no CORS configuration exists, so Spring answers no cross-origin requests. No test asserts the absence.
 
 ### Secrets (SC)
@@ -278,16 +276,16 @@ All run as Playwright or HTTP tests against the real server inside `./mvnw verif
 
 ## Gaps
 
-Controls with no automated verification, or only part of it, one line each. Each row ends with either:
+Controls with no automated verification, or only part of it, one line each. A closed row keeps its number and names the test that closed it. Each open row ends with either:
 - **Tracked: #nnn**, the issue that will close it; or
 - **Position**, a scope or platform decision that leaves it outside the repository's tests, with the reason.
 
-1. **Idle timeout (30 min):** configured; no test lets a session idle out. Tracked: #245.
-2. **RP-initiated logout:** nothing asserts the redirect reaches the provider's end-session endpoint. Tracked: #245.
+1. **Idle timeout (30 min):** closed, verified by `SessionHardeningIT` (#245).
+2. **RP-initiated logout:** closed, verified by `KeycloakLoginIT` (#245).
 3. **Step-up re-authentication:** not built. Position: cut for scope in v1 by BUILD_PLAN §9; admin actions are audited instead.
 4. **Deny-by-default URL rules:** exercised, but not enumerated by a test. Tracked: #245.
-5. **Session cookie flags (`Secure; HttpOnly; SameSite=Lax`):** configured in `SessionConfig`; no test asserts the `Set-Cookie` attributes. Tracked: #245.
-6. **HSTS:** left to Spring Security's default on HTTPS requests; no test asserts it, and the route sets none. Tracked: #245.
+5. **Session cookie flags (`Secure; HttpOnly; SameSite=Lax`):** closed, verified by `SessionHardeningIT` (#245).
+6. **HSTS:** closed, verified by `SessionHardeningIT` (#245); the route still sets none of its own.
 7. **No CORS:** no test asserts that cross-origin requests get no CORS headers. Tracked: #245.
 8. **SMTP STARTTLS required:** configured in the prod profile; no test. Tracked: #245.
 9. **App → Oracle over `tcps`:** no test. Position: the JDBC URL is a deployment value, and nothing in the repository connects to a deployed Oracle; the deploying organization verifies it.

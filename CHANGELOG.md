@@ -1039,6 +1039,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Security
 
+- Four configured session controls are now asserted (#245, security test map gaps 1, 2, 5 and 6):
+  - **`SessionHardeningIT`**, behind the trusted router:
+    - the `SESSION` cookie is `Secure`, `HttpOnly` and `SameSite=Lax`;
+    - HTTPS responses carry HSTS and plain-HTTP ones do not;
+    - a session idle 31 minutes is replaced and one idle 29 minutes is kept, tested by moving a stored session's last access back rather than waiting.
+  - **`KeycloakLoginIT`:** signing out sends the browser to the provider's end-session endpoint with `id_token_hint` and `post_logout_redirect_uri`, and ends the session.
 - The runtime image applies Red Hat's published errata on top of its pinned UBI 9 base (`microdnf upgrade` in the
   Containerfile's runtime stage, as root, then back to UID 185). The `openjdk-21-runtime:latest` base still carried
   util-linux 2.37.4-25.el9 (CVE-2026-53613, HIGH, fixed in 2.37.4-28.el9_9, in libblkid, libmount, libsmartcols and
