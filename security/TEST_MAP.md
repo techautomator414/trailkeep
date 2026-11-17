@@ -37,7 +37,7 @@ The status column records what is in effect today, not what is planned.
 | gitleaks | `.github/workflows/ci.yml#gitleaks` | every PR and push to `main` | any leak | running |
 | Enforcer and licence allow-list | inside `./mvnw verify`: `enforcer:bannedDependencies`, `enforcer:requireUpperBoundDeps`, `enforcer:dependencyConvergence`; `security/licenses-allowed.txt` | as the tests | any violation | running; the allow-list skips the test scope |
 | CycloneDX SBOM and Trivy on it | `.github/workflows/main.yml#sbom`, `.github/workflows/main.yml#trivy-sbom` | `main`, nightly, release | High/Critical | running |
-| Image build, Trivy, Dockle, kube-linter | `.github/workflows/main.yml#image` | `main`, nightly, release | High/Critical (`--ignore-unfixed`); Dockle warn; kube-linter errors | running |
+| Image build, Trivy, Dockle, kube-linter | `.github/workflows/main.yml#image` | `main`, nightly, release | High/Critical (`--ignore-unfixed`); Dockle warn; kube-linter errors | running; failing at its Trivy step (#210) |
 | SonarCloud quality gate | `.github/workflows/main.yml#sonarcloud` | `main`, nightly, release | gate A | **skipped**: `SONAR_TOKEN` not set (#30) |
 | OWASP Dependency-Check | `.github/workflows/main.yml#dependency-check` | `main`, nightly, release | CVSS ≥ 7 | **skipped**: `NVD_API_KEY` not set (#30) |
 | ZAP authenticated full and API scan | `.github/workflows/zap.yml#scan`, called by `.github/workflows/nightly.yml#zap` and `.github/workflows/release.yml#zap` | nightly (reports), release tag (gates) | Medium+, partial scan fails a release | running |
@@ -233,7 +233,7 @@ These rules are followed in code review, but no test asserts them.
 | Restricted leak | `RestrictedLeakCrawlIT` (fixture `LeakFixture`) | every PR | verified |
 | Upload abuse | `UploadAbuseBrowserIT`, `CaseAttachmentUploadIT` | every PR | verified |
 | Forwarded-header spoof from a non-router private address | `ForwardedHeadersPrivatePeerIT`, `ForwardedHeadersSpoofIT` | every PR | verified |
-| 0 Medium+ DAST | `.github/workflows/zap.yml`; plan pinned by `ZapPlanTest`, `OpenApiCoverageTest`, `DastVerdictTest` on every PR | nightly, release tag | verified when it runs; a release fails on Medium+ or a partial scan |
+| 0 Medium+ DAST | `.github/workflows/zap.yml`; plan pinned by `ZapPlanTest`, `OpenApiCoverageTest`, `DastVerdictTest` on every PR | nightly, release tag | **shown**: the release-mode run on `main` at 051c59b, [43968881937](https://github.com/techautomator414/trailkeep/actions/runs/43968881937), is green for both identities; every release fails on Medium+ or a partial scan |
 | Sonar gate A | `.github/workflows/main.yml#sonarcloud` | `main`, nightly, release | **not shown**: skipped until `SONAR_TOKEN` is set (#30) |
 | Dependency-Check clean | `.github/workflows/main.yml#dependency-check` | `main`, nightly, release | **not shown**: skipped until `NVD_API_KEY` is set (#30) |
 
@@ -278,37 +278,39 @@ All run as Playwright or HTTP tests against the real server inside `./mvnw verif
 
 ## Gaps
 
-Controls with no automated verification, or only part of it, one line each:
+Controls with no automated verification, or only part of it, one line each. Each row ends with either:
+- **Tracked: #nnn**, the issue that will close it; or
+- **Position**, a scope or platform decision that leaves it outside the repository's tests, with the reason.
 
-1. **Idle timeout (30 min):** configured; no test lets a session idle out.
-2. **RP-initiated logout:** nothing asserts the redirect reaches the provider's end-session endpoint.
-3. **Step-up re-authentication:** not built (cut for scope in v1).
-4. **Deny-by-default URL rules:** exercised, but not enumerated by a test.
-5. **Session cookie flags (`Secure; HttpOnly; SameSite=Lax`):** configured in `SessionConfig`; no test asserts the `Set-Cookie` attributes.
-6. **HSTS:** left to Spring Security's default on HTTPS requests; no test asserts it, and the route sets none.
-7. **No CORS:** no test asserts that cross-origin requests get no CORS headers.
-8. **SMTP STARTTLS required:** configured in the prod profile; no test.
-9. **App → Oracle over `tcps`:** deployment configuration only; no test.
-10. **Data at rest (TDE or volume encryption, backups):** platform responsibility; nothing tested in the repository.
-11. **Logging rules (no restricted text, ids not emails, control characters escaped):** no test asserts them.
-12. **`server.error.include-*`:** behaviour tested, keys not asserted.
-13. **Rate limiting on search and upload (Bucket4j):** not built.
-14. **The purge CronJob's credential separation:** no manifest test, unlike the importer and migration Jobs.
-15. **The web Deployment's secret mounts:** no manifest test.
-16. **GitHub secret scanning and push protection:** repository settings; not verifiable from the repository.
-17. **Pre-commit hooks** (gitleaks, Spotless, Checkstyle, SPDX in BUILD_PLAN §12.1): not provided; CI is the only gate.
-18. **SonarCloud quality gate:** skipped until `SONAR_TOKEN` is set (#30), so WP-28's "Sonar gate A" is not shown.
-19. **OWASP Dependency-Check:** skipped until `NVD_API_KEY` is set (#30), so "Dependency-Check clean" is not shown.
-20. **Dependabot does not track container images** (test containers, the ZAP and vnu images, the UBI bases); they are bumped by hand.
-21. **Licence allow-list:** skips the test scope, so test-only dependencies are not licence-checked.
-22. **Image signature, SBOM attestation and SLSA provenance:** exercised once, at `v0.1.0`; nothing verifies a signature after publishing.
-23. **Security review of the importer's plain SHA-256 mapping hash** (#169, `HANDOFF.md` §6): flagged for WP-28; not done.
-24. **Threat model (STRIDE):** BUILD_PLAN §9 lists it as a Phase 1 deliverable; it does not exist (see below).
-25. **Data map (security/DATA_MAP.md):** BUILD_PLAN §9 promises it; it does not exist (see below).
+1. **Idle timeout (30 min):** configured; no test lets a session idle out. Tracked: #245.
+2. **RP-initiated logout:** nothing asserts the redirect reaches the provider's end-session endpoint. Tracked: #245.
+3. **Step-up re-authentication:** not built. Position: cut for scope in v1 by BUILD_PLAN §9; admin actions are audited instead.
+4. **Deny-by-default URL rules:** exercised, but not enumerated by a test. Tracked: #245.
+5. **Session cookie flags (`Secure; HttpOnly; SameSite=Lax`):** configured in `SessionConfig`; no test asserts the `Set-Cookie` attributes. Tracked: #245.
+6. **HSTS:** left to Spring Security's default on HTTPS requests; no test asserts it, and the route sets none. Tracked: #245.
+7. **No CORS:** no test asserts that cross-origin requests get no CORS headers. Tracked: #245.
+8. **SMTP STARTTLS required:** configured in the prod profile; no test. Tracked: #245.
+9. **App → Oracle over `tcps`:** no test. Position: the JDBC URL is a deployment value, and nothing in the repository connects to a deployed Oracle; the deploying organization verifies it.
+10. **Data at rest (TDE or volume encryption, backups):** nothing tested in the repository. Position: a platform responsibility under BUILD_PLAN §9, owned by the database and storage platform.
+11. **Logging rules (no restricted text, ids not emails, control characters escaped):** no test asserts them. Tracked: #245.
+12. **`server.error.include-*`:** behaviour tested, keys not asserted. Tracked: #245.
+13. **Rate limiting on search and upload (Bucket4j):** not built. Tracked: #247.
+14. **The purge CronJob's credential separation:** no manifest test, unlike the importer and migration Jobs. Tracked: #246.
+15. **The web Deployment's secret mounts:** no manifest test. Tracked: #246.
+16. **GitHub secret scanning and push protection:** not verifiable from the repository. Position: they are GitHub repository settings outside the code; gitleaks covers every commit in CI.
+17. **Pre-commit hooks** (gitleaks, Spotless, Checkstyle, SPDX in BUILD_PLAN §12.1): not provided; CI is the only gate. Tracked: #249.
+18. **SonarCloud quality gate:** skipped until `SONAR_TOKEN` is set, so WP-28's "Sonar gate A" is not shown. Tracked: #30.
+19. **OWASP Dependency-Check:** skipped until `NVD_API_KEY` is set, so "Dependency-Check clean" is not shown. Tracked: #30.
+20. **Dependabot does not track container images** (test containers, the ZAP and vnu images, the UBI bases); they are bumped by hand. Tracked: #235.
+21. **Licence allow-list:** skips the test scope. Position: test-scope dependencies are never shipped, in neither the jar nor the image.
+22. **Image signature, SBOM attestation and SLSA provenance:** exercised once, at `v0.1.0`; nothing verifies a signature after publishing. Tracked: #249.
+23. **Security review of the importer's plain SHA-256 mapping hash** (`HANDOFF.md` §6): flagged for WP-28; not done. Tracked: #169.
+24. **Threat model (STRIDE):** BUILD_PLAN §9 lists it as a Phase 1 deliverable; it does not exist (see below). Tracked: #248.
+25. **Data map (security/DATA_MAP.md):** BUILD_PLAN §9 promises it; it does not exist (see below). Tracked: #248.
 
 ## Missing documents
 
 | Document | Promised by | State |
 |---|---|---|
-| Threat model: STRIDE over the BUILD_PLAN §7.1 diagram, re-checked at each phase gate | BUILD_PLAN §9 (a Phase 1 deliverable) | not in the repository. `docs/design/importer.md` discusses the importer's own risks, but there is no application-wide model |
-| security/DATA_MAP.md: where restricted and personal data lives | BUILD_PLAN §9, Privacy | not in the repository |
+| Threat model: STRIDE over the BUILD_PLAN §7.1 diagram, re-checked at each phase gate | BUILD_PLAN §9 (a Phase 1 deliverable) | not in the repository. `docs/design/importer.md` discusses the importer's own risks, but there is no application-wide model. Tracked: #248 |
+| security/DATA_MAP.md: where restricted and personal data lives | BUILD_PLAN §9, Privacy | not in the repository. Tracked: #248 |

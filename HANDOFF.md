@@ -31,9 +31,12 @@ tester) and WP-30 (performance at 500k, restore drill, runbook and 1.0.0, M).
 - #239: the Nu HTML validator;
 - #243 (part f): the security test map, `security/TEST_MAP.md`.
 
-Its acceptance is not fully shown yet:
-- **0 Medium+:** gated by `zap.yml` on release tags; nightly only reports.
-- **Sonar gate A and Dependency-Check clean:** wait for the scanner secrets (owner item 2, #30).
+Its acceptance:
+- **0 Medium+: shown.** `zap.yml` in release mode on `main` at 051c59b (after #233 and #236) is green for both
+  identities: [run 43968881937](https://github.com/techautomator414/trailkeep/actions/runs/43968881937). It gates
+  every release tag; nightly only reports.
+- **Sonar gate A and Dependency-Check clean: not shown.** These are the only items left, and they wait for the scanner
+  secrets (owner item 2, #30).
 
 `security/TEST_MAP.md` lists every security control with its evidence, and the gaps.
 
@@ -442,7 +445,6 @@ Follow-ups without an issue yet, each recorded in the PR or close-out that found
 | Performance | The importer's dry run, load and staging purge have not been measured at volume | WP-30 |
 | Tests | Some tests that place times relative to "now" leave a window of seconds around midnight in which they can fail (#151 moved one, the at-risk SLA walk, off the day boundary); the others are not yet swept | Phase 6 |
 | Security review | The plain SHA-256 mapping hash (section 5, #169) is flagged for the Phase 6 security review; WP-28 did not review it, and `security/TEST_MAP.md` lists it among the gaps | owner decision |
-| Security | The gaps of `security/TEST_MAP.md`: controls with no automated verification or only part of it, and the threat model and data map that BUILD_PLAN §9 promises | issues to be filed |
 | Operations | After an import: lock `TRAILKEEP_IMPORT` again, and keep `trailkeep-import-hash-key` while a delta may still compare with the ledger (`deploy/README.md` "Importer" step 5) | the deploying team |
 | Archive filter | "Include archived" lists archived cases from every team the person's scope reads, not per team (#125, deviation 3) | if wanted |
 | Design text | `docs/design/importer.md` has drifted from what was built, and is not edited by builders (CLAUDE.md rule 11): §6.1's example `people` block lacks `fields` (display name, email), without which email matching and name snapshots have nothing (the worked example's mapping has them, #202); §4.2.2 gives `sqlcmd -y 0 -h -1`, which `sqlcmd` refuses (`-y 0` alone, #201), and leaves the 1 MB question open; §2.1 still names `deploy/jobs/importer-job.yaml` (it is `deploy/jobs/importer/importer-job.yaml` with its kustomizations, #194); §8.1 says the hold lives in `retention` (it is in `casefile`, #198); §9 says no CSV writer exists (`shared.csv.CsvFormat` is reused, #193); §11's shared legacy-schema folder was not built | a docs PR |
@@ -521,10 +523,11 @@ Not defects, but worth knowing:
 ## 7. What comes next, in plan order
 
 1. **Phase 6, hardening and conformance** (3 weeks in Part F; the tester's window runs all three):
-   - **WP-28, authenticated DAST and security E2E** (M): built (section 1). What remains is its acceptance:
-     - a clean release-mode `zap.yml` run on `main`;
-     - Sonar gate A and Dependency-Check clean, which need owner item 2;
-     - and filing the gaps of `security/TEST_MAP.md` as issues;
+   - **WP-28, authenticated DAST and security E2E** (M): built (section 1).
+     - 0 Medium+ is shown by the release-mode run on `main`,
+       [43968881937](https://github.com/techautomator414/trailkeep/actions/runs/43968881937).
+     - What remains of its acceptance is Sonar gate A and Dependency-Check clean, which need owner item 2 (#30).
+     - The gaps of `security/TEST_MAP.md` are filed as #245 to #249, beside #30, #169 and #235;
    - **WP-29, the Section 508 conformance pass and ACR** (L, plus the 3-week tester window): Trusted Tester v5 by the
      named certified tester (owner item 9), remediation, and the ACR (VPAT 2.5) with the manual test matrix in
      `accessibility/`. Acceptance: no "Does Not Support", and dated tickets for any "Partially Supports";
