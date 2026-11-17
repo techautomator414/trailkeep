@@ -4,4 +4,4 @@
 # Ghostunnel, the TLS sidecar in front of ClamAV (RealClamd).
 # The one place this image is named: TestImages reads the FROM line, and Dependabot's docker ecosystem
 # proposes updates to the tag and the digest (issue 235). Keep exactly one FROM, pinned by digest.
-FROM ghostunnel/ghostunnel:v1.8.4@sha256:ddd258176f941ddd12547cf40beb5d1c98f1b432b838a9d07b5db9a0f630aa0d
+FROM ghostunnel/ghostunnel:v1.11.5@sha256:65c4e34ec0ee0f30ea1f72b7411ec70a91c32fc50f067a8466ad2adb1e7420f2
