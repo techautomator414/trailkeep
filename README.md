@@ -9,7 +9,7 @@ nothing about it. Each case has an owner, a type, an SLA clock, comments, attach
 approval moment: closure. The system emails people before deadlines pass, sends an automated aging report,
 and keeps an evidence-grade history.
 
-> **Status: Phase 5 complete, after the 0.1.0 walking skeleton and complete Phases 2 to 4.** Phase 1 of
+> **Status: Phase 6 in progress, after the 0.1.0 walking skeleton and complete Phases 2 to 5.** Phase 1 of
 > `IMPLEMENTATION_PLAN.md` is merged (build and scanning gates, two-vendor schema tooling, identity, OIDC login and
 > shared sessions, audit, web shell, container and deploy base), with team and case-configuration administration
 > (WP-09, WP-10). Phase 2 is merged: case create, view, edit, reassign and restrict, comments, attachments with virus
@@ -25,8 +25,14 @@ and keeps an evidence-grade history.
 > stops archive and purge, and a separate purge job tombstones archived cases; the System screen with job, mail and
 > scanner status and Prometheus alerts; a generic importer for legacy records from SQL Server, Oracle, PostgreSQL or
 > file exports, with a signed-off dry run and a reconciliation report; and preferences with single-key shortcuts that
-> can be turned off (WP-24 to WP-27). About nine tenths of the planned work packages are done. **Phase 6 is next**:
-> authenticated DAST, the Section 508 conformance pass and the 1.0.0 release work (WP-28 to WP-30).
+> can be turned off (WP-24 to WP-27). **Phase 6 is in progress.** WP-28 is done:
+> - authenticated ZAP full and API scans, nightly and gating every release;
+> - the security E2E suite;
+> - the Nu HTML validator;
+> - the security test map.
+>
+> The Section 508 conformance pass and the 1.0.0 release work remain (WP-29, WP-30). More than nine tenths of the
+> planned work packages are done.
 > Read [`HANDOFF.md`](HANDOFF.md) for exactly what exists, what does not, and what comes next.
 
 ## What it does
@@ -80,7 +86,8 @@ example) is caught by Mailpit and readable at `http://localhost:8025`; nothing l
 
 Static analysis, dependency, secret, container and authenticated dynamic scans are build gates from the
 first commit, and the evidence (SBOM, scan reports, accessibility conformance report) is attached to every
-release. See `IMPLEMENTATION_PLAN.md` Part G.
+release. See `IMPLEMENTATION_PLAN.md` Part G. The security test map,
+[`security/TEST_MAP.md`](security/TEST_MAP.md), names the check behind each control and lists the gaps.
 
 ## License
 

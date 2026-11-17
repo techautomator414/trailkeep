@@ -14,13 +14,31 @@ plans win; this file only says where the build stands._
 
 | Measure | Done | Total | Share |
 |---|---|---|---|
-| Work packages (IMPLEMENTATION_PLAN Part C) | 30 (WP-01 to WP-08 are 10 rows with the 03a/b and 04a/b splits, plus WP-09 to WP-27 with WP-17b) | 33 | 91 % |
-| Work packages weighted by size (S = 1, M = 2, L = 3) | 60 (53 at the end of Phase 4, plus WP-24 M, WP-25 S, WP-26 L and WP-27 S) | 67 | 90 % |
+| Work packages (IMPLEMENTATION_PLAN Part C) | 31 (WP-01 to WP-08 are 10 rows with the 03a/b and 04a/b splits, plus WP-09 to WP-28 with WP-17b) | 33 | 94 % |
+| Work packages weighted by size (S = 1, M = 2, L = 3) | 62 (53 at the end of Phase 4, plus WP-24 M, WP-25 S, WP-26 L, WP-27 S and WP-28 M) | 67 | 93 % |
 | Phase 1 pull requests (Part D) | 12 | 12 | 100 % |
 | Plan calendar (Part F) | 18 weeks: Phase 1 (4), Phase 2 (5), Phase 3 (3), Phase 4 (3) and Phase 5 (3) | 25 weeks | 72 % (the 25 include Phase 0 discovery and Phase 7 go-live, 2 weeks each, neither of them build work; Phases 1 to 6 alone are 18 of 21 weeks, 86 %) |
 
-What is left in the plan is Phase 6: WP-28 (DAST and security E2E, M), WP-29 (the Section 508 conformance pass, L,
-with a named certified tester) and WP-30 (performance at 500k, restore drill, runbook and 1.0.0, M).
+What is left in the plan is the rest of Phase 6: WP-29 (the Section 508 conformance pass, L, with a named certified
+tester) and WP-30 (performance at 500k, restore drill, runbook and 1.0.0, M).
+
+**WP-28 (authenticated DAST and security E2E, M) is built**, in these PRs:
+- #206 (part a): the CSRF and 404-not-403 route sweeps and the forwarded-header spoof;
+- #209 (part b): the CSP crawl, the restricted-leak crawl and upload abuse through the browser;
+- #211 (part c): the authenticated ZAP full scan;
+- #225 (part e): DAST findings, crawl caps and the partial-scan verdict;
+- #233 (part d): the API scan from a hand-written OpenAPI description;
+- #239: the Nu HTML validator;
+- #243 (part f): the security test map, `security/TEST_MAP.md`.
+
+Its acceptance:
+- **0 Medium+: shown.** `zap.yml` in release mode on `main` at 051c59b (after #233 and #236) is green for both
+  identities: [run 43968881937](https://github.com/techautomator414/trailkeep/actions/runs/43968881937). It gates
+  every release tag; nightly only reports.
+- **Sonar gate A and Dependency-Check clean: not shown.** These are the only items left, and they wait for the scanner
+  secrets (owner item 2, #30).
+
+`security/TEST_MAP.md` lists every security control with its evidence, and the gaps.
 
 **Phase 5 is complete.** WP-24 (retention, archive, legal hold and purge, M; #125 to #128), WP-25 (the System screen
 and operational alerts, S; #139, #140, #144, #153, #159, #160), WP-26 (the generic importer, L; 53 pull requests from
@@ -226,9 +244,9 @@ users need on Oracle (#204, an open bug).
 
 ### Not built yet
 
-Authenticated DAST and the security E2E suite (WP-28), the Section 508 conformance pass and ACR (WP-29), and
-performance at 500k, the restore drill, the runbook, the evidence pack and 1.0.0 (WP-30). Two Part G checks have no
-job yet: the ZAP scan (a placeholder in `nightly.yml` until WP-28) and the Nu HTML validator (section 4).
+The Section 508 conformance pass and ACR (WP-29), and performance at 500k, the restore drill, the runbook, the
+evidence pack and 1.0.0 (WP-30). Since WP-28 the ZAP scan and the Nu HTML validator have jobs; k6 at the 500k seed
+waits for WP-30 and veraPDF for v1.1 (section 4).
 
 Consequences for local development today: `compose.yaml` runs PostgreSQL, Keycloak, ClamAV with its TLS sidecar (the
 `local` profile trusts the dev-only CA that `clamav-tls-init` generates, so run `docker compose up -d` before
@@ -283,8 +301,9 @@ Playwright: the `e2e` suite launches Chromium; locally it skips if no browser is
 | `codeql.yml` | every PR, push to `main`, weekly | CodeQL `security-extended` for Java |
 | `scorecard.yml` | push to `main`, weekly | OpenSSF Scorecard |
 | `main.yml` | push to `main` (since #148 each merge has its own concurrency group, so every code merge gets a complete run and none is cancelled); on demand with `gh workflow run main.yml` (its own group since #88); called by nightly and release | SonarCloud, Dependency-Check, SBOM + Trivy, image build + Trivy (`--ignore-unfixed`) + Dockle + kube-linter, `oracle-it` (`./mvnw verify -Poracle-it`, both images, one job), `sqlserver-it` (the importer's SQL Server source ITs, `-Psqlserver-it`, WP-26 part p) |
-| `nightly.yml` | 04:41 UTC | `main.yml` again, and the `perf` job (`PerfCasesListIT` at 50k cases; fails at a list p95 of 500 ms or a search p95 of 1 s); the 500k-comment k6 run and ZAP are placeholders until WP-30 and WP-28 |
-| `release.yml` | tag `v*` | `main.yml` again plus its own `./mvnw verify`, image to GHCR with keyless cosign signature, SBOM attestation, SLSA provenance, GitHub Release with the evidence pack (it does not re-run the `ci.yml` jobs) |
+| `nightly.yml` | 04:41 UTC | `main.yml` again; the `perf` job (`PerfCasesListIT` at 50k cases; fails at a list p95 of 500 ms or a search p95 of 1 s); and `zap.yml` in nightly mode (reports; a red run blocks no merge). The 500k-comment k6 run is a placeholder until WP-30 |
+| `release.yml` | tag `v*` | `main.yml` again plus its own `./mvnw verify`, `zap.yml` in release mode (a Medium+ alert or a partial scan fails the release), image to GHCR with keyless cosign signature, SBOM attestation, SLSA provenance, GitHub Release with the evidence pack (it does not re-run the `ci.yml` jobs) |
+| `zap.yml` | called by nightly and release; on demand with a `mode` | the authenticated ZAP full scan and API scan of an image built from the commit, once per scan identity (`compliance.admin`, `alpha.analyst`), each on its own stack (WP-28) |
 
 Secrets: `SONAR_TOKEN` and `NVD_API_KEY` are referenced but were not set at handoff (#30). The release workflow
 needs no secrets beyond the job token for signing and publishing, but it forwards those two to `main.yml`, so a
@@ -303,11 +322,11 @@ clean") cannot be shown until they are set.
 | Oracle ITs (xe 21 and free 23) | – | ✓ | ✓ | ✓ | `main.yml` `oracle-it` |
 | SQL Server source ITs (importer) | – | ✓ | ✓ | ✓ | `main.yml` `sqlserver-it`. **Not a Part G row**: proposed in #167 (WP-26 part p) and run since, but not written into `IMPLEMENTATION_PLAN.md`; owner decision (section 6) |
 | CodeQL, Semgrep, SpotBugs/FindSecBugs, gitleaks | ✓ | ✓ | partly | partly | `codeql.yml` (PRs, pushes, weekly on Mondays) and `ci.yml` (Semgrep, gitleaks; PRs and pushes). Nightly and release get SpotBugs through `verify`, but neither runs Semgrep, gitleaks or CodeQL; a release tag is cut from a `main` commit those already passed |
-| Playwright E2E + axe + Nu validator | ✓ | ✓ | ✓ | ✓ | Playwright and axe run inside `verify`. **The Nu HTML validator is not wired anywhere** (BUILD_PLAN §10.2, §12.1); see section 6 |
+| Playwright E2E + axe + Nu validator | ✓ | ✓ | ✓ | ✓ | Playwright, axe and the Nu Html Checker (#239, a pinned image started by the tests) run inside `verify` |
 | SonarCloud, Dependency-Check | – | ✓ | ✓ | ✓ | `main.yml`; skipped with a notice while `SONAR_TOKEN` and `NVD_API_KEY` are absent (#30) |
 | CycloneDX SBOM generated | – | ✓ | ✓ | ✓ | `main.yml` `sbom`, scanned by `trivy-sbom` |
 | Container build, Trivy, Dockle, kube-linter | – | ✓ | ✓ | ✓ | `main.yml` `image` |
-| ZAP authenticated full + API scan | – | – | placeholder | – | `nightly.yml` `zap` prints a notice until WP-28 |
+| ZAP authenticated full + API scan | – | – | ✓ | ✓ | `zap.yml`, called by `nightly.yml` (reports) and `release.yml` (gates) |
 | k6 at the 50k/500k seed | – | – | 50k, in process | – | `nightly.yml` `perf` runs `PerfCasesListIT` at 50k (not k6); the k6 smoke runs by hand; 500k and the release run arrive with WP-30 |
 | OpenSSF Scorecard | – | push and weekly | – | – | `scorecard.yml` |
 | SBOM signed, cosign, SLSA, evidence pack | – | – | – | ✓ | `release.yml`; exercised once, at `v0.1.0` |
@@ -425,8 +444,7 @@ Follow-ups without an issue yet, each recorded in the PR or close-out that found
 | Performance | The cases-list index recommendations of `docs/perf/cases-list-50k.md` (`CASE_RECORD (OPENED_AT, ID)`, an expression index on `LOWER(TITLE)`) still wait for the 500k run | WP-30 |
 | Performance | The importer's dry run, load and staging purge have not been measured at volume | WP-30 |
 | Tests | Some tests that place times relative to "now" leave a window of seconds around midnight in which they can fail (#151 moved one, the at-risk SLA walk, off the day boundary); the others are not yet swept | Phase 6 |
-| Security review | The plain SHA-256 mapping hash (section 5, #169) is flagged for the Phase 6 security review | WP-28 |
-| CI | The Nu HTML validator that BUILD_PLAN §10.2 and §12.1 and Part G list beside axe is not wired into any job | WP-28 or WP-29 |
+| Security review | The plain SHA-256 mapping hash (section 5, #169) is flagged for the Phase 6 security review; WP-28 did not review it, and `security/TEST_MAP.md` lists it among the gaps | owner decision |
 | Operations | After an import: lock `TRAILKEEP_IMPORT` again, and keep `trailkeep-import-hash-key` while a delta may still compare with the ledger (`deploy/README.md` "Importer" step 5) | the deploying team |
 | Archive filter | "Include archived" lists archived cases from every team the person's scope reads, not per team (#125, deviation 3) | if wanted |
 | Design text | `docs/design/importer.md` has drifted from what was built, and is not edited by builders (CLAUDE.md rule 11): §6.1's example `people` block lacks `fields` (display name, email), without which email matching and name snapshots have nothing (the worked example's mapping has them, #202); §4.2.2 gives `sqlcmd -y 0 -h -1`, which `sqlcmd` refuses (`-y 0` alone, #201), and leaves the 1 MB question open; §2.1 still names `deploy/jobs/importer-job.yaml` (it is `deploy/jobs/importer/importer-job.yaml` with its kustomizations, #194); §8.1 says the hold lives in `retention` (it is in `casefile`, #198); §9 says no CSV writer exists (`shared.csv.CsvFormat` is reused, #193); §11's shared legacy-schema folder was not built | a docs PR |
@@ -505,12 +523,11 @@ Not defects, but worth knowing:
 ## 7. What comes next, in plan order
 
 1. **Phase 6, hardening and conformance** (3 weeks in Part F; the tester's window runs all three):
-   - **WP-28, authenticated DAST and security E2E** (M): Playwright signs in to the dev realm and hands the session to
-     ZAP for a full scan and an API scan against an ephemeral stack, nightly and on release tags (replacing the
-     `nightly.yml` placeholder), and a security E2E suite: CSP, CSRF, 404-not-403 enumeration, no restricted leak,
-     upload abuse, and forwarded-header spoofing from a private address that is not the router. Acceptance: 0 Medium+
-     findings, Sonar gate A and Dependency-Check clean; the last two need owner item 2. The plain SHA-256 mapping hash
-     (#169) is on its review list, and the Nu validator gap (section 6) sits beside it;
+   - **WP-28, authenticated DAST and security E2E** (M): built (section 1).
+     - 0 Medium+ is shown by the release-mode run on `main`,
+       [43968881937](https://github.com/techautomator414/trailkeep/actions/runs/43968881937).
+     - What remains of its acceptance is Sonar gate A and Dependency-Check clean, which need owner item 2 (#30).
+     - The gaps of `security/TEST_MAP.md` are filed as #245 to #249, beside #30, #169 and #235;
    - **WP-29, the Section 508 conformance pass and ACR** (L, plus the 3-week tester window): Trusted Tester v5 by the
      named certified tester (owner item 9), remediation, and the ACR (VPAT 2.5) with the manual test matrix in
      `accessibility/`. Acceptance: no "Does Not Support", and dated tickets for any "Partially Supports";
