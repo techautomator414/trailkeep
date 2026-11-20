@@ -27,10 +27,13 @@ WORKDIR /home/default/src
 
 # The wrapper downloads the Maven distribution with one plain `curl -f -L` and no retry, so a single rate-limit answer
 # (HTTP 429) from Maven Central failed the image build before Maven started (issue 240). curl reads ~/.curlrc, so this
-# makes that download retry on a transient error and on 408, 429, 5xx, honouring Retry-After. Nothing else changes:
-# the build is still cold (no cache mount) and the wrapper still verifies the distribution against
-# distributionSha256Sum in .mvn/wrapper/maven-wrapper.properties and fails on a mismatch. The builder stage only.
-RUN printf '%s\n' 'retry = 8' 'retry-delay = 5' 'retry-max-time = 300' 'retry-all-errors' > "$HOME/.curlrc"
+# makes that download retry on a transient error and on 408, 429, 5xx, honouring Retry-After. There is deliberately no
+# retry-delay: a fixed delay turns off curl's exponential backoff, which capped the whole retry budget at about 40 s
+# (8 x 5 s) while Central's 429 windows last about 2 minutes. With backoff the waits are 1, 2, 4 ... 128 s (about
+# 255 s over 8 retries), bounded by retry-max-time. Nothing else changes: the build is still cold (no cache mount) and
+# the wrapper still verifies the distribution against distributionSha256Sum in .mvn/wrapper/maven-wrapper.properties
+# and fails on a mismatch. The builder stage only.
+RUN printf '%s\n' 'retry = 8' 'retry-max-time = 600' 'retry-all-errors' > "$HOME/.curlrc"
 
 # Tests are not run here: the same commit has already passed `./mvnw verify` (ci.yml on main, the verify job in
 # release.yml), and the integration tests need a container runtime that an image build does not have.

@@ -898,10 +898,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - The image build no longer fails on a single rate-limit answer when it downloads Maven (#240). The wrapper fetches the
   distribution with one plain `curl -f -L` and no retry, and `.mvn/maven.config`'s resolver retry does not apply to
   that step, so one HTTP 429 from Maven Central failed a main, ZAP or release image build before Maven started. The
-  Containerfile's builder stage now writes a `~/.curlrc` (`retry = 8`, `retry-delay = 5`, `retry-max-time = 300`,
-  `retry-all-errors`), which makes that `curl` retry on a transient error and on 408, 429 and 5xx, honouring
-  `Retry-After`. The build stays cold, with no cache, and the wrapper still verifies the distribution against
-  `distributionSha256Sum` and fails on a mismatch (a planted wrong checksum fails the image build).
+  Containerfile's builder stage now writes a `~/.curlrc` (`retry = 8`, `retry-max-time = 600`, `retry-all-errors`),
+  which makes that `curl` retry on a transient error and on 408, 429 and 5xx, honouring `Retry-After`. It sets no
+  `retry-delay`: the first version did (`retry-delay = 5`), and a fixed delay turns off curl's exponential backoff, so
+  the download gave up after about 40 s of 429s while Central's rate-limit windows last about 2 minutes (nightly
+  44095456308). With backoff the waits grow 1, 2, 4 … 128 s, about 255 s over the eight retries. The build stays cold,
+  with no cache, and the wrapper still verifies the distribution against `distributionSha256Sum` and fails on a
+  mismatch (a planted wrong checksum fails the image build).
 - Builds now resolve from Maven Central only (#237). `flyway-parent` 12.4.0 declares five repositories (among them
   `maven.pkg.github.com/flyway/flyway-community-db-support` and an Azure DevOps feed), and Maven adds a dependency
   POM's repositories to its own, so every build asked them for their prefix list and got `HTTP 401` warnings; a
