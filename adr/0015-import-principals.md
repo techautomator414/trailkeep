@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 # ADR-0015: Two seeded, disabled principals act for the importer
 
-- **Status:** Proposed
+- **Status:** Accepted (2026-11-20)
 - **Date:** 2026-11-10
 - **Register rows:** IMPLEMENTATION_PLAN.md A.4 #37 (migrations land with their entities)
 - **Plan sections:** BUILD_PLAN.md §5.1 (`APP_USER`: users come from the identity provider), §3.2 (owner ≠ approver),

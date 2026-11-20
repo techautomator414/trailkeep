@@ -7,6 +7,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-20
+
+Case handling, end to end: IMPLEMENTATION_PLAN Phases 2 to 5 (WP-11 to WP-27, with WP-17b) and WP-28 of Phase 6.
+Cases are created, worked, commented on, given attachments, listed, exported, closed through the one approval gate
+and reopened; SLA states, reminders, the dashboard and the reports run on their own; retention, legal hold, purge,
+the System screen and the legacy importer are in place; and authenticated DAST, the security E2E suite and the HTML
+validity gate run in CI. WP-29 (the Section 508 conformance pass) and WP-30 (the evidence pack and 1.0.0) remain.
+`HANDOFF.md` records the state, the decisions taken and the open issues.
+
 ### Added
 
 - HTML validity on every PR (WP-28, BUILD_PLAN §10 and §12 "HTML validity (Nu validator)", IMPLEMENTATION_PLAN Part
@@ -872,10 +881,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   clamd's startup, readiness and liveness probes are `clamdscan --ping` exec probes instead of TCP-socket probes. The
   compose service runs `clamd --foreground=true` directly, as the pod does, so signatures are the image's. The
   NetworkPolicy is unchanged (it only admits 3311).
-- `ErrorAdvice` maps a `ConstraintViolationException` reaching the web layer to 422 (htmx `problem` fragment or the
-  error page) instead of a 5xx (#27).
-- Back-channel logout's loopback `logoutUri` is set from the port the server actually bound, so an instance started
-  with `server.port=0` can end sessions too (#28).
 - `JdbcOidcSessionRegistryIT` now has an Oracle variant (`OracleJdbcOidcSessionRegistryIT`, tag `oracle`) sharing
   its tests through an abstract base, so the registry's SQL runs on XE 21 and Free 23 in the `-Poracle-it` run (#26).
 - The local seed fails with a message naming the case type and the SLA policy when the policy is unknown (#29).
@@ -1050,6 +1055,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   audit actor-name snapshot is no longer cut between the two halves of a surrogate pair.
 - ADR-0006 no longer says both drivers accept the character-stream bind; on Oracle the search append binds a CLOB.
 - Oracle Free 23 `oracle-it` failures (ORA-12516) in `OracleDatabaseGrantsIT`: the grants probes share one connection per grantee and test contexts use a small Hikari pool.
+- `ErrorAdvice` maps a `ConstraintViolationException` reaching the web layer to 422 (htmx `problem` fragment or the
+  error page) instead of a 5xx (#27).
+- Back-channel logout's loopback `logoutUri` is set from the port the server actually bound, so an instance started
+  with `server.port=0` can end sessions too (#28).
 
 ### Security
 
@@ -1121,6 +1130,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Documentation
 
+- The 0.2.0 release documents: `HANDOFF.md`, the README's status and `CONTEXT.md` state 0.2.0's scope and what remains
+  for 1.0.0. ADR-0015 (the import principals) and ADR-0016 (go-live alerts pre-marked) are accepted after a check
+  against the code. ADR-0014 stays Proposed, because four of its statements differ from what WP-26 built
+  (`HANDOFF.md` section 6, "ADRs").
 - The security test map (WP-28 part f): `security/TEST_MAP.md`, linked from `SECURITY.md` and the README, names for
   every control row of BUILD_PLAN §9, every WP-28 acceptance item and the §12.1 E2E security row the test classes,
   Semgrep rules, enforcer rules, ZAP plan and suppressions and scanners that verify it, where and how often each runs,
@@ -1326,5 +1339,6 @@ starts with WP-11. `HANDOFF.md` records the state, the decisions taken and the o
   rules for plugin versions, upper-bound dependencies, dependency convergence and banned dependencies (Log4j core,
   Log4j 1, Lombok, Commons Logging before 1.3).
 
-[Unreleased]: https://github.com/techautomator414/trailkeep/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/techautomator414/trailkeep/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/techautomator414/trailkeep/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/techautomator414/trailkeep/releases/tag/v0.1.0

@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 # ADR-0016: Record an imported case's alerts already raised as sent, so go-live sends no wave
 
-- **Status:** Proposed
+- **Status:** Accepted (2026-11-20)
 - **Date:** 2026-11-13
 - **Register rows:** IMPLEMENTATION_PLAN.md A.4 #37 (migrations land with their entities; no migration here, a grant
   change only)
