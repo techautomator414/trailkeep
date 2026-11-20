@@ -147,7 +147,8 @@ no Dependency-Check report.
   - #256: `compose.yaml`'s images drift from the Dependabot-tracked test images.
   - #212, with its fix in draft #216: a NUL byte in a text input is a 500 on PostgreSQL. The fix makes a control
     character a 400 on every route.
-  - #240: the image build's download of Maven gives up too early on Central's 429; fixed by draft #257.
+  - #259: reconcile ADR-0014 with what was built. The importer enforces TLS on JDBC source URLs and gains the
+    ArchUnit rule; the ADR is amended for the rest (section 6, "ADRs").
 - **#30:** the scanner secrets `SONAR_TOKEN` and `NVD_API_KEY` (WP-28's "Sonar gate A; Dependency-Check clean" cannot
   be shown without them), a real identity-provider sign-in in DEV, and the manual testing of the shell ACR.
 
@@ -236,8 +237,8 @@ Merged since the Phase 5 refresh (#203), outside WP-28's own PRs:
   (one shared dev-realm Keycloak container per test JVM, #117), #250 (#245 part A: session cookie flags, HSTS, idle
   timeout and RP-initiated logout asserted), #251 (test-container images tracked by Dependabot, #235) and #252 (one
   Maven cache key per CI job, #244).
-- **Build:** #229 (ShedLock 7.11.0), #241 (resolve from Maven Central only, #237) and #242 (the wrapper's Maven
-  download retries in the image build, #240; its retry budget is too short, see draft #257).
+- **Build:** #229 (ShedLock 7.11.0), #241 (resolve from Maven Central only, #237) and #242 and #257 (the wrapper's
+  Maven download retries in the image build, with curl's exponential backoff, #240).
 - **Dependabot:** #219, #221, #222, #253 and #255.
 
 Schema on `main`: `V1__identity`, `V2__audit`, `V3__admin`, `V3_1__sessions`, `V4__case`, `V4_1__comment`,
@@ -489,7 +490,6 @@ All are recorded where they were made; this is the index.
 | #231 | DAST: scan state-creating admin POSTs last, so ZAP's stored payloads stop producing false positives (90035, 40014) |
 | #256 | `compose.yaml`'s images drift from the Dependabot-tracked test images |
 | #212 | A NUL byte in a text input is a 500 on PostgreSQL; the fix, a control character is a 400 on every route, is draft #216 |
-| #240 | The image build's Maven download gives up after about 40 s of Central's 429s (#242's retry budget); the fix is draft #257 |
 
 Follow-ups without an issue yet, each recorded in the PR or close-out that found it:
 
@@ -504,7 +504,7 @@ Follow-ups without an issue yet, each recorded in the PR or close-out that found
 | Archive filter | "Include archived" lists archived cases from every team the person's scope reads, not per team (#125, deviation 3) | if wanted |
 | Design text | `docs/design/importer.md` has drifted from what was built, and is not edited by builders (CLAUDE.md rule 11): §6.1's example `people` block lacks `fields` (display name, email), without which email matching and name snapshots have nothing (the worked example's mapping has them, #202); §4.2.2 gives `sqlcmd -y 0 -h -1`, which `sqlcmd` refuses (`-y 0` alone, #201), and leaves the 1 MB question open; §2.1 still names `deploy/jobs/importer-job.yaml` (it is `deploy/jobs/importer/importer-job.yaml` with its kustomizations, #194); §8.1 says the hold lives in `retention` (it is in `casefile`, #198); §9 says no CSV writer exists (`shared.csv.CsvFormat` is reused, #193); §11's shared legacy-schema folder was not built | a docs PR |
 | Export recipes | `docs/importer/export-recipes.md` should say that the Oracle recipe's `TIMESTAMP_TO_SCN(SYSTIMESTAMP)` is approximate (Oracle maps timestamps to SCNs at a granularity of seconds), so the recorded SCN marks the snapshot only roughly | a docs PR |
-| ADRs | ADR-0015 (the import principals) and ADR-0016 (go-live alerts pre-marked) were checked against the code and accepted on 2026-11-20. ADR-0014 stays "Proposed": four of its statements do not match what WP-26 built. (1) Rule 2's "verified TLS" for JDBC sources is not enforced: `SourceUrl` allow-lists parameter names only, so a PostgreSQL URL without `sslmode` or a plain-TCP Oracle address passes (`SourceUrlTest` accepts one), and TLS is required only by the account recipes in `docs/importer/source-accounts.md`. (2) Its ArchUnit rule (only the extract classes may depend on `SourceQueryJdbcDao`) was never written. (3) The SpotBugs exception is an entry in `config/spotbugs/exclude.xml`, not a `@SuppressFBWarnings` annotation. (4) Its Part B amendment allows one native-SQL class outside the three modules, but #190 added `closure.ClosureWrittenJdbcDao` and `audit.ImportedEventWrittenJdbcDao` too. Smaller drifts: the hold is set in the case INSERT by `casefile`, not by an UPDATE or a `retention` API, and `validate-mapping` also connects to the source | owner (item 11 below): amend the ADR or change the code |
+| ADRs | ADR-0015 (the import principals) and ADR-0016 (go-live alerts pre-marked) were checked against the code and accepted on 2026-11-20. ADR-0014 stays "Proposed": four of its statements do not match what WP-26 built. (1) Rule 2's "verified TLS" for JDBC sources is not enforced: `SourceUrl` allow-lists parameter names only, so a PostgreSQL URL without `sslmode` or a plain-TCP Oracle address passes (`SourceUrlTest` accepts one), and TLS is required only by the account recipes in `docs/importer/source-accounts.md`. (2) Its ArchUnit rule (only the extract classes may depend on `SourceQueryJdbcDao`) was never written. (3) The SpotBugs exception is an entry in `config/spotbugs/exclude.xml`, not a `@SuppressFBWarnings` annotation. (4) Its Part B amendment allows one native-SQL class outside the three modules, but #190 added `closure.ClosureWrittenJdbcDao` and `audit.ImportedEventWrittenJdbcDao` too. Smaller drifts: the hold is set in the case INSERT by `casefile`, not by an UPDATE or a `retention` API, and `validate-mapping` also connects to the source. Tracked as #259, with the release manager's decisions: enforce TLS for JDBC sources (PostgreSQL `verify-full`, Oracle `tcps`, SQL Server `encrypt=true` with certificate validation) and add the ArchUnit rule in code; amend the ADR for the SpotBugs location, the two extra `*JdbcDao` classes and the minor items. Until then operators must follow the TLS requirements of `docs/importer/source-accounts.md` | #259 |
 
 
 Closed since 0.1.0: #26 (the OIDC session registry IT runs on the Oracle leg, #38), #27 (`ConstraintViolationException`
@@ -567,8 +567,8 @@ code change.
     their owner) or record that the importer's third source stays outside the plan's CI table.
 11. **ADR-0014** (the importer's sources and canonical model) is still "Proposed"; ADR-0015 and ADR-0016 were
     accepted on 2026-11-20, after a check against the code. ADR-0014 differs from the build in four places (section
-    6, "ADRs"). Decide for each whether the ADR is amended to say what was built, or the code is changed (a TLS check
-    in `SourceUrl`, the ArchUnit rule), then accept it.
+    6, "ADRs"). The decisions are made and tracked as #259: TLS enforcement for JDBC sources and the ArchUnit rule in
+    code, the other mismatches by amending the ADR; it is accepted once #259 lands.
 
 Items 2 to 4 are the open Phase 1 exit items from #30; until they are done Phase 1 is not complete in the plan's own
 terms.

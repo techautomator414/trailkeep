@@ -1133,7 +1133,7 @@ validity gate run in CI. WP-29 (the Section 508 conformance pass) and WP-30 (the
 - The 0.2.0 release documents: `HANDOFF.md`, the README's status and `CONTEXT.md` state 0.2.0's scope and what remains
   for 1.0.0. ADR-0015 (the import principals) and ADR-0016 (go-live alerts pre-marked) are accepted after a check
   against the code. ADR-0014 stays Proposed, because four of its statements differ from what WP-26 built
-  (`HANDOFF.md` section 6, "ADRs").
+  (`HANDOFF.md` section 6, "ADRs"; tracked as #259).
 - The security test map (WP-28 part f): `security/TEST_MAP.md`, linked from `SECURITY.md` and the README, names for
   every control row of BUILD_PLAN §9, every WP-28 acceptance item and the §12.1 E2E security row the test classes,
   Semgrep rules, enforcer rules, ZAP plan and suppressions and scanners that verify it, where and how often each runs,
