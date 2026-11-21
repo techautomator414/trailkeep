@@ -84,6 +84,14 @@ jobs:
         # Same Playwright version as playwright.version in pom.xml (as in ci.yml).
         run: npx --yes playwright@1.63.0 install --with-deps chromium
 
+      - name: Restore the checksum-pinned Maven distribution for the image build
+        # Only the zip pinned by distributionSha256Sum, never repository contents: build-image.sh verifies it before use
+        # and downloads once if it is missing or does not match (issue 240). Exact key, no restore-keys.
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: target/image/maven-seed
+          key: maven-seed-${{ hashFiles('.mvn/wrapper/maven-wrapper.properties') }}
+
       - name: Build the image from digest-pinned UBI 9 bases
         run: .github/scripts/build-image.sh "${IMAGE}" "0.0.0-dast+${GITHUB_SHA::12}"
 

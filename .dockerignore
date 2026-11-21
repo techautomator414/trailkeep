@@ -5,6 +5,7 @@
 !.mvn/maven.config
 !.mvn/wrapper/maven-wrapper.properties
 !mvnw
+!target/image/maven-seed/**
 !pom.xml
 !src/main/**
 !config/**
