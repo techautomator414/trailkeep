@@ -101,7 +101,7 @@ The status column records what is in effect today, not what is planned.
 - **Markdown rendered then sanitized:** `MarkdownRendererTest` over the XSS corpus; `StoredReportSanitizerTest`.
 - **CSV export cells defeat formula injection:** `CsvFormatTest`.
 - **Content-Disposition cannot be split by a file name:** `AttachmentDispositionTest`, `CaseAttachmentDownloadIT`.
-- **Malformed input is a 400, never a 500 or an echo:** `MalformedParametersIT`, `MalformedMultipartIT` (every mapped route).
+- **Malformed input is a 400, never a 500 or an echo:** `MalformedParametersIT`, `MalformedMultipartIT` (every mapped route), `ControlCharactersIT` and `ControlCharacterSweepIT` (a control character in a parameter name or value, every mapped route; `UploadIntakeTest`, `CaseAttachmentUploadIT` for an upload's file name).
 - **Bean Validation reaching the web layer is a 422:** `WebShellIT`.
 
 **Configured only:** Bean Validation and size constraints on each form, which are exercised by the controller ITs of each form but not enumerated by a rule.
