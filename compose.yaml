@@ -13,7 +13,7 @@ name: trailkeep
 
 services:
   postgres:
-    image: postgres:16-alpine
+    image: postgres:16-alpine@sha256:81e77a4833487b8132fe4b00bedd39dc3f74b8641e387f19312a48f7de218c2e
     environment:
       POSTGRES_DB: trailkeep
       POSTGRES_USER: trailkeep
@@ -32,7 +32,7 @@ services:
 
   keycloak:
     # Same image as KeycloakLoginIT. Imports deploy/local/keycloak/trailkeep-dev-realm.json on first start.
-    image: keycloak/keycloak:26.0.7
+    image: keycloak/keycloak:26.8.2-1@sha256:723b1d6e254c0fc96d5cffec860c7e0744d6a3277822b865bb538cf891575e41
     command: ["start-dev", "--http-port=8180", "--import-realm"]
     environment:
       KC_BOOTSTRAP_ADMIN_USERNAME: admin
@@ -48,7 +48,7 @@ services:
   mailpit:
     # Same image as MailpitDispatchIT, pinned by digest. A local mail catcher: it accepts every message and delivers
     # none, so the outbox dispatcher can be watched end to end (WP-17). Both ports on loopback only.
-    image: axllent/mailpit:v1.33.0@sha256:9b3a463be15354c0f0eba91697d80e3e0d8a5623ef0e627cacc836bc17fd5231
+    image: axllent/mailpit:v1.33.1@sha256:aef2aacc11f075ec0fb6874275ee4a421e688e11a96ebb296134d1735c7761ce
     ports:
       - "127.0.0.1:1025:1025"
       - "127.0.0.1:8025:8025"
@@ -57,7 +57,7 @@ services:
     # DEV-ONLY, one-shot: a throwaway CA and a server certificate for localhost, generated on first start into the
     # git-ignored .local/clamd-tls/ and reused after that (delete the directory to issue new ones). The CA key is
     # deleted once it has signed. application-local.yml trusts ca.crt; nothing here is ever used outside this machine.
-    image: alpine/openssl:3.5.4
+    image: alpine/openssl:3.5.4@sha256:42c7389ef077aed0eb4e96d0abbd094083d701bbaff1313073b061c0c9cd8278
     entrypoint: ["/bin/sh", "-ec"]
     command:
       - |
@@ -80,7 +80,7 @@ services:
     # /init, which would wait for a unix socket this config deliberately lacks and exit after 30 minutes. So freshclam
     # does not run on start: the signatures are the ones baked into the image tag. Only the TLS sidecar's port is
     # published: clamd's own 3310 stays inside this service's network namespace, on 127.0.0.1.
-    image: clamav/clamav:1.4.3
+    image: clamav/clamav:1.5.3@sha256:d06c1d6a451d616e1dd79b42f44c8c8c291bba9cf4e75ebc4d0e43c1c6dd87bb
     command: ["clamd", "--foreground=true"]
     ports:
       - "127.0.0.1:3311:3311"
@@ -96,7 +96,7 @@ services:
   clamav-tls:
     # The TLS sidecar (ADR-0012), sharing clamav's network namespace as it does in the pod: TLS on 3311, forwarded to
     # clamd on 127.0.0.1:3310. Server-authenticated only (mTLS is optional and not used).
-    image: ghostunnel/ghostunnel:v1.8.4
+    image: ghostunnel/ghostunnel:v1.11.5@sha256:65c4e34ec0ee0f30ea1f72b7411ec70a91c32fc50f067a8466ad2adb1e7420f2
     network_mode: "service:clamav"
     depends_on:
       clamav-tls-init:
@@ -115,7 +115,7 @@ services:
 
   oracle:
     profiles: ["oracle"]
-    image: gvenzl/oracle-free:23-slim
+    image: gvenzl/oracle-free:23-slim@sha256:6d61d267a3b978c24c5ac1790e62e927416a0aec446bd86e4b3a1527562757bd
     environment:
       ORACLE_PASSWORD: trailkeep-dev # dev-only SYS/SYSTEM password
       APP_USER: trailkeep
