@@ -9,6 +9,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- The importer's 14-day staging TTL no longer depends on a later importer command (#275). It was applied only at the
+  start of a command, so an abandoned run with no later command kept its staged legacy rows and content area
+  indefinitely. `deploy/jobs/importer` (and each variant) now also applies `trailkeep-importer-staging-ttl`, a CronJob
+  that runs the new `expire-staging` command daily as `TRAILKEEP_IMPORT` with the content claim, one run at a time
+  (`concurrencyPolicy: Forbid`); the import user is the only one granted staging, so no grant changed, and the pod
+  holds neither the source password nor `import.hash-key`. Each run's purge now locks the run and skips a run another
+  pass purged meanwhile, so the schedule and a command never record one purge twice. Logs carry the count and run ids
+  only. `ImporterProfileIT` (PostgreSQL and Oracle) proves expiry with no other command, fresh staging kept and the
+  lock; `ImporterStagingTtlManifestTest` proves the schedule is live and the pod's secrets and network.
 - `AuditRecorderIT.redactedValuesAreStoredOnlyAsHmacAndLength` no longer fails by chance (#268). It looked for the
   fragment `4711` in the whole stored JSON, but the redacted field's `hmac` is 64 hex digits of a per-run random key and
   contains it about once in 1,000 runs (it did on #266's CI). The test now parses each stored value, requires the

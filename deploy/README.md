@@ -16,7 +16,7 @@ Reference manifests for OpenShift, usable on plain Kubernetes. They follow BUILD
 | `overlays/external-scanning/` | Example overlay without ClamAV, for `APP_ATTACHMENTS_SCANNING=external` (see "Scanning mode"). |
 | `components/prometheus-rules/` | Optional Kustomize component with the `PrometheusRule` for the operational alerts (see "Alerts"). |
 | `jobs/migrate/`, `jobs/migrate-external-scanning/` | The schema migration `Job` and its `NetworkPolicy`, run before every rollout (see "Migrations"). |
-| `jobs/importer/` | The importer `Job` and its `NetworkPolicy`, applied by hand because applying a `Job` runs it (see "Importer"). |
+| `jobs/importer/` | The importer `Job`, its `NetworkPolicy` and the staging TTL `CronJob`, applied by hand because applying a `Job` runs it (see "Importer"). |
 | `jobs/importer-external-scanning/` | The same for `APP_ATTACHMENTS_SCANNING=external`. |
 | `jobs/components/source-access/` | Kustomize component that gives the importer `Job` the source password and the route to the source, together; for `validate-mapping` and `extract` only. |
 | `jobs/importer-source-access/`, `jobs/importer-external-scanning-source-access/` | Each variant with that component applied. |
@@ -125,8 +125,12 @@ runs screen; the `Job` only carries them out.
    `validate-mapping` and `extract` read the source: the `source-access` component labels their pod
    `trailkeep.io/source-egress: "true"`, which admits it to `trailkeep-importer-source`, in the same step that mounts
    the source password. Replace the placeholder addresses as in `trailkeep-egress`.
-5. **Afterwards.** Lock `TRAILKEEP_IMPORT` again when the import is over. Keep `trailkeep-import-hash-key` while any
-   delta run may still compare with the ledger.
+5. **Staging TTL.** Every directory above also applies `trailkeep-importer-staging-ttl`, a `CronJob` that runs
+   `expire-staging` daily at 02:43 UTC as the import user, with the content claim, the import credential and
+   `app.audit.hmac-key` only, so a run's staging and content area go once `import.staging-ttl` has passed even if no
+   command follows (#275). Change its `schedule` in your overlay; it never needs `IMPORT_RUN`.
+6. **Afterwards.** Delete the `CronJob` once `status` shows every run's staging purged, then lock `TRAILKEEP_IMPORT`
+   again. Keep `trailkeep-import-hash-key` while any delta run may still compare with the ledger.
 
 ## Migrations
 
