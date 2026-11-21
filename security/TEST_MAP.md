@@ -257,6 +257,7 @@ All run as Playwright or HTTP tests against the real server inside `./mvnw verif
   - Then the hand-written API description, `security/zap/openapi.yaml`, imported with the session's CSRF token and the seeded identifiers.
   - Then ZAP's default active-scan policy over the application and the management port.
   - The plan fails on any alert of Medium or higher.
+- **Rate limits in the scan stack:** `app.rate-limit.search.*` and `upload.*` are raised to the test-profile values (100000) in `dast-app.sh`, with `enabled` kept true. The scanner is exempted from availability throttling so the active scan reaches search and upload; at the production limits it was refused 429 almost every time, which ZAP's boolean SQL-injection rule reads as an injection, and it lost coverage (#270). `RateLimitIT` verifies the control itself; the prod profile still refuses `enabled: false`.
 - **Identities:** `compliance.admin` and `alpha.analyst`, each on its own stack built from the commit. The stack is set up by `.github/scripts/dast-app.sh` and seeded by `DastSessionIT`, which runs only in the scan, not in `./mvnw verify`.
 - **The verdict:** `.github/scripts/dast-zap.sh` runs the scan and `.github/scripts/dast-verdict.sh` decides.
   - In a release, a partial scan also fails: an active scan cut off at its cap, or a plan stopped by a High insight.

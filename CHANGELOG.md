@@ -9,6 +9,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- The DAST scan is no longer throttled by the per-person rate limits (#270). With #247's production limits (120
+  searches a minute, 30 uploads in 10 minutes) the scanner was refused 429 on almost every search and upload request
+  (142,618 refusals in one nightly run), so it lost its coverage of both, and ZAP's boolean SQL-injection rule read a
+  200 against a 429 as an injection (40018) on `/cases`, failing one identity per run. `dast-app.sh` now starts the
+  scan image with `app.rate-limit.search.*` and `upload.*` at the test-profile values (100000) and `enabled` still
+  true; the prod profile's refusal of `enabled: false` is unchanged and `RateLimitIT` verifies the control. No ZAP
+  suppression was added.
 - The image build no longer downloads the Maven distribution from Maven Central (#240). #242 and #257 made the
   wrapper's download retry, and main run 44918965190 still failed after 255 s of backoff because Central refused the
   runner for longer. `.github/scripts/build-image.sh` (used by `main.yml`, `zap.yml` and `release.yml`) now puts

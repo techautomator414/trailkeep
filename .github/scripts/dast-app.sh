@@ -13,6 +13,11 @@
 # difference from prod beyond connection wiring, and DastSessionIT seeds instead. Every value is a dev-only one from
 # compose.yaml and the dev realm, except two generated for this run and never printed: the audit HMAC key and the
 # password that lets the runtime user log in to this throwaway database (compose creates it without a login).
+# One further difference from prod, deliberate: app.rate-limit.search.* and upload.* are the test-profile values (100000),
+# beside the dev-only values above, with enabled kept true (the prod profile refuses false). The scanner is exempted from
+# availability throttling so the active scan reaches search and upload: at the production limits nearly every request was
+# refused 429, and ZAP's boolean SQL-injection rule reads a 200 against a 429 as an injection (#270). RateLimitIT verifies
+# the control.
 # Usage: dast-app.sh start <image> | dast-app.sh stop
 set -euo pipefail
 
@@ -36,6 +41,8 @@ wiring() { # <database user>
     "db": {"schema": "public", "app-user": "trailkeep_app", "purge-user": "trailkeep_purge",
            "import-user": "trailkeep_import"},
     "attachments": {"clamd": {"host": "localhost"}},
+    "rate-limit": {"enabled": true,
+                   "search": {"capacity": 100000, "refill": 100000}, "upload": {"capacity": 100000, "refill": 100000}},
     "security": {
       "oidc": {"issuer-uri": "http://localhost:8180/realms/trailkeep-dev", "client-id": "trailkeep"},
       "group-roles": {"trailkeep-compliance-admins": "COMPLIANCE_ADMIN", "trailkeep-system-admins": "SYSTEM_ADMIN"}
