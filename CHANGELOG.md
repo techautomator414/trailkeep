@@ -33,6 +33,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Security
 
+- Per-user rate limits on case search and upload (#247, BUILD_PLAN §9 Availability, security test map gap 13). Each
+  signed-in person has a token bucket per route, keyed on their user id (never the client address): `search` covers
+  the cases list and its CSV export, `upload` covers attaching a file. Over the limit, `RateLimitInterceptor` refuses
+  the request before the handler runs (no query; the application never reads, scans or stores the file) with a 429 and
+  `Retry-After`, on a new `error/429` page or, for htmx, the problem fragment, which `app.js` now swaps for 429 as it
+  does for 403, 404, 409 and 422. Nothing the request sent is echoed. Each refusal is counted on
+  `trailkeep.rate_limit.refusals{route}` and logged at INFO with the user id and route only. Limits are
+  `app.rate-limit.{search,upload}.{capacity,refill,window}`; the defaults (120, then 120 a minute; 30, then 30 per
+  10 minutes) are far above normal use. `app.rate-limit.enabled=false` is for tests only: the prod profile refuses to
+  start with it. The limiter is a small in-house token bucket rather than Bucket4j (no new dependency): one number per
+  active person in memory, dropped once their bucket is full again. Buckets are per replica, so a multi-replica
+  deployment also needs a platform limit at the route or ingress (`deploy/README.md`).
+
 - Deny-by-default routes and the absence of CORS are now asserted (#245, security test map gaps 4 and 7):
   - **`DenyByDefaultIT`:** an anonymous request to every route in Spring MVC's handler mapping, with a valid CSRF
     token so CSRF's 403 cannot hide a `permitAll`, is refused: a 302 to the start of the sign-in, or a 401 with
