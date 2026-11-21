@@ -41,6 +41,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
     sign-in and sign-out, each listed in the test with its reason, and each must still answer anonymously.
   - **`NoCorsIT`:** a request with `Origin`, and a preflight for every mapped route, get no `Access-Control-*`
     header, anonymous or signed in.
+- STARTTLS and the logging rules are now asserted (#245, security test map gaps 8 and 11):
+  - **`MailStartTlsTest`:** the session of the mail sender Spring Boot builds from the prod profile has
+    `mail.smtp.starttls.enable` and `mail.smtp.starttls.required` set to `true`.
+  - **`LoggingRulesIT`:** the code paths that log around a restricted case, a failed mail dispatch and a refused or
+    conflicting sign-in run with the output captured. No restricted-case text, attachment name or email address
+    reaches the log, and each line names people by user id.
+  - **`JsonLoggingIT`:** a logged value with line breaks, a forged JSON fragment, an ANSI escape and NUL stays one
+    line of valid JSON.
 
 ## [0.2.0] - 2026-11-20
 
