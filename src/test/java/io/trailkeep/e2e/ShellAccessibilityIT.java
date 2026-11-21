@@ -30,8 +30,8 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 
 /**
- * The shell and error pages in a real browser after a real OIDC login: axe-core finds 0 WCAG 2.x A/AA violations,
- * the console shows no CSP violation, and the skip link is the first tab stop (WP-05 acceptance).
+ * The shell and error pages (404, 429, 500) in a real browser after a real OIDC login: axe-core finds 0 WCAG 2.x A/AA
+ * violations, the console shows no CSP violation, and the skip link is the first tab stop (WP-05 acceptance).
  *
  * <p>Chromium comes from Playwright ({@code PLAYWRIGHT_BROWSERS_PATH} where pre-installed, otherwise downloaded on
  * first use). If no browser can be launched the test is skipped with the reason, except when {@code CI} is set,
@@ -42,7 +42,14 @@ import org.springframework.test.context.DynamicPropertySource;
 @RequiresDocker
 @ActiveProfiles("test")
 @Import({PostgresTestcontainersConfiguration.class, BoomController.class})
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.DEFINED_PORT)
+// One search, then the rate limit (#247): only the rate-limit test opens the cases list.
+@SpringBootTest(
+        webEnvironment = SpringBootTest.WebEnvironment.DEFINED_PORT,
+        properties = {
+            "app.rate-limit.search.capacity=1",
+            "app.rate-limit.search.refill=1",
+            "app.rate-limit.search.window=1h"
+        })
 class ShellAccessibilityIT {
 
     private static final KeycloakDevRealm KEYCLOAK = KeycloakDevRealm.start();
@@ -158,6 +165,30 @@ class ShellAccessibilityIT {
 
         assertThat(response.status()).isEqualTo(404);
         assertThat(shell.heading()).isEqualTo("Page not found");
+        assertThat(shell.axeViolations()).isEmpty();
+        assertThat(consoleProblems).isEmpty();
+    }
+
+    @Test
+    void overTheRateLimitHtmxSwapsTheProblemAndTheFullPageIsTheErrorPageBothWithoutViolations() {
+        assertThat(open("/cases").status()).isEqualTo(200);
+        ShellPage shell = new ShellPage(page);
+
+        // The search form is an htmx request: app.js swaps the 429 problem fragment into the results.
+        page.fill("#tk-case-filter input[name=q]", "synthetic-needle-text");
+        page.click("#tk-case-filter button[type=submit]");
+        page.waitForSelector("#tk-case-results .tk-problem h2");
+        assertThat(page.textContent("#tk-case-results .tk-problem h2")).isEqualTo("Too many requests");
+        assertThat(page.evaluate("() => document.activeElement.closest('.tk-problem') !== null"))
+                .isEqualTo(true);
+        assertThat(shell.axeViolations()).isEmpty();
+
+        Response response = open("/cases?q=synthetic-needle-text");
+
+        assertThat(response.status()).isEqualTo(429);
+        assertThat(response.headerValue("retry-after")).isEqualTo("3600");
+        assertThat(shell.heading()).isEqualTo("Too many requests");
+        assertThat(page.content()).doesNotContain("synthetic-needle-text");
         assertThat(shell.axeViolations()).isEmpty();
         assertThat(consoleProblems).isEmpty();
     }
