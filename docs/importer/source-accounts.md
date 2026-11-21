@@ -18,7 +18,9 @@ The account's password is given to the importer Job as a Secret file, read as `i
 ## PostgreSQL
 
 The importer reads in one `REPEATABLE READ READ ONLY` transaction, so every query of a run sees the same snapshot.
-Use TLS with `sslmode=verify-full` and `sslrootcert` pointing at the mounted CA.
+The URL must require verified TLS: `sslmode=verify-full`, with `sslrootcert` pointing at the mounted CA. The importer
+refuses any other `sslmode` (`verify-ca` checks no host name, `require` checks nothing), or none, as
+`SOURCE_TLS_NOT_VERIFIED` before connecting.
 
 Replace `legacy` with the schema the mapping reads, and `trailkeep_source` with the account name.
 
@@ -58,7 +60,8 @@ that holds certificates only and has no password: a secret never goes in the URL
 is refused like any other property outside the allow-list. The importer
 refuses a TNS descriptor, a TNS alias and any URL property outside its allow-list of TLS and timeout settings before
 connecting, because descriptors and driver properties can name wallet and trace directories, provider classes and
-configuration files. Auto-login wallets need `oraclepki`, which is not on the importer's classpath.
+configuration files. It also refuses, as `SOURCE_TLS_NOT_VERIFIED`, an address that is not `tcps://` and a URL
+without `ssl_server_dn_match=true`. Auto-login wallets need `oraclepki`, which is not on the importer's classpath.
 
 Replace `legacy` with the schema the mapping reads, and `trailkeep_source` with the account name.
 
@@ -117,7 +120,8 @@ nothing else.
 
 Connect with `jdbc:sqlserver://host:1433;databaseName=<legacy database>;encrypt=strict;hostNameInCertificate=host`
 (TDS 8.0, SQL Server 2022 or later; older servers `encrypt=true`) and verify the server against the mounted CA with
-`serverCertificate` or a password-less `trustStore`. `trustServerCertificate` is accepted only as `false`. The importer
+`serverCertificate` or a password-less `trustStore`. `trustServerCertificate` is accepted only as `false`, and a URL
+without `encrypt=true` or `encrypt=strict` is refused as `SOURCE_TLS_NOT_VERIFIED`. The importer
 refuses, before connecting, any property outside its allow-list of database, TLS, timeout and routing settings
 (names compared without case, as the driver does) and any value in braces: driver properties can name classes to
 instantiate (`socketFactoryClass`, `trustManagerClass`, `accessTokenCallbackClass`), load native or Kerberos code
