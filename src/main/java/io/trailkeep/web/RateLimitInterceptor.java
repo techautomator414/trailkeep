@@ -39,7 +39,7 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
  * tagged {@code route}, and logged at INFO with the person's id and the route, never the request's parameters.
  */
 @Component
-class RateLimitInterceptor implements HandlerInterceptor, WebMvcConfigurer {
+final class RateLimitInterceptor implements HandlerInterceptor, WebMvcConfigurer {
 
     private static final Logger LOG = LoggerFactory.getLogger(RateLimitInterceptor.class);
 
