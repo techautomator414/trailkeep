@@ -80,7 +80,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   the purge CronJob has not succeeded for 36 hours and stays silent while it is suspended, as shipped
   (kube-state-metrics; `ManagementEndpointsIT` pins it); `deploy/README.md` now says search terms travel in GET query
   strings, so the router or ingress access log should omit them or be restricted; and security test map gap 20, its
-  Dependabot row and gap 23 are corrected. No application behaviour changes.
+  Dependabot row and gap 23 are corrected; and the staging-TTL CronJob (#281) has its own NetworkPolicy
+  (`staging-ttl-networkpolicy.yaml`: DNS and the database only, no route to clamd) under its own component label
+  `importer-staging-ttl`, which `trailkeep-importer` and `trailkeep-egress` do not select, pinned in
+  `ImporterStagingTtlManifestTest` for both importer directories. No application behaviour changes.
 - The published image is now verified after release, and pre-commit hooks are available (#249, security test map gaps
   17 and 22). `release.yml` runs the new `verify-image.yml` after the SLSA provenance and before the GitHub Release:
   `cosign verify` and `cosign verify-attestation --type cyclonedx` (cosign v3 bundles) against the identity

@@ -39,9 +39,9 @@ spec:
         metadata:
           labels:
             app.kubernetes.io/name: trailkeep
-            # The importer's NetworkPolicy (networkpolicy.yaml): DNS, the Trailkeep database and clamd's sidecar; never
-            # the source, since only the source-access component adds trailkeep.io/source-egress, and only to the Job.
-            app.kubernetes.io/component: importer
+            # Its own component, so that neither trailkeep-importer (clamd's sidecar) nor trailkeep-egress selects this
+            # pod: its NetworkPolicy (staging-ttl-networkpolicy.yaml) allows DNS and the Trailkeep database only.
+            app.kubernetes.io/component: importer-staging-ttl
           annotations:
             ignore-check.kube-linter.io/no-liveness-probe: "Batch job: no server to probe; activeDeadlineSeconds bounds it."
             ignore-check.kube-linter.io/no-readiness-probe: "Batch job: it never receives traffic."

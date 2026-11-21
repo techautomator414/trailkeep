@@ -16,7 +16,7 @@ Reference manifests for OpenShift, usable on plain Kubernetes. They follow BUILD
 | `overlays/external-scanning/` | Example overlay without ClamAV, for `APP_ATTACHMENTS_SCANNING=external` (see "Scanning mode"). |
 | `components/prometheus-rules/` | Optional Kustomize component with the `PrometheusRule` for the operational alerts (see "Alerts"). |
 | `jobs/migrate/`, `jobs/migrate-external-scanning/` | The schema migration `Job` and its `NetworkPolicy`, run before every rollout (see "Migrations"). |
-| `jobs/importer/` | The importer `Job`, its `NetworkPolicy` and the staging TTL `CronJob`, applied by hand because applying a `Job` runs it (see "Importer"). |
+| `jobs/importer/` | The importer `Job` with its `NetworkPolicy`, and the staging TTL `CronJob` with its own `NetworkPolicy` (DNS and the database only), applied by hand because applying a `Job` runs it (see "Importer"). |
 | `jobs/importer-external-scanning/` | The same for `APP_ATTACHMENTS_SCANNING=external`. |
 | `jobs/components/source-access/` | Kustomize component that gives the importer `Job` the source password and the route to the source, together; for `validate-mapping` and `extract` only. |
 | `jobs/importer-source-access/`, `jobs/importer-external-scanning-source-access/` | Each variant with that component applied. |

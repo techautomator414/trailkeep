@@ -9,11 +9,15 @@ import static io.trailkeep.ops.ManifestSupport.selects;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import java.util.TreeMap;
+import java.util.TreeSet;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.dataformat.yaml.YAMLMapper;
@@ -113,21 +117,71 @@ class ImporterStagingTtlManifestTest {
     }
 
     @Test
-    void itHasTheImportersNetworkWithoutTheSourceRouteAndTheExternalVariantDropsTheCaCertificate() throws IOException {
+    void itHasItsOwnNetworkOfDnsAndTheDatabaseAndNoBroaderPolicySelectsIt() throws IOException {
         Map<String, String> labels = labels(cronJob().at("/spec/jobTemplate/spec/template"));
-        Path policies = JOBS.resolve("importer/networkpolicy.yaml");
+        Path importerDir = JOBS.resolve("importer");
 
-        assertThat(selects(document(policies, "NetworkPolicy", "trailkeep-importer"), labels))
-                .isTrue();
-        assertThat(selects(document(policies, "NetworkPolicy", "trailkeep-importer-source"), labels))
-                .as("no route to the source")
-                .isFalse();
-        assertThat(selects(
-                        document(Path.of("deploy/base/networkpolicy.yaml"), "NetworkPolicy", "trailkeep-egress"),
-                        labels))
-                .as("not the web pods' egress (identity provider, mail)")
-                .isFalse();
+        assertThat(labels).containsEntry("app.kubernetes.io/component", "importer-staging-ttl");
 
+        // Every NetworkPolicy of the base and of the importer directory, which both importer variants render.
+        Map<String, JsonNode> selecting = new TreeMap<>();
+        List<Path> files = new ArrayList<>();
+        for (Path dir : List.of(Path.of("deploy/base"), importerDir)) {
+            try (var listed = Files.list(dir)) {
+                listed.filter(f -> f.toString().endsWith(".yaml")
+                                && !f.getFileName().toString().equals("kustomization.yaml"))
+                        .sorted()
+                        .forEach(files::add);
+            }
+        }
+        for (Path file : files) {
+            for (JsonNode doc : documents(file)) {
+                if ("NetworkPolicy".equals(doc.path("kind").asString()) && selects(doc, labels)) {
+                    selecting.put(doc.at("/metadata/name").asString(), doc);
+                }
+            }
+        }
+        assertThat(selecting.keySet())
+                .as("default-deny and its own policy; not trailkeep-importer (clamd), trailkeep-importer-source or"
+                        + " trailkeep-egress (identity provider, mail)")
+                .containsExactly("trailkeep-default-deny", "trailkeep-importer-staging-ttl");
+        JsonNode own = Objects.requireNonNull(selecting.get("trailkeep-importer-staging-ttl"));
+        assertThat(own.has("ingress")).as("nothing connects to the pod").isFalse();
+        assertThat(own.at("/spec/policyTypes").toString()).isEqualTo("[\"Ingress\",\"Egress\"]");
+
+        // The union of every policy that selects the pod: only cluster DNS and the Trailkeep database.
+        Set<Integer> reachable = new TreeSet<>();
+        selecting
+                .values()
+                .forEach(policy -> policy.at("/spec/egress")
+                        .forEach(rule -> rule.path("ports")
+                                .forEach(port -> reachable.add(port.path("port").asInt()))));
+        assertThat(reachable).as("egress ports over all policies").containsExactly(53, 2484, 5353, 5432);
+        for (JsonNode rule : own.at("/spec/egress")) {
+            assertThat(rule.toString())
+                    .as("no clamd, source or identity provider")
+                    .doesNotContain("clamav", "1433");
+        }
+
+        // Both importer directories ship it: the clamd one lists the file, the external one builds on that directory
+        // and patches no NetworkPolicy of the TTL.
+        assertThat(documents(importerDir.resolve("kustomization.yaml"))
+                        .getFirst()
+                        .path("resources")
+                        .toString())
+                .contains("staging-ttl-networkpolicy.yaml");
+        JsonNode external = documents(JOBS.resolve("importer-external-scanning/kustomization.yaml"))
+                .getFirst();
+        assertThat(external.path("resources").toString()).isEqualTo("[\"../importer\"]");
+        for (JsonNode patch : external.path("patches")) {
+            if ("NetworkPolicy".equals(patch.at("/target/kind").asString())) {
+                assertThat(patch.at("/target/name").asString()).isEqualTo("trailkeep-importer");
+            }
+        }
+    }
+
+    @Test
+    void theExternalVariantDropsTheCaCertificate() throws IOException {
         JsonNode overlay = documents(JOBS.resolve("importer-external-scanning/kustomization.yaml"))
                 .getFirst();
         List<JsonNode> patches = new ArrayList<>();

@@ -143,7 +143,7 @@ The status column records what is in effect today, not what is planned.
 **Verified:**
 - **No secret in a commit:** gitleaks on every PR and push.
 - **The audit key is required in prod:** `AuditConfigTest`.
-- **Each workload reads only its own secret files:** `ImporterJobManifestTest` (the importer Job), `ImporterStagingTtlManifestTest` (the staging TTL CronJob: the import credential and audit key, no source password or hash key), `MigrateJobManifestTest` (the migration Job), `PurgeCronJobManifestTest` (the purge CronJob: its own credential, no other Secret, no env injection), `WebDeploymentManifestTest` (the web Deployment: secrets only as files of `trailkeep-web`, never env literals).
+- **Each workload reads only its own secret files:** `ImporterJobManifestTest` (the importer Job), `ImporterStagingTtlManifestTest` (the staging TTL CronJob: the import credential and audit key, no source password or hash key; and its own network, #276: the union of every policy selecting its pod in `deploy/base` and `deploy/jobs/importer` allows only DNS and the database, not clamd, the source or `trailkeep-egress`, for the clamd and the external-scanning variants), `MigrateJobManifestTest` (the migration Job), `PurgeCronJobManifestTest` (the purge CronJob: its own credential, no other Secret, no env injection), `WebDeploymentManifestTest` (the web Deployment: secrets only as files of `trailkeep-web`, never env literals).
 
 **Platform:** GitHub secret scanning and push protection. They are repository settings, not visible in the repository.
 
