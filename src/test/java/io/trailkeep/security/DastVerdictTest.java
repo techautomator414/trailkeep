@@ -130,14 +130,14 @@ class DastVerdictTest {
         assertThat(both.exit()).isZero();
         assertThat(both.output()).doesNotContain("::error", "::warning");
 
-        Verdict first = scans("release", "4800.071 300.2");
+        Verdict first = scans("release", "3600.071 300.2");
         assertThat(first.exit()).isOne();
-        assertThat(first.output()).contains("::error", "Active scan 1 of 2 was cut off at its 80-minute cap");
+        assertThat(first.output()).contains("::error", "Active scan 1 of 2 was cut off at its 60-minute cap");
 
-        Verdict second = scans("release", "1444.962 2400.104");
+        Verdict second = scans("release", "1444.962 3600.104");
         assertThat(second.exit()).isOne();
-        assertThat(second.output()).contains("::error", "Active scan 2 of 2 was cut off at its 40-minute cap");
-        Verdict nightly = scans("nightly", "1444.962 2400.104");
+        assertThat(second.output()).contains("::error", "Active scan 2 of 2 was cut off at its 60-minute cap");
+        Verdict nightly = scans("nightly", "1444.962 3600.104");
         assertThat(nightly.exit()).isZero();
         assertThat(nightly.output()).contains("::warning", "Active scan 2 of 2 was cut off");
 
@@ -156,7 +156,7 @@ class DastVerdictTest {
     }
 
     private Verdict scans(String mode, String active) throws IOException, InterruptedException {
-        return verdict(mode, "200", "0", "1", "0", "", active, "4800 2400", "0");
+        return verdict(mode, "200", "0", "1", "0", "", active, "3600 3600", "0");
     }
 
     private Verdict run(String mode, String status, String gating, String stopped, String active)
