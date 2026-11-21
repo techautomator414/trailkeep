@@ -52,7 +52,7 @@ class ComposeImagesTest {
     }
 
     @Test
-    void everyServiceImageIsTheTestImageOfTheSameRepositoryOrAKnownComposeOnlyOne() throws IOException {
+    void everyServiceImageEqualsItsTestImageUnlessDeliberatelyComposeOnly() throws IOException {
         Map<String, String> testImages = testImagesByRepository();
         Map<String, String> drifted = new TreeMap<>();
         List<String> unknown = new ArrayList<>();
