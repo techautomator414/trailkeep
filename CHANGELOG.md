@@ -46,6 +46,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   active person in memory, dropped once their bucket is full again. Buckets are per replica, so a multi-replica
   deployment also needs a platform limit at the route or ingress (`deploy/README.md`).
 
+- The importer now requires verified TLS for every JDBC source, as ADR-0014 rule 2 promised (#259). `SourceUrl`
+  only allow-listed parameter names, so a PostgreSQL URL without `sslmode` and a plain-TCP Oracle address passed, and
+  TLS rested on the account recipes alone. Now PostgreSQL needs `sslmode=verify-full` (`verify-ca` checks no host
+  name), Oracle a `tcps://` Easy Connect address with `ssl_server_dn_match=true`, and SQL Server `encrypt=true` or
+  `strict` (`trustServerCertificate` was already only `false`); every value given must verify, so a later duplicate
+  cannot turn it off. A URL without it is refused before any connection: `SOURCE_TLS_NOT_VERIFIED` at `/source/url`
+  in `validate-mapping`, a FATAL issue at extract, and refused again by the DAO. **A deployment whose source URL
+  lacks these settings must add them** (`docs/importer/source-accounts.md` already wrote them). The ITs' database
+  containers serve plain TCP, so they set `import.source.plaintext-for-tests`, which is honoured only in the `test`
+  and `oracle-test` profiles; anywhere else, and always with `prod`, the importer refuses to start with it.
+  `PostgresSourceTlsIT` reads a PostgreSQL container over `verify-full` without it.
+- Only the classes that read a source may depend on `SourceQueryJdbcDao`: `JdbcSource` (extract), `SourceTestFetch`
+  (`validate-mapping`'s test fetch) and `SourceAccount` (#259). `SourceQueryDaoRulesTest` checks it and fires on a
+  planted caller.
+- ADR-0014 is Accepted (#259), reconciled with the merged code: the SpotBugs exception for the source DAO lives in
+  `config/spotbugs/exclude.xml` (the `@SuppressFBWarnings` annotations are LGPL); `closure.ClosureWrittenJdbcDao` and
+  `audit.ImportedEventWrittenJdbcDao` are listed beside it; the import hold is set in the case INSERT by `casefile`;
+  the import user's `CASE_SEARCH` update grant is recorded; `validate-mapping` also connects; the stale History-tab
+  line is gone.
+
 - Deny-by-default routes and the absence of CORS are now asserted (#245, security test map gaps 4 and 7):
   - **`DenyByDefaultIT`:** an anonymous request to every route in Spring MVC's handler mapping, with a valid CSRF
     token so CSRF's 403 cannot hide a `permitAll`, is refused: a 302 to the start of the sign-in, or a 401 with

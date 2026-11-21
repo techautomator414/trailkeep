@@ -32,9 +32,10 @@ import org.springframework.boot.ssl.SslStoreBundle;
  * A throwaway certificate authority and one server certificate it signed, generated at test run time with the JDK's
  * own {@code keytool} into a temporary directory: nothing is committed, and the store password is random. The
  * client side trusts only that CA, through a Spring Boot SSL bundle, exactly as the application does. There is no
- * trust-all manager and no disabled hostname check.
+ * trust-all manager and no disabled hostname check. Public for the importer's TLS source test ({@code
+ * PostgresSourceTlsIT}).
  */
-final class TestTls {
+public final class TestTls {
 
     private static final String BUNDLE = "clamd";
 
@@ -57,7 +58,7 @@ final class TestTls {
      *
      * @return the shared material
      */
-    static synchronized TestTls shared() {
+    public static synchronized TestTls shared() {
         TestTls tls = shared;
         if (tls == null) {
             tls = issue("dns:localhost,ip:127.0.0.1");
@@ -190,7 +191,7 @@ final class TestTls {
      *
      * @return the chain file; the key is {@code server-key.pem} beside it
      */
-    Path writePem() {
+    public Path writePem() {
         try {
             StringBuilder chain = new StringBuilder();
             for (Certificate certificate : serverKeys.getCertificateChain("server")) {
@@ -205,6 +206,15 @@ final class TestTls {
         } catch (GeneralSecurityException e) {
             throw new IllegalStateException(e);
         }
+    }
+
+    /**
+     * The CA's certificate as a PEM file, for a client that trusts a file rather than a key store.
+     *
+     * @return the file, in this material's temporary directory
+     */
+    public Path caCertificate() {
+        return dir.resolve("ca.crt");
     }
 
     private static String pem(String label, byte[] der) {

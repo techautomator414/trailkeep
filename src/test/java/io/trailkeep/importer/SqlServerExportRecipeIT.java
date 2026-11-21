@@ -152,6 +152,7 @@ class SqlServerExportRecipeIT extends ExtractJobSupport {
                         jdbcMapping,
                         null,
                         "--import.source.url=" + url("legacy_export"),
+                        PlainTcpSources.ARG,
                         "--import.source.user=trailkeep_source",
                         "--import.source.password=" + PASSWORD)
                 .close();

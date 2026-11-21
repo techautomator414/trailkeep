@@ -146,6 +146,7 @@ The status column records what is in effect today, not what is planned.
 ### Transport
 **Verified:**
 - **App → clamd over TLS (the sidecar):** `ClamdClientIT` against a real clamd behind TLS.
+- **Importer → JDBC sources over verified TLS** (ADR-0014 rule 2, #259): `SourceUrlTest` refuses, per vendor, a URL without it (PostgreSQL `sslmode=verify-full`, Oracle `tcps://` with `ssl_server_dn_match=true`, SQL Server `encrypt=true` or `strict`) in `validate-mapping` and in the DAO, and shows the test-only `import.source.plaintext-for-tests` fails startup outside the test profiles and with `prod`; `PostgresSourceTlsIT` reads a PostgreSQL container over `verify-full` with a throwaway CA, and is refused without the CA.
 - **Forwarded headers trusted only from the router's address pattern:** `ForwardedHeadersTrustedProxyIT`, `ForwardedHeadersSpoofIT`, `ForwardedHeadersPrivatePeerIT`.
 - **App → SMTP with STARTTLS required in prod** (`src/main/resources/application-prod.yml`): `MailStartTlsTest` reads `mail.smtp.starttls.enable` and `mail.smtp.starttls.required` from the session of the mail sender Spring Boot builds from the prod profile.
 

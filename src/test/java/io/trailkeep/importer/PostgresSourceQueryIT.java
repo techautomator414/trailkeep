@@ -50,7 +50,7 @@ class PostgresSourceQueryIT {
             new PostgreSQLContainer(PostgresTestcontainersConfiguration.IMAGE);
     private static final String PASSWORD = "Tk" + HexFormat.of().formatHex(new SecureRandom().generateSeed(12));
 
-    private final SourceQueryJdbcDao dao = new SourceQueryJdbcDao();
+    private final SourceQueryJdbcDao dao = PlainTcpSources.dao();
 
     @BeforeAll
     static void legacyDatabaseWithTheRecipeApplied() throws SQLException {
@@ -139,7 +139,7 @@ class PostgresSourceQueryIT {
                     query: "SELECT case_id FROM legacy.cases"
                     fields: { content: { query: "SELECT content FROM legacy.cases WHERE case_id = ?" } }
                 """;
-        MockEnvironment environment = new MockEnvironment()
+        MockEnvironment environment = PlainTcpSources.environment()
                 .withProperty("import.source.url", LEGACY.getJdbcUrl())
                 .withProperty("import.source.user", "trailkeep_source")
                 .withProperty("import.source.password", PASSWORD);

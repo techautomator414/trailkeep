@@ -56,7 +56,9 @@ class SourceTestFetch {
         try {
             source = SourceAccount.of(mapping, vendor, environment);
         } catch (SourceException refused) {
-            String pointer = "SOURCE_URL_NOT_ALLOWED".equals(refused.code()) ? "/source/url" : "/source";
+            boolean url =
+                    "SOURCE_URL_NOT_ALLOWED".equals(refused.code()) || "SOURCE_TLS_NOT_VERIFIED".equals(refused.code());
+            String pointer = url ? "/source/url" : "/source";
             return List.of(new MappingProblem(Code.valueOf(refused.code()), pointer));
         }
         return fetchAll(mapping, source);

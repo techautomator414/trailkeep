@@ -3,7 +3,10 @@
 package io.trailkeep.importer;
 
 import io.trailkeep.importer.SourceQueryValidator.Vendor;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Set;
+import java.util.function.Predicate;
 import java.util.regex.Pattern;
 
 /**
@@ -20,6 +23,9 @@ import java.util.regex.Pattern;
  * accessTokenCallbackClass}), loads native or Kerberos code ({@code integratedSecurity}, {@code authenticationScheme})
  * and reads key stores ({@code keyStoreLocation}); its address is {@code host[\instance][:port]}, its property names
  * are case-insensitive, and a value in braces may hold a {@code ;}, so braces are refused (26p).
+ *
+ * <p>An allowed URL must also require verified TLS ({@link #verifiesTls}, ADR-0014 rule 2, #259): the server's
+ * certificate checked against a trusted CA and its host name checked against the certificate.
  */
 final class SourceUrl {
 
@@ -87,6 +93,18 @@ final class SourceUrl {
 
     private static final String ORACLE_THIN = "jdbc:oracle:thin:@";
 
+    /** The two spellings of Oracle's host-name check, which {@link #verifiesTls} requires to be {@code true}. */
+    private static final Set<String> ORACLE_DN_MATCH = Set.of("ssl_server_dn_match", "oracle.net.ssl_server_dn_match");
+
+    /** A {@code true} in any case, in ASCII only, as the drivers read it. */
+    private static final Pattern TRUE = Pattern.compile("true", Pattern.CASE_INSENSITIVE);
+
+    /** SQL Server's {@code encrypt}, named in any case as the driver allows. */
+    private static final Pattern SQLSERVER_ENCRYPT = Pattern.compile("encrypt", Pattern.CASE_INSENSITIVE);
+
+    /** The {@code encrypt} values that verify: {@code true}, or {@code strict} (TDS 8.0). */
+    private static final Pattern SQLSERVER_ENCRYPT_VERIFIED = Pattern.compile("true|strict", Pattern.CASE_INSENSITIVE);
+
     private SourceUrl() {}
 
     /**
@@ -112,6 +130,71 @@ final class SourceUrl {
             case SQLSERVER -> false; // checked by sqlServer
         };
         return known && (query < 0 || parameters(vendor, url.substring(query + 1)));
+    }
+
+    /**
+     * Whether a URL requires verified TLS (ADR-0014 rule 2; design §4.1 and §11, "Encrypted in transit"). Every value
+     * a setting is given must verify, so a later duplicate cannot switch verification off.
+     *
+     * <ul>
+     *   <li>PostgreSQL: {@code sslmode=verify-full}, and {@code ssl} only as {@code true}. {@code verify-ca} checks no
+     *       host name and {@code require} checks nothing, so both are refused.
+     *   <li>Oracle: a {@code tcps://} address with {@code ssl_server_dn_match=true} (either spelling), as the account
+     *       recipe writes it; the host-name check is stated rather than left to the driver's default.
+     *   <li>SQL Server: {@code encrypt=true} or {@code encrypt=strict}. {@code trustServerCertificate} is already
+     *       allowed only as {@code false}.
+     * </ul>
+     *
+     * @param vendor the mapping's {@code source.vendor}
+     * @param url the URL with its placeholders resolved
+     * @return true only if the URL requires a verified, host-checked TLS connection
+     */
+    static boolean verifiesTls(Vendor vendor, String url) {
+        return switch (vendor) {
+            case POSTGRESQL ->
+                every(settings(url, "?", "&"), "sslmode"::equals, "verify-full"::equals, true)
+                        && every(settings(url, "?", "&"), "ssl"::equals, "true"::equals, false);
+            case ORACLE ->
+                url.startsWith(ORACLE_THIN + "tcps://")
+                        && every(settings(url, "?", "&"), ORACLE_DN_MATCH::contains, TRUE.asMatchPredicate(), true);
+            case SQLSERVER ->
+                every(
+                        settings(url, ";", ";"),
+                        SQLSERVER_ENCRYPT.asMatchPredicate(),
+                        SQLSERVER_ENCRYPT_VERIFIED.asMatchPredicate(),
+                        true);
+        };
+    }
+
+    /** The {@code name=value} settings after the address, a setting without {@code =} having an empty value. */
+    private static List<String[]> settings(String url, String start, String separator) {
+        int from = url.indexOf(start);
+        List<String[]> settings = new ArrayList<>();
+        if (from >= 0) {
+            for (String setting : url.substring(from + 1).split(Pattern.quote(separator), -1)) {
+                int equals = setting.indexOf('=');
+                settings.add(
+                        equals < 0
+                                ? new String[] {setting, ""}
+                                : new String[] {setting.substring(0, equals), setting.substring(equals + 1)});
+            }
+        }
+        return settings;
+    }
+
+    /** Whether every setting the name matches has a verifying value, and, if required, there is one. */
+    private static boolean every(
+            List<String[]> settings, Predicate<String> name, Predicate<String> verifies, boolean required) {
+        boolean seen = false;
+        for (String[] setting : settings) {
+            if (name.test(setting[0])) {
+                if (!verifies.test(setting[1])) {
+                    return false;
+                }
+                seen = true;
+            }
+        }
+        return seen || !required;
     }
 
     /** {@code jdbc:sqlserver://address;name=value;…} with the address and every property allowed. */

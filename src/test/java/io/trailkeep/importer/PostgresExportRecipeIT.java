@@ -152,6 +152,7 @@ class PostgresExportRecipeIT extends ExtractJobSupport {
         long live = validatedRun(jdbcMapping);
         List<String> args = new ArrayList<>(List.of(
                 "--import.source.url=" + LEGACY.getJdbcUrl(),
+                PlainTcpSources.ARG,
                 "--import.source.user=trailkeep_source",
                 "--import.source.password=" + PASSWORD,
                 "--import.content-area=" + area(directory, "jdbc")));

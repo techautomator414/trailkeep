@@ -62,7 +62,7 @@ class OracleSourceIT extends ExtractJobSupport {
     @Autowired
     private JdbcConnectionDetails connection;
 
-    private final SourceQueryJdbcDao dao = new SourceQueryJdbcDao();
+    private final SourceQueryJdbcDao dao = PlainTcpSources.dao();
 
     @Override
     String vendorProfile() {
@@ -274,7 +274,7 @@ class OracleSourceIT extends ExtractJobSupport {
         String text = LegacyPostgresSource.mapping(MAPPING)
                 .replace("vendor: postgresql", "vendor: oracle")
                 .replace("legacy.", "tk_legacy.");
-        MockEnvironment environment = new MockEnvironment()
+        MockEnvironment environment = PlainTcpSources.environment()
                 .withProperty("import.source.url", connection.getJdbcUrl())
                 .withProperty("import.source.user", "tk_source")
                 .withProperty("import.source.password", PASSWORD);
@@ -289,6 +289,7 @@ class OracleSourceIT extends ExtractJobSupport {
                         mapping,
                         null,
                         "--import.source.url=" + connection.getJdbcUrl(),
+                        PlainTcpSources.ARG,
                         "--import.source.user=tk_source",
                         "--import.source.password=" + PASSWORD,
                         "--import.content-area=" + area)

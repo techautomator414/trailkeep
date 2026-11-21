@@ -1,9 +1,9 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 # ADR-0014: Import from SQL Server, Oracle, PostgreSQL or their exports through one canonical staging model
 
-- **Status:** Proposed
+- **Status:** Accepted (2026-11-21)
 - **Date:** 2026-11-05 (revised 2026-11-05 after the independent review and the re-review on #56, with the owner's
-  decisions of 2026-11-05)
+  decisions of 2026-11-05; reconciled with the merged code on 2026-11-21, #259)
 - **Register rows:** IMPLEMENTATION_PLAN.md A.4 #34 (importer idempotency), A.4 #37 (migrations land with their
   entities), WP-26 (generic importer)
 - **Plan sections:** BUILD_PLAN.md §15 (importing records), §5.1 (`IMPORT_RUN` among the supporting tables), §6 (SLA),
@@ -71,12 +71,20 @@ Option 3. The detail is in the design document; the binding rules are:
 1. **Three stages separated by tables:** *extract* (source-specific; writes only canonical staging rows and the
    run's content area), *validate/dry-run* (writes only issues, the run summary and a reconciliation preview), *load*
    (writes the domain through import-only APIs of `casefile`, `document`, `closure`, `audit`, `user` and, once their
-   work packages land, `sla` and `retention`, with `origin = IMPORT`). **Only extract opens a source connection.**
+   work packages land, `sla` and `retention`, with `origin = IMPORT`). **Only extract opens a source connection to
+   read rows;** `validate-mapping` also connects, to test-fetch each query for at most one row, so a wrong table or
+   column fails before any extract.
    Attachment bytes are read once at extract, inside the snapshot, and their size and SHA-256 recorded; bytes from a
    source query are copied into a run-scoped content area, and mounted files are re-read at load only to verify their
    hash (`CONTENT_CHANGED` on a mismatch), so the folder stays mounted until the load has finished. The load needs no
    source credential or source egress.
-2. **Sources:** JDBC for SQL Server, Oracle and PostgreSQL, read in one consistent snapshot with verified TLS; files
+2. **Sources:** JDBC for SQL Server, Oracle and PostgreSQL, read in one consistent snapshot with verified TLS
+   (certificate and host name), which `SourceUrl` requires before anything connects: PostgreSQL
+   `sslmode=verify-full`; Oracle a `tcps://` Easy Connect address with `ssl_server_dn_match=true`; SQL Server
+   `encrypt=true` or `strict`, and `trustServerCertificate` only `false`. A URL without it is
+   `SOURCE_TLS_NOT_VERIFIED` in `validate-mapping` and a FATAL issue at extract. The ITs' plain-TCP database containers
+   set `import.source.plaintext-for-tests`, honoured only in the test profiles; anywhere else, and always with `prod`,
+   it fails startup. Files come
    as CSV/TSV and JSON Lines that are the per-entity query outputs, with a checksummed manifest recording the export's
    snapshot. Vendor dump formats and raw per-table exports are not parsed; they are restored or loaded into a scratch
    database and read over JDBC.
@@ -119,7 +127,8 @@ Option 3. The detail is in the design document; the binding rules are:
     `@CaseRooted` repository and shown on the History tab marked "Imported". Values of description-, subject- and
     note-like fields, and of every field not on a short plain allow-list, are HMAC-redacted like audit.
 11. **Nothing imported is deleted unreviewed.** Every case past its purge date at import and every case on legal hold
-    in the legacy system is imported and placed on legal hold, with a fixed reason. The hold is released by a
+    in the legacy system is imported and placed on legal hold, with a fixed reason. `casefile`'s import API sets the
+    hold in the case's INSERT, so the import user needs no UPDATE of a hold. The hold is released by a
     Compliance Admin through the normal legal-hold action.
 12. **Delta runs never overwrite.** Changed records are reported as `CHANGED_AFTER_IMPORT`; legacy closures during the
     freeze (`CLOSED_IN_SOURCE`) are always detected, by a status-only comparison that runs even under
@@ -168,14 +177,21 @@ also allows **one** class in `importer`, `SourceQueryJdbcDao`, which runs operat
 
 - It accepts only a `ValidatedSourceQuery`, a type that only the query validator can construct, and runs it on the
   **source** connection, never on the Trailkeep `DataSource`.
-- Its single execute method carries
-  `@SuppressFBWarnings(value = {"SQL_PREPARED_STATEMENT_GENERATED_FROM_NONCONSTANT_STRING", "SQL_INJECTION_JDBC"},
-  justification = "…")`, stating that the text is operator configuration validated by the parser, never built from
-  data. No other suppression is added and no gate is changed.
-- A new ArchUnit rule allows only the importer's extract classes to depend on it.
+- Its single execute method, `run`, is excluded from SpotBugs'
+  `SQL_PREPARED_STATEMENT_GENERATED_FROM_NONCONSTANT_STRING` and `SQL_INJECTION_JDBC` in `config/spotbugs/exclude.xml`,
+  matched by class, method and those two patterns, with a comment stating that the text is operator configuration validated by the parser, never built from data. Not
+  `@SuppressFBWarnings`: its annotations are LGPL, which the licence allow-list does not admit. No other exclusion is
+  added and no gate is changed.
+- An ArchUnit rule (`SourceQueryDaoRulesTest`) allows only the classes that read a source to depend on it:
+  `JdbcSource` (extract), `SourceTestFetch` (`validate-mapping`'s test fetch) and `SourceAccount`, which resolves the
+  account both use.
 - Staging tables are accessed through JPA entities in `io.trailkeep.importer.staging`; staging deletes are constant
   JPQL. Only the `importer` profile's managed types include that package, because Hibernate `validate` on Oracle sees
   only tables the connecting user holds a privilege on, and `TRAILKEEP_APP` holds none on staging.
+
+Two more `*JdbcDao` classes came with WP-26 part aa1 (#190): `closure.ClosureWrittenJdbcDao` and
+`audit.ImportedEventWrittenJdbcDao`. Each runs one constant statement that reads the written form of imported rows
+for the reconciliation, in its own module, and follows the native-SQL-only-in-`*JdbcDao` rule without any exception.
 
 The plan documents are not edited (CLAUDE.md rule 11); this amendment is listed under Plan deviations in #56.
 
@@ -183,7 +199,8 @@ The plan documents are not edited (CLAUDE.md rule 11); this amendment is listed 
 
 A fourth database user, `TRAILKEEP_IMPORT`, used only by the importer Job, owns the grants on staging tables and the
 grants the load needs: inserts on the domain tables it writes (including `ALERT_LEDGER` and `CASE_IMPORTED_EVENT`),
-the `CASE_RECORD` updates for re-link and hold, and `SELECT` on every table an entity maps, so `validate` passes on
+the `CASE_RECORD` update of the owner for re-link (the hold is set in the INSERT), the `CASE_SEARCH` update of the
+search text as imported comments are appended, and `SELECT` on every table an entity maps, so `validate` passes on
 Oracle. `TRAILKEEP_APP` loses its implicit DELETE on "importer staging tables". On the importer's own tables it keeps
 `SELECT` and `INSERT` on `IMPORT_RUN` (the run request), `UPDATE` of its approval and acknowledgement columns, and
 `SELECT` on `IMPORT_ISSUE`, `IMPORT_RUN_SUMMARY`, `IMPORT_LEDGER`, `IMPORT_OWNER_PENDING` and `CASE_IMPORTED_EVENT`.
@@ -229,8 +246,7 @@ recorded by amending this table.
   `ALLOW_SNAPSHOT_ISOLATION` on the source, a readable secondary, a database snapshot or a restored copy, and long
   snapshots cost tempdb, undo or vacuum on the source. The owner-accepted risk above.
 - **Neutral:** BUILD_PLAN §15's CSV path remains a subset of this design. The v1.1 "mapping DSL beyond fixed YAML"
-  item stays deferred; the transform set is closed and can grow by reviewed PRs. The History tab display of imported
-  events waits for WP-16.
+  item stays deferred; the transform set is closed and can grow by reviewed PRs.
 
 ### Plan dependencies
 
@@ -243,8 +259,12 @@ for the import hold only). None of those depends on WP-26; WP-25 still does, for
 
 - Query-validator unit tests and the grants recipe ITs on SQL Server, Oracle and PostgreSQL, each shipped with its
   adapter and asserting what the recipe achieves, including `PUBLIC` function execution (design §4.1, §11).
-- An ArchUnit rule: only importer extract classes depend on `SourceQueryJdbcDao`, and only `importer` calls the
-  import-only APIs.
+- ArchUnit rules: only extract, the test fetch and the account resolver depend on `SourceQueryJdbcDao`
+  (`SourceQueryDaoRulesTest`), and only `importer` calls the import-only APIs (`ImportOnlyApiRulesTest`). Each is shown
+  firing on a planted caller.
+- `SourceUrlTest` refuses each vendor's URL without verified TLS, in `validate-mapping` and in the DAO, and shows the
+  test-only plain-TCP setting fails startup outside the test profiles and with `prod`; `PostgresSourceTlsIT` reads a
+  source over `sslmode=verify-full` without it.
 - `AbstractDatabaseGrantsIT` and its vendor subclasses with the `TRAILKEEP_IMPORT` column; a negative IT that the web
   credential cannot read staging; on Oracle, the web profile and the importer profile both start under `validate`.
 - Source-equivalence ITs (JDBC vs files per vendor), recipe tests, and the end-to-end `RECONCILED` and re-run tests.

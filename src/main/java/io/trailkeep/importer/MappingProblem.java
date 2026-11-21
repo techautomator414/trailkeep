@@ -62,6 +62,12 @@ record MappingProblem(Code code, String pointer) implements Comparable<MappingPr
         SOURCE_UNSUPPORTED,
         /** A source URL with another driver's scheme or a parameter outside the allow-list ({@link SourceUrl}). */
         SOURCE_URL_NOT_ALLOWED,
+        /**
+         * A source URL that does not require verified TLS ({@link SourceUrl#verifiesTls}): PostgreSQL without {@code
+         * sslmode=verify-full}, Oracle without a {@code tcps://} address and {@code ssl_server_dn_match=true}, SQL
+         * Server without {@code encrypt=true} or {@code strict}.
+         */
+        SOURCE_TLS_NOT_VERIFIED,
         /** A setting the test fetch needs is not configured: an {@code import.source.*} placeholder or the password. */
         SOURCE_SETTING_MISSING,
         /** The source could not be reached, or refused the account. */

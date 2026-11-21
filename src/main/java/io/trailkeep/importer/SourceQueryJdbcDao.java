@@ -26,6 +26,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.function.Consumer;
 import org.jspecify.annotations.Nullable;
+import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
 
 /**
@@ -33,10 +34,12 @@ import org.springframework.stereotype.Component;
  * necessity: the source is a foreign schema no entity maps, and the queries are the operator's own, from the reviewed
  * mapping. It runs nothing but a {@link ValidatedSourceQuery}, with values only as bind parameters, never wrapped or
  * rewritten, in one read-only snapshot per session, with a statement timeout. A driver failure becomes a code-only
- * {@link SourceQueryException}. PostgreSQL (26n), Oracle (26o) and SQL Server (26p) sources are supported.
+ * {@link SourceQueryException}. PostgreSQL (26n), Oracle (26o) and SQL Server (26p) sources are supported. It refuses
+ * a URL outside {@link SourceUrl}'s allow-list, or one that does not require verified TLS unless a test profile allows
+ * plain TCP ({@link SourceTls}, read once here, so a misplaced test setting fails the context's startup).
  */
 @Component
-class SourceQueryJdbcDao {
+final class SourceQueryJdbcDao {
 
     /** Rows fetched per round trip; no stage holds more than one batch (design §8.2). */
     static final int FETCH_SIZE = 500;
@@ -58,6 +61,13 @@ class SourceQueryJdbcDao {
 
     /** Where a PostgreSQL snapshot stands. */
     private static final String POSTGRESQL_POINT = "SELECT 'postgresql', pg_current_snapshot()::text";
+
+    /** Whether a source URL must require verified TLS: always outside a test profile ({@link SourceTls}). */
+    private final boolean tlsRequired;
+
+    SourceQueryJdbcDao(Environment environment) {
+        this.tlsRequired = SourceTls.required(environment);
+    }
 
     /**
      * Where a legacy database is and who reads it: the read-only source account of the grants recipe
@@ -113,6 +123,9 @@ class SourceQueryJdbcDao {
         if (!SourceUrl.allowed(source.vendor(), source.url())) {
             throw new IllegalArgumentException(
                     "the source URL names another driver or a parameter outside the allow-list");
+        }
+        if (tlsRequired && !SourceUrl.verifiesTls(source.vendor(), source.url())) {
+            throw new IllegalArgumentException("the source URL does not require verified TLS");
         }
         try {
             Connection connection = DriverManager.getConnection(source.url(), source.user(), source.password());

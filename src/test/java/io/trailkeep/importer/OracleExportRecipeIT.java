@@ -149,6 +149,7 @@ class OracleExportRecipeIT extends ExtractJobSupport {
                         jdbcMapping,
                         null,
                         "--import.source.url=" + connection.getJdbcUrl(),
+                        PlainTcpSources.ARG,
                         "--import.source.user=trailkeep_source",
                         "--import.source.password=" + PASSWORD)
                 .close();
