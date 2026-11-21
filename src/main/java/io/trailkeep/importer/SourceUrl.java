@@ -3,7 +3,10 @@
 package io.trailkeep.importer;
 
 import io.trailkeep.importer.SourceQueryValidator.Vendor;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Set;
+import java.util.function.Predicate;
 import java.util.regex.Pattern;
 
 /**
@@ -93,12 +96,6 @@ final class SourceUrl {
     /** The two spellings of Oracle's host-name check, which {@link #verifiesTls} requires to be {@code true}. */
     private static final Set<String> ORACLE_DN_MATCH = Set.of("ssl_server_dn_match", "oracle.net.ssl_server_dn_match");
 
-    /** SQL Server's {@code encrypt} with a verifying value: {@code true}, or {@code strict} (TDS 8.0). */
-    private static final Pattern SQLSERVER_ENCRYPT_VERIFIED =
-            Pattern.compile("encrypt=(true|strict)", Pattern.CASE_INSENSITIVE);
-
-    private static final Pattern SQLSERVER_ENCRYPT = Pattern.compile("encrypt(=.*)?", Pattern.CASE_INSENSITIVE);
-
     private SourceUrl() {}
 
     /**
@@ -144,43 +141,51 @@ final class SourceUrl {
      * @return true only if the URL requires a verified, host-checked TLS connection
      */
     static boolean verifiesTls(Vendor vendor, String url) {
-        if (vendor == Vendor.SQLSERVER) {
-            boolean verified = false;
-            for (String property : url.split(";", -1)) {
-                if (SQLSERVER_ENCRYPT.matcher(property).matches()) {
-                    if (!SQLSERVER_ENCRYPT_VERIFIED.matcher(property).matches()) {
-                        return false;
-                    }
-                    verified = true;
-                }
-            }
-            return verified;
-        }
-        int query = url.indexOf('?');
-        String address = query < 0 ? url : url.substring(0, query);
-        if (query < 0 || (vendor == Vendor.ORACLE && !address.startsWith(ORACLE_THIN + "tcps://"))) {
-            return false;
-        }
-        boolean verified = false;
-        for (String parameter : url.substring(query + 1).split("&", -1)) {
-            int equals = parameter.indexOf('=');
-            String name = equals < 0 ? parameter : parameter.substring(0, equals);
-            String value = equals < 0 ? "" : parameter.substring(equals + 1);
-            if (vendor == Vendor.ORACLE && ORACLE_DN_MATCH.contains(name)) {
-                if (!"true".equalsIgnoreCase(value)) {
-                    return false;
-                }
-                verified = true;
-            } else if (vendor == Vendor.POSTGRESQL && "sslmode".equals(name)) {
-                if (!"verify-full".equals(value)) {
-                    return false;
-                }
-                verified = true;
-            } else if (vendor == Vendor.POSTGRESQL && "ssl".equals(name) && !"true".equals(value)) {
-                return false;
+        return switch (vendor) {
+            case POSTGRESQL ->
+                every(settings(url, "?", "&"), "sslmode"::equals, "verify-full"::equals, true)
+                        && every(settings(url, "?", "&"), "ssl"::equals, "true"::equals, false);
+            case ORACLE ->
+                url.startsWith(ORACLE_THIN + "tcps://")
+                        && every(settings(url, "?", "&"), ORACLE_DN_MATCH::contains, "true"::equalsIgnoreCase, true);
+            case SQLSERVER ->
+                every(
+                        settings(url, ";", ";"),
+                        "encrypt"::equalsIgnoreCase,
+                        value -> "true".equalsIgnoreCase(value) || "strict".equalsIgnoreCase(value),
+                        true);
+        };
+    }
+
+    /** The {@code name=value} settings after the address, a setting without {@code =} having an empty value. */
+    private static List<String[]> settings(String url, String start, String separator) {
+        int from = url.indexOf(start);
+        List<String[]> settings = new ArrayList<>();
+        if (from >= 0) {
+            for (String setting : url.substring(from + 1).split(Pattern.quote(separator), -1)) {
+                int equals = setting.indexOf('=');
+                settings.add(
+                        equals < 0
+                                ? new String[] {setting, ""}
+                                : new String[] {setting.substring(0, equals), setting.substring(equals + 1)});
             }
         }
-        return verified;
+        return settings;
+    }
+
+    /** Whether every setting the name matches has a verifying value, and, if required, there is one. */
+    private static boolean every(
+            List<String[]> settings, Predicate<String> name, Predicate<String> verifies, boolean required) {
+        boolean seen = false;
+        for (String[] setting : settings) {
+            if (name.test(setting[0])) {
+                if (!verifies.test(setting[1])) {
+                    return false;
+                }
+                seen = true;
+            }
+        }
+        return seen || !required;
     }
 
     /** {@code jdbc:sqlserver://address;name=value;…} with the address and every property allowed. */

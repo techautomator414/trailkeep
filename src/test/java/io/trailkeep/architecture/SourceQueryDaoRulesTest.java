@@ -13,11 +13,11 @@ import com.tngtech.archunit.lang.EvaluationResult;
 import org.junit.jupiter.api.Test;
 
 /**
- * Only the classes that read a source may depend on {@code SourceQueryJdbcDao}, the one class that runs operator-written
- * SQL on a source connection (ADR-0014, Part B "Persistence" amendment; #259): {@code JdbcSource} (extract), {@code
- * SourceTestFetch} ({@code validate-mapping}'s test fetch, which also connects) and {@code SourceAccount}, which
- * resolves the account both use. Checked on the production classes and proven to fire on a planted caller. The DAO is
- * package-private, so the rule names classes rather than referencing them.
+ * Only the classes that read a source may depend on {@code SourceQueryJdbcDao}, the one class that runs
+ * operator-written SQL on a source connection (ADR-0014, Part B "Persistence" amendment; #259): {@code JdbcSource}
+ * (extract), {@code SourceTestFetch} ({@code validate-mapping}'s test fetch, which also connects) and {@code
+ * SourceAccount}, which resolves the account both use. Checked on the production classes and proven to fire on a
+ * planted caller. The DAO is package-private, so the rule names classes rather than referencing them.
  */
 class SourceQueryDaoRulesTest {
 

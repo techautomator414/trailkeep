@@ -213,7 +213,7 @@ class SourceUrlTest {
 
     /** Each vendor's URL without verified TLS is refused at its place, before any connection (#259). */
     @Test
-    void validateMappingRefusesAUrlWithoutVerifiedTlsForEachVendor() {
+    void validateMappingRefusesUrlsWithoutVerifiedTlsForEachVendor() {
         String[][] cases = {
             {"postgresql", "jdbc:postgresql://db.invalid:5432/legacy?sslmode=require"},
             {"oracle", "jdbc:oracle:thin:@db.invalid:1521/legacy"},
@@ -230,7 +230,7 @@ class SourceUrlTest {
     }
 
     @Test
-    void theDaoRefusesAUrlWithoutVerifiedTlsToo() {
+    void theDaoRefusesUrlsWithoutVerifiedTlsToo() {
         assertThatThrownBy(() -> new SourceQueryJdbcDao(new MockEnvironment())
                         .open(new Source(
                                 "jdbc:postgresql://db.invalid/legacy", "legacy_reader", "unused", Vendor.POSTGRESQL)))
@@ -243,7 +243,7 @@ class SourceUrlTest {
      * prod} importer Job above all, where the DAO's construction (and so the context's startup) fails.
      */
     @Test
-    void plainTcpIsAllowedOnlyInATestProfileAndNeverWithProd() {
+    void plainTcpIsAllowedOnlyInTestProfilesAndNeverWithProd() {
         MockEnvironment test = plaintext("test");
         assertThat(SourceTls.required(test)).isFalse();
         assertThat(SourceTls.required(plaintext("oracle-test", "importer"))).isFalse();

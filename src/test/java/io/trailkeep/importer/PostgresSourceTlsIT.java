@@ -34,10 +34,10 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 
 /**
  * A PostgreSQL source over verified TLS, without the test-only escape (#259): the server presents a certificate from a
- * throwaway CA for {@code localhost} and {@code 127.0.0.1}, and the importer reaches it with {@code sslmode=verify-full} and that CA as
- * {@code sslrootcert}. The URL the importer now requires is the one that works, both for {@code validate-mapping}'s
- * test fetch and for the DAO's session, and the session really is encrypted. The same server without the CA, or
- * without TLS in the URL, is refused.
+ * throwaway CA for {@code localhost} and {@code 127.0.0.1}, and the importer reaches it with {@code
+ * sslmode=verify-full} and that CA as {@code sslrootcert}. The URL the importer now requires is the one that works,
+ * both for {@code validate-mapping}'s test fetch and for the DAO's session, and the session really is encrypted. The
+ * same server without the CA, or without TLS in the URL, is refused.
  */
 // "IT" is the Failsafe suffix Part B mandates for integration tests, not an abbreviation.
 @SuppressWarnings("checkstyle:AbbreviationAsWordInName")
