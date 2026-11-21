@@ -29,6 +29,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -44,6 +50,7 @@ import org.springframework.orm.jpa.persistenceunit.ManagedClassNameFilter;
 import org.springframework.orm.jpa.persistenceunit.PersistenceManagedTypes;
 import org.springframework.scheduling.annotation.ScheduledAnnotationBeanPostProcessor;
 import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * The two persistence units of one image (WP-26 part a, design §2.1 R3), each started as the database user it runs
@@ -207,6 +214,71 @@ abstract class AbstractImporterProfileIT {
 
         assertThat(stagedRows(current)).isZero();
         assertThat(purgedAt(current)).isNotNull();
+    }
+
+    /**
+     * The scheduled staging TTL (#275): {@code expire-staging}, the CronJob's command, given no run and with no other
+     * importer command run, removes an expired run's staging and content area and records the purge, and leaves a run
+     * that has not expired alone.
+     */
+    @Test
+    void expireStagingAloneRemovesExpiredStagingAndKeepsFreshStaging(@TempDir Path area) throws Exception {
+        long expired = stagedRun(Instant.parse("2026-01-01T00:00:00Z"));
+        long fresh = stagedRun(Instant.parse("2099-01-01T00:00:00Z"));
+        Path expiredFolder = Files.createDirectories(area.resolve(Long.toString(expired)));
+        Files.writeString(expiredFolder.resolve("ab".repeat(32)), "synthetic content");
+        Path freshFile = Files.createDirectories(area.resolve(Long.toString(fresh))).resolve("cd".repeat(32));
+        Files.writeString(freshFile, "synthetic content");
+
+        start(importUser, true, "--import.command=expire-staging", "--import.content-area=" + area)
+                .close();
+
+        assertThat(stagedRows(expired)).as("expired: staging and checkpoints gone").isZero();
+        assertThat(purgedAt(expired)).isNotNull();
+        assertThat(expiredFolder).as("expired: content area gone").doesNotExist();
+        assertThat(stagedRows(fresh)).as("not expired: untouched").isEqualTo(6);
+        assertThat(purgedAt(fresh)).isNull();
+        assertThat(freshFile).exists();
+    }
+
+    /**
+     * One purge per run (#275): while a TTL pass holds an expired run's lock, having purged it, a second pass (the
+     * CronJob racing an importer command) waits for it, then finds the run purged and leaves it alone, without failing.
+     */
+    @Test
+    void aSecondTtlPassWaitsForTheFirstAndLeavesTheRunItPurged() throws Exception {
+        long current = stagedRun(Instant.parse("2099-01-01T00:00:00Z"));
+        try (ConfigurableApplicationContext importer =
+                start(importUser, true, "--import.command=status", "--import.run=" + current)) {
+            // Seeded after the start, whose own TTL pass would have taken it.
+            long expired = stagedRun(Instant.parse("2026-01-01T00:00:00Z"));
+            StagingPurger purger = importer.getBean(StagingPurger.class);
+            ExecutorService other = Executors.newSingleThreadExecutor();
+            CountDownLatch held = new CountDownLatch(1);
+            try {
+                Future<List<Long>> second = other.submit(() -> {
+                    held.await();
+                    return purger.purgeExpired(Instant.now());
+                });
+                List<Long> first = importer.getBean(TransactionTemplate.class).execute(status -> {
+                    List<Long> purged = purger.purgeExpired(Instant.now());
+                    held.countDown();
+                    assertThatThrownBy(() -> second.get(500, TimeUnit.MILLISECONDS))
+                            .as("the second pass waits while the first holds the run")
+                            .isInstanceOf(TimeoutException.class);
+                    return purged;
+                });
+
+                assertThat(first).contains(expired);
+                assertThat(second.get(60, TimeUnit.SECONDS))
+                        .as("the second pass found the run purged")
+                        .doesNotContain(expired);
+            } finally {
+                other.shutdownNow();
+            }
+            assertThat(stagedRows(expired)).isZero();
+            assertThat(purgedAt(expired)).isNotNull();
+        }
     }
 
     /** A run with one row in every staging table and one checkpoint, as the schema owner seeds it. */
