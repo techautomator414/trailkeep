@@ -120,10 +120,21 @@ class AuditRecorderIT {
         transactions.executeWithoutResult(status -> recorder.record(entry(changes)));
 
         Map<String, Object> row = jdbc.queryForMap("SELECT OLD_VALUES_JSON, NEW_VALUES_JSON FROM AUDIT_EVENT");
-        assertThat(row.values())
-                .allSatisfy(json -> assertThat((String) json)
-                        .doesNotContain(SECRET_SUBJECT, "sensitive", "4711")
-                        .contains("\"hmac\":\"", "\"length\":"));
+        // Structural, not a substring over the JSON: the hmac is random hex and can contain "4711" by chance (#268).
+        RedactedJsonAssert.assertRedacted(
+                String.valueOf(row.get("old_values_json")),
+                "subject",
+                SECRET_SUBJECT.length(),
+                SECRET_SUBJECT,
+                "sensitive",
+                "4711");
+        RedactedJsonAssert.assertRedacted(
+                String.valueOf(row.get("new_values_json")),
+                "subject",
+                (SECRET_SUBJECT + " v2").length(),
+                SECRET_SUBJECT,
+                "sensitive",
+                "4711");
         assertThat((String) row.get("old_values_json")).contains("\"title\":\"Old\"");
     }
 
