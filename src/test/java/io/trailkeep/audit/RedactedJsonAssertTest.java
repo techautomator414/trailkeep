@@ -50,7 +50,7 @@ class RedactedJsonAssertTest {
     }
 
     @Test
-    void aMalformedRedactionIsRefused() {
+    void malformedRedactionsAreRefused() {
         String upper = HEX_WITH_4711.toUpperCase(java.util.Locale.ROOT);
         for (String subject : new String[] {
             "{\"hmac\":\"" + upper + "\",\"length\":32}",
