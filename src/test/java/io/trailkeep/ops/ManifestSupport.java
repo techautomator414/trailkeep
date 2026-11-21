@@ -32,7 +32,7 @@ final class ManifestSupport {
                 .orElseThrow(() -> new AssertionError(kind + "/" + name + " not found in " + file));
     }
 
-    /** Whether the NetworkPolicy's podSelector (matchLabels and In/NotIn expressions) selects a pod with these labels. */
+    /** Whether the NetworkPolicy podSelector (matchLabels and In/NotIn expressions) selects a pod with these labels. */
     static boolean selects(JsonNode policy, Map<String, String> labels) {
         JsonNode selector = policy.at("/spec/podSelector");
         for (Map.Entry<String, JsonNode> expected : selector.path("matchLabels").properties()) {
