@@ -162,7 +162,11 @@ class ImporterStagingTtlManifestTest {
                     .as("no clamd, source or identity provider")
                     .doesNotContain("clamav", "1433");
         }
+    }
 
+    @Test
+    void bothImporterDirectoriesShipItsNetworkPolicy() throws IOException {
+        Path importerDir = JOBS.resolve("importer");
         // Both importer directories ship it: the clamd one lists the file, the external one builds on that directory
         // and patches no NetworkPolicy of the TTL.
         assertThat(documents(importerDir.resolve("kustomization.yaml"))
