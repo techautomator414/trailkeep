@@ -47,3 +47,8 @@ release. Details: `IMPLEMENTATION_PLAN.md` Part G and `BUILD_PLAN.md` §9 and §
 Which test or scanner verifies each control, where and how often it runs, what is only configured, and the known
 gaps (SonarCloud and Dependency-Check, for one, are skipped until their secrets are set): see
 [`security/TEST_MAP.md`](security/TEST_MAP.md).
+
+The threats we design against, each with its control, its verification and the residual risk left to the project, the
+deployer or the platform: see [`security/THREAT_MODEL.md`](security/THREAT_MODEL.md). Where restricted and personal
+data lives, who can read it, how long it is kept and whether it leaves the system: see
+[`security/DATA_MAP.md`](security/DATA_MAP.md).
