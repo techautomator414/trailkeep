@@ -123,7 +123,8 @@ class ManagementEndpointsIT {
 
         int alerts = rules.split("- alert: ", -1).length - 1;
         assertThat(alerts).isGreaterThanOrEqualTo(10);
-        // The purge CronJob ships suspended: its alert must read the suspend flag, or it fires on every default install.
+        // The purge CronJob ships suspended: its alert must read the suspend flag, or it fires on every default
+        // install.
         assertThat(rules)
                 .contains("alert: TrailkeepPurgeNotSucceeding")
                 .contains("kube_cronjob_status_last_successful_time{cronjob=\"trailkeep-purge\"}")
