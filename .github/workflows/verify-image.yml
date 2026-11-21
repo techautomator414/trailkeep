@@ -12,8 +12,6 @@
 name: verify-image
 
 on:
-  push:
-    branches: [ops-249-verify-published-image] # TEMPORARY, reverted: proves the job before the file is on main
   workflow_call:
     inputs:
       tag:
@@ -47,8 +45,8 @@ jobs:
       packages: read # read the image, its signature and attestations from GHCR
     env:
       IMAGE: ghcr.io/techautomator414/trailkeep
-      TAG: ${{ inputs.tag || 'v0.2.0' }}
-      DIGEST: ${{ inputs.digest || 'sha256:0000000000000000000000000000000000000000000000000000000000000000' }}
+      TAG: ${{ inputs.tag }}
+      DIGEST: ${{ inputs.digest }}
       SLSA_VERIFIER_VERSION: "2.7.1"
       # SHA-256 of slsa-verifier-linux-amd64 for that version. The binary also verifies against its own SLSA
       # provenance (slsa-verifier-linux-amd64.intoto.jsonl): `slsa-verifier verify-artifact`. Bump both together.
