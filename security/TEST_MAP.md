@@ -43,8 +43,8 @@ The status column records what is in effect today, not what is planned.
 | ZAP authenticated full and API scan | `.github/workflows/zap.yml#scan`, called by `.github/workflows/nightly.yml#zap` and `.github/workflows/release.yml#zap` | nightly (reports), release tag (gates) | Medium+, partial scan fails a release | running |
 | OpenSSF Scorecard | `.github/workflows/scorecard.yml#analysis` | push to `main`, weekly | reported, not a gate | running |
 | Dependabot | `.github/dependabot.yml` | weekly | pull requests | maven, github-actions and pip only; container images are not tracked |
-| Image signature, SBOM attestation, SLSA provenance | `.github/workflows/release.yml#publish`, `.github/workflows/release.yml#provenance` | release tag | the release fails | exercised once, at `v0.1.0` |
-| Pre-commit hooks | not in the repository | locally | advisory | **not provided** |
+| Image signature, SBOM attestation, SLSA provenance | `.github/workflows/release.yml#publish`, `.github/workflows/release.yml#provenance`; verified after publishing by `.github/workflows/verify-image.yml` (`release.yml#verify-published`) | release tag; `verify-image` by hand against any tag | the release fails | **shown** against v0.2.0 (`cosign verify`, `cosign verify-attestation --type cyclonedx`, `slsa-verifier verify-image`); a wrong tag and a wrong digest fail |
+| Pre-commit hooks | `.pre-commit-config.yaml` (gitleaks, Spotless, SPDX header) | locally, opt-in | advisory; CI is the gate | provided |
 
 ## Controls (BUILD_PLAN §9)
 
@@ -197,7 +197,7 @@ The status column records what is in effect today, not what is planned.
 - **SBOM scanned by Trivy:** `.github/workflows/main.yml#trivy-sbom`.
 - **The image scanned by Trivy and checked by Dockle; manifests by kube-linter:** `.github/workflows/main.yml#image`.
 - **Actions pinned by commit SHA:** reviewed in PRs, with actionlint in `.github/workflows/ci.yml#actionlint`.
-- **Release-time signature, SBOM attestation and SLSA provenance:** `.github/workflows/release.yml`.
+- **Release-time signature, SBOM attestation and SLSA provenance:** `.github/workflows/release.yml`, checked after publishing by `.github/workflows/verify-image.yml` (see gap 22).
 
 **Configured only:**
 - Dependabot, weekly;
@@ -299,12 +299,12 @@ Controls with no automated verification, or only part of it, one line each. A cl
 14. **The purge CronJob's credential separation:** no manifest test, unlike the importer and migration Jobs. Tracked: #246.
 15. **The web Deployment's secret mounts:** no manifest test. Tracked: #246.
 16. **GitHub secret scanning and push protection:** not verifiable from the repository. Position: they are GitHub repository settings outside the code; gitleaks covers every commit in CI.
-17. **Pre-commit hooks** (gitleaks, Spotless, Checkstyle, SPDX in BUILD_PLAN §12.1): not provided; CI is the only gate. Tracked: #249.
+17. **Pre-commit hooks** (gitleaks, Spotless, Checkstyle, SPDX in BUILD_PLAN §12.1): closed (#249). `.pre-commit-config.yaml` provides gitleaks, `./mvnw spotless:check` and the SPDX header check as opt-in hooks (CONTRIBUTING.md). Checkstyle is left to `./mvnw verify`; CI remains the gate.
 18. **SonarCloud quality gate:** skipped until `SONAR_TOKEN` is set, so WP-28's "Sonar gate A" is not shown. Tracked: #30.
 19. **OWASP Dependency-Check:** skipped until `NVD_API_KEY` is set, so "Dependency-Check clean" is not shown. Tracked: #30.
 20. **Dependabot does not track container images** (test containers, the ZAP and vnu images, the UBI bases); they are bumped by hand. Tracked: #235.
 21. **Licence allow-list:** skips the test scope. Position: test-scope dependencies are never shipped, in neither the jar nor the image.
-22. **Image signature, SBOM attestation and SLSA provenance:** exercised once, at `v0.1.0`; nothing verifies a signature after publishing. Tracked: #249.
+22. **Image signature, SBOM attestation and SLSA provenance:** closed (#249). `release.yml#verify-published` calls `.github/workflows/verify-image.yml` after the provenance and before the GitHub Release: `cosign verify` and `cosign verify-attestation --type cyclonedx` (cosign v3 bundles) against the identity `release.yml@refs/tags/<tag>`, and `slsa-verifier verify-image` (the generator's legacy format) with `--source-uri` and `--source-tag`; any failure fails the release. The same workflow runs by hand against an existing tag's digest. Shown green against v0.2.0, and failing for a wrong tag and a wrong digest.
 23. **Security review of the importer's plain SHA-256 mapping hash** (`HANDOFF.md` §6): flagged for WP-28; not done. Tracked: #169.
 24. **Threat model (STRIDE):** BUILD_PLAN §9 lists it as a Phase 1 deliverable; it does not exist (see below). Tracked: #248.
 25. **Data map (security/DATA_MAP.md):** BUILD_PLAN §9 promises it; it does not exist (see below). Tracked: #248.

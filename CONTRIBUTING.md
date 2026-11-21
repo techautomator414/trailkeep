@@ -29,6 +29,16 @@ docker compose --profile oracle up -d
 ./mvnw verify -Poracle-it
 ```
 
+### Optional: pre-commit hooks
+
+`.pre-commit-config.yaml` runs gitleaks, `./mvnw spotless:check` and the SPDX header check before each commit, so
+you hear about them sooner. They are optional: CI runs the same checks and is the gate.
+
+```
+pipx install pre-commit    # or: pip install --user pre-commit
+pre-commit install
+```
+
 ## Pull requests
 
 - Branch from `main`; one work package or one bounded fix per PR; ≤ 400 net lines of production code
