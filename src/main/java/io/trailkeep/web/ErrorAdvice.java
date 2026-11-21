@@ -22,8 +22,8 @@ import org.springframework.web.servlet.ModelAndView;
  * layer (a controller that skipped form validation before calling a {@code @Validated} service) is a 422, not a 5xx.
  * A request parameter with a control character is a 400 ({@link ControlCharacterInterceptor}).
  * A download refused because every slot is taken is a 503 with {@code Retry-After} (an upload the container refused
- * for its size never reaches here: see {@link UploadTooLargeErrorView}). The exception message never reaches the
- * response.
+ * for its size never reaches here: see {@link UploadTooLargeErrorView}). A request over the person's rate limit is a
+ * 429 with {@code Retry-After} ({@link RateLimitInterceptor}). The exception message never reaches the response.
  */
 @ControllerAdvice
 class ErrorAdvice {
@@ -34,7 +34,8 @@ class ErrorAdvice {
         DomainException.class,
         ConstraintViolationException.class,
         DownloadsBusyException.class,
-        ControlCharacterException.class
+        ControlCharacterException.class,
+        RateLimitedException.class
     })
     ModelAndView domain(Exception exception, HttpServletRequest request, HttpServletResponse response) {
         HttpStatus status = HttpStatus.UNPROCESSABLE_CONTENT;
@@ -53,6 +54,10 @@ class ErrorAdvice {
             status = HttpStatus.SERVICE_UNAVAILABLE;
             response.setHeader(HttpHeaders.RETRY_AFTER, "5");
         }
+        if (exception instanceof RateLimitedException limited) {
+            status = HttpStatus.TOO_MANY_REQUESTS;
+            response.setHeader(HttpHeaders.RETRY_AFTER, Long.toString(limited.retryAfterSeconds()));
+        }
         LOG.debug("{} -> {}", exception.getClass().getSimpleName(), status.value());
         response.setStatus(status.value());
         boolean htmx = "true".equals(request.getHeader("HX-Request"));
@@ -62,7 +67,11 @@ class ErrorAdvice {
         } else if (status.is5xxServerError()) {
             view = "error/5xx";
         } else {
-            view = status == HttpStatus.NOT_FOUND ? "error/404" : "error/4xx";
+            view = switch (status) {
+                case NOT_FOUND -> "error/404";
+                case TOO_MANY_REQUESTS -> "error/429";
+                default -> "error/4xx";
+            };
         }
         ModelAndView page = new ModelAndView(view);
         page.addObject("status", status.value());

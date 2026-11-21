@@ -88,7 +88,7 @@
     });
   }
 
-  /** htmx contract: 200 swaps; 403/404/409/422 swap the problem or form fragment; 5xx keeps the page. */
+  /** htmx contract: 200 swaps; 403/404/409/422/429 swap the problem or form fragment; 5xx keeps the page. */
   function wireHtmx() {
     document.addEventListener('htmx:configRequest', function (event) {
       const header = meta('tk-csrf-header');
@@ -99,7 +99,7 @@
     });
     document.addEventListener('htmx:beforeSwap', function (event) {
       const status = event.detail.xhr.status;
-      if (status === 403 || status === 404 || status === 409 || status === 422) {
+      if (status === 403 || status === 404 || status === 409 || status === 422 || status === 429) {
         event.detail.shouldSwap = true;
         event.detail.isError = false;
       } else if (status >= 500) {

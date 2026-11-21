@@ -38,6 +38,7 @@ class CaseListController {
     }
 
     @GetMapping("/cases")
+    @RateLimited(RateLimited.Route.SEARCH)
     String list(
             @AuthenticationPrincipal TrailkeepOidcUser principal,
             @RequestParam MultiValueMap<String, String> parameters,

@@ -184,8 +184,8 @@ The status column records what is in effect today, not what is planned.
 - **Bounded concurrent downloads, 503 with `Retry-After` when full:** `CaseAttachmentDownloadIT`, `ConcurrentDownloadHeapIT`.
 - **The scheduler lock:** `SlaEvaluatorIT`.
 - **Management endpoints only on the management port, and only health, info and prometheus:** `ManagementEndpointsIT`.
-
-**Not built:** per-user rate limiting on search and upload. There is no Bucket4j and no other limiter.
+- **Per-user rate limits on search and upload** (`RateLimitInterceptor`, #247): `RateLimitIT` drives each limit to a 429 with `Retry-After`, on the error page and as the htmx problem fragment, without echoing what was sent; shows a refused upload is never scanned, the CSV export shares the search bucket, another person is unaffected, and each refusal is counted on `trailkeep.rate_limit.refusals` and logged with the user id and route only. `TokenBucketsTest` covers refill, the wait reported, idle-bucket eviction and a wrapping monotonic clock; `RateLimitInterceptorTest` that the prod profile refuses `app.rate-limit.enabled=false` and that the shipped limits are on. `ShellAccessibilityIT` runs axe and the Nu validator on the 429 page and the swapped htmx fragment.
+  - **Platform:** the buckets are in memory per replica, so a multi-replica deployment also sets a limit at the route or ingress (`deploy/README.md`, "Runtime properties").
 
 **Configured only:** database pool sizing.
 
@@ -294,7 +294,7 @@ Controls with no automated verification, or only part of it, one line each. A cl
 10. **Data at rest (TDE or volume encryption, backups):** nothing tested in the repository. Position: a platform responsibility under BUILD_PLAN §9, owned by the database and storage platform.
 11. **Logging rules (no restricted text, ids not emails, control characters escaped):** closed, verified by `LoggingRulesIT` and `JsonLoggingIT` (#245).
 12. **Error attributes off (`spring.web.error.include-*`):** closed, verified by `ErrorPropertiesTest` (#245). The old `server.error.*` keys were not read under Spring Boot 4; `ConfigurationKeysTest` guards against that recurring.
-13. **Rate limiting on search and upload (Bucket4j):** not built. Tracked: #247.
+13. **Rate limiting on search and upload:** closed, verified by `RateLimitIT` (#247). Built in-house (a token bucket per user in memory), not with Bucket4j; per replica, with a platform limit at the route for multi-replica deployments.
 14. **The purge CronJob's credential separation:** no manifest test, unlike the importer and migration Jobs. Tracked: #246.
 15. **The web Deployment's secret mounts:** no manifest test. Tracked: #246.
 16. **GitHub secret scanning and push protection:** not verifiable from the repository. Position: they are GitHub repository settings outside the code; gitleaks covers every commit in CI.

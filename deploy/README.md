@@ -165,6 +165,14 @@ The order for a fresh install and for every release:
 - **Probes.** On the management port 8081: `/actuator/health/liveness` and `/actuator/health/readiness`. Their
   members are listed explicitly, so cluster-level indicators never restart a healthy pod.
 - **Metrics.** `/actuator/prometheus` on port 8081. The `NetworkPolicy` admits it only from cluster monitoring.
+- **Rate limits.** `app.rate-limit.search.*` (the cases list and its CSV export) and `app.rate-limit.upload.*`
+  (attaching a file) give each signed-in person a token bucket: `capacity` requests at once, `refill` more per
+  `window`. The defaults (120 searches, then 120 a minute; 30 uploads, then 30 per 10 minutes) are far above normal
+  use. Over the limit the request is refused before any work with a 429 and `Retry-After`, counted on
+  `trailkeep_rate_limit_refusals_total{route}` and logged with the person's id and the route. The buckets are **in
+  memory, per replica**: with N replicas a person can make up to N times the limit, and a restart refills them. A
+  multi-replica deployment also sets a platform limit at the route or ingress (per client, not per person). The
+  `prod` profile refuses to start with `app.rate-limit.enabled=false`, which only tests may set.
 - **Logs.** One JSON object per line on stdout, with `requestId` (and later `userId`, `caseNumber`, `module`).
 - **Batch profiles.** The purge `CronJob`, importer `Job` and migration `Job` run the same image with `prod,purge`,
   `prod,importer` or `prod,migrate` and `spring.main.web-application-type=none`.

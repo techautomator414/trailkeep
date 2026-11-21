@@ -153,6 +153,22 @@ app:
     # max-concurrent-downloads (default 8): downloads streaming at once per replica; one more is refused with 503 and
     # Retry-After. Each holds a database connection while it streams, so keep it below the Hikari pool (10 by
     # default), and at most the async executor's core size (spring.task.execution.pool.core-size, 8 by default).
+  # Per-person rate limits (#247), in each replica's memory: a bucket per person and route holds capacity requests
+  # and gains refill more per window, evenly. Over it, the request is refused 429 with Retry-After before any work,
+  # counted on trailkeep.rate_limit.refusals{route} and logged with the person's id. search covers the cases list and
+  # its CSV export; upload covers attaching a file. With N replicas a person may get up to N times these, so a
+  # multi-replica deployment also limits at the route or ingress. enabled: false is for tests only; the prod profile
+  # refuses to start with it.
+  rate-limit:
+    enabled: true
+    search:
+      capacity: 120
+      refill: 120
+      window: 1m
+    upload:
+      capacity: 30
+      refill: 30
+      window: 10m
   # CSV export of the cases list (WP-15 part 4): a filter matching more than max-rows cases is refused (422) and the
   # person narrows it. The export streams in pages of 500 rows inside one read-only transaction.
   export:

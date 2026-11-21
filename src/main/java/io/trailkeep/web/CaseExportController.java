@@ -57,6 +57,7 @@ class CaseExportController {
     }
 
     @GetMapping("/cases/export.csv")
+    @RateLimited(RateLimited.Route.SEARCH)
     ModelAndView export(
             @AuthenticationPrincipal TrailkeepOidcUser principal,
             @RequestParam MultiValueMap<String, String> parameters,
