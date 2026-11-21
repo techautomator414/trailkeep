@@ -9,6 +9,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- `AuditRecorderIT.redactedValuesAreStoredOnlyAsHmacAndLength` no longer fails by chance (#268). It looked for the
+  fragment `4711` in the whole stored JSON, but the redacted field's `hmac` is 64 hex digits of a per-run random key and
+  contains it about once in 1,000 runs (it did on #266's CI). The test now parses each stored value, requires the
+  redacted field to be exactly an object with a lowercase 64-hex `hmac` and the plaintext's `length`, and requires that
+  no other string in the document contains the secret, `sensitive` or `4711`; `RedactedJsonAssertTest` shows the check
+  on crafted JSON, including an hmac that contains `4711`. Test-only.
 - The DAST scan is no longer throttled by the per-person rate limits (#270). With #247's production limits (120
   searches a minute, 30 uploads in 10 minutes) the scanner was refused 429 on almost every search and upload request
   (142,618 refusals in one nightly run), so it lost its coverage of both, and ZAP's boolean SQL-injection rule read a
