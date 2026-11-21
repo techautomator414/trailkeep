@@ -65,6 +65,17 @@ spring:
       cache:
         cachecontrol:
           max-age: 365d
+    # Error responses show none of the error attributes (BUILD_PLAN §9 Errors): no message, stack trace, exception
+    # class, binding errors or request path, in the HTML pages or in the JSON body. Spring Boot 4.0 moved these keys
+    # from server.error.* to spring.web.error.* and stopped reading the old names (deprecated at level "error"), so
+    # they must live here. ErrorPropertiesTest asserts the bound values, and ConfigurationKeysTest fails on any key
+    # Boot no longer reads.
+    error:
+      include-message: never
+      include-stacktrace: never
+      include-exception: false
+      include-binding-errors: never
+      include-path: never
   session:
     # Spring Session JDBC (ADR-0008). The schema is V3_1__sessions; Spring Session never creates tables.
     jdbc:
@@ -195,11 +206,6 @@ server:
       # Idle timeout (BUILD_PLAN §9). The 8-hour absolute lifetime is app.security.absolute-session-lifetime; the
       # page's expiry warning reads this value too.
       timeout: 30m
-  error:
-    include-message: never
-    include-stacktrace: never
-    include-exception: false
-    include-binding-errors: never
   # Honor X-Forwarded-* only from the router (Part A #29 amended r3, BUILD_PLAN §16). Spring Boot's default
   # internal-proxies trusts every RFC 1918 address, which on an intranet is every client, so both lists are
   # overridden with the same regular expression. An unset pattern resolves to "trust nobody" here and is then
