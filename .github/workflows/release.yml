@@ -175,9 +175,22 @@ jobs:
     secrets:
       registry-password: ${{ secrets.GITHUB_TOKEN }}
 
+  verify-published:
+    name: verify the published image
+    # The signature, the SBOM attestation and the provenance, checked as a user would check them, against the digest just
+    # pushed (issue 249). A failure stops the release before it has a GitHub Release.
+    needs: [publish, provenance]
+    permissions:
+      contents: read
+      packages: read
+    uses: ./.github/workflows/verify-image.yml
+    with:
+      tag: ${{ github.ref_name }}
+      digest: ${{ needs.publish.outputs.digest }}
+
   github-release:
     name: GitHub Release with evidence pack
-    needs: [publish, provenance]
+    needs: [publish, provenance, verify-published]
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
@@ -210,14 +223,26 @@ jobs:
           set -euo pipefail
           notes="Image: \`${IMAGE}@${DIGEST}\`
 
-          Verify the signature:
+          The release workflow verified all three artefacts below against this digest before publishing this release.
+          The signature and the CycloneDX SBOM attestation use cosign's bundle format (cosign **v3** or later):
           \`\`\`
           cosign verify ${IMAGE}@${DIGEST} \\
             --certificate-identity-regexp '^https://github.com/${GITHUB_REPOSITORY}/' \\
             --certificate-oidc-issuer https://token.actions.githubusercontent.com
+          cosign verify-attestation --type cyclonedx ${IMAGE}@${DIGEST} \\
+            --certificate-identity-regexp '^https://github.com/${GITHUB_REPOSITORY}/' \\
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com
           \`\`\`
-          SLSA provenance is attached to the image in GHCR. The evidence pack (SBOM, scan reports, test reports) is
-          attached below; see CHANGELOG.md for changes."
+          The SLSA provenance comes from slsa-github-generator in the earlier cosign format, which cosign v3 does not read;
+          verify it with slsa-verifier:
+          \`\`\`
+          slsa-verifier verify-image ${IMAGE}@${DIGEST} \\
+            --source-uri github.com/${GITHUB_REPOSITORY} --source-tag ${GITHUB_REF_NAME}
+          \`\`\`
+          or with cosign v2 (\`verify-attestation --type slsaprovenance\` and
+          \`--certificate-identity-regexp '^https://github.com/slsa-framework/slsa-github-generator/'\`).
+
+          The evidence pack (SBOM, scan reports, test reports) is attached below; see CHANGELOG.md for changes."
           gh release create "${GITHUB_REF_NAME}" pack/* \
             --repo "${GITHUB_REPOSITORY}" \
             --verify-tag \

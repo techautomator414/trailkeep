@@ -43,6 +43,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Security
 
+- The published image is now verified after release, and pre-commit hooks are available (#249, security test map gaps
+  17 and 22). `release.yml` runs the new `verify-image.yml` after the SLSA provenance and before the GitHub Release:
+  `cosign verify` and `cosign verify-attestation --type cyclonedx` (cosign v3 bundles) against the identity
+  `release.yml@refs/tags/<tag>`, and `slsa-verifier verify-image` (pinned by version and checksum; the generator's legacy
+  provenance format, which cosign v3 does not read), so a release whose signature, SBOM attestation or provenance does
+  not verify gets no GitHub Release. The same workflow can be dispatched by hand against any tag and digest. The release
+  notes now carry one working command per artefact. `.pre-commit-config.yaml` adds opt-in gitleaks, Spotless and SPDX
+  header hooks (CONTRIBUTING.md); CI stays the gate.
 - Per-user rate limits on case search and upload (#247, BUILD_PLAN §9 Availability, security test map gap 13). Each
   signed-in person has a token bucket per route, keyed on their user id (never the client address): `search` covers
   the cases list and its CSV export, `upload` covers attaching a file. Over the limit, `RateLimitInterceptor` refuses

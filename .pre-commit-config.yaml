@@ -1,0 +1,25 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Charlie Genova and contributors
+#
+# OPTIONAL local hooks (CONTRIBUTING.md, "Optional: pre-commit hooks"). CI is the gate and runs the same checks on every
+# pull request (gitleaks in ci.yml, Spotless and the SPDX header check in `./mvnw verify`); these only tell you sooner.
+# Install: `pipx install pre-commit && pre-commit install`. Bump `rev` by commit SHA together with its tag comment.
+repos:
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: 83d9cd684c87d95d656c1458ef04895a7f1cbd8e # v8.30.1
+    hooks:
+      - id: gitleaks
+
+  - repo: local
+    hooks:
+      - id: spotless
+        name: Spotless (palantir-java-format); fix with ./mvnw spotless:apply
+        entry: ./mvnw -B -ntp -q spotless:check
+        language: system
+        files: \.(java|xml)$
+        pass_filenames: false
+      - id: spdx-header
+        name: SPDX header on every source file; fix with ./mvnw license:format
+        entry: ./mvnw -B -ntp -q com.mycila:license-maven-plugin:check
+        language: system
+        pass_filenames: false
