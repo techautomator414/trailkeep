@@ -12,11 +12,14 @@ import io.trailkeep.testsupport.RequiresDocker;
 import java.nio.file.Path;
 import java.security.SecureRandom;
 import java.util.Base64;
+import java.util.List;
+import java.util.UUID;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
+import org.slf4j.LoggerFactory;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
@@ -28,7 +31,10 @@ import org.springframework.test.context.DynamicPropertySource;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
-/** The prod profile writes one JSON object per line, carrying the request id from the MDC. */
+/**
+ * The prod profile writes one JSON object per line, carrying the request id from the MDC, and escapes control
+ * characters inside it, so text a user typed cannot forge or split a log line (security test map gap 11).
+ */
 // "IT" is the Failsafe suffix Part B mandates for integration tests, not an abbreviation.
 @SuppressWarnings("checkstyle:AbbreviationAsWordInName")
 @RequiresDocker
@@ -115,5 +121,26 @@ class JsonLoggingIT {
         assertThat(json.get("requestId").asString()).isEqualTo("json-req-42");
         assertThat(json.has("@timestamp")).isTrue();
         assertThat(json.has("logger_name")).isTrue();
+    }
+
+    /**
+     * A logged value holding line breaks, a forged JSON fragment, an ANSI escape and NUL stays one line of valid JSON
+     * whose message is the value exactly. The escaping is the encoder's, so the value is logged as application code
+     * logs any value, as an argument through the prod profile's root appender.
+     */
+    @Test
+    void controlCharactersAreEscapedSoOneEventIsOneLine(CapturedOutput output) {
+        String probe = "zqjson" + UUID.randomUUID().toString().replace("-", "");
+        String value =
+                "Synthetic " + probe + "\n{\"level\":\"ERROR\",\"message\":\"forged\"}\r\n\u001b[31m\u0007\u0000end";
+
+        LoggerFactory.getLogger(JsonLoggingIT.class).info("Value: {}", value);
+
+        List<String> lines =
+                output.getOut().lines().filter(line -> line.contains(probe)).toList();
+        assertThat(lines).as("lines carrying the probe").hasSize(1);
+        assertThat(lines.getFirst()).doesNotContainPattern("[\\x00-\\x1F]");
+        JsonNode json = JsonMapper.builder().build().readTree(lines.getFirst());
+        assertThat(json.get("message").asString()).isEqualTo("Value: " + value);
     }
 }

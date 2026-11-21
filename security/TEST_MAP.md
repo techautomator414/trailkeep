@@ -147,10 +147,10 @@ The status column records what is in effect today, not what is planned.
 **Verified:**
 - **App → clamd over TLS (the sidecar):** `ClamdClientIT` against a real clamd behind TLS.
 - **Forwarded headers trusted only from the router's address pattern:** `ForwardedHeadersTrustedProxyIT`, `ForwardedHeadersSpoofIT`, `ForwardedHeadersPrivatePeerIT`.
+- **App → SMTP with STARTTLS required in prod** (`src/main/resources/application-prod.yml`): `MailStartTlsTest` reads `mail.smtp.starttls.enable` and `mail.smtp.starttls.required` from the session of the mail sender Spring Boot builds from the prod profile.
 
 **Configured only:**
 - edge TLS with an HTTP redirect (`deploy/base/route.yaml`);
-- SMTP STARTTLS required in prod (`src/main/resources/application-prod.yml`);
 - app → Oracle over `tcps`, which is the deployment's JDBC URL. No test connects that way.
 
 ### Data at rest
@@ -159,14 +159,15 @@ The status column records what is in effect today, not what is planned.
 **Platform:** Oracle TDE or PostgreSQL volume encryption, and backups. Nothing in the repository tests them.
 
 ### Logging
-**Verified:** structured JSON and plain-text output, both with the request id on every line: `JsonLoggingIT`, `TextLoggingIT`, `RequestIdFilterTest`.
+**Verified:**
+- **Structured JSON and plain-text output, both with the request id on every line:** `JsonLoggingIT`, `TextLoggingIT`, `RequestIdFilterTest`.
+- **Control characters escaped by the JSON encoder:** `JsonLoggingIT`. A value holding line breaks, a forged JSON fragment, an ANSI escape and NUL stays one line of valid JSON, and its message is the value exactly.
+- **No restricted-case text and no email address in the log; people logged by user id:** `LoggingRulesIT` runs the paths that log around a restricted case, with the output captured:
+  - create, open and edit, a comment, a stored and a refused upload;
+  - an update request, with its alert and queued mail, and a mail dispatch that fails;
+  - a sign-in refused for a disabled user, and a role conflict at sign-in.
 
-**Configured only:**
-- control characters escaped by the JSON encoder (Logback configuration);
-- never logging description, subject or attachment names of restricted cases;
-- user ids rather than emails.
-
-These rules are followed in code review, but no test asserts them.
+  Every text and address it writes carries one marker, which must never appear in the log, and each path must have logged its line with the ids.
 
 ### Errors
 **Verified:**
@@ -288,10 +289,10 @@ Controls with no automated verification, or only part of it, one line each. A cl
 5. **Session cookie flags (`Secure; HttpOnly; SameSite=Lax`):** closed, verified by `SessionHardeningIT` (#245).
 6. **HSTS:** closed, verified by `SessionHardeningIT` (#245); the route still sets none of its own.
 7. **No CORS:** closed, verified by `NoCorsIT` (#245).
-8. **SMTP STARTTLS required:** configured in the prod profile; no test. Tracked: #245.
+8. **SMTP STARTTLS required:** closed, verified by `MailStartTlsTest` (#245).
 9. **App → Oracle over `tcps`:** no test. Position: the JDBC URL is a deployment value, and nothing in the repository connects to a deployed Oracle; the deploying organization verifies it.
 10. **Data at rest (TDE or volume encryption, backups):** nothing tested in the repository. Position: a platform responsibility under BUILD_PLAN §9, owned by the database and storage platform.
-11. **Logging rules (no restricted text, ids not emails, control characters escaped):** no test asserts them. Tracked: #245.
+11. **Logging rules (no restricted text, ids not emails, control characters escaped):** closed, verified by `LoggingRulesIT` and `JsonLoggingIT` (#245).
 12. **Error attributes off (`spring.web.error.include-*`):** closed, verified by `ErrorPropertiesTest` (#245). The old `server.error.*` keys were not read under Spring Boot 4; `ConfigurationKeysTest` guards against that recurring.
 13. **Rate limiting on search and upload (Bucket4j):** not built. Tracked: #247.
 14. **The purge CronJob's credential separation:** no manifest test, unlike the importer and migration Jobs. Tracked: #246.
