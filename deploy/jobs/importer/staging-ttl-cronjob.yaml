@@ -1,0 +1,130 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Charlie Genova and contributors
+# The staging TTL on a schedule (docs/design/importer.md §5 "Staging TTL", #275). Every importer command first purges
+# the staging rows and content area of each run past its expiry; this CronJob runs that pass on its own
+# (IMPORT_COMMAND=expire-staging, no run id), so an abandoned run's staging goes even if no command follows it. It is
+# applied with every importer Job (this kustomization), so it exists from the first command on.
+# Why here and not in the web pods or the purge CronJob: only TRAILKEEP_IMPORT may read or delete staging and record
+# the purge on IMPORT_RUN (R__grants.sql), and only an importer pod mounts the content area. This pod therefore holds
+# the import credential and the content claim, and nothing else the Job has: no source password, no import.hash-key,
+# no mapping or extract files, no reports claim. app.audit.hmac-key is there because the prod profile refuses to
+# start without it.
+# Delete it (kubectl delete cronjob trailkeep-importer-staging-ttl) only once status shows every run's staging purged,
+# before the import user is locked.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: trailkeep-importer-staging-ttl
+  labels:
+    app.kubernetes.io/name: trailkeep
+    app.kubernetes.io/part-of: trailkeep
+    app.kubernetes.io/component: importer
+spec:
+  # The cadence: staging outlives its expiry by at most one interval. Change it in your overlay.
+  schedule: "43 2 * * *"
+  timeZone: Etc/UTC
+  # One runner: a run that is still going when the next is due skips it. Each run's purge also locks the run's row, so
+  # this pass and an importer command never purge one run twice (StagingPurger).
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 3600
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: 3600
+      # No ttlSecondsAfterFinished here: the history limits above bound finished Jobs, and kube-linter
+      # (job-ttl-seconds-after-finished) rejects both mechanisms on one CronJob.
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: trailkeep
+            # The importer's NetworkPolicy (networkpolicy.yaml): DNS, the Trailkeep database and clamd's sidecar; never
+            # the source, since only the source-access component adds trailkeep.io/source-egress, and only to the Job.
+            app.kubernetes.io/component: importer
+          annotations:
+            ignore-check.kube-linter.io/no-liveness-probe: "Batch job: no server to probe; activeDeadlineSeconds bounds it."
+            ignore-check.kube-linter.io/no-readiness-probe: "Batch job: it never receives traffic."
+        spec:
+          # Default service account, as for the importer Job; its token is not mounted.
+          automountServiceAccountToken: false
+          restartPolicy: Never
+          securityContext:
+            runAsNonRoot: true
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: importer
+              image: ghcr.io/techautomator414/trailkeep:0.1.0
+              imagePullPolicy: IfNotPresent
+              envFrom:
+                - configMapRef:
+                    name: trailkeep-config
+              env:
+                - name: SPRING_PROFILES_ACTIVE
+                  value: prod,importer
+                - name: SPRING_MAIN_WEB_APPLICATION_TYPE
+                  value: none
+                - name: IMPORT_COMMAND
+                  value: expire-staging
+                # The Job's content claim, mounted at the same path, so each expired run's folder goes too.
+                - name: IMPORT_CONTENTAREA
+                  value: /var/lib/trailkeep/import-content
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                runAsNonRoot: true
+                capabilities:
+                  drop: ["ALL"]
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 512Mi
+                limits:
+                  cpu: "1"
+                  memory: 768Mi
+              volumeMounts:
+                - name: tmp
+                  mountPath: /tmp
+                - name: import-content
+                  mountPath: /var/lib/trailkeep/import-content
+                - name: secrets
+                  mountPath: /etc/trailkeep/secrets
+                  readOnly: true
+                - name: clamav-ca
+                  mountPath: /etc/trailkeep/clamav-ca
+                  readOnly: true
+          volumes:
+            # Secret files (Spring configtree), each item named: the TRAILKEEP_IMPORT credential, and the audit key
+            # the prod profile requires at start-up. Never the web application's credential, never import.hash-key,
+            # never the source password.
+            - name: secrets
+              projected:
+                defaultMode: 0444 # readable by whichever non-root UID the platform assigns
+                sources:
+                  - secret:
+                      name: trailkeep-import
+                      items:
+                        - key: spring.datasource.username
+                          path: spring.datasource.username
+                        - key: spring.datasource.password
+                          path: spring.datasource.password
+                  - secret:
+                      name: trailkeep-web
+                      items:
+                        - key: app.audit.hmac-key
+                          path: app.audit.hmac-key
+            - name: tmp
+              emptyDir:
+                sizeLimit: 128Mi
+            # The importer Job's content claim (importer-job.yaml). On a ReadWriteOnce volume a pass that cannot attach
+            # it while a Job holds it fails at its deadline, and the next one runs.
+            - name: import-content
+              persistentVolumeClaim:
+                claimName: trailkeep-import-content
+            # The CA certificate (no key) the scanner client loads at startup (clamav.yaml, ADR-0012). This pass never
+            # scans, but it runs the same application context.
+            - name: clamav-ca
+              secret:
+                secretName: clamav-ca
+                defaultMode: 0444

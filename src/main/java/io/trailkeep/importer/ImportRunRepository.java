@@ -20,6 +20,13 @@ interface ImportRunRepository extends Repository<ImportRun, Long> {
     List<ImportRun> findByStagingExpiresAtLessThanEqualAndStagingPurgedAtIsNull(Instant now);
 
     /**
+     * One run, locked for update, so that of two staging purges of a run (the scheduled TTL and a command's) the second
+     * waits for the first and then sees it purged (design §5). The same grants as {@link #findBySourceIdOrderByIdAsc}.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    Optional<ImportRun> findLockedById(Long id);
+
+    /**
      * A source's runs, locked for update in id order, so that loads of one source claim their runs in turn (design
      * §8.2). PostgreSQL needs UPDATE on one column for the lock, which the import user has; Oracle needs SELECT.
      */

@@ -112,7 +112,8 @@ code does not change.
   and in its SBOM too, and is scanned there. Only the importer profile calls it.
 - Commands: `validate-mapping`, `extract`, `dry-run`, `load`, `reconcile`, `status`, `purge-staging` and
   `relink-owners` (§7.3). Each is one Job run with `--import.command=…` and `--import.run=<id>`; the run id comes from
-  the authenticated run request (§3).
+  the authenticated run request (§3). `expire-staging` takes no run: it applies the staging TTL alone, on the schedule
+  of the CronJob applied with the Job (§5 "Staging TTL", #275).
 
 ### 2.2 What exists today and what WP-26 adds
 
@@ -144,7 +145,7 @@ Checked against `main` at 3fe138e (#57 merged).
 | 4 | **Sign-off** on the Import runs screen | A Compliance Admin (the requester may approve their own run) reviews the run summary on the screen, including the recorded scanning mode, acknowledges each WARNING class (including `NOT_SCANNED`, §4.3), and approves; stored as `APPROVED_BY` (an `APP_USER` id) and audited | No |
 | 5 | `load` | Loads only rows not already in `IMPORT_LEDGER`, one case per transaction; resumable | Yes |
 | 6 | `reconcile` | Final report comparing source, staging and Trailkeep (§9) | No |
-| 7 | `purge-staging` | Deletes the run's staging rows and content area (they hold PHI); also enforced by a TTL (§5) | No |
+| 7 | `purge-staging` | Deletes the run's staging rows and content area (they hold PHI); also enforced by a TTL on a schedule (§5) | No |
 
 `load` refuses to start unless the run passed `dry-run` with zero fatal issues, is signed off, the mapping hash and
 staging have not changed since the sign-off, and **the scanning mode in force equals `IMPORT_RUN.SCAN_MODE`**, the
@@ -489,7 +490,29 @@ import user), so the PR records it under Plan deviations.
 
 **Staging TTL.** Every run has an expiry (`import.staging-ttl`, default 14 days from extract). Every importer command
 first purges the staging rows and content area of any run past its expiry, signed off or not, and records the purge
-on the run. An abandoned run therefore does not keep PHI indefinitely. The TTL is checked again by `status`.
+on the run. The TTL is checked again by `status`. Applied only there, it would act only when some command ran, so an
+abandoned run with no later command would keep its staging indefinitely (#275). **The TTL therefore also runs on a
+schedule** (Decided (owner, #275)): the CronJob `trailkeep-importer-staging-ttl` (`deploy/jobs/importer`), applied
+with every importer Job so it exists from the first command on, runs `expire-staging` daily, which applies the same
+pass (`StagingPurger.purgeExpired`) and nothing else. Staging therefore outlives its expiry by at most one interval of
+the schedule, which an overlay may change; the TTL itself is unchanged.
+
+- **Where and as whom.** It runs as an importer pod, as `TRAILKEEP_IMPORT`, because that is the only user that may
+  read or delete staging and record the purge on `IMPORT_RUN` (the grants table above), and an importer pod is the
+  only one that mounts the content area. The web app's scheduler would need `TRAILKEEP_APP` granted `DELETE` on
+  staging, which decision 2 rules out, and the content claim; the purge CronJob's `TRAILKEEP_PURGE` has no grant on
+  any import table. No grant changes. The pod holds the import credential, `app.audit.hmac-key` (the `prod` profile
+  refuses to start without it) and the content claim, and none of the Job's other inputs: no source password, no
+  `import.hash-key`, no mapping, extract or reports claim. It is an importer pod on the network too
+  (`trailkeep-importer`), never admitted to the source route.
+- **One runner.** The CronJob's `concurrencyPolicy: Forbid` keeps two passes from overlapping. A pass may still meet
+  an importer command's pass: each run's purge locks the run's row (`PESSIMISTIC_WRITE`, the grants the load's claim
+  already uses, §8.2) and leaves a run another pass purged while it waited, so each purge is recorded once and neither
+  fails. ShedLock is not used: its table is the web app's, and the import user has no grant on it.
+- **Logs.** Each pass logs the count and the ids of the runs it purged, never a staged value (§10).
+- **Retirement.** Delete the CronJob only once `status` shows every run's staging purged, and before the import user
+  is locked. On a ReadWriteOnce content claim a pass that cannot attach it while a Job holds it fails at its deadline,
+  and the next pass runs.
 
 ## 6. The mapping file
 
@@ -919,7 +942,8 @@ WP-22, whichever lands first, adds it).
 - **Untrusted content stays untrusted:** text is normalised and escaped or sanitized as in §6.4; attachments go
   through the intake; every file path stays inside its root (§4.3).
 - **PHI minimization:**
-  - staging and the content area are readable only by `TRAILKEEP_IMPORT` (§5), purged after sign-off and by the TTL;
+  - staging and the content area are readable only by `TRAILKEEP_IMPORT` (§5), purged after sign-off and by the TTL,
+    which runs on a schedule (§5);
   - issues carry codes and numeric details, never values. Driver and parser exceptions carry values (for example
     PostgreSQL's `Key (x)=(…)`, truncation errors, CSV errors that quote the row), so the importer maps each exception
     to an issue code by type and SQLState and **never stores or logs its message**; a test feeds such exceptions

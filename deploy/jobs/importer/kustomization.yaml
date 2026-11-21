@@ -1,7 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
 # Copyright 2026 Charlie Genova and contributors
-# The importer Job with its NetworkPolicy, for clamd scanning (the default). Applying it runs the Job, so it is not
-# part of deploy/base: kubectl -n <namespace> apply -k deploy/jobs/importer. ../importer-external-scanning is the
+# The importer Job with its NetworkPolicy and the scheduled staging TTL (staging-ttl-cronjob.yaml, #275), for clamd
+# scanning (the default). Applying it runs the Job, so it is not part of deploy/base:
+# kubectl -n <namespace> apply -k deploy/jobs/importer. ../importer-external-scanning is the
 # variant for APP_ATTACHMENTS_SCANNING=external. Point your own overlay at either; set the namespace, image and
 # placeholders there.
 apiVersion: kustomize.config.k8s.io/v1beta1
@@ -10,6 +11,7 @@ kind: Kustomization
 resources:
   - importer-job.yaml
   - networkpolicy.yaml
+  - staging-ttl-cronjob.yaml
 
 images:
   - name: ghcr.io/techautomator414/trailkeep

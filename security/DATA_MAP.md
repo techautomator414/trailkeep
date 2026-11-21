@@ -34,7 +34,7 @@ Anyone else gets a 404. Below, "case readers" means exactly this set.
 | owner (`TRAILKEEP_OWNER`) | migration Job | owns every table; the only user with DDL |
 | app (`TRAILKEEP_APP`) | web pods | the grants matrix: never `UPDATE` or `DELETE` on history tables, no staging |
 | purge (`TRAILKEEP_PURGE`) | purge CronJob | `SELECT` and `DELETE` on case content, the tombstone `UPDATE` of four `CASE_RECORD` columns, `INSERT` into the audit trail |
-| import (`TRAILKEEP_IMPORT`) | importer Job | staging (alone), `INSERT` into the tables a load writes, `SELECT` on every mapped table |
+| import (`TRAILKEEP_IMPORT`) | importer Job, and its staging TTL CronJob | staging (alone), `INSERT` into the tables a load writes, `SELECT` on every mapped table |
 
 The cells below give each table's grants as S, I, U, D (select, insert, update, delete); "(U)" is an update of named
 columns only.
@@ -282,8 +282,8 @@ where its data sits.
 
 | Where | What | Read by (DB) | Retention |
 |---|---|---|---|
-| `IMPORT_STG_PERSON`, `_CASE`, `_COMMENT`, `_ATTACHMENT`, `_EVENT` (V13) | canonical legacy rows: names, addresses and provider ids; titles, descriptions, subjects (restricted included), closure summaries, comment bodies, history values, file names and content pointers | import S I D only; the web application does not map them | deleted by `purge-staging`, or by the staging TTL (`import.staging-ttl`, default 14 days from extract). The TTL is applied at the start of every importer command, so it acts only when some command runs (`ImporterProfileIT`) |
-| `trailkeep-import-content` claim | each run's attachment bytes fetched at extract | the importer Job | deleted with the run's staging; must be encrypted at rest (`deploy/README.md`) |
+| `IMPORT_STG_PERSON`, `_CASE`, `_COMMENT`, `_ATTACHMENT`, `_EVENT` (V13) | canonical legacy rows: names, addresses and provider ids; titles, descriptions, subjects (restricted included), closure summaries, comment bodies, history values, file names and content pointers | import S I D only; the web application does not map them | deleted by `purge-staging`, or by the staging TTL (`import.staging-ttl`, default 14 days from extract). The TTL is applied at the start of every importer command and daily by the `trailkeep-importer-staging-ttl` CronJob (`expire-staging`, #275), so staging outlives its expiry by at most one interval of that schedule whether or not another command runs (`StagingTtlIT`, `ImporterStagingTtlManifestTest`) |
+| `trailkeep-import-content` claim | each run's attachment bytes fetched at extract | the importer Job and its staging TTL CronJob | deleted with the run's staging, by the same TTL; must be encrypted at rest (`deploy/README.md`) |
 | `trailkeep-import-data` claim (read-only) | the mapping file, lookups, extract files and attachment folders the operator supplies | the importer Job | the operator's |
 | `trailkeep-import-reports` claim | per-run reports: counts, codes, keyed hashes, Trailkeep ids | the importer Job, the approver | kept for the approver; the operator's |
 | `IMPORT_RUN`, `IMPORT_ISSUE`, `IMPORT_RUN_SUMMARY` (V10) | codes, counts, mapping hash, source fingerprint; issue keys as HMAC under `import.hash-key`, never values or messages | app S I on `IMPORT_RUN` with (U) of the sign-off columns, S on issues and summaries; import S I, with (U) of the status and count columns on `IMPORT_RUN` and D on issues and summaries | indefinite |

@@ -20,8 +20,8 @@ import org.springframework.stereotype.Component;
  * as the {@code TRAILKEEP_IMPORT} user; the process then ends ({@code TrailkeepApplication}). A failure fails the
  * start, so the Job's pod exits non-zero. {@code status}, {@code validate-mapping}, {@code extract}, {@code dry-run},
  * {@code load}, {@code relink-owners}, {@code reconcile} and {@code purge-staging} exist so far; any other command is
- * refused. Every command first applies the staging TTL. Logs carry run ids, codes
- * and counts only.
+ * refused. Every command first applies the staging TTL; {@code expire-staging}, the scheduled TTL (#275), needs no run
+ * and does only that. Logs carry run ids, codes and counts only.
  */
 @Component
 @Profile("importer")
@@ -30,7 +30,15 @@ class ImportCommandRunner implements ApplicationRunner {
     private static final Logger LOG = LoggerFactory.getLogger(ImportCommandRunner.class);
 
     private static final List<String> COMMANDS = List.of(
-            "status", "validate-mapping", "extract", "dry-run", "load", "relink-owners", "reconcile", "purge-staging");
+            "status",
+            "validate-mapping",
+            "extract",
+            "dry-run",
+            "load",
+            "relink-owners",
+            "reconcile",
+            "purge-staging",
+            "expire-staging");
 
     private final ImportProperties properties;
     private final ImportStatusReader statuses;
@@ -72,11 +80,15 @@ class ImportCommandRunner implements ApplicationRunner {
         if (!COMMANDS.contains(command)) {
             throw new IllegalStateException("Unknown or not yet available import command: " + command);
         }
+        boolean expireOnly = "expire-staging".equals(command);
         Long run = properties.run();
-        if (run == null) {
+        if (run == null && !expireOnly) {
             throw new IllegalStateException("import.run is required");
         }
         purgeExpired();
+        if (expireOnly || run == null) {
+            return;
+        }
         long runId = run;
         if ("validate-mapping".equals(command)) {
             validateMapping(runId);
@@ -133,12 +145,14 @@ class ImportCommandRunner implements ApplicationRunner {
         }
     }
 
-    /** Every command first applies the staging TTL (design §5), whichever run it was started for. */
+    /**
+     * Every command first applies the staging TTL (design §5), whichever run it was started for; {@code
+     * expire-staging}, which the scheduled CronJob runs, does nothing else. The run ids and the count are logged, never
+     * a staged value.
+     */
     private void purgeExpired() {
-        int expired = purger.purgeExpired(clock.instant());
-        if (expired > 0) {
-            LOG.info("Staging purged for {} expired import runs", expired);
-        }
+        List<Long> expired = purger.purgeExpired(clock.instant());
+        LOG.info("Staging TTL: {} expired import runs purged {}", expired.size(), expired);
     }
 
     private Path mapping() {

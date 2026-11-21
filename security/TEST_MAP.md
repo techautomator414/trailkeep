@@ -143,7 +143,7 @@ The status column records what is in effect today, not what is planned.
 **Verified:**
 - **No secret in a commit:** gitleaks on every PR and push.
 - **The audit key is required in prod:** `AuditConfigTest`.
-- **Each workload reads only its own secret files:** `ImporterJobManifestTest` (the importer Job), `MigrateJobManifestTest` (the migration Job), `PurgeCronJobManifestTest` (the purge CronJob: its own credential, no other Secret, no env injection), `WebDeploymentManifestTest` (the web Deployment: secrets only as files of `trailkeep-web`, never env literals).
+- **Each workload reads only its own secret files:** `ImporterJobManifestTest` (the importer Job), `ImporterStagingTtlManifestTest` (the staging TTL CronJob: the import credential and audit key, no source password or hash key), `MigrateJobManifestTest` (the migration Job), `PurgeCronJobManifestTest` (the purge CronJob: its own credential, no other Secret, no env injection), `WebDeploymentManifestTest` (the web Deployment: secrets only as files of `trailkeep-web`, never env literals).
 
 **Platform:** GitHub secret scanning and push protection. They are repository settings, not visible in the repository.
 
@@ -216,6 +216,7 @@ The status column records what is in effect today, not what is planned.
 - **Purge runs as its own user, which may only turn a case into a tombstone; the purge profile starts no web application:** `PurgeIT`, `PurgeProfileIT`, `PostgresDatabaseGrantsIT`.
 - **Purge skips anything under legal hold:** `PurgeIT`, `LegalHoldIT`.
 - **Import sign-off and run moves split between database users:** `PostgresDatabaseGrantsIT`.
+- **Importer staging is purged on a schedule, as the import user, whether or not another command runs** (#275): `StagingTtlIT` and `OracleStagingTtlIT` run `expire-staging` alone and see an expired run's staging and content area removed and a fresh run's kept, and a second TTL pass wait for the first's lock and leave the run it purged; `ImporterStagingTtlManifestTest` keeps the CronJob live, one run at a time, with the content claim and off the source route.
 
 - **The purge CronJob has its own Secret, which the web Deployment never mounts, and its own network:** `PurgeCronJobManifestTest` and `WebDeploymentManifestTest` (#246). The pod's egress is DNS and the database only (`deploy/base/purge-networkpolicy.yaml`); `trailkeep-egress`, which reaches the identity provider and the mail relay, excludes it, as it excludes the importer and migration Jobs. The `clamav-ca` mount stays: the `purge` profile still builds the clamd client, which resolves its SSL bundle at startup, though the pod never scans.
 

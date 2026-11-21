@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # Copyright 2026 Charlie Genova and contributors
 # The importer Job for organizations that scan upstream (ADR-0013), mirroring deploy/overlays/external-scanning: no
-# clamav-ca volume, no clamd stream limit and no egress rule to ClamAV. The importer reads the mode from
+# clamav-ca volume (in the Job or the staging TTL CronJob), no clamd stream limit and no egress rule to ClamAV. The importer reads the mode from
 # trailkeep-config (APP_ATTACHMENTS_SCANNING=external, set by that overlay); dry-run records it, the sign-off approves
 # it, and load refuses to start if it differs (design §4.3, R1). Imported files are stored as NOT_SCANNED, never as
 # clean.
@@ -43,3 +43,22 @@ patches:
         value: clamav
       - op: remove
         path: /spec/egress/2
+  # The scheduled staging TTL (staging-ttl-cronjob.yaml) loads no scanner client either.
+  - patch: |-
+      apiVersion: batch/v1
+      kind: CronJob
+      metadata:
+        name: trailkeep-importer-staging-ttl
+      spec:
+        jobTemplate:
+          spec:
+            template:
+              spec:
+                containers:
+                  - name: importer
+                    volumeMounts:
+                      - mountPath: /etc/trailkeep/clamav-ca
+                        $patch: delete
+                volumes:
+                  - name: clamav-ca
+                    $patch: delete
