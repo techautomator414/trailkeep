@@ -227,13 +227,16 @@ abstract class AbstractImporterProfileIT {
         long fresh = stagedRun(Instant.parse("2099-01-01T00:00:00Z"));
         Path expiredFolder = Files.createDirectories(area.resolve(Long.toString(expired)));
         Files.writeString(expiredFolder.resolve("ab".repeat(32)), "synthetic content");
-        Path freshFile = Files.createDirectories(area.resolve(Long.toString(fresh))).resolve("cd".repeat(32));
+        Path freshFile =
+                Files.createDirectories(area.resolve(Long.toString(fresh))).resolve("cd".repeat(32));
         Files.writeString(freshFile, "synthetic content");
 
         start(importUser, true, "--import.command=expire-staging", "--import.content-area=" + area)
                 .close();
 
-        assertThat(stagedRows(expired)).as("expired: staging and checkpoints gone").isZero();
+        assertThat(stagedRows(expired))
+                .as("expired: staging and checkpoints gone")
+                .isZero();
         assertThat(purgedAt(expired)).isNotNull();
         assertThat(expiredFolder).as("expired: content area gone").doesNotExist();
         assertThat(stagedRows(fresh)).as("not expired: untouched").isEqualTo(6);

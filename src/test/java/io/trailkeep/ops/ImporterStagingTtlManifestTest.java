@@ -71,7 +71,9 @@ class ImporterStagingTtlManifestTest {
                     .isIn("", "clamav-ca");
             for (JsonNode source : volume.path("projected").path("sources")) {
                 List<String> items = new ArrayList<>();
-                source.path("secret").path("items").forEach(item -> items.add(item.path("key").asString()));
+                source.path("secret")
+                        .path("items")
+                        .forEach(item -> items.add(item.path("key").asString()));
                 projected.put(source.path("secret").path("name").asString(), items);
             }
         }
@@ -102,15 +104,16 @@ class ImporterStagingTtlManifestTest {
         assertThat(claims).as("the content claim alone").containsExactly(jobClaim);
         JsonNode mount = named(container().path("volumeMounts"), "import-content");
         assertThat(mount.path("mountPath").asString()).isEqualTo(env().get("IMPORT_CONTENTAREA"));
-        assertThat(mount.path("readOnly").asBoolean()).as("each expired run's folder is deleted").isFalse();
+        assertThat(mount.path("readOnly").asBoolean())
+                .as("each expired run's folder is deleted")
+                .isFalse();
         assertThat(container().at("/securityContext/readOnlyRootFilesystem").asBoolean())
                 .isTrue();
         assertThat(pod().path("automountServiceAccountToken").asBoolean(true)).isFalse();
     }
 
     @Test
-    void itHasTheImportersNetworkWithoutTheSourceRouteAndTheExternalVariantDropsTheCaCertificate()
-            throws IOException {
+    void itHasTheImportersNetworkWithoutTheSourceRouteAndTheExternalVariantDropsTheCaCertificate() throws IOException {
         Map<String, String> labels = labels(cronJob().at("/spec/jobTemplate/spec/template"));
         Path policies = JOBS.resolve("importer/networkpolicy.yaml");
 
@@ -168,7 +171,9 @@ class ImporterStagingTtlManifestTest {
 
     private static Map<String, String> env() throws IOException {
         Map<String, String> env = new TreeMap<>();
-        container().path("env").forEach(e -> env.put(e.path("name").asString(), e.path("value").asString()));
+        container()
+                .path("env")
+                .forEach(e -> env.put(e.path("name").asString(), e.path("value").asString()));
         return env;
     }
 }
