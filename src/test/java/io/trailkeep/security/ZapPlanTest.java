@@ -142,9 +142,9 @@ class ZapPlanTest {
 
     /**
      * The form bodies are attacked last (#231). Rules that find a payload an earlier rule stored through a form, shown
-     * back escaped, took it as proof of template injection on the cases list and of stored XSS in the CSV export. So the
-     * active scan runs twice: first every route with no form body attacked, then, last of all scanning jobs, the form
-     * bodies of the POST paths only, with no query string attacked. Each part's input vectors come from the
+     * back escaped, took it as proof of template injection on the cases list and of stored XSS in the CSV export. So
+     * the active scan runs twice: first every route with no form body attacked, then, last of all scanning jobs, the
+     * form bodies of the POST paths only, with no query string attacked. Each part's input vectors come from the
      * activeScan-config job just before it, which sets nothing else (no exclusions, no scanner options); the two caps
      * add up to the single scan's 120 minutes.
      */
@@ -184,8 +184,9 @@ class ZapPlanTest {
      * The second active scan's context holds exactly the POST paths of the API description, which
      * {@link OpenApiCoverageTest} keeps equal to what the application serves: a POST left out would have its form body
      * attacked by neither scan, and a GET-only path put in (the CSV export) would bring back the stored-payload false
-     * positives. ZAP matches a context by path, as here; the Automation Framework includes everything under each of the
-     * context's {@code urls}, so they count as include paths. Both contexts exclude the same sign-in and sign-out paths.
+     * positives. ZAP matches a context by path, as here; the Automation Framework includes everything under each of
+     * the context's {@code urls}, so they count as include paths. Both contexts exclude the same sign-in and sign-out
+     * paths.
      */
     @Test
     void theWritesContextHoldsExactlyThePostPaths() throws IOException {

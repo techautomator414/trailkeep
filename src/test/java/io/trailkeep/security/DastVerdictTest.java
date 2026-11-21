@@ -17,7 +17,8 @@ import org.junit.jupiter.api.io.TempDir;
 /**
  * Pins the DAST verdict policy of {@code .github/scripts/dast-verdict.sh} on every PR (WP-28 part e), although ZAP runs
  * only nightly and on release tags: a partial scan (any of the plan's active scans cut off at its cap or its completion
- * missing, or the plan stopped by a High insight) warns in nightly and fails in release; everything else that fails, fails in both.
+ * missing, or the plan stopped by a High insight) warns in nightly and fails in release; everything else that fails,
+ * fails in both.
  */
 class DastVerdictTest {
 
@@ -120,8 +121,8 @@ class DastVerdictTest {
     }
 
     /**
-     * The plan's active scan runs as two activeScan jobs (#231), the second attacking the form bodies last: each gets its
-     * own time and cap, and either one cut off or missing makes the scan partial.
+     * The plan's active scan runs as two activeScan jobs (#231), the second attacking the form bodies last: each gets
+     * its own time and cap, and either one cut off or missing makes the scan partial.
      */
     @Test
     void everyActiveScanOfThePlanMustCompleteInsideItsOwnCap() throws IOException, InterruptedException {
@@ -148,7 +149,7 @@ class DastVerdictTest {
     }
 
     @Test
-    void noActiveScanCapFailsARelease() throws IOException, InterruptedException {
+    void missingActiveScanCapsFailRelease() throws IOException, InterruptedException {
         Verdict verdict = verdict("release", "200", "0", "1", "0", "", FINISHED, "", "0");
         assertThat(verdict.exit()).isOne();
         assertThat(verdict.output()).contains("No active scan cap was given");
