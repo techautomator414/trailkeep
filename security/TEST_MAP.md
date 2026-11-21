@@ -141,7 +141,6 @@ The status column records what is in effect today, not what is planned.
 
 **Platform:** GitHub secret scanning and push protection. They are repository settings, not visible in the repository.
 
-**Configured only:** the web Deployment's and purge CronJob's secret mounts (`deploy/base/deployment.yaml`, `deploy/base/purge-cronjob.yaml`), which only kube-linter reads.
 
 ### Transport
 **Verified:**
@@ -212,7 +211,7 @@ The status column records what is in effect today, not what is planned.
 - **Purge skips anything under legal hold:** `PurgeIT`, `LegalHoldIT`.
 - **Import sign-off and run moves split between database users:** `PostgresDatabaseGrantsIT`.
 
-**Configured only:** the purge CronJob's own Secret, which the web Deployment never mounts (`deploy/base/purge-cronjob.yaml`). No manifest test asserts it, unlike the importer and migration Jobs.
+- **The purge CronJob has its own Secret, which the web Deployment never mounts, and its own network:** `PurgeCronJobManifestTest` and `WebDeploymentManifestTest` (#246). The pod's egress is DNS and the database only (`deploy/base/purge-networkpolicy.yaml`); `trailkeep-egress`, which reaches the identity provider and the mail relay, excludes it, as it excludes the importer and migration Jobs. The `clamav-ca` mount stays: the `purge` profile still builds the clamd client, which resolves its SSL bundle at startup, though the pod never scans.
 
 ### Privacy
 **Verified:**

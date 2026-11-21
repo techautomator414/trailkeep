@@ -43,7 +43,8 @@ kube-linter lint deploy/
    every connection must default to the owner's schema (the application, the purge and the importer all read it from
    `trailkeep-config`); on PostgreSQL it is the schema `search_path` points at, for example `public`.
 3. **NetworkPolicy targets** in `trailkeep-egress`: database, identity provider, SMTP relay and clamd. The base uses
-   RFC 5737 documentation addresses.
+   RFC 5737 documentation addresses. The database address is repeated in `trailkeep-purge` (`base/purge-networkpolicy.yaml`,
+   the purge CronJob's own egress: DNS and the database only); set it to the same value.
 4. **Secrets.** Create them from the platform's secret store; the manifests only reference them. Each key is a file
    named after the Spring property it sets (Spring `configtree`), mounted at `/etc/trailkeep/secrets/`:
 

@@ -59,8 +59,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   capabilities dropped, no service-account token, suspended as shipped) and that default-deny covers the pod with no
   ingress admitted. `WebDeploymentManifestTest` pins that the web pods get the database login, SMTP password, OIDC
   client secret and audit key only as files of `trailkeep-web`, that the container has no `env` at all, that every
-  volume is an `emptyDir` or a Secret, and that the ConfigMap holds no secret-looking key or embedded login. No
-  manifest changed.
+  volume is an `emptyDir` or a Secret, and that the ConfigMap holds no secret-looking key or embedded login.
+- The purge CronJob's pod now has its own egress `NetworkPolicy` (#246): DNS and the database only, like the
+  migration Job's (`deploy/base/purge-networkpolicy.yaml`). Until now `trailkeep-egress` selected it, so the pod that
+  holds the `TRAILKEEP_PURGE` credential could reach the identity provider (443) and the SMTP relay (587), which the
+  `purge` profile never uses; `trailkeep-egress` now excludes `purge` as it excludes `importer` and `migrate`.
+  `PurgeCronJobManifestTest` pins the exact ports and that no policy in the base opens more. The `clamav-ca` mount
+  stays, because the profile still builds the clamd client, which resolves its SSL bundle at startup. A deployment
+  that replaced the database address in `trailkeep-egress` sets the same value in `trailkeep-purge`.
 
 - Per-user rate limits on case search and upload (#247, BUILD_PLAN §9 Availability, security test map gap 13). Each
   signed-in person has a token bucket per route, keyed on their user id (never the client address): `search` covers

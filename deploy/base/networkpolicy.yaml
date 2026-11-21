@@ -46,16 +46,17 @@ kind: NetworkPolicy
 metadata:
   name: trailkeep-egress
 spec:
-  # Every Trailkeep pod except the importer Job's and the migration Job's, which never need the identity provider or the
-  # SMTP relay and have their own policies (deploy/jobs/importer/networkpolicy.yaml, docs/design/importer.md §10;
-  # deploy/jobs/migrate/networkpolicy.yaml, which holds the schema owner's credential and reaches only the database).
+  # Every Trailkeep pod except the importer Job's, the migration Job's and the purge CronJob's, which never need the
+  # identity provider or the SMTP relay and have their own policies (deploy/jobs/importer/networkpolicy.yaml,
+  # docs/design/importer.md §10; deploy/jobs/migrate/networkpolicy.yaml, which holds the schema owner's credential and
+  # reaches only the database; purge-networkpolicy.yaml, the same for the purge credential).
   podSelector:
     matchLabels:
       app.kubernetes.io/name: trailkeep
     matchExpressions:
       - key: app.kubernetes.io/component
         operator: NotIn
-        values: [importer, migrate]
+        values: [importer, migrate, purge]
   policyTypes: [Egress]
   egress:
     # Cluster DNS.

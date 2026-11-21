@@ -9,10 +9,13 @@ import static io.trailkeep.ops.ManifestSupport.selects;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeMap;
+import java.util.TreeSet;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.JsonNode;
 
@@ -133,12 +136,13 @@ class PurgeCronJobManifestTest {
     }
 
     @Test
-    void theNetworkPoliciesDenyIngressAndKeepThePodUnderTheBaseEgressRules() throws IOException {
+    void theNetworkPolicyAllowsDnsAndTheDatabaseOnlyAndTheBaseEgressDoesNotSelectThePod() throws IOException {
         Map<String, String> labels = labels(cronJob().at("/spec/jobTemplate/spec/template"));
         Path file = BASE.resolve("networkpolicy.yaml");
         JsonNode defaultDeny = document(file, "NetworkPolicy", "trailkeep-default-deny");
         JsonNode webIngress = document(file, "NetworkPolicy", "trailkeep-web-ingress");
-        JsonNode egress = document(file, "NetworkPolicy", "trailkeep-egress");
+        JsonNode baseEgress = document(file, "NetworkPolicy", "trailkeep-egress");
+        JsonNode own = document(BASE.resolve("purge-networkpolicy.yaml"), "NetworkPolicy", "trailkeep-purge");
 
         assertThat(labels).containsEntry("app.kubernetes.io/component", "purge");
         assertThat(selects(defaultDeny, labels))
@@ -146,19 +150,62 @@ class PurgeCronJobManifestTest {
                 .isTrue();
         assertThat(defaultDeny.at("/spec/policyTypes").toString()).isEqualTo("[\"Ingress\",\"Egress\"]");
         assertThat(selects(webIngress, labels))
-                .as("nothing is allowed in: the only ingress rule is for the web pods")
+                .as("the only ingress rule is for the web pods")
                 .isFalse();
-        assertThat(selects(egress, labels))
-                .as("the purge reaches the database through the base egress rules, which also cover DNS")
-                .isTrue();
-        documents(file).forEach(policy -> {
-            if (selects(policy, labels)
-                    && policy.at("/spec/policyTypes").toString().contains("Ingress")) {
-                assertThat(policy.has("ingress"))
-                        .as("%s admits no ingress to the purge pod", policy.at("/metadata/name"))
-                        .isFalse();
+        assertThat(selects(baseEgress, labels))
+                .as("trailkeep-egress reaches the identity provider and the mail relay and excludes this pod")
+                .isFalse();
+        assertThat(selects(own, labels)).isTrue();
+        assertThat(own.at("/spec/policyTypes").toString()).isEqualTo("[\"Ingress\",\"Egress\"]");
+        assertThat(own.has("ingress"))
+                .as("no ingress rule: nothing connects to the pod")
+                .isFalse();
+        assertThat(own.at("/spec/egress")).hasSize(2);
+        assertThat(ports(own))
+                .as("cluster DNS and the database (Oracle tcps and PostgreSQL); no identity provider, SMTP or clamd")
+                .containsExactly(53, 2484, 5353, 5432);
+
+        // Every NetworkPolicy in the base that selects the pod, together: default-deny's empty egress plus its own.
+        Set<Integer> reachable = new TreeSet<>();
+        try (var files = Files.list(BASE)) {
+            for (Path path : files.filter(f -> f.toString().endsWith(".yaml")).toList()) {
+                for (JsonNode doc : documents(path)) {
+                    if ("NetworkPolicy".equals(doc.path("kind").asString()) && selects(doc, labels)) {
+                        assertThat(doc.has("ingress"))
+                                .as("%s admits no ingress to the purge pod", doc.at("/metadata/name"))
+                                .isFalse();
+                        reachable.addAll(ports(doc));
+                    }
+                }
             }
-        });
+        }
+        assertThat(reachable).as("egress ports over all policies").containsExactly(53, 2484, 5353, 5432);
+    }
+
+    @Test
+    void theCaCertificateStaysMountedBecauseTheClamdClientResolvesItsSslBundleAtStartup() throws IOException {
+        JsonNode data = document(BASE.resolve("configmap.yaml"), "ConfigMap", "trailkeep-config")
+                .path("data");
+        String bundle =
+                data.path("SPRING_SSL_BUNDLE_PEM_CLAMD_TRUSTSTORE_CERTIFICATE").asString();
+
+        // The purge profile does not set app.attachments.scanning=external, so ClamdScanningCondition matches and
+        // ClamdClient is built in this context; its constructor resolves the "clamd" SSL bundle, so a missing
+        // /etc/trailkeep/clamav-ca/ca.crt would fail the purge at start-up although it never scans (ClamdClient,
+        // "Resolves the SSL bundle at startup"). The integration tests give the bundle a JDK trust store, so they
+        // cannot show the mount is unneeded. The external-scanning overlay deletes it, with the clamd client.
+        assertThat(bundle)
+                .isEqualTo("file:" + mountOf("clamav-ca").path("mountPath").asString() + "/ca.crt");
+        assertThat(mountOf("clamav-ca").path("readOnly").asBoolean()).isTrue();
+        assertThat(container().path("env").toString()).doesNotContain("SCANNING");
+    }
+
+    private static Set<Integer> ports(JsonNode policy) {
+        Set<Integer> ports = new TreeSet<>();
+        policy.at("/spec/egress")
+                .forEach(rule -> rule.path("ports")
+                        .forEach(port -> ports.add(port.path("port").asInt())));
+        return ports;
     }
 
     private static JsonNode cronJob() throws IOException {
