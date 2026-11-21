@@ -266,7 +266,7 @@ duties").
   keyed hashes, never legacy values or exception messages (`docs/design/importer.md` §10); rate-limit refusals log the
   user id and route.
 - **Not logged by Trailkeep:** request URLs; no Tomcat access log is configured. The router's own access log, outside
-  Trailkeep, can record URLs, including case numbers and search text (threat model, RR-10).
+  Trailkeep, can record URLs, including case numbers and search text (threat model, RR-10); `deploy/README.md` ("Router access logs") tells deployers to omit query strings or restrict that log.
 - **Read by, retention, leaving the system:** the platform's log pipeline (threat model, RR-17).
 
 ## Backups

@@ -48,7 +48,7 @@ The status column records what is in effect today, not what is planned.
 | OWASP Dependency-Check | `.github/workflows/main.yml#dependency-check` | `main`, nightly, release | CVSS ≥ 7 | **skipped**: `NVD_API_KEY` not set (#30) |
 | ZAP authenticated full and API scan | `.github/workflows/zap.yml#scan`, called by `.github/workflows/nightly.yml#zap` and `.github/workflows/release.yml#zap` | nightly (reports), release tag (gates) | Medium+, partial scan fails a release | running |
 | OpenSSF Scorecard | `.github/workflows/scorecard.yml#analysis` | push to `main`, weekly | reported, not a gate | running |
-| Dependabot | `.github/dependabot.yml` | weekly | pull requests | maven, github-actions and pip only; container images are not tracked |
+| Dependabot | `.github/dependabot.yml` | weekly | pull requests | maven, github-actions and pip, plus the docker and docker-compose ecosystems for the test images (#251) and the compose images (#269) |
 | Image signature, SBOM attestation, SLSA provenance | `.github/workflows/release.yml#publish`, `.github/workflows/release.yml#provenance`; verified after publishing by `.github/workflows/verify-image.yml` (`release.yml#verify-published`) | release tag; `verify-image` by hand against any tag | the release fails | **shown** against v0.2.0 (`cosign verify`, `cosign verify-attestation --type cyclonedx`, `slsa-verifier verify-image`); a wrong tag and a wrong digest fail |
 | Pre-commit hooks | `.pre-commit-config.yaml` (gitleaks, Spotless, SPDX header) | locally, opt-in | advisory; CI is the gate | provided |
 
@@ -143,7 +143,7 @@ The status column records what is in effect today, not what is planned.
 **Verified:**
 - **No secret in a commit:** gitleaks on every PR and push.
 - **The audit key is required in prod:** `AuditConfigTest`.
-- **Each workload reads only its own secret files:** `ImporterJobManifestTest` (the importer Job), `ImporterStagingTtlManifestTest` (the staging TTL CronJob: the import credential and audit key, no source password or hash key), `MigrateJobManifestTest` (the migration Job), `PurgeCronJobManifestTest` (the purge CronJob: its own credential, no other Secret, no env injection), `WebDeploymentManifestTest` (the web Deployment: secrets only as files of `trailkeep-web`, never env literals).
+- **Each workload reads only its own secret files:** `ImporterJobManifestTest` (the importer Job), `ImporterStagingTtlManifestTest` (the staging TTL CronJob: the import credential and audit key, no source password or hash key; and its own network, #276: the union of every policy selecting its pod in `deploy/base` and `deploy/jobs/importer` allows only DNS and the database, not clamd, the source or `trailkeep-egress`, for the clamd and the external-scanning variants), `MigrateJobManifestTest` (the migration Job), `PurgeCronJobManifestTest` (the purge CronJob: its own credential, no other Secret, no env injection), `WebDeploymentManifestTest` (the web Deployment: secrets only as files of `trailkeep-web`, never env literals).
 
 **Platform:** GitHub secret scanning and push protection. They are repository settings, not visible in the repository.
 
@@ -310,10 +310,10 @@ Controls with no automated verification, or only part of it, one line each. A cl
 17. **Pre-commit hooks** (gitleaks, Spotless, Checkstyle, SPDX in BUILD_PLAN §12.1): closed (#249). `.pre-commit-config.yaml` provides gitleaks, `./mvnw spotless:check` and the SPDX header check as opt-in hooks (CONTRIBUTING.md). Checkstyle is left to `./mvnw verify`; CI remains the gate.
 18. **SonarCloud quality gate:** skipped until `SONAR_TOKEN` is set, so WP-28's "Sonar gate A" is not shown. Tracked: #30.
 19. **OWASP Dependency-Check:** skipped until `NVD_API_KEY` is set, so "Dependency-Check clean" is not shown. Tracked: #30.
-20. **Dependabot does not track container images** (test containers, the ZAP and vnu images, the UBI bases); they are bumped by hand. Tracked: #235.
+20. **Container images:** closed. Dependabot tracks the test images (#251, closing #235) and the `compose.yaml` images (#269) through its docker and docker-compose ecosystems; `ImageSourcesTest` checks the coverage. Still bumped by hand: the `Containerfile` UBI bases and the ZAP image in `zap.yml`.
 21. **Licence allow-list:** skips the test scope. Position: test-scope dependencies are never shipped, in neither the jar nor the image.
 22. **Image signature, SBOM attestation and SLSA provenance:** closed (#249). `release.yml#verify-published` calls `.github/workflows/verify-image.yml` after the provenance and before the GitHub Release: `cosign verify` and `cosign verify-attestation --type cyclonedx` (cosign v3 bundles) against the identity `release.yml@refs/tags/<tag>`, and `slsa-verifier verify-image` (the generator's legacy format) with `--source-uri` and `--source-tag`; any failure fails the release. The same workflow runs by hand against an existing tag's digest. Shown green against v0.2.0, and failing for a wrong tag and a wrong digest.
-23. **Security review of the importer's plain SHA-256 mapping hash** (`HANDOFF.md` §6): flagged for WP-28; not done. Tracked: #169.
+23. **Security review of the importer's plain SHA-256 mapping hash** (`HANDOFF.md` §6): flagged for WP-28; not done. #169 is a merged feature PR, not a tracker: this is an open decision, owned by the project owner's security review of the importer's mapping hash.
 24. **Threat model (STRIDE):** closed, written as `security/THREAT_MODEL.md` (#248). Its residual risks name the
     open gaps above; it is re-checked at each phase gate.
 25. **Data map:** closed, written as `security/DATA_MAP.md` (#248).

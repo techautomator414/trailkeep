@@ -1,0 +1,49 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Charlie Genova and contributors
+# The staging TTL CronJob's pod's own network (#276, modelled on base/purge-networkpolicy.yaml): no ingress, and egress
+# only to DNS and the Trailkeep database. The expire-staging pass deletes staging rows and the content area and never
+# scans, reads the source or sends mail, so it gets neither trailkeep-importer's route to clamd's sidecar nor
+# trailkeep-egress's identity provider and SMTP relay: its component label (importer-staging-ttl) is selected by
+# neither. Applies to the clamd and the external-scanning variants alike. Addresses use RFC 5737 documentation ranges
+# as PLACEHOLDERS; the deploying organization replaces them, with the same value as in trailkeep-importer for the
+# database.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: trailkeep-importer-staging-ttl
+  labels:
+    app.kubernetes.io/name: trailkeep
+    app.kubernetes.io/part-of: trailkeep
+    app.kubernetes.io/component: importer-staging-ttl
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: trailkeep
+      app.kubernetes.io/component: importer-staging-ttl
+  # Ingress listed with no rule: nothing may connect to the pod, even where the base's default-deny is not applied.
+  policyTypes: [Ingress, Egress]
+  egress:
+    # Cluster DNS.
+    - to:
+        - namespaceSelector: {}
+          podSelector:
+            matchLabels:
+              dns.operator.openshift.io/daemonset-dns: default
+      ports:
+        - port: 5353
+          protocol: UDP
+        - port: 5353
+          protocol: TCP
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+    # The Trailkeep database. PLACEHOLDER address; Oracle tcps 2484 (or 1521), PostgreSQL 5432.
+    - to:
+        - ipBlock:
+            cidr: 192.0.2.10/32
+      ports:
+        - port: 2484
+          protocol: TCP
+        - port: 5432
+          protocol: TCP
