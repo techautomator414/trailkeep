@@ -173,8 +173,9 @@ These rules are followed in code review, but no test asserts them.
 - **Generic error pages that never echo input or show an exception:** `MalformedParametersIT`, `MalformedMultipartIT`, `ShellAccessibilityIT` (the 500 page names no exception).
 - **Tomcat's own error page without server information:** `TomcatErrorPageHeadersIT`.
 - **The not-found page for an unreadable case:** `WebShellIT`.
-
-**Configured only:** `server.error.include-*` all off (`src/main/resources/application.yml`). This is exercised by the tests above but not asserted key by key.
+- **No error attribute in any error response** (message, stack trace, exception, binding errors, request path; `spring.web.error.include-*` in `src/main/resources/application.yml`): `ErrorPropertiesTest` asserts the values Spring Boot binds under the prod profile.
+  - Until #245 these keys were `server.error.*`, which Spring Boot 4 no longer reads. The row said "configured", but nothing was configured: the attributes were off only by Boot's defaults, and the request path was on.
+  - `ConfigurationKeysTest` fails on any key in a profile file that Boot's configuration metadata marks as removed (deprecated at level `error`), so a renamed key cannot sit unread again.
 
 ### Availability
 **Verified:**
@@ -291,7 +292,7 @@ Controls with no automated verification, or only part of it, one line each. A cl
 9. **App → Oracle over `tcps`:** no test. Position: the JDBC URL is a deployment value, and nothing in the repository connects to a deployed Oracle; the deploying organization verifies it.
 10. **Data at rest (TDE or volume encryption, backups):** nothing tested in the repository. Position: a platform responsibility under BUILD_PLAN §9, owned by the database and storage platform.
 11. **Logging rules (no restricted text, ids not emails, control characters escaped):** no test asserts them. Tracked: #245.
-12. **`server.error.include-*`:** behaviour tested, keys not asserted. Tracked: #245.
+12. **Error attributes off (`spring.web.error.include-*`):** closed, verified by `ErrorPropertiesTest` (#245). The old `server.error.*` keys were not read under Spring Boot 4; `ConfigurationKeysTest` guards against that recurring.
 13. **Rate limiting on search and upload (Bucket4j):** not built. Tracked: #247.
 14. **The purge CronJob's credential separation:** no manifest test, unlike the importer and migration Jobs. Tracked: #246.
 15. **The web Deployment's secret mounts:** no manifest test. Tracked: #246.

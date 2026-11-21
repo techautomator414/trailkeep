@@ -23,6 +23,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   `ATTACHMENT_NAME` error for that file (the case still loads without it; `ATTACHMENT_NAME` cannot be skipped with
   `limits.acceptSkip`). SpotBugs' `SERVLET_PARAMETER` on the interceptor's `preHandle` is excluded for exactly that
   class, method and pattern: it reads parameters only to refuse them.
+- The error-page settings take effect again (#245, security test map gap 12). Spring Boot 4.0 moved
+  `server.error.*` to `spring.web.error.*` and stopped reading the old names, so the four `include-*` lines in
+  `application.yml` did nothing: message, stack trace, exception and binding errors were off only by Boot's
+  defaults, and the request path was allowed into Boot's JSON error body (`include-path` defaults to `always`). The
+  block is now `spring.web.error`, with `include-path: never` added. `ErrorPropertiesTest` asserts the values Boot
+  binds under the prod profile, and `ConfigurationKeysTest` fails on any key in a profile file that the classpath's
+  configuration metadata marks as removed (deprecated at level `error`).
 
 ### Security
 
