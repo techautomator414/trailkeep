@@ -82,3 +82,21 @@ updates:
       test-images:
         patterns:
           - "*"
+
+  # The images compose.yaml starts for local development and the DAST stack (#256). ComposeImagesTest keeps each equal to
+  # its test image under src/test/resources/images/ (or, for the compose-only alpine/openssl, digest-pinned), so the
+  # weekly test-images PR above and this one must land together; a PR that moves only one fails that test.
+  - package-ecosystem: docker-compose
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: ci
+    groups:
+      compose-images:
+        patterns:
+          - "*"

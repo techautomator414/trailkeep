@@ -22,6 +22,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   scan image with `app.rate-limit.search.*` and `upload.*` at the test-profile values (100000) and `enabled` still
   true; the prod profile's refusal of `enabled: false` is unchanged and `RateLimitIT` verifies the control. No ZAP
   suppression was added.
+- `compose.yaml` runs the images the tests run again, each pinned by digest with its tag kept (#256). It had drifted
+  to Keycloak 26.0.7, ClamAV 1.4.3, ghostunnel v1.8.4 and Mailpit v1.33.0, tag-only for most, while the tests and
+  so the evidence for a release ran Keycloak 26.8.2-1, ClamAV 1.5.3, ghostunnel v1.11.5 and Mailpit v1.33.1; the
+  same file builds the ZAP DAST stack, so the release-gating scan ran against the older identity provider and scanner.
+  PostgreSQL, Oracle Free and `alpine/openssl` are pinned by digest as well. `ComposeImagesTest` fails if a service
+  image is not `repository:tag@sha256:digest`, or differs in repository, tag or digest from the test image of the same
+  repository under `src/test/resources/images/` (`alpine/openssl`, compose-only, must still be pinned), and checks
+  Dependabot's new `docker-compose` entry for `/`, so compose moves weekly with the test images.
 - The image build no longer downloads the Maven distribution from Maven Central (#240). #242 and #257 made the
   wrapper's download retry, and main run 44918965190 still failed after 255 s of backoff because Central refused the
   runner for longer. `.github/scripts/build-image.sh` (used by `main.yml`, `zap.yml` and `release.yml`) now puts
