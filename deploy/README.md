@@ -178,6 +178,10 @@ The order for a fresh install and for every release:
   memory, per replica**: with N replicas a person can make up to N times the limit, and a restart refills them. A
   multi-replica deployment also sets a platform limit at the route or ingress (per client, not per person). The
   `prod` profile refuses to start with `app.rate-limit.enabled=false`, which only tests may set.
+- **Router access logs.** Search terms (`q`) and case numbers travel in GET query strings, which Trailkeep does not
+  log but the router or ingress access log can. Configure it to omit query strings, or treat that log as restricted
+  (access and retention as for case data). Saved views and the `CASES_EXPORTED` audit row keep the query by design; see
+  `security/DATA_MAP.md` ("Logs", "Not logged by Trailkeep") and the threat model's RR-10.
 - **Logs.** One JSON object per line on stdout, with `requestId` (and later `userId`, `caseNumber`, `module`).
 - **Batch profiles.** The purge `CronJob`, importer `Job` and migration `Job` run the same image with `prod,purge`,
   `prod,importer` or `prod,migrate` and `spring.main.web-application-type=none`.
@@ -233,3 +237,12 @@ is stored unscanned. Check the ClamAV pod and its TLS sidecar, the `clamav-tls` 
 replaced certificate fails the handshake), and the egress `NetworkPolicy` from the replica that reports 0. The System
 screen shows whether clamd answers right now and its version. With external scanning
 (`overlays/external-scanning`) there is no probe and no `trailkeep_scanner_up` series, so this alert never fires.
+
+### The retention purge is not succeeding
+
+`TrailkeepPurgeNotSucceeding`: the `trailkeep-purge` CronJob has not completed a Job successfully for more than 36
+hours. The rule needs kube-state-metrics, and it stays silent while the CronJob is suspended (`suspend: true`, as
+shipped): a suspended purge means retention is not yet enabled, which is a decision and not a fault. Once you
+unsuspend it, check `kubectl get jobs -l app.kubernetes.io/component=purge`, read the failed Job's log (counts only, no
+case data), and check the `trailkeep-purge` Secret, the purge `NetworkPolicy` to the database and the database itself.
+A run that is late does not lose data: the next run purges everything already past its date.

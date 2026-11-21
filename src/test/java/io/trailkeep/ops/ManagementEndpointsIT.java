@@ -122,7 +122,12 @@ class ManagementEndpointsIT {
         assertThat(names).allSatisfy(name -> assertThat(scrape).as(name).containsPattern("(?m)^" + name + "[{ ]"));
 
         int alerts = rules.split("- alert: ", -1).length - 1;
-        assertThat(alerts).isGreaterThanOrEqualTo(9);
+        assertThat(alerts).isGreaterThanOrEqualTo(10);
+        // The purge CronJob ships suspended: its alert must read the suspend flag, or it fires on every default install.
+        assertThat(rules)
+                .contains("alert: TrailkeepPurgeNotSucceeding")
+                .contains("kube_cronjob_status_last_successful_time{cronjob=\"trailkeep-purge\"}")
+                .contains("unless on(namespace, cronjob) kube_cronjob_spec_suspend{cronjob=\"trailkeep-purge\"} == 1");
         assertThat(rules.split("severity: ", -1).length - 1).isEqualTo(alerts);
         assertThat(rules.split("summary: ", -1).length - 1).isEqualTo(alerts);
         Matcher runbook = Pattern.compile("runbook_url: \"[^\"]*/deploy/README\\.md#([a-z-]+)\"")

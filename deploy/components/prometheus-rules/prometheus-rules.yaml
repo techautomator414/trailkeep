@@ -93,3 +93,24 @@ spec:
           annotations:
             summary: "clamd has not answered a replica's probe for 5 minutes; uploads are refused."
             runbook_url: "https://github.com/techautomator414/trailkeep/blob/main/deploy/README.md#the-virus-scanner-is-down"
+    - name: trailkeep.purge
+      rules:
+        # The purge is a CronJob, not an application job, so the signal is kube-state-metrics (it must be scraped; it is
+        # on OpenShift's cluster monitoring). Daily schedule plus 12 hours of slack. A CronJob that never succeeded has
+        # no last-successful series, so its age is counted from creation. The CronJob ships suspended
+        # (kube_cronjob_spec_suspend == 1): a suspended purge is a decision, not a failure, so it never alerts.
+        - alert: TrailkeepPurgeNotSucceeding
+          expr: |
+            (
+                time() - kube_cronjob_status_last_successful_time{cronjob="trailkeep-purge"} > 129600
+              or
+                (time() - kube_cronjob_created{cronjob="trailkeep-purge"} > 129600)
+                unless on(namespace, cronjob) kube_cronjob_status_last_successful_time{cronjob="trailkeep-purge"}
+            )
+            unless on(namespace, cronjob) kube_cronjob_spec_suspend{cronjob="trailkeep-purge"} == 1
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "The retention purge has not succeeded for more than 36 hours (and is not suspended)."
+            runbook_url: "https://github.com/techautomator414/trailkeep/blob/main/deploy/README.md#the-retention-purge-is-not-succeeding"

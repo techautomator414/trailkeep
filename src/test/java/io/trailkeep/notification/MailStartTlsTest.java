@@ -16,7 +16,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.mail.javamail.JavaMailSenderImpl;
 
 /**
- * Mail to the relay needs STARTTLS in prod (BUILD_PLAN §9 Transport; security test map gap 8): a relay that does not
+ * Mail to the relay needs STARTTLS and a verified server identity in prod (BUILD_PLAN §9 Transport; security test map gap 8): a relay that does not
  * offer it is refused, never used in the clear. Asserted on the session properties of the {@link JavaMailSenderImpl}
  * Spring Boot builds from the {@code prod} profile, which is the sender {@code OutboxDispatcher} is given, not on the
  * text of the profile file. Starts only the mail sender's auto-configuration; nothing connects.
@@ -38,6 +38,9 @@ class MailStartTlsTest {
                     .isEqualTo("true");
             assertThat(session.getProperty("mail.smtp.starttls.required"))
                     .as("STARTTLS required")
+                    .isEqualTo("true");
+            assertThat(session.getProperty("mail.smtp.ssl.checkserveridentity"))
+                    .as("relay certificate must match the host (JavaMail defaults to false)")
                     .isEqualTo("true");
         }
     }
