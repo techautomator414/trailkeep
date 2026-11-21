@@ -137,11 +137,10 @@ The status column records what is in effect today, not what is planned.
 **Verified:**
 - **No secret in a commit:** gitleaks on every PR and push.
 - **The audit key is required in prod:** `AuditConfigTest`.
-- **Each workload reads only its own secret files:** `ImporterJobManifestTest` (the importer Job), `MigrateJobManifestTest` (the migration Job).
+- **Each workload reads only its own secret files:** `ImporterJobManifestTest` (the importer Job), `MigrateJobManifestTest` (the migration Job), `PurgeCronJobManifestTest` (the purge CronJob: its own credential, no other Secret, no env injection), `WebDeploymentManifestTest` (the web Deployment: secrets only as files of `trailkeep-web`, never env literals).
 
 **Platform:** GitHub secret scanning and push protection. They are repository settings, not visible in the repository.
 
-**Configured only:** the web Deployment's and purge CronJob's secret mounts (`deploy/base/deployment.yaml`, `deploy/base/purge-cronjob.yaml`), which only kube-linter reads.
 
 ### Transport
 **Verified:**
@@ -212,7 +211,7 @@ The status column records what is in effect today, not what is planned.
 - **Purge skips anything under legal hold:** `PurgeIT`, `LegalHoldIT`.
 - **Import sign-off and run moves split between database users:** `PostgresDatabaseGrantsIT`.
 
-**Configured only:** the purge CronJob's own Secret, which the web Deployment never mounts (`deploy/base/purge-cronjob.yaml`). No manifest test asserts it, unlike the importer and migration Jobs.
+- **The purge CronJob has its own Secret, which the web Deployment never mounts, and its own network:** `PurgeCronJobManifestTest` and `WebDeploymentManifestTest` (#246). The pod's egress is DNS and the database only (`deploy/base/purge-networkpolicy.yaml`); `trailkeep-egress`, which reaches the identity provider and the mail relay, excludes it, as it excludes the importer and migration Jobs. The `clamav-ca` mount stays: the `purge` profile still builds the clamd client, which resolves its SSL bundle at startup, though the pod never scans.
 
 ### Privacy
 **Verified:**
@@ -296,8 +295,8 @@ Controls with no automated verification, or only part of it, one line each. A cl
 11. **Logging rules (no restricted text, ids not emails, control characters escaped):** closed, verified by `LoggingRulesIT` and `JsonLoggingIT` (#245).
 12. **Error attributes off (`spring.web.error.include-*`):** closed, verified by `ErrorPropertiesTest` (#245). The old `server.error.*` keys were not read under Spring Boot 4; `ConfigurationKeysTest` guards against that recurring.
 13. **Rate limiting on search and upload:** closed, verified by `RateLimitIT` (#247). Built in-house (a token bucket per user in memory), not with Bucket4j; per replica, with a platform limit at the route for multi-replica deployments.
-14. **The purge CronJob's credential separation:** no manifest test, unlike the importer and migration Jobs. Tracked: #246.
-15. **The web Deployment's secret mounts:** no manifest test. Tracked: #246.
+14. **The purge CronJob's credential separation:** closed, verified by `PurgeCronJobManifestTest` (#246).
+15. **The web Deployment's secret mounts:** closed, verified by `WebDeploymentManifestTest` (#246). No Oracle wallet is mounted today; the test requires any added volume to be a Secret.
 16. **GitHub secret scanning and push protection:** not verifiable from the repository. Position: they are GitHub repository settings outside the code; gitleaks covers every commit in CI.
 17. **Pre-commit hooks** (gitleaks, Spotless, Checkstyle, SPDX in BUILD_PLAN §12.1): closed (#249). `.pre-commit-config.yaml` provides gitleaks, `./mvnw spotless:check` and the SPDX header check as opt-in hooks (CONTRIBUTING.md). Checkstyle is left to `./mvnw verify`; CI remains the gate.
 18. **SonarCloud quality gate:** skipped until `SONAR_TOKEN` is set, so WP-28's "Sonar gate A" is not shown. Tracked: #30.
