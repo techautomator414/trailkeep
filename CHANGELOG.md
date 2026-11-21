@@ -51,6 +51,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   not verify gets no GitHub Release. The same workflow can be dispatched by hand against any tag and digest. The release
   notes now carry one working command per artefact. `.pre-commit-config.yaml` adds opt-in gitleaks, Spotless and SPDX
   header hooks (CONTRIBUTING.md); CI stays the gate.
+- Manifest tests for the purge CronJob and the web Deployment (#246, security test map gaps 14 and 15), in the style of
+  the importer and migration Job tests, on every build. `PurgeCronJobManifestTest` pins that the purge pod mounts only
+  its own `trailkeep-purge` Secret (plus the CA certificate), that no other workload's Secret is named anywhere in
+  the pod, that nothing is injected through `env` or a Secret reference, the `prod,purge` profiles, three distinct
+  database users in the ConfigMap, the same hardening as the Jobs (read-only root, no privilege escalation, all
+  capabilities dropped, no service-account token, suspended as shipped) and that default-deny covers the pod with no
+  ingress admitted. `WebDeploymentManifestTest` pins that the web pods get the database login, SMTP password, OIDC
+  client secret and audit key only as files of `trailkeep-web`, that the container has no `env` at all, that every
+  volume is an `emptyDir` or a Secret, and that the ConfigMap holds no secret-looking key or embedded login. No
+  manifest changed.
+
 - Per-user rate limits on case search and upload (#247, BUILD_PLAN §9 Availability, security test map gap 13). Each
   signed-in person has a token bucket per route, keyed on their user id (never the client address): `search` covers
   the cases list and its CSV export, `upload` covers attaching a file. Over the limit, `RateLimitInterceptor` refuses
