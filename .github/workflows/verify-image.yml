@@ -47,8 +47,8 @@ jobs:
       packages: read # read the image, its signature and attestations from GHCR
     env:
       IMAGE: ghcr.io/techautomator414/trailkeep
-      TAG: ${{ inputs.tag || 'v0.2.1' }}
-      DIGEST: ${{ inputs.digest || 'sha256:bde05b65cb9b05a6019de637652b521b661916c91a841e2c80cb77998dc03d01' }}
+      TAG: ${{ inputs.tag || 'v0.2.0' }}
+      DIGEST: ${{ inputs.digest || 'sha256:0000000000000000000000000000000000000000000000000000000000000000' }}
       SLSA_VERIFIER_VERSION: "2.7.1"
       # SHA-256 of slsa-verifier-linux-amd64 for that version. The binary also verifies against its own SLSA
       # provenance (slsa-verifier-linux-amd64.intoto.jsonl): `slsa-verifier verify-artifact`. Bump both together.
