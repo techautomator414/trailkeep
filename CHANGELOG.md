@@ -24,6 +24,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   `limits.acceptSkip`). SpotBugs' `SERVLET_PARAMETER` on the interceptor's `preHandle` is excluded for exactly that
   class, method and pattern: it reads parameters only to refuse them.
 
+### Security
+
+- Deny-by-default routes and the absence of CORS are now asserted (#245, security test map gaps 4 and 7):
+  - **`DenyByDefaultIT`:** an anonymous request to every route in Spring MVC's handler mapping, with a valid CSRF
+    token so CSRF's 403 cannot hide a `permitAll`, is refused: a 302 to the start of the sign-in, or a 401 with
+    `HX-Redirect` for htmx. So are static files, the error page, unmapped paths and Spring Security's `/login` and
+    `GET /logout` pages, which are not generated. The only public endpoints are the four Spring Security serves for
+    sign-in and sign-out, each listed in the test with its reason, and each must still answer anonymously.
+  - **`NoCorsIT`:** a request with `Origin`, and a preflight for every mapped route, get no `Access-Control-*`
+    header, anonymous or signed in.
+
 ## [0.2.0] - 2026-11-20
 
 Case handling, end to end: IMPLEMENTATION_PLAN Phases 2 to 5 (WP-11 to WP-27, with WP-17b) and WP-28 of Phase 6.

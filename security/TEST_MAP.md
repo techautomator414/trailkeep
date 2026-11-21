@@ -75,8 +75,10 @@ The status column records what is in effect today, not what is planned.
 - **Per-role controller behaviour:** the `web` controller ITs, for example `CaseControllerIT`, `CaseAssignmentControllerIT`, `ClosureDecisionControllerIT`, `TeamAdminControllerIT` and `UserAdminControllerIT`.
 - **Module boundaries:** `ModularityTest`, `ImportOnlyApiRulesTest`.
 - **Allow-listed sort and filter values:** `CaseListQueryTest`.
-
-**Configured only:** deny-by-default URL rules in `SecurityConfig`. They are exercised by `SecurityDefaultsIT` and the route sweeps, but no test enumerates the rules themselves.
+- **Deny by default** (`SecurityConfig`): `DenyByDefaultIT` sends an anonymous request, with a valid CSRF token, to every route in the handler mapping, and to static files, the error page, unmapped paths and Spring Security's `/login` and `GET /logout` (not generated, because the application sets its own entry point). Each is refused: a 302 to the start of the sign-in, or a 401 with `HX-Redirect` for htmx.
+  - The public list is kept in the test, each entry with its reason: `GET /oauth2/authorization/{id}`, `GET /login/oauth2/code/{id}`, `POST /logout` (CSRF token still required) and `POST /logout/connect/back-channel/{id}`. All are served by Spring Security's filters, and each must still answer anonymously, so the list cannot go stale.
+  - A `permitAll` on any other route fails the test until the route is listed with a reason.
+  - The management port (8081) is anonymous by design: health, liveness, readiness, info and Prometheus only, reached from inside the cluster and never routed. `ManagementEndpointsIT` pins that nothing else is served there.
 
 ### Audit (AU)
 **Verified:**
@@ -129,9 +131,7 @@ The status column records what is in effect today, not what is planned.
 - **Valid HTML on every page state the accessibility tests check:** `NuHtmlCheckIT` and every `*AccessibilityIT` through the shared page check (the Nu Html Checker, #239).
 - **Cookies `Secure; HttpOnly; SameSite=Lax`** (set in `SessionConfig`): `SessionHardeningIT` reads the `Set-Cookie` attributes behind the router.
 - **HSTS** on responses to requests that arrive as HTTPS behind the trusted router (`max-age=31536000 ; includeSubDomains`), and not on plain HTTP: `SessionHardeningIT`. It comes from Spring Security's default header writer, which `SecurityConfig` leaves on; the route in `deploy/base/route.yaml` sets no HSTS of its own.
-
-**Configured only:**
-- **No CORS:** no CORS configuration exists, so Spring answers no cross-origin requests. No test asserts the absence.
+- **No CORS:** no CORS configuration exists. `NoCorsIT` sends a request with `Origin`, and a preflight for every mapped route, anonymous and signed in; none gets an `Access-Control-*` header.
 
 ### Secrets (SC)
 **Verified:**
@@ -283,10 +283,10 @@ Controls with no automated verification, or only part of it, one line each. A cl
 1. **Idle timeout (30 min):** closed, verified by `SessionHardeningIT` (#245).
 2. **RP-initiated logout:** closed, verified by `KeycloakLoginIT` (#245).
 3. **Step-up re-authentication:** not built. Position: cut for scope in v1 by BUILD_PLAN §9; admin actions are audited instead.
-4. **Deny-by-default URL rules:** exercised, but not enumerated by a test. Tracked: #245.
+4. **Deny-by-default URL rules:** closed, verified by `DenyByDefaultIT` (#245).
 5. **Session cookie flags (`Secure; HttpOnly; SameSite=Lax`):** closed, verified by `SessionHardeningIT` (#245).
 6. **HSTS:** closed, verified by `SessionHardeningIT` (#245); the route still sets none of its own.
-7. **No CORS:** no test asserts that cross-origin requests get no CORS headers. Tracked: #245.
+7. **No CORS:** closed, verified by `NoCorsIT` (#245).
 8. **SMTP STARTTLS required:** configured in the prod profile; no test. Tracked: #245.
 9. **App → Oracle over `tcps`:** no test. Position: the JDBC URL is a deployment value, and nothing in the repository connects to a deployed Oracle; the deploying organization verifies it.
 10. **Data at rest (TDE or volume encryption, backups):** nothing tested in the repository. Position: a platform responsibility under BUILD_PLAN §9, owned by the database and storage platform.
