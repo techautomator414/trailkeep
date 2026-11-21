@@ -26,6 +26,19 @@
     <Bug pattern="SERVLET_HEADER"/>
   </Match>
   <!--
+    SERVLET_PARAMETER (FindSecBugs, Low) in ControlCharacterInterceptor.preHandle: the rule flags reading a request
+    parameter as a taint source. preHandle reads the parameter map only to inspect each name and value character by
+    character for control characters and to refuse the request; the values are never used, stored, logged or echoed
+    (ControlCharacterException carries no value). That is the input validation the rule asks for, not a sink. The
+    match is exactly this class, this method and this pattern. Covered by ControlCharactersIT and
+    ControlCharacterSweepIT. Approved by the release manager on https://github.com/techautomator414/trailkeep/pull/216
+  -->
+  <Match>
+    <Class name="io.trailkeep.web.ControlCharacterInterceptor"/>
+    <Method name="preHandle"/>
+    <Bug pattern="SERVLET_PARAMETER"/>
+  </Match>
+  <!--
     FindSecBugs SPRING_ENDPOINT marks every controller for review; it reports no defect. Each class below was reviewed:
     DashboardController (PR 9, WP-05): GET only, renders the signed-in user's own display name, behind login.
     SessionController (PR 9, WP-05): POST only, CSRF-protected, behind login, changes only the session's idle clock.

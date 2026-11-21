@@ -7,6 +7,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- A control character in any text a request sends is now a 400 on every route (#212), the same on PostgreSQL and
+  Oracle. PostgreSQL rejects U+0000 in a text parameter ("invalid byte sequence for encoding UTF8: 0x00"), which was a
+  500 on the case list filters, the SLA policy and case type forms and comments (56 of the 62 server errors in the
+  authenticated ZAP scan). One `HandlerInterceptor` (`ControlCharacterInterceptor`) checks every parameter name and
+  value once Spring has resolved the request, so the query string, form fields and multipart text parts are all
+  covered and a new form needs nothing; it refuses U+0000 to U+001F except tab, line feed and carriage return, and
+  U+007F, and `ErrorAdvice` renders the 400 (the problem fragment for htmx). `ControlCharactersIT` covers the entry
+  points and `ControlCharacterSweepIT` every mapped route, in a value and in a name. An uploaded file's name is not a
+  request parameter, so `UploadIntake` refuses any control character in it (U+0000 to U+001F, so tab, CR and LF too,
+  and U+007F) as `NAME`, the existing 422 path, before anything is written or scanned; the importer uses the same
+  check, so a legacy attachment whose name holds one is not stored and the run's issue list records an
+  `ATTACHMENT_NAME` error for that file (the case still loads without it; `ATTACHMENT_NAME` cannot be skipped with
+  `limits.acceptSkip`). SpotBugs' `SERVLET_PARAMETER` on the interceptor's `preHandle` is excluded for exactly that
+  class, method and pattern: it reads parameters only to refuse them.
+
 ## [0.2.0] - 2026-11-20
 
 Case handling, end to end: IMPLEMENTATION_PLAN Phases 2 to 5 (WP-11 to WP-27, with WP-17b) and WP-28 of Phase 6.
