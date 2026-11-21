@@ -21,7 +21,7 @@ class TokenBucketsTest {
     }
 
     @Test
-    void aFullBucketGivesItsCapacityAtOnceThenRefusesWithTheWaitForTheNextToken() {
+    void fullBucketGivesItsCapacityAtOnceThenRefusesWithTheWaitForTheNextToken() {
         TokenBuckets buckets = buckets(3, 6, Duration.ofMinutes(1)); // a token every 10 s
 
         assertThat(buckets.take(1)).isZero();
@@ -46,7 +46,7 @@ class TokenBucketsTest {
     }
 
     @Test
-    void aQuietSpellRefillsToCapacityAndNoFurther() {
+    void quietSpellRefillsToCapacityAndNoFurther() {
         TokenBuckets buckets = buckets(2, 2, Duration.ofSeconds(20)); // a token every 10 s
 
         assertThat(buckets.take(1)).isZero();

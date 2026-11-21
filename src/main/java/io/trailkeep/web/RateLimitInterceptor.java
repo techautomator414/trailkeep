@@ -24,8 +24,8 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 /**
  * Per-person rate limiting on the routes marked {@link RateLimited} (#247, BUILD_PLAN §9 Availability): the cases
- * list and its export ({@link Route#SEARCH}) and attaching a file ({@link Route#UPLOAD}). A request with an empty bucket
- * is refused with {@link RateLimitedException}, which {@link ErrorAdvice} answers 429 with {@code Retry-After}.
+ * list and its export ({@link Route#SEARCH}) and attaching a file ({@link Route#UPLOAD}). A request with an empty
+ * bucket is refused with {@link RateLimitedException}, which {@link ErrorAdvice} answers 429 with {@code Retry-After}.
  *
  * <p>Keyed on the signed-in person's {@code APP_USER.ID}, never the client address, which the router rewrites and
  * which many people can share. It runs first among the interceptors, after authentication and CSRF and before the

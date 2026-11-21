@@ -172,7 +172,6 @@ class ShellAccessibilityIT {
     @Test
     void overTheRateLimitHtmxSwapsTheProblemAndTheFullPageIsTheErrorPageBothWithoutViolations() {
         assertThat(open("/cases").status()).isEqualTo(200);
-        ShellPage shell = new ShellPage(page);
 
         // The search form is an htmx request: app.js swaps the 429 problem fragment into the results.
         page.fill("#tk-case-filter input[name=q]", "synthetic-needle-text");
@@ -181,6 +180,7 @@ class ShellAccessibilityIT {
         assertThat(page.textContent("#tk-case-results .tk-problem h2")).isEqualTo("Too many requests");
         assertThat(page.evaluate("() => document.activeElement.closest('.tk-problem') !== null"))
                 .isEqualTo(true);
+        ShellPage shell = new ShellPage(page);
         assertThat(shell.axeViolations()).isEmpty();
 
         Response response = open("/cases?q=synthetic-needle-text");
