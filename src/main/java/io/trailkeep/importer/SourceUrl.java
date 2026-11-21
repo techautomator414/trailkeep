@@ -20,6 +20,9 @@ import java.util.regex.Pattern;
  * accessTokenCallbackClass}), loads native or Kerberos code ({@code integratedSecurity}, {@code authenticationScheme})
  * and reads key stores ({@code keyStoreLocation}); its address is {@code host[\instance][:port]}, its property names
  * are case-insensitive, and a value in braces may hold a {@code ;}, so braces are refused (26p).
+ *
+ * <p>An allowed URL must also require verified TLS ({@link #verifiesTls}, ADR-0014 rule 2, #259): the server's
+ * certificate checked against a trusted CA and its host name checked against the certificate.
  */
 final class SourceUrl {
 
@@ -87,6 +90,15 @@ final class SourceUrl {
 
     private static final String ORACLE_THIN = "jdbc:oracle:thin:@";
 
+    /** The two spellings of Oracle's host-name check, which {@link #verifiesTls} requires to be {@code true}. */
+    private static final Set<String> ORACLE_DN_MATCH = Set.of("ssl_server_dn_match", "oracle.net.ssl_server_dn_match");
+
+    /** SQL Server's {@code encrypt} with a verifying value: {@code true}, or {@code strict} (TDS 8.0). */
+    private static final Pattern SQLSERVER_ENCRYPT_VERIFIED =
+            Pattern.compile("encrypt=(true|strict)", Pattern.CASE_INSENSITIVE);
+
+    private static final Pattern SQLSERVER_ENCRYPT = Pattern.compile("encrypt(=.*)?", Pattern.CASE_INSENSITIVE);
+
     private SourceUrl() {}
 
     /**
@@ -112,6 +124,63 @@ final class SourceUrl {
             case SQLSERVER -> false; // checked by sqlServer
         };
         return known && (query < 0 || parameters(vendor, url.substring(query + 1)));
+    }
+
+    /**
+     * Whether a URL requires verified TLS (ADR-0014 rule 2; design §4.1 and §11, "Encrypted in transit"). Every value
+     * a setting is given must verify, so a later duplicate cannot switch verification off.
+     *
+     * <ul>
+     *   <li>PostgreSQL: {@code sslmode=verify-full}, and {@code ssl} only as {@code true}. {@code verify-ca} checks no
+     *       host name and {@code require} checks nothing, so both are refused.
+     *   <li>Oracle: a {@code tcps://} address with {@code ssl_server_dn_match=true} (either spelling), as the account
+     *       recipe writes it; the host-name check is stated rather than left to the driver's default.
+     *   <li>SQL Server: {@code encrypt=true} or {@code encrypt=strict}. {@code trustServerCertificate} is already
+     *       allowed only as {@code false}.
+     * </ul>
+     *
+     * @param vendor the mapping's {@code source.vendor}
+     * @param url the URL with its placeholders resolved
+     * @return true only if the URL requires a verified, host-checked TLS connection
+     */
+    static boolean verifiesTls(Vendor vendor, String url) {
+        if (vendor == Vendor.SQLSERVER) {
+            boolean verified = false;
+            for (String property : url.split(";", -1)) {
+                if (SQLSERVER_ENCRYPT.matcher(property).matches()) {
+                    if (!SQLSERVER_ENCRYPT_VERIFIED.matcher(property).matches()) {
+                        return false;
+                    }
+                    verified = true;
+                }
+            }
+            return verified;
+        }
+        int query = url.indexOf('?');
+        String address = query < 0 ? url : url.substring(0, query);
+        if (query < 0 || (vendor == Vendor.ORACLE && !address.startsWith(ORACLE_THIN + "tcps://"))) {
+            return false;
+        }
+        boolean verified = false;
+        for (String parameter : url.substring(query + 1).split("&", -1)) {
+            int equals = parameter.indexOf('=');
+            String name = equals < 0 ? parameter : parameter.substring(0, equals);
+            String value = equals < 0 ? "" : parameter.substring(equals + 1);
+            if (vendor == Vendor.ORACLE && ORACLE_DN_MATCH.contains(name)) {
+                if (!"true".equalsIgnoreCase(value)) {
+                    return false;
+                }
+                verified = true;
+            } else if (vendor == Vendor.POSTGRESQL && "sslmode".equals(name)) {
+                if (!"verify-full".equals(value)) {
+                    return false;
+                }
+                verified = true;
+            } else if (vendor == Vendor.POSTGRESQL && "ssl".equals(name) && !"true".equals(value)) {
+                return false;
+            }
+        }
+        return verified;
     }
 
     /** {@code jdbc:sqlserver://address;name=value;…} with the address and every property allowed. */
