@@ -16,8 +16,8 @@ import org.junit.jupiter.api.io.TempDir;
 
 /**
  * Pins the DAST verdict policy of {@code .github/scripts/dast-verdict.sh} on every PR (WP-28 part e), although ZAP runs
- * only nightly and on release tags: a partial scan (the active scan cut off at its cap, its completion missing, or the
- * plan stopped by a High insight) warns in nightly and fails in release; everything else that fails, fails in both.
+ * only nightly and on release tags: a partial scan (any of the plan's active scans cut off at its cap or its completion
+ * missing, or the plan stopped by a High insight) warns in nightly and fails in release; everything else that fails, fails in both.
  */
 class DastVerdictTest {
 
@@ -101,25 +101,66 @@ class DastVerdictTest {
 
     @Test
     void lostSessionMissingReportOrUnknownModeFails() throws IOException, InterruptedException {
-        assertThat(verdict("release", "302", "0", "1", "0", "", FINISHED, "0").output())
+        assertThat(verdict("release", "302", "0", "1", "0", "", FINISHED, CAP, "0")
+                        .output())
                 .contains("lost its session");
-        assertThat(verdict("nightly", "200", "0", "0", "0", "", FINISHED, "0").output())
+        assertThat(verdict("nightly", "200", "0", "0", "0", "", FINISHED, CAP, "0")
+                        .output())
                 .contains("wrote no JSON report");
-        Verdict unknown = verdict("weekly", "200", "0", "1", "0", "", FINISHED, "0");
+        Verdict unknown = verdict("weekly", "200", "0", "1", "0", "", FINISHED, CAP, "0");
         assertThat(unknown.exit()).isOne();
         assertThat(unknown.output()).contains("Unknown mode");
     }
 
     @Test
     void rulesStoppedAtTheirLimitAreCountedButDoNotFail() throws IOException, InterruptedException {
-        Verdict verdict = verdict("release", "200", "0", "1", "0", "", FINISHED, "6");
+        Verdict verdict = verdict("release", "200", "0", "1", "0", "", FINISHED, CAP, "6");
         assertThat(verdict.exit()).isZero();
         assertThat(verdict.summary()).contains("6 active scan rule(s) stopped at their 5-minute limit");
     }
 
+    /**
+     * The plan's active scan runs as two activeScan jobs (#231), the second attacking the form bodies last: each gets its
+     * own time and cap, and either one cut off or missing makes the scan partial.
+     */
+    @Test
+    void everyActiveScanOfThePlanMustCompleteInsideItsOwnCap() throws IOException, InterruptedException {
+        Verdict both = scans("release", "1444.962 300.2");
+        assertThat(both.exit()).isZero();
+        assertThat(both.output()).doesNotContain("::error", "::warning");
+
+        Verdict first = scans("release", "4800.071 300.2");
+        assertThat(first.exit()).isOne();
+        assertThat(first.output()).contains("::error", "Active scan 1 of 2 was cut off at its 80-minute cap");
+
+        Verdict second = scans("release", "1444.962 2400.104");
+        assertThat(second.exit()).isOne();
+        assertThat(second.output()).contains("::error", "Active scan 2 of 2 was cut off at its 40-minute cap");
+        Verdict nightly = scans("nightly", "1444.962 2400.104");
+        assertThat(nightly.exit()).isZero();
+        assertThat(nightly.output()).contains("::warning", "Active scan 2 of 2 was cut off");
+
+        for (String missing : List.of("1444.962 -", "1444.962", "- 300.2", "")) {
+            Verdict verdict = scans("release", missing);
+            assertThat(verdict.exit()).as(missing).isOne();
+            assertThat(verdict.output()).as(missing).containsPattern("does not show active scan [12] of 2 completing");
+        }
+    }
+
+    @Test
+    void noActiveScanCapFailsARelease() throws IOException, InterruptedException {
+        Verdict verdict = verdict("release", "200", "0", "1", "0", "", FINISHED, "", "0");
+        assertThat(verdict.exit()).isOne();
+        assertThat(verdict.output()).contains("No active scan cap was given");
+    }
+
+    private Verdict scans(String mode, String active) throws IOException, InterruptedException {
+        return verdict(mode, "200", "0", "1", "0", "", active, "4800 2400", "0");
+    }
+
     private Verdict run(String mode, String status, String gating, String stopped, String active)
             throws IOException, InterruptedException {
-        return verdict(mode, "200", status, "1", gating, stopped, active, "0");
+        return verdict(mode, "200", status, "1", gating, stopped, active, CAP, "0");
     }
 
     private Verdict verdict(
@@ -130,11 +171,12 @@ class DastVerdictTest {
             String gating,
             String stopped,
             String active,
+            String cap,
             String skipped)
             throws IOException, InterruptedException {
         Path summary = Files.createTempFile(dir, "summary", ".md");
         List<String> command = new ArrayList<>(List.of("bash", SCRIPT.toString(), mode, "compliance.admin", still));
-        command.addAll(List.of(status, report, gating, stopped, active, CAP, skipped));
+        command.addAll(List.of(status, report, gating, stopped, active, cap, skipped));
         ProcessBuilder builder = new ProcessBuilder(command).redirectErrorStream(true);
         builder.environment().put("GITHUB_STEP_SUMMARY", summary.toString());
         Process process = builder.start();

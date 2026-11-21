@@ -6,14 +6,18 @@
 # and ::error annotations and job-summary lines. It reads no file, so DastVerdictTest pins every rule on each PR.
 #   - Fails in both modes: the scan lost its session; ZAP wrote no JSON report; the gate (ZAP's exit status) and the
 #     report disagree; an alert of Medium or higher (ZAP exit 1); an undocumented exit status.
-#   - A partial scan, i.e. the active scan cut off at its maxScanDurationInMins cap (or its completion missing from
-#     zap.log), or the plan stopped by a High insight such as memory: a ::warning and a summary line in nightly, a
-#     failure in release, so that a release never passes on a scan that did not cover the application.
+#   - A partial scan, i.e. any of the plan's active scans (one per activeScan job, #231) cut off at its
+#     maxScanDurationInMins cap (or its completion missing from zap.log), or the plan stopped by a High insight such as
+#     memory: a ::warning and a summary line in nightly, a failure in release, so that a release never passes on a scan
+#     that did not cover the application.
 #   - ZAP exit 2 (Low alerts or plan warnings only) passes with a ::warning; 0 passes.
 #   - Rules the active scan skipped at their 5-minute limit are counted in the summary, in both modes.
 # Usage: dast-verdict.sh <mode: release|nightly> <identity> <dashboard status after the scan> <ZAP exit status>
 #          <report written: 1|0> <alerts of Medium or higher in the report> <stopping insight, or "">
-#          <active scan seconds from zap.log, or ""> <active scan cap in seconds> <rules skipped at their limit>
+#          <each active scan's seconds from zap.log, or "-"> <each active scan's cap in seconds>
+#          <rules skipped at their limit>
+#        The two per-scan arguments are space-separated, one value per activeScan job in plan order; a scan with no
+#        value (an empty list, or one shorter than the caps) has no completion.
 set -uo pipefail
 
 mode="$1" identity="$2" still="$3" status="$4" report="$5" gating="$6" stopped="$7" active="$8" cap="$9"
@@ -54,11 +58,24 @@ partial=()
 if [ -n "${stopped}" ]; then
   partial+=("ZAP stopped the plan early on a High insight (${stopped}), so the scan is partial.")
 fi
-if [ -z "${active}" ]; then
-  partial+=("zap.log does not show the active scan completing, so the scan may be partial.")
-elif [ "${active%%.*}" -ge $((cap - 1)) ]; then
-  partial+=("The active scan was cut off at its $((cap / 60))-minute cap (it ran ${active} s), so the scan is partial.")
+read -r -a actives <<< "${active}"
+read -r -a caps <<< "${cap}"
+if [ "${#caps[@]}" = "0" ]; then
+  partial+=("No active scan cap was given, so no active scan can be shown complete.")
 fi
+for index in "${!caps[@]}"; do
+  seconds="${actives[index]:--}" limit="${caps[index]}"
+  if [ "${#caps[@]}" = "1" ]; then
+    scan="the active scan" Scan="The active scan"
+  else
+    scan="active scan $((index + 1)) of ${#caps[@]}" Scan="Active scan $((index + 1)) of ${#caps[@]}"
+  fi
+  if [ "${seconds}" = "-" ]; then
+    partial+=("zap.log does not show ${scan} completing, so the scan may be partial.")
+  elif [ "${seconds%%.*}" -ge $((limit - 1)) ]; then
+    partial+=("${Scan} was cut off at its $((limit / 60))-minute cap (it ran ${seconds} s), so the scan is partial.")
+  fi
+done
 for reason in "${partial[@]}"; do
   if [ "${mode}" = "release" ]; then
     fail "${reason} A release needs a complete scan."
