@@ -182,6 +182,7 @@ class CaseController {
     }
 
     @PostMapping("/cases/{number}/attachments")
+    @RateLimited(RateLimited.Route.UPLOAD)
     String attach(
             @AuthenticationPrincipal TrailkeepOidcUser principal,
             @PathVariable String number,
