@@ -16,8 +16,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   (`concurrencyPolicy: Forbid`); the import user is the only one granted staging, so no grant changed, and the pod
   holds neither the source password nor `import.hash-key`. Each run's purge now locks the run and skips a run another
   pass purged meanwhile, so the schedule and a command never record one purge twice. Logs carry the count and run ids
-  only. `ImporterProfileIT` (PostgreSQL and Oracle) proves expiry with no other command, fresh staging kept and the
-  lock; `ImporterStagingTtlManifestTest` proves the schedule is live and the pod's secrets and network.
+  only. `StagingTtlIT` (PostgreSQL and Oracle) proves expiry with no other command, fresh staging kept and the
+  lock, and takes over the existing TTL test from `ImporterProfileIT`, which had reached the file-length limit;
+  `ImporterStagingTtlManifestTest` proves the schedule is live and the pod's secrets and network.
 - `AuditRecorderIT.redactedValuesAreStoredOnlyAsHmacAndLength` no longer fails by chance (#268). It looked for the
   fragment `4711` in the whole stored JSON, but the redacted field's `hmac` is 64 hex digits of a per-run random key and
   contains it about once in 1,000 runs (it did on #266's CI). The test now parses each stored value, requires the

@@ -29,12 +29,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -50,7 +44,6 @@ import org.springframework.orm.jpa.persistenceunit.ManagedClassNameFilter;
 import org.springframework.orm.jpa.persistenceunit.PersistenceManagedTypes;
 import org.springframework.scheduling.annotation.ScheduledAnnotationBeanPostProcessor;
 import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
-import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * The two persistence units of one image (WP-26 part a, design §2.1 R3), each started as the database user it runs
@@ -67,9 +60,6 @@ import org.springframework.transaction.support.TransactionTemplate;
 abstract class AbstractImporterProfileIT {
 
     private static final Instant NOW = Instant.parse("2026-11-10T12:00:00Z");
-
-    /** A clamd stream limit below the importer's 25 MB cap (design §4.3 "Size"). */
-    private static final String BELOW_THE_CAP = "--import.attachments.clamd-stream-max=1MB";
 
     @Autowired
     private TestDatabaseUsers users;
@@ -186,149 +176,6 @@ abstract class AbstractImporterProfileIT {
             jdbc.update("DELETE FROM IMPORT_ISSUE WHERE RUN_ID IN (?, ?)", seeded, requested);
             jdbc.update("DELETE FROM IMPORT_RUN WHERE ID IN (?, ?)", seeded, requested);
         }
-    }
-
-    /**
-     * The staging TTL and {@code purge-staging} (WP-26 part j, design §5), as the import user: any command first
-     * removes the staging of every expired run and records it, leaving runs that have not expired alone; {@code
-     * purge-staging} removes one run's staging at once.
-     */
-    @Test
-    void anyCommandPurgesExpiredStagingAndPurgeStagingPurgesItsRun() throws SQLException {
-        long expired = stagedRun(Instant.parse("2026-01-01T00:00:00Z"));
-        long current = stagedRun(Instant.parse("2099-01-01T00:00:00Z"));
-
-        // A clamd stream limit below the importer's cap stops dry-run and load only, never these commands.
-        start(importUser, true, "--import.command=status", "--import.run=" + current, BELOW_THE_CAP)
-                .close();
-
-        assertThat(stagedRows(expired))
-                .as("expired: staging and checkpoints gone")
-                .isZero();
-        assertThat(stagedRows(current)).as("not expired: untouched").isEqualTo(6);
-        assertThat(purgedAt(expired)).isNotNull();
-        assertThat(purgedAt(current)).isNull();
-
-        start(importUser, true, "--import.command=purge-staging", "--import.run=" + current, BELOW_THE_CAP)
-                .close();
-
-        assertThat(stagedRows(current)).isZero();
-        assertThat(purgedAt(current)).isNotNull();
-    }
-
-    /**
-     * The scheduled staging TTL (#275): {@code expire-staging}, the CronJob's command, given no run and with no other
-     * importer command run, removes an expired run's staging and content area and records the purge, and leaves a run
-     * that has not expired alone.
-     */
-    @Test
-    void expireStagingAloneRemovesExpiredStagingAndKeepsFreshStaging(@TempDir Path area) throws Exception {
-        long expired = stagedRun(Instant.parse("2026-01-01T00:00:00Z"));
-        long fresh = stagedRun(Instant.parse("2099-01-01T00:00:00Z"));
-        Path expiredFolder = Files.createDirectories(area.resolve(Long.toString(expired)));
-        Files.writeString(expiredFolder.resolve("ab".repeat(32)), "synthetic content");
-        Path freshFile =
-                Files.createDirectories(area.resolve(Long.toString(fresh))).resolve("cd".repeat(32));
-        Files.writeString(freshFile, "synthetic content");
-
-        start(importUser, true, "--import.command=expire-staging", "--import.content-area=" + area)
-                .close();
-
-        assertThat(stagedRows(expired))
-                .as("expired: staging and checkpoints gone")
-                .isZero();
-        assertThat(purgedAt(expired)).isNotNull();
-        assertThat(expiredFolder).as("expired: content area gone").doesNotExist();
-        assertThat(stagedRows(fresh)).as("not expired: untouched").isEqualTo(6);
-        assertThat(purgedAt(fresh)).isNull();
-        assertThat(freshFile).exists();
-    }
-
-    /**
-     * One purge per run (#275): while a TTL pass holds an expired run's lock, having purged it, a second pass (the
-     * CronJob racing an importer command) waits for it, then finds the run purged and leaves it alone, without failing.
-     */
-    @Test
-    void aSecondTtlPassWaitsForTheFirstAndLeavesTheRunItPurged() throws Exception {
-        long current = stagedRun(Instant.parse("2099-01-01T00:00:00Z"));
-        try (ConfigurableApplicationContext importer =
-                start(importUser, true, "--import.command=status", "--import.run=" + current)) {
-            // Seeded after the start, whose own TTL pass would have taken it.
-            long expired = stagedRun(Instant.parse("2026-01-01T00:00:00Z"));
-            StagingPurger purger = importer.getBean(StagingPurger.class);
-            ExecutorService other = Executors.newSingleThreadExecutor();
-            CountDownLatch held = new CountDownLatch(1);
-            try {
-                Future<List<Long>> second = other.submit(() -> {
-                    held.await();
-                    return purger.purgeExpired(Instant.now());
-                });
-                List<Long> first = importer.getBean(TransactionTemplate.class).execute(status -> {
-                    List<Long> purged = purger.purgeExpired(Instant.now());
-                    held.countDown();
-                    assertThatThrownBy(() -> second.get(500, TimeUnit.MILLISECONDS))
-                            .as("the second pass waits while the first holds the run")
-                            .isInstanceOf(TimeoutException.class);
-                    return purged;
-                });
-
-                assertThat(first).contains(expired);
-                assertThat(second.get(60, TimeUnit.SECONDS))
-                        .as("the second pass found the run purged")
-                        .doesNotContain(expired);
-            } finally {
-                other.shutdownNow();
-            }
-            assertThat(stagedRows(expired)).isZero();
-            assertThat(purgedAt(expired)).isNotNull();
-        }
-    }
-
-    /** A run with one row in every staging table and one checkpoint, as the schema owner seeds it. */
-    private long stagedRun(Instant expiresAt) {
-        long run = runs.save(new ImportRun(ImportRun.Kind.IMPORT, "legacy1", new CaseSeed(jdbc).user(), NOW))
-                .getId();
-        jdbc.update("UPDATE IMPORT_RUN SET STAGING_EXPIRES_AT = ? WHERE ID = ?", Timestamp.from(expiresAt), run);
-        String hash = "cd".repeat(32);
-        jdbc.update("INSERT INTO IMPORT_STG_PERSON (RUN_ID, LEGACY_KEY, ROW_HASH) VALUES (?, 'p1', ?)", run, hash);
-        jdbc.update(
-                "INSERT INTO IMPORT_STG_CASE (RUN_ID, LEGACY_KEY, ROW_HASH, DESCRIPTION) VALUES (?, 'c1', ?,"
-                        + " 'Synthetic staged description')",
-                run,
-                hash);
-        for (String table : List.of("IMPORT_STG_COMMENT", "IMPORT_STG_ATTACHMENT", "IMPORT_STG_EVENT")) {
-            // Test-only seeding of a fixed table name from this list.
-            jdbc.update(
-                    "INSERT INTO " + table + " (RUN_ID, LEGACY_KEY, ROW_HASH, CASE_KEY) VALUES (?, 'x1', ?, 'c1')",
-                    run,
-                    hash);
-        }
-        jdbc.update(
-                "INSERT INTO IMPORT_RUN_CHECKPOINT (RUN_ID, STAGE, ENTITY, FINISHED_AT) VALUES (?, 'EXTRACT',"
-                        + " 'CASE', ?)",
-                run,
-                Timestamp.from(NOW));
-        return run;
-    }
-
-    private int stagedRows(long run) {
-        int rows = 0;
-        for (String table : List.of(
-                "IMPORT_STG_PERSON",
-                "IMPORT_STG_CASE",
-                "IMPORT_STG_COMMENT",
-                "IMPORT_STG_ATTACHMENT",
-                "IMPORT_STG_EVENT",
-                "IMPORT_RUN_CHECKPOINT")) {
-            Integer count =
-                    jdbc.queryForObject("SELECT COUNT(*) FROM " + table + " WHERE RUN_ID = ?", Integer.class, run);
-            rows += count == null ? 0 : count;
-        }
-        return rows;
-    }
-
-    private @Nullable Timestamp purgedAt(long run) {
-        return jdbc.queryForObject("SELECT STAGING_PURGED_AT FROM IMPORT_RUN WHERE ID = ?", Timestamp.class, run);
     }
 
     @Test

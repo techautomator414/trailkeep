@@ -35,7 +35,7 @@ class ImporterStagingTtlManifestTest {
     private static final String NAME = "trailkeep-importer-staging-ttl";
 
     @Test
-    void itRunsExpireStagingOnALiveScheduleOneRunAtATime() throws IOException {
+    void itRunsExpireStagingOnLiveScheduleOneRunAtOnce() throws IOException {
         JsonNode cron = cronJob();
 
         assertThat(cron.at("/spec/suspend").asBoolean(false))

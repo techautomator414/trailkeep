@@ -146,8 +146,9 @@ class ImportCommandRunner implements ApplicationRunner {
     }
 
     /**
-     * Every command first applies the staging TTL (design §5), whichever run it was started for; {@code expire-staging},
-     * which the scheduled CronJob runs, does nothing else. The run ids and the count are logged, never a staged value.
+     * Every command first applies the staging TTL (design §5), whichever run it was started for; {@code
+     * expire-staging}, which the scheduled CronJob runs, does nothing else. The run ids and the count are logged, never
+     * a staged value.
      */
     private void purgeExpired() {
         List<Long> expired = purger.purgeExpired(clock.instant());

@@ -11,11 +11,11 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * Removes a run's staging (design §5): on {@code purge-staging}, and, on the scheduled {@code expire-staging} and before
- * every other importer command, for every run whose {@code STAGING_EXPIRES_AT} has passed, signed off or not, so an
- * abandoned run does not keep legacy data. Each run's purge is one transaction that locks the run, with the purge time
- * recorded on it, and takes the run's content area with it (26n2), before the purge is recorded; a run another purge
- * finished while this one waited for the lock is left alone.
+ * Removes a run's staging (design §5): on {@code purge-staging}, and, on the scheduled {@code expire-staging} and
+ * before every other importer command, for every run whose {@code STAGING_EXPIRES_AT} has passed, signed off or not, so
+ * an abandoned run does not keep legacy data. Each run's purge is one transaction that locks the run, with the purge
+ * time recorded on it, and takes the run's content area with it (26n2), before the purge is recorded; a run another
+ * purge finished while this one waited for the lock is left alone.
  */
 @Component
 @Profile("importer")
