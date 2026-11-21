@@ -37,7 +37,20 @@ RUN printf '%s\n' 'retry = 8' 'retry-max-time = 600' 'retry-all-errors' > "$HOME
 
 # Tests are not run here: the same commit has already passed `./mvnw verify` (ci.yml on main, the verify job in
 # release.yml), and the integration tests need a container runtime that an image build does not have.
-RUN ./mvnw -B -ntp -DskipTests package \
+#
+# Issue 240: retrying a refused download cannot beat a rate-limit window that outlasts the retry budget, so CI does
+# not download here at all. .github/scripts/build-image.sh puts the distribution in the build context under
+# target/image/maven-seed/ (laid out like a Maven repository) after verifying it against distributionSha256Sum, and
+# this step points the wrapper's MVNW_REPOURL at it. The wrapper then fetches it from a file: URL, with no network, and
+# runs its own SHA-256 check before it installs anything, so a corrupt seed fails the build. A pre-extracted
+# MAVEN_HOME would be used without any check, which is why the zip is seeded and not the unpacked tree. With no seed
+# (a plain local `docker build`) MVNW_REPOURL stays unset, the wrapper downloads from Central and the .curlrc above
+# applies. MVNW_REPOURL is only for the wrapper: it unsets it before starting Maven, so dependency downloads are
+# unchanged (resolver retry from .mvn/maven.config, cold). MVNW_VERBOSE makes the wrapper log where it fetched from.
+RUN seed="$PWD/target/image/maven-seed" \
+ && if [ -d "$seed" ]; then export MVNW_REPOURL="file://$seed"; fi \
+ && MVNW_VERBOSE=true ./mvnw -B -ntp --version \
+ && ./mvnw -B -ntp -DskipTests package \
  && cp target/trailkeep-*.jar /home/default/app.jar \
  && java -Djarmode=tools -jar /home/default/app.jar extract --layers --destination /home/default/extracted
 

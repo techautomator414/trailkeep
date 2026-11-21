@@ -9,6 +9,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- The image build no longer downloads the Maven distribution from Maven Central (#240). #242 and #257 made the
+  wrapper's download retry, and main run 44918965190 still failed after 255 s of backoff because Central refused the
+  runner for longer. `.github/scripts/build-image.sh` (used by `main.yml`, `zap.yml` and `release.yml`) now puts
+  the distribution zip in the build context under `target/image/maven-seed/` first, from a verified cache copy or one
+  download (Central, then the Apache archive) checked against `distributionSha256Sum`, and the Containerfile points
+  the wrapper's `MVNW_REPOURL` at it, so the wrapper reads a `file:` URL and still runs its own checksum check; a
+  corrupt seed fails the build. A local `docker build` without a seed falls back to the download and the `.curlrc`
+  retry. Dependency downloads are unchanged (resolver retry, cold in the release build). The zip is checksum-pinned,
+  so the release job restores it from an exact-key cache; the no-cache rule for repository contents (#230) is
+  unchanged.
 - A control character in any text a request sends is now a 400 on every route (#212), the same on PostgreSQL and
   Oracle. PostgreSQL rejects U+0000 in a text parameter ("invalid byte sequence for encoding UTF8: 0x00"), which was a
   500 on the case list filters, the SLA policy and case type forms and comments (56 of the 62 server errors in the
