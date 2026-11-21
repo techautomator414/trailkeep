@@ -8,4 +8,4 @@
 # Version when pinned: the Nu Html Checker 26.11.14 (git revision c1619cc379312770dc018376ca032771d1e39ad1), built
 # 2026-11-14. The image labels no version and the project publishes only latest, so the digest is the pin; when
 # Dependabot moves it, refresh this note (docker run --rm <image> java -jar /vnu.jar --version).
-FROM ghcr.io/validator/validator:latest@sha256:ab58f1a04ce22a393725e3fd6468d2763c08be6a9dc6fcaa0b1d93dd0c5f804e
+FROM ghcr.io/validator/validator:latest@sha256:f10441aee7dcea043d2153b0a8bbce13dafeafc8a3680b69b88b83ba5b9880f5
