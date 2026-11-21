@@ -325,6 +325,7 @@ abstract class AbstractWorkedExampleIT extends LoadSupport {
     private static String[] source(String... more) {
         List<String> args = new ArrayList<>(List.of(
                 "--import.source.url=" + LEGACY.getJdbcUrl(),
+                PlainTcpSources.ARG,
                 "--import.source.user=trailkeep_source",
                 "--import.source.password=" + PASSWORD));
         args.addAll(List.of(more));

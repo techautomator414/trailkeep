@@ -65,7 +65,7 @@ class SqlServerSourceIT extends ExtractJobSupport {
     private static final MSSQLServerContainer LEGACY =
             new MSSQLServerContainer(IMAGE).acceptLicense().withPassword(PASSWORD);
 
-    private final SourceQueryJdbcDao dao = new SourceQueryJdbcDao();
+    private final SourceQueryJdbcDao dao = PlainTcpSources.dao();
 
     @Override
     String vendorProfile() {
@@ -280,7 +280,7 @@ class SqlServerSourceIT extends ExtractJobSupport {
         String text = LegacyPostgresSource.mapping(MAPPING)
                 .replace("vendor: postgresql", "vendor: sqlserver")
                 .replace("legacy.", "dbo.");
-        MockEnvironment environment = new MockEnvironment()
+        MockEnvironment environment = PlainTcpSources.environment()
                 .withProperty("import.source.url", url())
                 .withProperty("import.source.user", "tk_source")
                 .withProperty("import.source.password", PASSWORD);
@@ -298,6 +298,7 @@ class SqlServerSourceIT extends ExtractJobSupport {
                         mapping,
                         null,
                         "--import.source.url=" + url(),
+                        PlainTcpSources.ARG,
                         "--import.source.user=tk_source",
                         "--import.source.password=" + PASSWORD,
                         "--import.content-area=" + area)
