@@ -96,6 +96,15 @@ final class SourceUrl {
     /** The two spellings of Oracle's host-name check, which {@link #verifiesTls} requires to be {@code true}. */
     private static final Set<String> ORACLE_DN_MATCH = Set.of("ssl_server_dn_match", "oracle.net.ssl_server_dn_match");
 
+    /** A {@code true} in any case, in ASCII only, as the drivers read it. */
+    private static final Pattern TRUE = Pattern.compile("true", Pattern.CASE_INSENSITIVE);
+
+    /** SQL Server's {@code encrypt}, named in any case as the driver allows. */
+    private static final Pattern SQLSERVER_ENCRYPT = Pattern.compile("encrypt", Pattern.CASE_INSENSITIVE);
+
+    /** The {@code encrypt} values that verify: {@code true}, or {@code strict} (TDS 8.0). */
+    private static final Pattern SQLSERVER_ENCRYPT_VERIFIED = Pattern.compile("true|strict", Pattern.CASE_INSENSITIVE);
+
     private SourceUrl() {}
 
     /**
@@ -147,12 +156,12 @@ final class SourceUrl {
                         && every(settings(url, "?", "&"), "ssl"::equals, "true"::equals, false);
             case ORACLE ->
                 url.startsWith(ORACLE_THIN + "tcps://")
-                        && every(settings(url, "?", "&"), ORACLE_DN_MATCH::contains, "true"::equalsIgnoreCase, true);
+                        && every(settings(url, "?", "&"), ORACLE_DN_MATCH::contains, TRUE.asMatchPredicate(), true);
             case SQLSERVER ->
                 every(
                         settings(url, ";", ";"),
-                        "encrypt"::equalsIgnoreCase,
-                        value -> "true".equalsIgnoreCase(value) || "strict".equalsIgnoreCase(value),
+                        SQLSERVER_ENCRYPT.asMatchPredicate(),
+                        SQLSERVER_ENCRYPT_VERIFIED.asMatchPredicate(),
                         true);
         };
     }
