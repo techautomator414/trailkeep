@@ -7,6 +7,10 @@
 # runnable by hand. One job per scan identity (decision Q3), each on its own ephemeral stack:
 #   - the image built from this commit by build-image.sh, run in the prod profile on the host network, wired to the
 #     compose PostgreSQL, Keycloak dev realm and ClamAV with dev-only values; the audit HMAC key is generated per run;
+#     the per-person rate limits on search and upload (#247) are raised to the test-profile values (100000) and stay
+#     enabled: the scanner is exempted from availability throttling so the active scan reaches the application (at the
+#     production limits it was answered 429 for almost every request, which ZAP's boolean SQL-injection rule reads as an
+#     injection, #270). RateLimitIT verifies the control itself;
 #   - DastSessionIT (-Pdast) signs the dev-realm people in through Chromium, seeds a small synthetic data set and
 #     writes the identity's SESSION cookie, its CSRF token and the data set's identifiers to target/dast (never
 #     uploaded);
