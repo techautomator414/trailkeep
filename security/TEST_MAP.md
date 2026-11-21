@@ -13,6 +13,12 @@ Sources:
 The placement of checks follows `IMPLEMENTATION_PLAN.md` Part G and the workflows as they run today (`HANDOFF.md`
 §4, "Part G as it runs today").
 
+Two companion documents use this page as their evidence:
+- `security/THREAT_MODEL.md`: the STRIDE model over BUILD_PLAN §7.1, each threat with its control, the row here that
+  verifies it and its residual risk;
+- `security/DATA_MAP.md`: where restricted and personal data lives, who reads it, how long it stays and whether it
+  leaves the system.
+
 **This page is checked on every build.** `SecurityTestMapTest` fails if any of these does not resolve:
 - a backticked test class;
 - any other class name;
@@ -221,7 +227,8 @@ The status column records what is in effect today, not what is planned.
 - **Retention with legal hold:** `PurgeIT`, `LegalHoldIT`, `ArchiveJobIT`.
 - **No restricted text reaches another reader:** `RestrictedLeakCrawlIT`.
 
-**Missing:** the "where is PHI" data map (security/DATA_MAP.md in BUILD_PLAN §9) does not exist.
+**Documented:** the "where is PHI" data map of BUILD_PLAN §9 is `security/DATA_MAP.md` (#248). It is a document,
+not a test; each control it quotes names its test here.
 
 ## WP-28 acceptance (IMPLEMENTATION_PLAN Part C)
 
@@ -306,12 +313,13 @@ Controls with no automated verification, or only part of it, one line each. A cl
 21. **Licence allow-list:** skips the test scope. Position: test-scope dependencies are never shipped, in neither the jar nor the image.
 22. **Image signature, SBOM attestation and SLSA provenance:** closed (#249). `release.yml#verify-published` calls `.github/workflows/verify-image.yml` after the provenance and before the GitHub Release: `cosign verify` and `cosign verify-attestation --type cyclonedx` (cosign v3 bundles) against the identity `release.yml@refs/tags/<tag>`, and `slsa-verifier verify-image` (the generator's legacy format) with `--source-uri` and `--source-tag`; any failure fails the release. The same workflow runs by hand against an existing tag's digest. Shown green against v0.2.0, and failing for a wrong tag and a wrong digest.
 23. **Security review of the importer's plain SHA-256 mapping hash** (`HANDOFF.md` §6): flagged for WP-28; not done. Tracked: #169.
-24. **Threat model (STRIDE):** BUILD_PLAN §9 lists it as a Phase 1 deliverable; it does not exist (see below). Tracked: #248.
-25. **Data map (security/DATA_MAP.md):** BUILD_PLAN §9 promises it; it does not exist (see below). Tracked: #248.
+24. **Threat model (STRIDE):** closed, written as `security/THREAT_MODEL.md` (#248). Its residual risks name the
+    open gaps above; it is re-checked at each phase gate.
+25. **Data map:** closed, written as `security/DATA_MAP.md` (#248).
 
 ## Missing documents
 
 | Document | Promised by | State |
 |---|---|---|
-| Threat model: STRIDE over the BUILD_PLAN §7.1 diagram, re-checked at each phase gate | BUILD_PLAN §9 (a Phase 1 deliverable) | not in the repository. `docs/design/importer.md` discusses the importer's own risks, but there is no application-wide model. Tracked: #248 |
-| security/DATA_MAP.md: where restricted and personal data lives | BUILD_PLAN §9, Privacy | not in the repository. Tracked: #248 |
+| Threat model: STRIDE over the BUILD_PLAN §7.1 diagram, re-checked at each phase gate | BUILD_PLAN §9 (a Phase 1 deliverable) | closed: `security/THREAT_MODEL.md` (#248). It links to `docs/design/importer.md` §10 for the importer's own analysis |
+| Data map: where restricted and personal data lives | BUILD_PLAN §9, Privacy | closed: `security/DATA_MAP.md` (#248) |

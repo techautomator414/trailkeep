@@ -139,6 +139,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   - **`JsonLoggingIT`:** a logged value with line breaks, a forged JSON fragment, an ANSI escape and NUL stays one
     line of valid JSON.
 
+### Documentation
+
+- The STRIDE threat model and the data map that BUILD_PLAN §9 promises (#248), linked from `SECURITY.md` and
+  `security/TEST_MAP.md`, whose gaps 24 and 25 and "Missing documents" rows are now closed:
+  - **`security/THREAT_MODEL.md`:** the §7.1 diagram with its ten trust boundaries (browser and router, database,
+    identity provider, clamd, SMTP, the purge CronJob, the migration and importer Jobs, the management port, CI/CD and
+    the supply chain). Each threat names its control, the test-map section and test that verify it, and its residual
+    risk. It states its assumptions, links the importer's own analysis (`docs/design/importer.md` §10) instead of
+    repeating it, and is re-checked at each phase gate. The 19 residual risks include encryption at rest and backups,
+    secret-store hygiene and the single audit key, per-replica rate limits, identity-provider tests against the dev
+    realm only (#30), no assistive-technology pass yet (#92), case scoping in the application rather than the
+    database, an audit trail that the schema owner can still change and no audit export screen, unredacted search
+    text, the purge CronJob without an alert, and the staging TTL that acts only when an importer command runs.
+  - **`security/DATA_MAP.md`:** for case content, attachments, restricted markers, people, audit, sessions, mail and
+    alerts, exports, reports, the search side table, logs, backups and importer staging: the tables and columns from
+    the migrations, who reads them through `CaseScope` and through each database user's grants, how long they stay
+    (archive, legal hold, purge tombstone) and whether they leave the system. What could not be checked against the
+    code is marked unverified.
+
 ## [0.2.0] - 2026-11-20
 
 Case handling, end to end: IMPLEMENTATION_PLAN Phases 2 to 5 (WP-11 to WP-27, with WP-17b) and WP-28 of Phase 6.
