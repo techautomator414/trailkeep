@@ -2,11 +2,12 @@
   SPDX-License-Identifier: Apache-2.0
   Copyright 2026 Charlie Genova and contributors
 -->
-# Trailkeep handoff: state at 0.2.0
+# Trailkeep handoff: state at 0.3.0
 
 _Written 2026-11-04 at 0.1.0 for the team taking over; refreshed 2026-11-06, after WP-11 to WP-18 merged (Phase 2
 closed), 2026-11-07, after WP-19 merged (Phase 3 closed), 2026-11-08, after WP-23 merged (Phase 4 closed),
-2026-11-13, after WP-24 to WP-27 merged (Phase 5 closed), and 2026-11-20 for the 0.2.0 tag, after WP-28 merged. Read
+2026-11-13, after WP-24 to WP-27 merged (Phase 5 closed), 2026-11-20 for the 0.2.0 tag, after WP-28 merged, and
+2026-11-22 for the 0.3.0 tag, after the security test map's and the threat model's follow-ups merged. Read
 this first, then `README.md`, then `IMPLEMENTATION_PLAN.md` Part B (standards) and Part C (work packages). Where this
 file and the plans disagree, the plans win; this file only says where the build stands._
 
@@ -20,8 +21,9 @@ file and the plans disagree, the plans win; this file only says where the build 
 | Plan calendar (Part F) | 18 weeks: Phase 1 (4), Phase 2 (5), Phase 3 (3), Phase 4 (3) and Phase 5 (3) | 25 weeks | 72 % (the 25 include Phase 0 discovery and Phase 7 go-live, 2 weeks each, neither of them build work; Phases 1 to 6 alone are 18 of 21 weeks, 86 %) |
 
 What is left in the plan is the rest of Phase 6: WP-29 (the Section 508 conformance pass, L, with a named certified
-tester) and WP-30 (performance at 500k, restore drill, runbook and 1.0.0, M). "0.2.0" and "What remains for 1.0.0",
-at the end of this section, give the release's scope and the open issues.
+tester) and WP-30 (performance at 500k, restore drill, runbook and 1.0.0, M). 0.3.0 adds no work package: it closes
+the follow-ups that WP-28's security test map and the threat model filed. "0.2.0", "0.3.0" and "What remains for
+1.0.0", at the end of this section, give each release's scope and the open issues.
 
 **WP-28 (authenticated DAST and security E2E, M) is built**, in these PRs:
 - #206 (part a): the CSRF and 404-not-403 route sweeps and the forwarded-header spoof;
@@ -39,7 +41,9 @@ Its acceptance:
 - **Sonar gate A and Dependency-Check clean: not shown.** These are the only items left, and they wait for the scanner
   secrets (owner item 2, #30).
 
-`security/TEST_MAP.md` lists every security control with its evidence, and the gaps.
+`security/TEST_MAP.md` lists every security control with its evidence, and the gaps. Since 0.3.0 every gap that a
+change in this repository can close is closed (#245 to #249); the open rows are #30's scanners (gaps 18 and 19), the
+mapping-hash review (gap 23, an owner decision) and the platform or scope positions.
 
 **Phase 5 is complete.** WP-24 (retention, archive, legal hold and purge, M; #125 to #128), WP-25 (the System screen
 and operational alerts, S; #139, #140, #144, #153, #159, #160), WP-26 (the generic importer, L; 53 pull requests from
@@ -117,18 +121,53 @@ evidence pack and 1.0.0 (WP-30).
 0.1.0 is the `v0.1.0` tag, cut from `main` as the last step of this handoff, after #25 (CI fix for #13), #33 (the
 test port fix below) and #32 (this document) merged. Every workflow is green on that commit: `ci`, `main` (both Oracle images, image build and
 scan), `codeql`, `scorecard`. "Green" has one caveat: `main.yml` skips SonarCloud and Dependency-Check with a notice
-when their secrets are absent, and they were absent at handoff (#30). The next tag is `v0.2.0`, cut after this
-refresh merges ("0.2.0" below).
+when their secrets are absent, and they were absent at handoff (#30). `v0.2.0` followed on 2026-11-20 ("0.2.0"
+below), and the next tag is `v0.3.0`, cut after this refresh merges ("0.3.0" below).
 
 ### 0.2.0
 
-**0.2.0 is the `v0.2.0` tag**, cut from `main` once this refresh merges. Its scope is everything merged since
-`v0.1.0` (which was Phase 1 with WP-09 and WP-10): Phases 2 to 5, that is WP-11 to WP-27 with WP-17b, and WP-28 of
-Phase 6. It also carries the fixes, CI and dependency changes merged meanwhile. `CHANGELOG.md`'s `[0.2.0]` section
+**0.2.0 is the `v0.2.0` tag**, cut from `main` on 2026-11-20 after the 0.2.0 refresh (#258) merged. Its scope is
+everything merged since `v0.1.0` (which was Phase 1 with WP-09 and WP-10): Phases 2 to 5, that is WP-11 to WP-27 with
+WP-17b, and WP-28 of Phase 6. It also carries the fixes, CI and dependency changes merged meanwhile. `CHANGELOG.md`'s `[0.2.0]` section
 lists them all. The pom version stays `0.1.0-SNAPSHOT`: `release.yml` takes the version from the tag for the image
 and the GitHub Release. **SonarCloud and Dependency-Check are intentionally off for 0.2.0**, pending the owner's
 repository secrets (#30). `main.yml` skips both with a notice, so the release runs neither, and its evidence pack has
 no Dependency-Check report.
+
+### 0.3.0
+
+**0.3.0 is the `v0.3.0` tag**, cut from `main` once this refresh merges. Its scope is everything merged since
+`v0.2.0`; no work package is in it. `CHANGELOG.md`'s `[0.3.0]` section lists every change; section 2, "Merged since
+0.2.0", maps them to their PRs. In short:
+- **The security test map's gaps are closed** (#245, in #250, which shipped in 0.2.0, and #260, #261 and #262):
+  deny-by-default routes, no CORS, STARTTLS, the error attributes and the logging rules are asserted. #261 found that
+  Spring Boot 4 no longer read `server.error.*`, so the error-page settings now sit under `spring.web.error`.
+- **Input and abuse:** a control character in any request text is a 400 on every route, and an upload's file name with
+  one is refused (#216, for #212's NUL byte); per-person rate limits on search, export and upload answer 429 with
+  `Retry-After` (#263, for #247).
+- **The importer** requires verified TLS from every JDBC source, an ArchUnit rule guards the source DAO, and ADR-0014 is
+  accepted (#264, for #259); the staging TTL runs daily as its own `CronJob` instead of waiting for the next command
+  (#281, for #275).
+- **Documents:** the STRIDE threat model and `security/DATA_MAP.md` (#273, for #248), and their hardening follow-ups:
+  the SMTP relay's identity check set and pinned, the purge alert, the router access-log note and the staging TTL's own
+  `NetworkPolicy` (#282, for #276).
+- **Deploy and supply chain:** manifest tests for the purge `CronJob` and the web `Deployment`, and the purge's own
+  egress policy (#266, for #246); the published image's signature, SBOM attestation and provenance are verified before
+  the GitHub Release, and opt-in pre-commit hooks (#267, for #249).
+- **Audit:** the audit trail screen for Compliance Admins and its audited CSV export (#288 and #289, for #274), with
+  migration `V20` (an index on the audit trail's time).
+- **Fixes:** two concurrency 500s (#286 and #287, for #284 and #285), and a flaky audit redaction test (#272, for #268).
+- **DAST:** the active scan is split in two, with the state-creating form bodies attacked last, so ZAP's own stored
+  payloads stop reading as findings; the 90035 suppression on `/cases` and the 40014 one on the CSV export are
+  removed, a narrower 90035 entry covers only the three admin configuration forms (case types, SLA policies, teams;
+  owner-approved, expiring 2027-02-20), and the verdict detects a cut-off per scan (#283, for #231). The two
+  application 500s the split scan surfaced are the concurrency fixes above.
+- **CI and build:** `compose.yaml` pinned to the test images by digest (#269, for #256), the DAST scan exempted from the
+  rate limits (#271, for #270), the Maven distribution seeded into the image build (#265, for #240), and scanned images
+  that resolve their dependencies offline while the release stays cold (#291, for #290).
+
+The pom version still stays `0.1.0-SNAPSHOT`: `release.yml` takes the version from the tag. **SonarCloud and
+Dependency-Check stay intentionally off for 0.3.0**, for the same reason as in 0.2.0 (#30).
 
 ### What remains for 1.0.0
 
@@ -137,18 +176,9 @@ no Dependency-Check report.
 - **WP-30**, performance at the 500k seed, the restore drill, the runbook, the evidence pack and the signed `v1.0.0`
   tag.
 - **The open issues:**
-  - #245 parts B and C: assert the deny-by-default routes and no CORS (B), and STARTTLS, `server.error.include-*` and
-    the logging rules (C). Part A merged as #250.
-  - #246: manifest tests for the purge `CronJob`'s credential separation and the web `Deployment`'s secret mounts.
-  - #247: per-user rate limiting on search and upload (BUILD_PLAN §9), not built.
-  - #248: the STRIDE threat model and `security/DATA_MAP.md`.
-  - #249: verify published image signatures and attestations after release; the pre-commit hooks.
-  - #231: the DAST scan should run state-creating admin POSTs last, to stop false positives from stored payloads.
-  - #256: `compose.yaml`'s images drift from the Dependabot-tracked test images.
-  - #212, with its fix in draft #216: a NUL byte in a text input is a 500 on PostgreSQL. The fix makes a control
-    character a 400 on every route.
-  - #259: reconcile ADR-0014 with what was built. The importer enforces TLS on JDBC source URLs and gains the
-    ArchUnit rule; the ADR is amended for the rest (section 6, "ADRs").
+  - The `json-schema-validator` 3.0.9 bump, tracked on #254 and now carried by Dependabot's grouped #277: it stays red
+    on `RequireUpperBoundDeps` (it declares Jackson 3.1.8, Spring Boot 4.1.x manages 3.1.7) until a Spring Boot release
+    manages Jackson 3.1.8 or later. No override, exclusion or ignore rule.
 - **#30:** the scanner secrets `SONAR_TOKEN` and `NVD_API_KEY` (WP-28's "Sonar gate A; Dependency-Check clean" cannot
   be shown without them), a real identity-provider sign-in in DEV, and the manual testing of the shell ACR.
 
@@ -241,6 +271,25 @@ Merged since the Phase 5 refresh (#203), outside WP-28's own PRs:
   Maven download retries in the image build, with curl's exponential backoff, #240).
 - **Dependabot:** #219, #221, #222, #253 and #255.
 
+Merged since 0.2.0 (#258, tagged `v0.2.0`), for 0.3.0:
+- **Security tests and fixes:** #260 (#245 part B: `DenyByDefaultIT`, `NoCorsIT`), #261 (the error-page settings bind
+  under `spring.web.error`; `ErrorPropertiesTest`, `ConfigurationKeysTest`), #262 (#245 part C: `MailStartTlsTest`,
+  `LoggingRulesIT`, `JsonLoggingIT`), #216 (a control character is a 400 on every route, #212), #263 (per-user rate
+  limits, #247) and #264 (verified TLS for JDBC sources, `SourceQueryDaoRulesTest`, ADR-0014 accepted, #259).
+- **Threat model and its follow-ups:** #273 (`security/THREAT_MODEL.md`, `security/DATA_MAP.md`, #248) and #282 (SMTP
+  server identity, `TrailkeepPurgeNotSucceeding`, the router access-log note, the staging TTL's `NetworkPolicy`,
+  #276 items 1 to 5).
+- **Deploy and supply chain:** #266 (`PurgeCronJobManifestTest`, `WebDeploymentManifestTest`, the purge's own
+  `NetworkPolicy`, #246), #267 (`verify-image.yml` after release, opt-in pre-commit hooks, #249) and #281 (the staging
+  TTL `CronJob`, #275).
+- **Audit:** #288 (the audit trail screen, `V20`) and #289 (its audited CSV export), for #274.
+- **Fixes:** #286 (the case type row lock, #284), #287 (409 on a pin racing a case write, #285) and #272 (the audit
+  redaction test checks structure, #268).
+- **CI and build:** #265 (the Maven distribution seeded into the image build, #240), #269 (`compose.yaml` pinned by
+  digest to the test images, #256), #271 (the DAST stack exempt from the rate limits, #270), #291 (scanned images
+  resolve offline, the release stays cold, #290) and #283 (the split active scan, two suppressions removed and a
+  narrower 90035 entry for the admin configuration forms, per-scan cut-off detection, #231).
+
 Schema on `main`: `V1__identity`, `V2__audit`, `V3__admin`, `V3_1__sessions`, `V4__case`, `V4_1__comment`,
 `V4_2__comment_pin`, `V4_3__attachment`, `V4_4__attachment_not_scanned`, `V4_5__search_text_lowercase` (#70),
 `V4_6__sla_check_ceilings` (#77), `V4_7__saved_view` (#78), `V4_8__notification_outbox` (#94), `V4_9__user_alert` (#96),
@@ -248,9 +297,10 @@ Schema on `main`: `V1__identity`, `V2__audit`, `V3__admin`, `V3_1__sessions`, `V
 `V7__report_delivery` (#120), `V8__legal_hold_events` (#127), `V9__user_preference` (#132), `V10__import_runs` (#134),
 `V11__import_principals` (#137), `V12__case_legacy_number` (#142), `V13__import_staging` (#147),
 `V14__attachment_uploader_snapshot` (#149), `V15__closure_imported` (#150), `V16__case_imported_event` (#152),
-`V17__import_ledger` (#177), `V18__import_owner_pending` (#187), `V19__import_ledger_written` (#190), plus the
-repeatable `R__grants` per vendor. Every migration is in `db/migration/common`; the vendor folders hold only
-`R__grants.sql`. Other PRs added no migration. The next migration is `V20`, assigned in the PR that ships it.
+`V17__import_ledger` (#177), `V18__import_owner_pending` (#187), `V19__import_ledger_written` (#190),
+`V20__audit_time_index` (#288, 0.3.0), plus the repeatable `R__grants` per vendor. Every migration is in
+`db/migration/common`; the vendor folders hold only `R__grants.sql`. Other PRs added no migration. The next migration
+is `V21`, assigned in the PR that ships it.
 
 ### Database users, profiles and Jobs
 
@@ -282,12 +332,18 @@ only what it purges) and **`importer`** (`ImportCommandRunner` runs the one `--i
 validates, and only this profile maps the staging entities).
 
 Kubernetes objects beside the web `Deployment`: the purge `CronJob` (`deploy/base/purge-cronjob.yaml`, `suspend: true`
-until an overlay enables retention; Secret `trailkeep-purge`) and the importer `Job` (`deploy/jobs/importer`, or
+until an overlay enables retention; Secret `trailkeep-purge`; since #266 its own `NetworkPolicy` `trailkeep-purge`,
+DNS and the database only, which `trailkeep-egress` no longer covers) and the importer `Job` (`deploy/jobs/importer`, or
 `importer-external-scanning`), applied by hand per command, with its own `NetworkPolicy` (DNS, database and clamd only),
 three claims (`trailkeep-import-data` read-only, `trailkeep-import-content` and `trailkeep-import-reports` writable) and
 the Secrets `trailkeep-import` and `trailkeep-import-hash-key`, plus `app.audit.hmac-key` alone from `trailkeep-web`. Only `validate-mapping` and `extract` read the source:
 for those the `jobs/components/source-access` component adds the source password (`trailkeep-import-source`) and the
 egress label in one step (`jobs/importer-source-access`, `jobs/importer-external-scanning-source-access`).
+Since #281 every importer directory also applies the staging TTL `CronJob` `trailkeep-importer-staging-ttl`
+(`expire-staging` daily at 02:43 UTC as the import user, with the content claim, the import credential and the audit
+key only), under its own component label `importer-staging-ttl` and its own `NetworkPolicy`, DNS and the database
+only (#282). Delete it once every run's staging is purged, before locking `TRAILKEEP_IMPORT` again
+(`deploy/README.md` "Importer" steps 5 and 6).
 Migrations run as the migration `Job` (`deploy/jobs/migrate`, or `migrate-external-scanning`; profile `prod,migrate`,
 the schema owner's credential from its own Secret `trailkeep-migrate`, its own `NetworkPolicy`) before the web
 rollout; the `prod` profile runs Flyway off, so no run-time user ever runs DDL (#205, fixed by #208).
@@ -353,7 +409,8 @@ Playwright: the `e2e` suite launches Chromium; locally it skips if no browser is
 | `scorecard.yml` | push to `main`, weekly | OpenSSF Scorecard |
 | `main.yml` | push to `main` (since #148 each merge has its own concurrency group, so every code merge gets a complete run and none is cancelled); on demand with `gh workflow run main.yml` (its own group since #88); called by nightly and release | SonarCloud, Dependency-Check, SBOM + Trivy, image build + Trivy (`--ignore-unfixed`) + Dockle + kube-linter, `oracle-it` (`./mvnw verify -Poracle-it`, both images, one job), `sqlserver-it` (the importer's SQL Server source ITs, `-Psqlserver-it`, WP-26 part p) |
 | `nightly.yml` | 04:41 UTC | `main.yml` again; the `perf` job (`PerfCasesListIT` at 50k cases; fails at a list p95 of 500 ms or a search p95 of 1 s); and `zap.yml` in nightly mode (reports; a red run blocks no merge). The 500k-comment k6 run is a placeholder until WP-30 |
-| `release.yml` | tag `v*` | `main.yml` again plus its own `./mvnw verify`, `zap.yml` in release mode (a Medium+ alert or a partial scan fails the release), image to GHCR with keyless cosign signature, SBOM attestation, SLSA provenance, GitHub Release with the evidence pack (it does not re-run the `ci.yml` jobs) |
+| `release.yml` | tag `v*` | `main.yml` again plus its own `./mvnw verify`, `zap.yml` in release mode (a Medium+ alert or a partial scan fails the release), image to GHCR with keyless cosign signature, SBOM attestation, SLSA provenance, `verify-image.yml` against the published digest (#267; a failure stops the release), GitHub Release with the evidence pack (it does not re-run the `ci.yml` jobs) |
+| `verify-image.yml` | called by release; on demand against a tag and digest | `cosign verify`, `cosign verify-attestation --type cyclonedx` and `slsa-verifier verify-image` for the published image (#249) |
 | `zap.yml` | called by nightly and release; on demand with a `mode` | the authenticated ZAP full scan and API scan of an image built from the commit, once per scan identity (`compliance.admin`, `alpha.analyst`), each on its own stack (WP-28) |
 
 Secrets: `SONAR_TOKEN` and `NVD_API_KEY` are referenced but were not set at handoff (#30). The release workflow
@@ -361,8 +418,10 @@ needs no secrets beyond the job token for signing and publishing, but it forward
 release cut without them skips SonarCloud and Dependency-Check and its evidence pack has no Dependency-Check report.
 They were still absent at 0.2.0: the latest `main` run before this refresh (44007159836, on 37dfd20) reports "Secret
 SONAR_TOKEN is not configured for this repository; the quality gate did not run." and "Secret NVD_API_KEY is not
-configured for this repository; the NVD scan did not run." Both scanners are intentionally off for 0.2.0. WP-28's
-acceptance ("Sonar gate A; Dependency-Check clean") cannot be shown until they are set.
+configured for this repository; the NVD scan did not run." Both scanners are intentionally off for 0.2.0. They were
+still absent at 0.3.0: the latest `main` run before this refresh (44988621200, on 369b889) gives the same two notices,
+and both scanners stay intentionally off for 0.3.0. WP-28's acceptance ("Sonar gate A; Dependency-Check clean")
+cannot be shown until they are set.
 
 ### Part G as it runs today
 
@@ -381,7 +440,7 @@ acceptance ("Sonar gate A; Dependency-Check clean") cannot be shown until they a
 | ZAP authenticated full + API scan | – | – | ✓ | ✓ | `zap.yml`, called by `nightly.yml` (reports) and `release.yml` (gates) |
 | k6 at the 50k/500k seed | – | – | 50k, in process | – | `nightly.yml` `perf` runs `PerfCasesListIT` at 50k (not k6); the k6 smoke runs by hand; 500k and the release run arrive with WP-30 |
 | OpenSSF Scorecard | – | push and weekly | – | – | `scorecard.yml` |
-| SBOM signed, cosign, SLSA, evidence pack | – | – | – | ✓ | `release.yml`; exercised once, at `v0.1.0`, and next at `v0.2.0` |
+| SBOM signed, cosign, SLSA, evidence pack | – | – | – | ✓ | `release.yml`; exercised at `v0.1.0` and `v0.2.0`, next at `v0.3.0`. Since #267 `verify-image.yml` checks the signature, the SBOM attestation and the provenance of the published image before the GitHub Release; shown green against `v0.2.0` by hand |
 | veraPDF | – | – | – | – | v1.1 only (no PDF in v1) |
 
 Branch rules: status checks required, linear history, no force-push, zero approving reviews (single maintainer).
@@ -395,7 +454,7 @@ All are recorded where they were made; this is the index.
 |---|---|---|
 | Trivy image gate runs with `--ignore-unfixed` | #11, #12 | Owner chose to fail only on fixable HIGH/CRITICAL findings; unfixed base-image findings stay in the reports and evidence pack |
 | Semgrep excludes `python.django.security.django-no-csrf-token.django-no-csrf-token` | #19, `ci.yml` | False positive on Thymeleaf forms whose CSRF field Spring Security injects |
-| `config/spotbugs/exclude.xml` carries `SPRING_ENDPOINT` for every controller (`DashboardController`, `SessionController`, `TeamAdminController`, `UserAdminController`, `CaseConfigController`, `CaseController`, `CaseEditController`, `CaseAssignmentController`, `CaseAttachmentController`, `CaseListController`, `SavedViewController`, `CaseExportController`, `CaseHistoryController`, `AlertController`, `UpdateRequestController`, `ClosureController`, `ClosureDecisionController`, `ClosureApproverController`, `CaseReopenController`, `ReportController`, `ReportRunController`, `ReportScheduleController`, `LegalHoldController`, `PreferencesController`, `SystemController`, `TestMailController`, `ImportRunController`), listed by class | #19, #20, #22, #49, #50, #59, #62, #63, #78, #84, #87, #96, #98, #104, #105, #106, #107, #116, #118, #121, #122, #126, #132, #139, #145, #175, #176, #186, #188 | The pattern reports no defect; each controller is reviewed and the approval recorded in the file; `spotbugs-annotations` is LGPL and off the license allow-list, so the file is the mechanism |
+| `config/spotbugs/exclude.xml` carries `SPRING_ENDPOINT` for every controller (`DashboardController`, `SessionController`, `TeamAdminController`, `UserAdminController`, `CaseConfigController`, `CaseController`, `CaseEditController`, `CaseAssignmentController`, `CaseAttachmentController`, `CaseListController`, `SavedViewController`, `CaseExportController`, `CaseHistoryController`, `AlertController`, `UpdateRequestController`, `ClosureController`, `ClosureDecisionController`, `ClosureApproverController`, `CaseReopenController`, `ReportController`, `ReportRunController`, `ReportScheduleController`, `LegalHoldController`, `PreferencesController`, `SystemController`, `TestMailController`, `ImportRunController`, `AuditController`), listed by class | #19, #20, #22, #49, #50, #59, #62, #63, #78, #84, #87, #96, #98, #104, #105, #106, #107, #116, #118, #121, #122, #126, #132, #139, #145, #175, #176, #186, #188, #288 | The pattern reports no defect; each controller is reviewed and the approval recorded in the file; `spotbugs-annotations` is LGPL and off the license allow-list, so the file is the mechanism |
 | `SourceQueryJdbcDao` runs non-constant SQL, excluded from FindSecBugs' two SQL-injection patterns by name | #162, `config/spotbugs/exclude.xml` | The importer runs the operator's own source queries from the reviewed mapping, so the SQL is not a constant by design; `run` accepts only a `ValidatedSourceQuery` (exactly one `SELECT`, no locking, `INTO`, database link or function outside the vendor allow-list), values are bound, and the session is a read-only snapshot under a read-only account (`docs/importer/source-accounts.md`) |
 | Case configuration (SLA policies, case types, outcomes) lives in `casefile`, not `sla` | ADR-0011, #21 | Keeps the module graph acyclic; `sla` reads it through `CaseConfigService`. Supersedes BUILD_PLAN §7.4's `sla/ (SlaPolicy, …)` line |
 | App user may DELETE from `CASE_TYPE_OUTCOME` | ADR-0011, both `R__grants.sql` | Configuration, not case data; closure outcomes are stored as `VARCHAR` snapshots, not foreign keys |
@@ -475,6 +534,13 @@ All are recorded where they were made; this is the index.
 | Export recipes: `sqlcmd -y 0` without `-h -1`; a SQL*Plus line over 32 767 bytes fails closed (`ROW_UNREADABLE`) and goes through JDBC; Oracle BLOBs and SQL Server attachments are JDBC-only | #199, #201 | What the tools allow, each recipe run by a test. A value over 1 MB is exported whole by mssql-tools18, which settles design §4.2.2's open question |
 | Each importer IT seeds its own synthetic legacy fixture | WP-26 | Design §11's single shared `legacy-schema/` folder was not built; not audited item by item against §11's list of awkward values |
 | New runtime dependencies for the importer: `jackson-dataformat-yaml` and `json-schema-validator` (Apache-2.0, #146), JSqlParser (LGPL-2.1 OR Apache-2.0, Apache-2.0 elected, #155), `re2j` (BSD-3-Clause published as "Go License", #154), `commons-csv` (Apache-2.0, #168), `mssql-jdbc` (MIT, #167) | those PRs, `pom.xml` | The allow-list was not widened: the "Go License" name was added to the BSD-3-Clause `licenseMerge`, after checking its text. `re2j` gives linear-time matching, so a mapping's pattern cannot hang an extract on a crafted value |
+| A control character in any request parameter is refused by one `HandlerInterceptor`, and in an upload's file name by `UploadIntake` | #216 | Checking every parameter name and value once Spring has resolved the request covers the query string, form fields and multipart text parts, so a new form needs nothing. Tab, line feed and carriage return stay allowed in parameters, not in file names. SpotBugs' `SERVLET_PARAMETER` is excluded for exactly `ControlCharacterInterceptor.preHandle`, which reads parameters only to refuse them |
+| Rate limits are an in-house token bucket per person and route, in memory, per replica; `prod` refuses `app.rate-limit.enabled=false` | #263 | Keyed on the user id, never the client address. No new dependency (Bucket4j was not needed for one number per active person). A multi-replica deployment adds a platform limit at the route (`deploy/README.md`, threat model RR-3). The DAST stack raises the limits but keeps them on, with no ZAP suppression (#271) |
+| JDBC sources must verify TLS; `import.source.plaintext-for-tests` is honoured only in the `test` and `oracle-test` profiles | #264, ADR-0014 | The ITs' database containers serve plain TCP; anywhere else, and always with `prod`, the importer refuses to start with the flag. `PostgresSourceTlsIT` proves a `verify-full` read without it |
+| The audit trail screen and its export admit only a Compliance Admin who is not also a System Admin; a search covers at most 31 whole days and draws on the search rate limit | #288, #289 | The all-cases scope is the security module's grant (`CasePermissionService.auditScope`). A redacted value shows its length, never its HMAC. `V20`'s `(AT_TS, ID)` index keeps a time-range search from reading the whole trail |
+| Saving a case type takes its row lock first; a pin that meets a concurrent case write answers 409, without retry | #286, #287 | A case type has no version column, so the pessimistic lock is the fix that needs no migration. A pin on a stale page is a conflict, as for the other case writes |
+| The ZAP active scan runs in two parts, the form bodies last over a `trailkeep-forms` context without the four CSV downloads; one narrow 90035 suppression stays for the three admin configuration forms | #283, #231 | Attacking query strings before any form stores a payload removed the `/cases` 90035 and the CSV 40014 false positives; the CSVs are attachments with nosniff, attacked by every rule in the first part. A form's own list page still shows its stored payload, escaped, which no ordering separates, so the owner approved that entry on 2026-11-22, expiring 2027-02-20. The two caps add up to the former 120 minutes, and either part cut off is a partial scan |
+| Images that are only scanned resolve their dependencies offline from the job's cache; the published image is still built cold | #291 | Central's 429 windows failed `main`'s image build. #230's rule stands: no cached repository contents in a published artefact |
 
 ## 6. Known gaps and follow-ups
 
@@ -482,14 +548,7 @@ All are recorded where they were made; this is the index.
 |---|---|
 | #30 | Phase 1 exit items: scanner secrets, real IdP login in DEV, shell ACR manual testing |
 | #92 | Owner item: the manual assistive-technology pass on the Phase 2 screens (a Phase 2 exit criterion). Still open, and it now also covers the Alerts page and the Request update dialog with its combobox (WP-17, WP-18), the WP-19 screens (the Request closure, Reject or request changes, Reassign approver and Reopen dialogs and their fallback pages, the pending banner and the dashboard's "Pending my approval"), the WP-20 to WP-23 screens (the dashboard's tiles, My cases and paged lists, the Aging and SLA compliance reports and their print view, the scheduled report runs and the report schedules), and the Phase 5 screens (the legal hold dialog, its fallback page and the hold history; the purged case page; the System screen and "send me a test"; the Import runs list, run page, run request and sign-off; the History tab's imported rows; `/preferences` and the `/` and `N` shortcuts), which pass axe and a keyboard walk but have had no screen-reader pass |
-| #245 | Security tests for the configured-but-untested controls of `security/TEST_MAP.md`: part A merged (#250); part B (deny-by-default routes, no CORS) and part C (STARTTLS, `server.error.include-*`, logging rules) remain |
-| #246 | Manifest tests for the purge `CronJob`'s credential separation and the web `Deployment`'s secret mounts |
-| #247 | Per-user rate limiting on search and upload (BUILD_PLAN §9 Availability) is not built |
-| #248 | The STRIDE threat model and `security/DATA_MAP.md` promised by BUILD_PLAN §9 |
-| #249 | Verify published image signatures and attestations after release; ship the pre-commit hooks BUILD_PLAN promises |
-| #231 | DAST: scan state-creating admin POSTs last, so ZAP's stored payloads stop producing false positives (90035, 40014) |
-| #256 | `compose.yaml`'s images drift from the Dependabot-tracked test images |
-| #212 | A NUL byte in a text input is a 500 on PostgreSQL; the fix, a control character is a 400 on every route, is draft #216 |
+| #277 (was #254) | The `json-schema-validator` 3.0.9 bump stays red on `RequireUpperBoundDeps` until a Spring Boot release manages Jackson 3.1.8 or later; no override, exclusion or ignore rule. Dependabot closed #254 and carries the bump in its grouped #277 |
 
 Follow-ups without an issue yet, each recorded in the PR or close-out that found it:
 
@@ -504,7 +563,7 @@ Follow-ups without an issue yet, each recorded in the PR or close-out that found
 | Archive filter | "Include archived" lists archived cases from every team the person's scope reads, not per team (#125, deviation 3) | if wanted |
 | Design text | `docs/design/importer.md` has drifted from what was built, and is not edited by builders (CLAUDE.md rule 11): §6.1's example `people` block lacks `fields` (display name, email), without which email matching and name snapshots have nothing (the worked example's mapping has them, #202); §4.2.2 gives `sqlcmd -y 0 -h -1`, which `sqlcmd` refuses (`-y 0` alone, #201), and leaves the 1 MB question open; §2.1 still names `deploy/jobs/importer-job.yaml` (it is `deploy/jobs/importer/importer-job.yaml` with its kustomizations, #194); §8.1 says the hold lives in `retention` (it is in `casefile`, #198); §9 says no CSV writer exists (`shared.csv.CsvFormat` is reused, #193); §11's shared legacy-schema folder was not built | a docs PR |
 | Export recipes | `docs/importer/export-recipes.md` should say that the Oracle recipe's `TIMESTAMP_TO_SCN(SYSTIMESTAMP)` is approximate (Oracle maps timestamps to SCNs at a granularity of seconds), so the recorded SCN marks the snapshot only roughly | a docs PR |
-| ADRs | ADR-0015 (the import principals) and ADR-0016 (go-live alerts pre-marked) were checked against the code and accepted on 2026-11-20. ADR-0014 stays "Proposed": four of its statements do not match what WP-26 built. (1) Rule 2's "verified TLS" for JDBC sources is not enforced: `SourceUrl` allow-lists parameter names only, so a PostgreSQL URL without `sslmode` or a plain-TCP Oracle address passes (`SourceUrlTest` accepts one), and TLS is required only by the account recipes in `docs/importer/source-accounts.md`. (2) Its ArchUnit rule (only the extract classes may depend on `SourceQueryJdbcDao`) was never written. (3) The SpotBugs exception is an entry in `config/spotbugs/exclude.xml`, not a `@SuppressFBWarnings` annotation. (4) Its Part B amendment allows one native-SQL class outside the three modules, but #190 added `closure.ClosureWrittenJdbcDao` and `audit.ImportedEventWrittenJdbcDao` too. Smaller drifts: the hold is set in the case INSERT by `casefile`, not by an UPDATE or a `retention` API, and `validate-mapping` also connects to the source. Tracked as #259, with the release manager's decisions: enforce TLS for JDBC sources (PostgreSQL `verify-full`, Oracle `tcps`, SQL Server `encrypt=true` with certificate validation) and add the ArchUnit rule in code; amend the ADR for the SpotBugs location, the two extra `*JdbcDao` classes and the minor items. Until then operators must follow the TLS requirements of `docs/importer/source-accounts.md` | #259 |
+| ADRs | **Done in 0.3.0:** ADR-0014 is Accepted (#264), with TLS enforced for JDBC sources, the ArchUnit rule on `SourceQueryJdbcDao` in code, and the ADR amended for the rest. What follows is the 0.2.0 finding, kept for the record. ADR-0015 (the import principals) and ADR-0016 (go-live alerts pre-marked) were checked against the code and accepted on 2026-11-20. ADR-0014 stayed "Proposed": four of its statements did not match what WP-26 built. (1) Rule 2's "verified TLS" for JDBC sources is not enforced: `SourceUrl` allow-lists parameter names only, so a PostgreSQL URL without `sslmode` or a plain-TCP Oracle address passes (`SourceUrlTest` accepts one), and TLS is required only by the account recipes in `docs/importer/source-accounts.md`. (2) Its ArchUnit rule (only the extract classes may depend on `SourceQueryJdbcDao`) was never written. (3) The SpotBugs exception is an entry in `config/spotbugs/exclude.xml`, not a `@SuppressFBWarnings` annotation. (4) Its Part B amendment allows one native-SQL class outside the three modules, but #190 added `closure.ClosureWrittenJdbcDao` and `audit.ImportedEventWrittenJdbcDao` too. Smaller drifts: the hold is set in the case INSERT by `casefile`, not by an UPDATE or a `retention` API, and `validate-mapping` also connects to the source. Tracked as #259, with the release manager's decisions: enforce TLS for JDBC sources (PostgreSQL `verify-full`, Oracle `tcps`, SQL Server `encrypt=true` with certificate validation) and add the ArchUnit rule in code; amend the ADR for the SpotBugs location, the two extra `*JdbcDao` classes and the minor items. Until then operators must follow the TLS requirements of `docs/importer/source-accounts.md` | #259 |
 
 
 Closed since 0.1.0: #26 (the OIDC session registry IT runs on the Oracle leg, #38), #27 (`ConstraintViolationException`
@@ -521,6 +580,10 @@ writes on purpose (#128, which deletes the search text rather than rewriting it)
 fixed by #81. The WP-24 notes of the Phase 4 refresh (the `CASE_REOPEN` and report-run purge order, a retention rule for
 `REPORT_RUN`) are done in #128; the compliance report still counts `CLOSED` cases only, not `ARCHIVED` ones (#116).
 
+Closed since 0.2.0: #212 (control characters, #216), #231 (the split DAST scan, #283), #240 (#265), #245 (#250, #260,
+#261, #262), #246 (#266), #247 (#263), #248 (#273), #249 (#267), #256 (#269), #259 (#264), #268 (#272), #270 (#271),
+#274 (#288, #289), #275 (#281), #276 (#282), #284 (#286), #285 (#287) and #290 (#291).
+
 ### Open owner items
 
 Things only the repository owner can do (accounts, secrets, a real identity provider, a human tester). None is a
@@ -529,7 +592,7 @@ code change.
 1. **OpenSSF Best Practices badge.** Register the project at bestpractices.dev, then add the badge to `README.md`.
    This closes Scorecard alert #8.
 2. **Repository secrets `SONAR_TOKEN` and `NVD_API_KEY`**, for the `main.yml` SonarCloud and Dependency-Check steps
-   (they are skipped with a notice without them; #30). Both are intentionally off for 0.2.0; until they are set,
+   (they are skipped with a notice without them; #30). Both are intentionally off for 0.2.0 and 0.3.0; until they are set,
    WP-28's "Sonar gate A; Dependency-Check clean" cannot be shown.
 3. **One real sign-in against the organization's identity provider in DEV**, following
    [`deploy/OIDC_PROVIDER.md`](deploy/OIDC_PROVIDER.md). Record the outcome on #30, not the values.
@@ -555,20 +618,19 @@ code change.
    which also relaxes the pod's no-egress `NetworkPolicy`; or point `freshclam` at a private mirror. Setting
    `app.attachments.scanning: external` (ADR-0013, `deploy/overlays/external-scanning`) removes the ClamAV pod and
    with it this decision, at the cost of files being stored `NOT_SCANNED`.
-8. **Tag 0.2.0.** Prepared by this refresh: `CHANGELOG.md`'s Unreleased block is now `[0.2.0] - 2026-11-20`. The
-   annotated `v0.2.0` tag on the merge commit runs `release.yml` again: the image to GHCR with its signature, SBOM
-   attestation and provenance, and a GitHub Release with the evidence pack (without the Dependency-Check report while
-   #30's secrets are absent).
+8. **Tag 0.3.0.** Prepared by this refresh: `CHANGELOG.md`'s Unreleased block is now `[0.3.0] - 2026-11-22` (`v0.2.0`
+   was tagged on 2026-11-20). The annotated `v0.3.0` tag on the merge commit runs `release.yml` again: the image to
+   GHCR with its signature, SBOM attestation and provenance, their verification by `verify-image.yml` (new since #267),
+   and a GitHub Release with the evidence pack (without the Dependency-Check report while #30's secrets are absent).
 9. **The named certified tester for WP-29.** The Section 508 conformance pass needs a Trusted Tester v5 (or the
    deploying organization's equivalent) for a 3-week window (Part F); the remediation and the ACR depend on it. #92's
    screen-reader pass is the same kind of work and can be folded into it.
 10. **The SQL Server row in Part G.** `-Psqlserver-it` has run on `main`, nightly and release tags since #167, but
     `IMPLEMENTATION_PLAN.md` Part G has no row for it. Decide whether to add the row (the plans are changed only by
     their owner) or record that the importer's third source stays outside the plan's CI table.
-11. **ADR-0014** (the importer's sources and canonical model) is still "Proposed"; ADR-0015 and ADR-0016 were
-    accepted on 2026-11-20, after a check against the code. ADR-0014 differs from the build in four places (section
-    6, "ADRs"). The decisions are made and tracked as #259: TLS enforcement for JDBC sources and the ArchUnit rule in
-    code, the other mismatches by amending the ADR; it is accepted once #259 lands.
+11. **ADR-0014** (the importer's sources and canonical model): done. It is Accepted since #264 (#259), with TLS
+    enforcement for JDBC sources and the ArchUnit rule in code and the other mismatches amended in the ADR; ADR-0015
+    and ADR-0016 were accepted on 2026-11-20. No action remains.
 
 Items 2 to 4 are the open Phase 1 exit items from #30; until they are done Phase 1 is not complete in the plan's own
 terms.
@@ -589,8 +651,8 @@ Not defects, but worth knowing:
      - 0 Medium+ is shown by the release-mode run on `main`,
        [43968881937](https://github.com/techautomator414/trailkeep/actions/runs/43968881937).
      - What remains of its acceptance is Sonar gate A and Dependency-Check clean, which need owner item 2 (#30).
-     - The gaps of `security/TEST_MAP.md` are filed as #245 to #249, beside #30 and #169 (#235 is closed by #251);
-       #245 part A is merged (#250), parts B and C remain;
+     - The gaps of `security/TEST_MAP.md` filed as #245 to #249 are closed (0.3.0, section 1); what stays open is #30
+       and the mapping-hash review (gap 23);
    - **WP-29, the Section 508 conformance pass and ACR** (L, plus the 3-week tester window): Trusted Tester v5 by the
      named certified tester (owner item 9), remediation, and the ACR (VPAT 2.5) with the manual test matrix in
      `accessibility/`. Acceptance: no "Does Not Support", and dated tickets for any "Partially Supports";
@@ -601,7 +663,7 @@ Not defects, but worth knowing:
      (`APP_DB_SCHEMA`, #207) and #205 (the migration `Job`, #208).
 2. **Owner-only items** that gate Phase 6 or the release, none of them code: the scanner secrets for WP-28's
    acceptance (item 2, #30), the named certified tester for WP-29 (item 9), the screen-reader pass of #92, the
-   `v0.2.0` tag after this refresh merges (item 8), the Part G SQL Server row (item 10), the ADRs (item 11), and the
+   `v0.3.0` tag after this refresh merges (item 8), the Part G SQL Server row (item 10), and the
    open Phase 1 items of #30 (real IdP sign-in, shell ACR manual testing). #24 (Spring Session pin) needs no action
    while the pin stays.
 3. Carried forward: rows of the cases list open on click only (the case-number link is the keyboard path, #84). #117
@@ -620,5 +682,6 @@ independent review on a different model recorded on the PR.
   and `adr/README.md` is the index.
 - `CHANGELOG.md` follows Keep a Changelog; every PR adds its entry under Unreleased.
 - The release process is the `v*` tag; 0.1.0 was cut this way, as the last step of the handoff, to exercise it and
-  produce the first evidence pack, and 0.2.0 the same way after this refresh. The pom version stays `0.1.0-SNAPSHOT`;
+  produce the first evidence pack, 0.2.0 the same way after its refresh, and 0.3.0 after this one. The pom version
+  stays `0.1.0-SNAPSHOT`;
   `release.yml` takes the version from the tag.

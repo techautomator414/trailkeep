@@ -7,22 +7,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
-### Changed
+## [0.3.0] - 2026-11-22
 
-- Image builds that are scanned but never published resolve their dependencies offline (#290). Central's long 429
-  windows, and a brief not-found for a file that exists (`spring-boot-starter-parent:pom:4.1.2`), failed main's image
-  build inside `docker build`, where the whole tree was resolved cold. `build-image.sh` now takes a dependency mode:
-  - `offline` (main.yml's image job, zap.yml's scan image): the runner builds the jar itself through the job's own
-    `~/.m2` cache (issue 252; main.yml's image job gains Temurin and that cache), copies the repository into the build
-    context as `target/image/m2-seed`, and the Containerfile runs Maven `-o` against it. Central's hosts resolve to
-    127.0.0.1 inside the build, so the build proves it needs no network for dependencies. CycloneDX's goals declare
-    `requiresOnline`, so these scanned images carry no embedded `META-INF/sbom/application.cdx.json`; the published
-    image, built cold, keeps it, and neither Trivy's image scan nor main.yml's SBOM gate reads that file.
-  - `cold`, the default, and what release.yml asks for: the published image resolves every dependency from Central,
-    as before, and a cold build deletes any seed left in the workspace (#230's rule: no cached repository contents in a
-    published artefact).
-  `.mvn/maven.config` raises the resolver retry for the cold paths (release verify, the release image, CI jobs on a
-  cache miss) from 6 retries of up to 60 s to 10 of up to 120 s. `ImageBuildDependenciesTest` pins the modes.
+Hardening before 1.0.0, with no new work package: the follow-ups of WP-28's security test map and of the threat model
+it led to. Every configured-but-untested control of `security/TEST_MAP.md` now has a test; a control character in any
+request text is a 400; search and upload are rate-limited per person; the importer requires verified TLS from JDBC
+sources, and ADR-0014 is accepted; the STRIDE threat model and the data map are written, with their hardening
+follow-ups; the purge CronJob gets its own egress policy and manifest tests; the published image is verified before its
+GitHub Release; Compliance Admins get an audit trail screen with an audited CSV export; the importer's staging TTL runs
+on a schedule; two concurrency 500s are fixed; the DAST scan attacks form bodies last, so two suppressions of ZAP's
+own stored payloads are gone; and the image builds no longer fail on Maven Central's rate limits.
+WP-29 (the Section 508 conformance pass) and WP-30 (the evidence pack and 1.0.0) remain. `HANDOFF.md` records the
+state and the open issues.
 
 ### Added
 
@@ -44,6 +40,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   through `CsvFormat`, so a formula is defused. Each export is audited as `AUDIT_EXPORTED` with its row count and the
   screen's query, in the transaction that counts it, like `CASES_EXPORTED`; it draws on the search rate limit. Tested
   by `AuditExportIT` and `RateLimitIT`.
+
+### Changed
+
+- Image builds that are scanned but never published resolve their dependencies offline (#290). Central's long 429
+  windows, and a brief not-found for a file that exists (`spring-boot-starter-parent:pom:4.1.2`), failed main's image
+  build inside `docker build`, where the whole tree was resolved cold. `build-image.sh` now takes a dependency mode:
+  - `offline` (main.yml's image job, zap.yml's scan image): the runner builds the jar itself through the job's own
+    `~/.m2` cache (issue 252; main.yml's image job gains Temurin and that cache), copies the repository into the build
+    context as `target/image/m2-seed`, and the Containerfile runs Maven `-o` against it. Central's hosts resolve to
+    127.0.0.1 inside the build, so the build proves it needs no network for dependencies. CycloneDX's goals declare
+    `requiresOnline`, so these scanned images carry no embedded `META-INF/sbom/application.cdx.json`; the published
+    image, built cold, keeps it, and neither Trivy's image scan nor main.yml's SBOM gate reads that file.
+  - `cold`, the default, and what release.yml asks for: the published image resolves every dependency from Central,
+    as before, and a cold build deletes any seed left in the workspace (#230's rule: no cached repository contents in a
+    published artefact).
+  `.mvn/maven.config` raises the resolver retry for the cold paths (release verify, the release image, CI jobs on a
+  cache miss) from 6 retries of up to 60 s to 10 of up to 120 s. `ImageBuildDependenciesTest` pins the modes.
 
 ### Fixed
 
@@ -177,7 +190,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   `PurgeCronJobManifestTest` pins the exact ports and that no policy in the base opens more. The `clamav-ca` mount
   stays, because the profile still builds the clamd client, which resolves its SSL bundle at startup. A deployment
   that replaced the database address in `trailkeep-egress` sets the same value in `trailkeep-purge`.
-
 - Per-user rate limits on case search and upload (#247, BUILD_PLAN §9 Availability, security test map gap 13). Each
   signed-in person has a token bucket per route, keyed on their user id (never the client address): `search` covers
   the cases list and its CSV export, `upload` covers attaching a file. Over the limit, `RateLimitInterceptor` refuses
@@ -190,7 +202,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   start with it. The limiter is a small in-house token bucket rather than Bucket4j (no new dependency): one number per
   active person in memory, dropped once their bucket is full again. Buckets are per replica, so a multi-replica
   deployment also needs a platform limit at the route or ingress (`deploy/README.md`).
-
 - The importer now requires verified TLS for every JDBC source, as ADR-0014 rule 2 promised (#259). `SourceUrl`
   only allow-listed parameter names, so a PostgreSQL URL without `sslmode` and a plain-TCP Oracle address passed, and
   TLS rested on the account recipes alone. Now PostgreSQL needs `sslmode=verify-full` (`verify-ca` checks no host
@@ -210,7 +221,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   `audit.ImportedEventWrittenJdbcDao` are listed beside it; the import hold is set in the case INSERT by `casefile`;
   the import user's `CASE_SEARCH` update grant is recorded; `validate-mapping` also connects; the stale History-tab
   line is gone.
-
 - Deny-by-default routes and the absence of CORS are now asserted (#245, security test map gaps 4 and 7):
   - **`DenyByDefaultIT`:** an anonymous request to every route in Spring MVC's handler mapping, with a valid CSRF
     token so CSRF's 403 cannot hide a `permitAll`, is refused: a 302 to the start of the sign-in, or a 401 with
@@ -230,6 +240,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Documentation
 
+- The 0.3.0 release documents: `HANDOFF.md`, the README's status and `CONTEXT.md` state what 0.3.0 adds over 0.2.0
+  and what remains for 1.0.0. `security/THREAT_MODEL.md`'s RR-14 (no purge alert) and RR-18 (the SMTP server identity
+  check not pinned), and threats 5.1 and 6.5 that point at them, are updated for #276's alert and test, with a
+  re-check row.
 - The STRIDE threat model and the data map that BUILD_PLAN §9 promises (#248), linked from `SECURITY.md` and
   `security/TEST_MAP.md`, whose gaps 24 and 25 and "Missing documents" rows are now closed:
   - **`security/THREAT_MODEL.md`:** the §7.1 diagram with its ten trust boundaries (browser and router, database,
@@ -1579,6 +1593,7 @@ starts with WP-11. `HANDOFF.md` records the state, the decisions taken and the o
   rules for plugin versions, upper-bound dependencies, dependency convergence and banned dependencies (Log4j core,
   Log4j 1, Lombok, Commons Logging before 1.3).
 
-[Unreleased]: https://github.com/techautomator414/trailkeep/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/techautomator414/trailkeep/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/techautomator414/trailkeep/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/techautomator414/trailkeep/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/techautomator414/trailkeep/releases/tag/v0.1.0
