@@ -9,6 +9,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- Concurrent saves of one case type no longer deadlock on PostgreSQL and answer 500 (#284). `saveCaseType` now takes
+  the case type's row lock (`PESSIMISTIC_WRITE`) before the name check and before it touches the outcomes, so two
+  saves of one type queue and the second applies after the first commits, as the import-run lock does (#281). Before,
+  one save held the row for the unique-name update while the other deleted outcomes and ran the foreign key's share
+  check on that row. A type has no version column, so the pessimistic lock is the fix that needs no migration.
+  `CaseTypeSaveRaceIT` (PostgreSQL and Oracle) races a rename against a save that keeps the name, 40 rounds: both
+  finish, nothing but a conflict is refused, the log has no ERROR and the type holds one save's values whole.
 - The importer's 14-day staging TTL no longer depends on a later importer command (#275). It was applied only at the
   start of a command, so an abandoned run with no later command kept its staged legacy rows and content area
   indefinitely. `deploy/jobs/importer` (and each variant) now also applies `trailkeep-importer-staging-ttl`, a CronJob
