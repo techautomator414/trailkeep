@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- The audit trail for Compliance Admins (BUILD_PLAN §3.2, §9; #274). A plain GET form filters by a required range of
+     days, the actor, the entity type, the action and a case number; plain links page through, so nothing here needs a
+     script. A range problem is announced next to the dates (aria-invalid, aria-describedby). Each time is a <time>
+     element (UTC in datetime, app.timezone as text). A redacted value arrives as its length only and reads "redacted
+     (n characters)"; every other value is written with th:text, so it is escaped. -->
+<html lang="en" xmlns:th="http://www.thymeleaf.org" th:replace="~{web/layout :: page(~{::title}, ~{::main})}">
+<head><title th:text="#{tk.audit.title} + ' · ' + ${@branding.name()}">Audit trail</title></head>
+<body>
+<main id="main" class="container tk-main" tabindex="-1">
+  <h1 th:text="#{tk.audit.title}">Audit trail</h1>
+  <p th:replace="~{report/schedules :: admin}"></p>
+  <form method="get" th:action="@{/admin/audit}" class="row g-3 align-items-end"
+        th:with="described=${rangeProblem} ? 'tk-audit-range-error tk-audit-range-hint' : 'tk-audit-range-hint'">
+    <div class="col-12 col-sm-6 col-lg-3">
+      <label class="form-label" for="tk-audit-from" th:text="#{tk.audit.from}">From</label>
+      <input id="tk-audit-from" class="form-control" type="date" name="from" required th:value="${f.from}"
+             th:attr="aria-invalid=${rangeProblem} ? 'true' : null,aria-describedby=${described}">
+    </div>
+    <div class="col-12 col-sm-6 col-lg-3">
+      <label class="form-label" for="tk-audit-to" th:text="#{tk.audit.to}">To</label>
+      <input id="tk-audit-to" class="form-control" type="date" name="to" required th:value="${f.to}"
+             th:attr="aria-invalid=${rangeProblem} ? 'true' : null,aria-describedby=${described}">
+    </div>
+    <div class="col-12 col-lg-6">
+      <p id="tk-audit-range-hint" class="form-text mb-0" th:text="#{tk.audit.range.hint(${maxDays})}">Both days are
+        included; at most 31 days.</p>
+      <p th:if="${rangeProblem}" id="tk-audit-range-error" class="invalid-feedback d-block mb-0"
+         th:text="#{tk.audit.range.invalid(${maxDays})}">The last day must not be before the first, and the range must
+        be at most 31 days.</p>
+    </div>
+    <div class="col-12 col-sm-6 col-lg-3">
+      <label class="form-label" for="tk-audit-actor" th:text="#{tk.audit.actor}">Actor name contains</label>
+      <input id="tk-audit-actor" class="form-control" type="text" name="actor" maxlength="200" th:value="${f.actor}">
+    </div>
+    <div class="col-12 col-sm-6 col-lg-3">
+      <label class="form-label" for="tk-audit-entity" th:text="#{tk.audit.entity}">Entity type</label>
+      <input id="tk-audit-entity" class="form-control" type="text" name="entity" maxlength="40"
+             pattern="[A-Za-z][A-Za-z0-9_]*" th:value="${f.entity}" aria-describedby="tk-audit-entity-hint">
+      <p id="tk-audit-entity-hint" class="form-text mb-0" th:text="#{tk.audit.entity.hint}">For example CASE or USER.</p>
+    </div>
+    <div class="col-12 col-sm-6 col-lg-3">
+      <label class="form-label" for="tk-audit-action" th:text="#{tk.audit.action}">Action</label>
+      <input id="tk-audit-action" class="form-control" type="text" name="action" maxlength="40"
+             pattern="[A-Za-z][A-Za-z0-9_]*" th:value="${f.action}" aria-describedby="tk-audit-action-hint">
+      <p id="tk-audit-action-hint" class="form-text mb-0" th:text="#{tk.audit.action.hint}">For example LOGIN.</p>
+    </div>
+    <div class="col-12 col-sm-6 col-lg-3">
+      <label class="form-label" for="tk-audit-case" th:text="#{tk.audit.case}">Case number</label>
+      <input id="tk-audit-case" class="form-control" type="text" name="case" maxlength="40" th:value="${f.caseNumber}">
+    </div>
+    <div class="col-12">
+      <button class="btn btn-primary" type="submit" th:text="#{tk.audit.apply}">Show events</button>
+    </div>
+  </form>
+  <p id="tk-audit-status" class="mt-3" th:text="${caseUnknown} ? #{tk.audit.case.unknown(${f.caseNumber})}
+     : (${pages > 1} ? #{tk.history.found(${total})} + ' ' + #{tk.list.page(${page},${pages})}
+     : #{tk.history.found(${total})})">3 events found.</p>
+  <div th:unless="${rows.isEmpty()}" class="table-responsive" tabindex="0" role="region"
+       aria-labelledby="tk-audit-caption">
+    <table class="table align-middle">
+      <caption id="tk-audit-caption" th:text="#{tk.audit.caption}">Audit events, newest first</caption>
+      <thead>
+      <tr>
+        <th scope="col" th:text="#{tk.history.when}">When</th>
+        <th scope="col" th:text="#{tk.history.who}">Who</th>
+        <th scope="col" th:text="#{tk.history.origin}">Origin</th>
+        <th scope="col" th:text="#{tk.history.what}">Event</th>
+        <th scope="col" th:text="#{tk.audit.subject}">About</th>
+        <th scope="col" th:text="#{tk.history.changes}">Changes</th>
+      </tr>
+      </thead>
+      <tbody>
+      <tr th:each="r : ${rows}"
+          th:with="fields=${r.changes.fields()},number=${r.caseId == null} ? null : ${caseNumbers.get(r.caseId)}">
+        <th scope="row"><time th:datetime="${#temporals.format(r.at, 'yyyy-MM-dd''T''HH:mm:ss''Z''', 'UTC')}"
+            th:text="${#temporals.format(r.at, 'yyyy-MM-dd HH:mm:ss', zone)}">2026-11-05 10:30:00</time></th>
+        <td th:text="${r.actorName} ?: #{tk.history.system}">Someone</td>
+        <td th:text="#{'tk.history.origin.' + ${r.origin}}">Screen</td>
+        <td th:text="${r.action}">LOGIN</td>
+        <td><span th:text="${r.entityId == null} ? ${r.entityType} : ${r.entityType} + ' ' + ${r.entityId}">USER</span>
+          <a th:if="${number != null}" class="d-block" th:href="@{/cases/{n}(n=${number})}"
+             th:text="${number}">CASE-2026-000001</a></td>
+        <td>
+          <ul class="list-unstyled mb-0" th:unless="${fields.isEmpty()}">
+            <li th:each="c : ${fields}" class="text-break"
+                th:with="from=${c.before == null} ? null : (${c.before.redactedLength != null}
+                           ? #{tk.audit.redacted(${c.before.redactedLength})} : ${c.before.text}),
+                         to=${c.after == null} ? #{tk.history.empty} : (${c.after.redactedLength != null}
+                           ? #{tk.audit.redacted(${c.after.redactedLength})} : ${c.after.text})"
+                th:text="${from == null} ? #{tk.history.value(${c.name},${to})}
+                  : #{tk.history.change(${c.name},${from},${to})}">title: Old → New</li>
+          </ul>
+          <span th:if="${fields.isEmpty()}" class="text-muted" th:text="#{tk.history.none}">No fields recorded</span>
+        </td>
+      </tr>
+      </tbody>
+    </table>
+  </div>
+  <nav th:if="${pages > 1}" th:aria-label="#{tk.list.pages}">
+    <ul class="pagination">
+      <li class="page-item" th:if="${page > 1}">
+        <a id="tk-audit-previous" class="page-link" rel="prev" th:href="@{/admin/audit(from=${f.from},to=${f.to},actor=${f.actor},entity=${f.entity},action=${f.action},case=${f.caseNumber},page=${page - 1})}"
+           th:text="#{tk.list.previous}">Previous page</a></li>
+      <li class="page-item" th:if="${page < pages}">
+        <a id="tk-audit-next" class="page-link" rel="next" th:href="@{/admin/audit(from=${f.from},to=${f.to},actor=${f.actor},entity=${f.entity},action=${f.action},case=${f.caseNumber},page=${page + 1})}"
+           th:text="#{tk.list.next}">Next page</a></li>
+    </ul>
+  </nav>
+</main>
+</body>
+</html>

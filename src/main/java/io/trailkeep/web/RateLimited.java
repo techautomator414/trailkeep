@@ -25,7 +25,7 @@ import java.util.Locale;
 
     /** The limited routes, each with its own bucket per person and its own {@code app.rate-limit.*} settings. */
     enum Route {
-        /** The cases list and its CSV export, both of which run the case search. */
+        /** The cases list and its CSV export, which run the case search, and the audit search (#274). */
         SEARCH,
         /** Attaching a file to a case: the file is checked, scanned and stored. */
         UPLOAD;

@@ -18,7 +18,7 @@ import org.springframework.validation.annotation.Validated;
  *
  * @param enabled whether requests are limited at all. Tests may turn it off; the {@code prod} profile refuses to start
  *     with it off ({@link RateLimitInterceptor}).
- * @param search the cases list and its CSV export
+ * @param search the cases list and its CSV export, and the audit search
  * @param upload attaching a file to a case
  */
 @Validated

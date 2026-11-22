@@ -3,6 +3,7 @@
 package io.trailkeep.audit;
 
 import io.trailkeep.shared.access.CaseScope;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -135,6 +136,60 @@ public interface AuditTrailService {
      * @return its latest time, or empty if it never happened
      */
     Optional<Instant> latest(String entityType, long entityId, String action);
+
+    /**
+     * The longest time range one {@link #search} may cover, so no search reads an unbounded part of the trail: 32 days,
+     * room for a month of whole days in a zone with a daylight-saving hour.
+     */
+    Duration MAX_RANGE = Duration.ofDays(32);
+
+    /**
+     * What a search of the whole audit trail keeps (BUILD_PLAN §9 "audit export for Compliance Admins").
+     *
+     * @param from the first instant included
+     * @param to the first instant excluded: after {@code from}, at most {@link #MAX_RANGE} later
+     * @param actorName text the actor's recorded name contains, in any case; {@code null} for any actor
+     * @param entityType the entity type, such as {@code USER}; {@code null} for any
+     * @param action the action, such as {@code LOGIN}; {@code null} for any
+     * @param caseId the one case whose events are kept; {@code null} for events of any case or of none
+     */
+    record AuditFilter(
+            Instant from,
+            Instant to,
+            @Nullable String actorName,
+            @Nullable String entityType,
+            @Nullable String action,
+            @Nullable Long caseId) {
+
+        /**
+         * Checks the time range.
+         *
+         * @param from the first instant included
+         * @param to the first instant excluded
+         * @param actorName text the actor's name contains
+         * @param entityType the entity type
+         * @param action the action
+         * @param caseId the case
+         */
+        public AuditFilter {
+            if (!from.isBefore(to) || Duration.between(from, to).compareTo(MAX_RANGE) > 0) {
+                throw new IllegalArgumentException("the time range must be positive and at most " + MAX_RANGE);
+            }
+        }
+    }
+
+    /**
+     * One page of the events a filter keeps, newest first, case-less events included. Only an unrestricted scope sees
+     * anything (the security module grants one to a Compliance Admin); any other scope gets an empty page with a total
+     * of zero. Values stay as stored: a redacted one is its HMAC and length, never text.
+     *
+     * @param scope the caller's scope
+     * @param filter the time range and the other filters
+     * @param offset how many of the newest matching events to skip
+     * @param limit the page size, 1 to 500
+     * @return the page and how many events match in all
+     */
+    AuditPage search(CaseScope scope, AuditFilter filter, int offset, int limit);
 
     /**
      * One page of audit events.
