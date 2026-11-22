@@ -44,6 +44,7 @@ env:
         - "http://localhost:8080/cases/export\\.csv"
         - "http://localhost:8080/reports/(aging|compliance)\\.csv"
         - "http://localhost:8080/reports/runs/[^/]+\\.csv"
+        - "http://localhost:8080/admin/audit/export\\.csv"
   parameters:
     failOnError: true
     failOnWarning: false
