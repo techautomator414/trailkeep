@@ -165,8 +165,11 @@ duties").
 - **Purge rows:** a `CASE_PURGED` row carries only counts of what went.
 - **Read by, in the application:** the case's History tab, for case readers (`AuditTrailService`). Reading a
   restricted case's history writes `VIEW_RESTRICTED`. Events without a case (sign-ins, admin changes, exports) are
-  reachable only through an unrestricted scope. **No screen or export presents them at this commit:** the Compliance
-  Admin audit export of BUILD_PLAN §9 was not found in the code (threat model, RR-8).
+  reachable only through an unrestricted scope, which the security module grants for this purpose only to a Compliance
+  Admin who is not a System Admin: the audit screen `/admin/audit` (`AuditController`, #274) shows every event in a
+  range of at most 31 days, 50 a page, with the actor's name snapshot, entity, action, case number and old and new
+  values; a redacted value as its length only, never its HMAC. The client address is not shown. Verified by
+  `AuditControllerIT` (TEST_MAP "Audit"). No export at this commit (threat model, RR-8).
 - **Read by, in the database:** app S I; purge I; import S I; nobody U or D (`PostgresDatabaseGrantsIT`,
   `OracleDatabaseGrantsIT`).
 - **Retention:** indefinite; kept through the purge. Any trimming is a DBA decision outside the application.

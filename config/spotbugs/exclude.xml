@@ -283,6 +283,15 @@
     only. The run is requested, nothing else: owners change only when the importer Job runs relink-owners with
     import.apply=true. Covered by ImportRunActionsControllerIT, ImportRunServiceIT and ImportRunsAccessibilityIT.
     Approved in the security-reviewer role on #188.
+    AuditController (#274): GET /admin/audit only, behind login. CasePermissionService.auditScope grants the
+    unrestricted scope to a Compliance Admin who is not a System Admin, from permissions rebuilt from the database per
+    request; anyone else is 403 before anything is read. Every parameter is bounded before a query: the days parse as
+    ISO dates and span at most 31, entity type and action must match [A-Z][A-Z0-9_]{0,39}, the actor text is at most 200
+    characters and reaches a Criteria LIKE as a bind parameter with its wildcards escaped, a case number is resolved
+    through CaseService under the viewer's scope, and the page is 1 to 6 digits (MAX_PAGE), checked again where its
+    offset is computed. Values are shown through th:text; a redacted value is shown as its length only
+    (AuditChanges.Value carries no HMAC). Covered by AuditControllerIT, AuditTrailServiceIT and AuditAccessibilityIT.
+    Approved in the security-reviewer role on #288 (2026-11-22).
     Approved in the security-reviewer role on #20. Listed by class, never by pattern alone, so each new controller
     is reviewed the same way.
   -->
@@ -316,6 +325,7 @@
       <Class name="io.trailkeep.web.SystemController"/>
       <Class name="io.trailkeep.web.TestMailController"/>
       <Class name="io.trailkeep.web.ImportRunController"/>
+      <Class name="io.trailkeep.web.AuditController"/>
     </Or>
   </Match>
   <!--

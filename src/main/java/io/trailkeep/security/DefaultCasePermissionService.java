@@ -2,12 +2,14 @@
 // Copyright 2026 Charlie Genova and contributors
 package io.trailkeep.security;
 
+import io.trailkeep.shared.access.CaseScope;
 import io.trailkeep.user.GlobalRole;
 import io.trailkeep.user.TeamRole;
 import io.trailkeep.user.UserDirectoryService;
 import io.trailkeep.user.UserPermissions;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -51,6 +53,12 @@ class DefaultCasePermissionService implements CasePermissionService {
         return ids.stream()
                 .filter(id -> id != requesterId && !Objects.equals(id, facts.ownerId()))
                 .toList();
+    }
+
+    @Override
+    public Optional<CaseScope> auditScope(UserPermissions user) {
+        boolean granted = user.has(GlobalRole.COMPLIANCE_ADMIN) && !user.has(GlobalRole.SYSTEM_ADMIN);
+        return granted ? Optional.of(CaseScope.all()) : Optional.empty();
     }
 
     static MatrixRole roleOf(UserPermissions user, long teamId) {

@@ -49,4 +49,24 @@ interface AuditEventQueries {
      * @return the count
      */
     long countByCase(CaseScope scope, long caseId, Set<String> actions);
+
+    /**
+     * One page of the events a filter keeps, case-less ones included; empty unless the scope is unrestricted.
+     *
+     * @param scope the caller's scope
+     * @param filter the filter
+     * @param offset how many of the newest events to skip
+     * @param limit the maximum number of rows
+     * @return the events, newest first
+     */
+    List<AuditEvent> search(CaseScope scope, AuditTrailService.AuditFilter filter, int offset, int limit);
+
+    /**
+     * How many events {@link #search} pages through.
+     *
+     * @param scope the caller's scope
+     * @param filter the filter
+     * @return the count
+     */
+    long countSearch(CaseScope scope, AuditTrailService.AuditFilter filter);
 }

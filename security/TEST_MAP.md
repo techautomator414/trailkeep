@@ -78,7 +78,7 @@ The status column records what is in effect today, not what is planned.
   - `ArchitectureRulesTest`, whose rules are that case-rooted repositories take a scope, are injected only into access paths, and that the all-cases scope is granted only by security.
 - **404, not 403, on every case route for an unreadable case:** `RouteSweepIT` (every mapped route, from the handler mapping).
 - **Object-level checks on attachments:** `CaseAttachmentDownloadIT` (an attachment id of another case is a 404) and `CaseAttachmentReleaseIT`.
-- **Per-role controller behaviour:** the `web` controller ITs, for example `CaseControllerIT`, `CaseAssignmentControllerIT`, `ClosureDecisionControllerIT`, `TeamAdminControllerIT` and `UserAdminControllerIT`.
+- **Per-role controller behaviour:** the `web` controller ITs, for example `CaseControllerIT`, `CaseAssignmentControllerIT`, `ClosureDecisionControllerIT`, `TeamAdminControllerIT`, `UserAdminControllerIT` and `AuditControllerIT` (every role).
 - **Module boundaries:** `ModularityTest`, `ImportOnlyApiRulesTest`.
 - **Allow-listed sort and filter values:** `CaseListQueryTest`.
 - **Deny by default** (`SecurityConfig`): `DenyByDefaultIT` sends an anonymous request, with a valid CSRF token, to every route in the handler mapping, and to static files, the error page, unmapped paths and Spring Security's `/login` and `GET /logout` (not generated, because the application sets its own entry point). Each is refused: a 302 to the start of the sign-in, or a 401 with `HX-Redirect` for htmx.
@@ -92,6 +92,7 @@ The status column records what is in effect today, not what is planned.
 - **Redaction as HMAC-SHA-256 plus length, never plaintext; a key is required in prod:** `SnapshotDiffTest`, `AuditRecorderIT`, `AuditConfigTest`.
 - **The runtime user cannot update or delete audit rows (database grants):** `PostgresDatabaseGrantsIT` and `OracleDatabaseGrantsIT`, against `GrantsMatrix`.
 - **Case timelines and restricted filtering:** `AuditTrailServiceIT`.
+- **The whole trail, case-less events included, is readable by Compliance Admins only, on a bounded, paged screen; redacted values stay redacted** (#274, BUILD_PLAN §3.2 "View audit across all cases"): `AuditControllerIT` refuses every other role with 403, a System Admin who also holds Compliance Admin included, and checks each filter, paging, the 31-day range bound, escaping, and that a redacted value reads "redacted (n characters)" with neither its plaintext nor its HMAC on the page; `CasePermissionServiceTest` (the grant), `AuditTrailServiceIT` (only an unrestricted scope sees anything; wildcards in the actor filter are text), `AuditChangesTest` (the read model carries no HMAC), `AuditAccessibilityIT` (axe and Nu).
 - **A restricted-case view and download each write one event:** `RestrictedViewAuditIT`.
 - **One application clock:** `InstantSourceConfigTest`.
 
@@ -190,7 +191,7 @@ The status column records what is in effect today, not what is planned.
 - **Bounded concurrent downloads, 503 with `Retry-After` when full:** `CaseAttachmentDownloadIT`, `ConcurrentDownloadHeapIT`.
 - **The scheduler lock:** `SlaEvaluatorIT`.
 - **Management endpoints only on the management port, and only health, info and prometheus:** `ManagementEndpointsIT`.
-- **Per-user rate limits on search and upload** (`RateLimitInterceptor`, #247): `RateLimitIT` drives each limit to a 429 with `Retry-After`, on the error page and as the htmx problem fragment, without echoing what was sent; shows a refused upload is never scanned, the CSV export shares the search bucket, another person is unaffected, and each refusal is counted on `trailkeep.rate_limit.refusals` and logged with the user id and route only. `TokenBucketsTest` covers refill, the wait reported, idle-bucket eviction and a wrapping monotonic clock; `RateLimitInterceptorTest` that the prod profile refuses `app.rate-limit.enabled=false` and that the shipped limits are on. `ShellAccessibilityIT` runs axe and the Nu validator on the 429 page and the swapped htmx fragment.
+- **Per-user rate limits on search and upload** (`RateLimitInterceptor`, #247): `RateLimitIT` drives each limit to a 429 with `Retry-After`, on the error page and as the htmx problem fragment, without echoing what was sent; shows a refused upload is never scanned, the CSV export and the audit search (#274) share the search bucket, another person is unaffected, and each refusal is counted on `trailkeep.rate_limit.refusals` and logged with the user id and route only. `TokenBucketsTest` covers refill, the wait reported, idle-bucket eviction and a wrapping monotonic clock; `RateLimitInterceptorTest` that the prod profile refuses `app.rate-limit.enabled=false` and that the shipped limits are on. `ShellAccessibilityIT` runs axe and the Nu validator on the 429 page and the swapped htmx fragment.
   - **Platform:** the buckets are in memory per replica, so a multi-replica deployment also sets a limit at the route or ingress (`deploy/README.md`, "Runtime properties").
 
 **Configured only:** database pool sizing.
@@ -211,7 +212,7 @@ The status column records what is in effect today, not what is planned.
 
 ### Separation of duties
 **Verified:**
-- **System Admin has no case access:** `PermissionMatrixTest`.
+- **System Admin has no case access:** `PermissionMatrixTest`; nor audit access, even holding Compliance Admin: `CasePermissionServiceTest`, `AuditControllerIT`.
 - **Approver ≠ requester and owner:** `CasePermissionServiceTest`, `ClosureRequestIT`.
 - **Purge runs as its own user, which may only turn a case into a tombstone; the purge profile starts no web application:** `PurgeIT`, `PurgeProfileIT`, `PostgresDatabaseGrantsIT`.
 - **Purge skips anything under legal hold:** `PurgeIT`, `LegalHoldIT`.

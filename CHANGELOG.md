@@ -7,6 +7,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- An audit trail screen for Compliance Admins, `GET /admin/audit` (#274, BUILD_PLAN §3.2 "View audit across all
+  cases", §9), linked from the Compliance Admin screens. It filters `AUDIT_EVENT` by a required range of whole days in
+  `app.timezone` (at most 31; the last seven by default), text in the actor's recorded name, entity type, action and
+  case number, 50 events a page, newest first, and includes events with no case (sign-ins, admin changes, exports),
+  which no screen showed before. Only a Compliance Admin who is not also a System Admin is let in
+  (`CasePermissionService.auditScope`, the security module's grant of the all-cases scope); everyone else gets 403, as
+  on the other admin screens. A redacted value reads "redacted (n characters)": `AuditChanges.fields()` carries its
+  length and never its HMAC, and every other value is escaped. Searches draw on the search rate limit. `V20` adds
+  `IX_AUDIT_AT (AT_TS, ID)`: without it every search read the whole trail. Tested by `AuditControllerIT` (every role,
+  filters, paging, redaction, escaping, range bounds), `AuditTrailServiceIT`, `AuditChangesTest`,
+  `CasePermissionServiceTest`, `RateLimitIT` and `AuditAccessibilityIT` (axe and Nu). The CSV export follows in a
+  second pull request.
+
 ### Fixed
 
 - Concurrent saves of one case type no longer deadlock on PostgreSQL and answer 500 (#284). `saveCaseType` now takes

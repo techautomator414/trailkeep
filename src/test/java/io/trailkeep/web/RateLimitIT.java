@@ -44,11 +44,11 @@ import org.springframework.test.web.servlet.request.MockMultipartHttpServletRequ
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Per-person rate limits on search and upload (#247), with limits small enough to reach: three requests, then one
- * more an hour. Over the limit the request is a 429 with {@code Retry-After}, on the error page or as the htmx problem
- * fragment, without echoing what was sent; a refused upload is never scanned; another person is unaffected; each
- * refusal is counted and logged with the person's id and the route only. Buckets outlive a test's transaction, so each
- * test uses its own people.
+ * Per-person rate limits on search (the cases list, its export and the audit search) and upload (#247, #274), with
+ * limits small enough to reach: three requests, then one more an hour. Over the limit the request is a 429 with {@code
+ * Retry-After}, on the error page or as the htmx problem fragment, without echoing what was sent; a refused upload is
+ * never scanned; another person is unaffected; each refusal is counted and logged with the person's id and the route
+ * only. Buckets outlive a test's transaction, so each test uses its own people.
  */
 // "IT" is the Failsafe suffix Part B mandates for integration tests, not an abbreviation.
 @SuppressWarnings("checkstyle:AbbreviationAsWordInName")
@@ -75,6 +75,7 @@ class RateLimitIT {
     static final long UPLOADER = 971_004L;
     static final long EXPORTER = 971_005L;
     static final long LIMITED = 971_006L;
+    static final long AUDITOR = 971_007L;
     static final long TEAM = 971_100L;
 
     /** Text sent with a refused request; it must not come back in the response or reach the log. */
@@ -101,7 +102,7 @@ class RateLimitIT {
     void seed() {
         jdbc.update("INSERT INTO TEAM (ID, NAME) VALUES (?, 'Synthetic Rate Team')", TEAM);
         CaseSeed seed = new CaseSeed(jdbc);
-        for (long person : new long[] {SEARCHER, OTHER, HTMX, UPLOADER, EXPORTER, LIMITED}) {
+        for (long person : new long[] {SEARCHER, OTHER, HTMX, UPLOADER, EXPORTER, LIMITED, AUDITOR}) {
             jdbc.update(
                     "INSERT INTO APP_USER (ID, EXTERNAL_ID, DISPLAY_NAME, EMAIL, DISABLED, CREATED_AT)"
                             + " VALUES (?, ?, 'Synthetic Person', ?, FALSE, CURRENT_TIMESTAMP)",
@@ -110,6 +111,7 @@ class RateLimitIT {
                     "user-" + person + "@example.invalid");
             seed.member(person, TEAM, TeamRole.ANALYST);
         }
+        jdbc.update("INSERT INTO APP_USER_GLOBAL_ROLE (USER_ID, GLOBAL_ROLE) VALUES (?, 'COMPLIANCE_ADMIN')", AUDITOR);
         number = seed.caseRow(TEAM, UPLOADER, Sensitivity.STANDARD, CaseStatus.OPEN);
         entityManager.flush();
     }
@@ -174,6 +176,19 @@ class RateLimitIT {
         mvc.perform(get("/cases/export.csv").param("q", SENT))
                 .andExpect(status().isTooManyRequests())
                 .andExpect(header().string("Retry-After", HOUR));
+    }
+
+    @Test
+    @WithAppUser(id = AUDITOR, globalRole = GlobalRole.COMPLIANCE_ADMIN)
+    void theAuditSearchDrawsOnTheSearchBucket() throws Exception {
+        for (int i = 0; i < 3; i++) {
+            mvc.perform(get("/admin/audit").param("actor", SENT)).andExpect(status().isOk());
+        }
+
+        mvc.perform(get("/admin/audit").param("actor", SENT))
+                .andExpect(status().isTooManyRequests())
+                .andExpect(header().string("Retry-After", HOUR))
+                .andExpect(content().string(not(containsString(SENT))));
     }
 
     @Test

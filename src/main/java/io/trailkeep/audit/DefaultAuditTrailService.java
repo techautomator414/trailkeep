@@ -56,6 +56,17 @@ class DefaultAuditTrailService implements AuditTrailService {
     }
 
     @Override
+    public AuditPage search(CaseScope scope, AuditFilter filter, int offset, int limit) {
+        if (offset < 0) {
+            throw new IllegalArgumentException("offset must not be negative");
+        }
+        int checked = checked(limit);
+        long total = repository.countSearch(scope, filter);
+        return new AuditPage(
+                offset >= total ? List.of() : toRecords(repository.search(scope, filter, offset, checked)), total);
+    }
+
+    @Override
     public ImportedPage importedPageForCase(CaseScope scope, long caseId, int offset, int limit) {
         if (offset < 0) {
             throw new IllegalArgumentException("offset must not be negative");

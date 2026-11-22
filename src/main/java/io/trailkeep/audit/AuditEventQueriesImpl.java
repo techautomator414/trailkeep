@@ -11,8 +11,10 @@ import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
 import jakarta.persistence.criteria.Subquery;
 import jakarta.persistence.metamodel.EntityType;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import org.jspecify.annotations.Nullable;
 
@@ -24,7 +26,7 @@ import org.jspecify.annotations.Nullable;
  * CASE_RECORD} (no foreign keys by decision, and {@code audit} may not depend on {@code casefile}), so the case is
  * reached by a subquery on the entity the case module registers as {@value #CASE_ENTITY}, which {@link
  * CaseScope#toPredicate} is applied to. If that entity is not registered the query fails closed and sees nothing.
- * Events with no case stay invisible to principal scopes, and so does the "recent events" list.
+ * Events with no case stay invisible to principal scopes, and so do the "recent events" list and the search.
  */
 class AuditEventQueriesImpl implements AuditEventQueries {
 
@@ -66,6 +68,62 @@ class AuditEventQueriesImpl implements AuditEventQueries {
         }
         CriteriaQuery<Long> counting = query.select(cb.count(event)).where(where);
         return entityManager.createQuery(counting).getSingleResult();
+    }
+
+    @Override
+    public List<AuditEvent> search(CaseScope scope, AuditTrailService.AuditFilter filter, int offset, int limit) {
+        if (!scope.isUnrestricted()) {
+            return List.of();
+        }
+        CriteriaBuilder cb = entityManager.getCriteriaBuilder();
+        CriteriaQuery<AuditEvent> query = cb.createQuery(AuditEvent.class);
+        Root<AuditEvent> event = query.from(AuditEvent.class);
+        query.select(event)
+                .where(matching(filter, event, cb))
+                .orderBy(cb.desc(event.get("at")), cb.desc(event.get("id")));
+        return entityManager
+                .createQuery(query)
+                .setFirstResult(offset)
+                .setMaxResults(limit)
+                .getResultList();
+    }
+
+    @Override
+    public long countSearch(CaseScope scope, AuditTrailService.AuditFilter filter) {
+        if (!scope.isUnrestricted()) {
+            return 0;
+        }
+        CriteriaBuilder cb = entityManager.getCriteriaBuilder();
+        CriteriaQuery<Long> query = cb.createQuery(Long.class);
+        Root<AuditEvent> event = query.from(AuditEvent.class);
+        query.select(cb.count(event)).where(matching(filter, event, cb));
+        return entityManager.createQuery(query).getSingleResult();
+    }
+
+    /** The time range always, then each filter given; the name is matched as text, its wildcards escaped. */
+    private static Predicate matching(
+            AuditTrailService.AuditFilter filter, Root<AuditEvent> event, CriteriaBuilder cb) {
+        List<Predicate> all = new ArrayList<>(6);
+        all.add(cb.greaterThanOrEqualTo(event.<Instant>get("at"), filter.from()));
+        all.add(cb.lessThan(event.<Instant>get("at"), filter.to()));
+        String name = filter.actorName();
+        if (name != null) {
+            String text = name.toLowerCase(Locale.ROOT)
+                    .replace("\\", "\\\\")
+                    .replace("%", "\\%")
+                    .replace("_", "\\_");
+            all.add(cb.like(cb.lower(event.get("actorName")), "%" + text + "%", '\\'));
+        }
+        if (filter.entityType() != null) {
+            all.add(cb.equal(event.get("entityType"), filter.entityType()));
+        }
+        if (filter.action() != null) {
+            all.add(cb.equal(event.get("action"), filter.action()));
+        }
+        if (filter.caseId() != null) {
+            all.add(cb.equal(event.get("caseId"), filter.caseId()));
+        }
+        return cb.and(all.toArray(Predicate[]::new));
     }
 
     private List<AuditEvent> select(

@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import io.trailkeep.shared.CaseStatus;
 import io.trailkeep.shared.Sensitivity;
+import io.trailkeep.shared.access.CaseScope;
 import io.trailkeep.user.GlobalRole;
 import io.trailkeep.user.TeamAdminService;
 import io.trailkeep.user.TeamRole;
@@ -151,6 +152,27 @@ class CasePermissionServiceTest {
 
         assertThat(service.approverCandidates(facts(2L, Sensitivity.STANDARD), 3L))
                 .containsExactly(8L, 9L);
+    }
+
+    @Test
+    void theAuditScopeIsForComplianceAdminsWhoAreNotSystemAdmins() {
+        // BUILD_PLAN §3.2 "View audit across all cases": Compliance Admin only; §9 System Admin has no case access.
+        assertThat(service.auditScope(user(1, Set.of(GlobalRole.COMPLIANCE_ADMIN), null)))
+                .containsSame(CaseScope.all());
+        assertThat(service.auditScope(user(1, Set.of(GlobalRole.COMPLIANCE_ADMIN), TeamRole.MANAGER)))
+                .containsSame(CaseScope.all());
+        assertThat(service.auditScope(user(1, Set.of(GlobalRole.COMPLIANCE_ADMIN, GlobalRole.SYSTEM_ADMIN), null)))
+                .isEmpty();
+        assertThat(service.auditScope(user(1, Set.of(GlobalRole.SYSTEM_ADMIN), null)))
+                .isEmpty();
+        for (TeamRole role : TeamRole.values()) {
+            assertThat(service.auditScope(user(1, Set.of(), role)))
+                    .as("%s", role)
+                    .isEmpty();
+        }
+        assertThat(service.auditScope(user(1, Set.of(), null))).isEmpty();
+        assertThat(service.auditScope(new UserPermissions(1, true, Set.of(GlobalRole.COMPLIANCE_ADMIN), Map.of())))
+                .isEmpty();
     }
 
     private static UserPermissions user(long id, Set<GlobalRole> global, @Nullable TeamRole roleInTeam) {
