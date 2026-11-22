@@ -16,6 +16,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   check on that row. A type has no version column, so the pessimistic lock is the fix that needs no migration.
   `CaseTypeSaveRaceIT` (PostgreSQL and Oracle) races a rename against a save that keeps the name, 40 rounds: both
   finish, nothing but a conflict is refused, the log has no ERROR and the type holds one save's values whole.
+- Pinning or unpinning a comment while its case is written concurrently now answers 409, not 500 (#285).
+  `setPinned` locks the case row after loading it, and that lock raised the optimistic-lock conflict when an edit or an
+  assignment committed in between. The service now turns it into the same `CONFLICT` a losing edit gives (the problem
+  fragment for htmx, the error page otherwise), with nothing pinned and nothing logged at ERROR. A retry was not used:
+  the person's page is stale, as it is for the other case writes. `CaseCommentPinConflictIT` commits a case write
+  between the load and the lock and covers pin and unpin.
 - The importer's 14-day staging TTL no longer depends on a later importer command (#275). It was applied only at the
   start of a command, so an abandoned run with no later command kept its staged legacy rows and content area
   indefinitely. `deploy/jobs/importer` (and each variant) now also applies `trailkeep-importer-staging-ttl`, a CronJob
