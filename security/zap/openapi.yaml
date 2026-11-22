@@ -510,6 +510,17 @@ paths:
         - {name: case, in: query, schema: {type: string, example: __CASE__}}
         - {$ref: "#/components/parameters/page"}
       responses: {"200": {description: Page}, "422": {description: The range is backwards or too long}}
+  /admin/audit/export.csv:
+    get:
+      summary: The audit trail as CSV (Compliance Admin), for the screen's filters
+      parameters:
+        - {$ref: "#/components/parameters/periodFrom"}
+        - {$ref: "#/components/parameters/periodTo"}
+        - {name: actor, in: query, schema: {type: string, example: Synthetic}}
+        - {name: entity, in: query, schema: {type: string, example: USER}}
+        - {name: action, in: query, schema: {type: string, example: LOGIN}}
+        - {name: case, in: query, schema: {type: string, example: __CASE__}}
+      responses: {"200": {description: CSV}, "422": {description: Too many rows or a bad range}}
 
   # ---- Teams, users, system (System Admin; neither scan identity is one, so these answer 403)
   /admin/teams:

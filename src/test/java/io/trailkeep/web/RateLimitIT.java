@@ -76,6 +76,7 @@ class RateLimitIT {
     static final long EXPORTER = 971_005L;
     static final long LIMITED = 971_006L;
     static final long AUDITOR = 971_007L;
+    static final long AUDIT_EXPORTER = 971_008L;
     static final long TEAM = 971_100L;
 
     /** Text sent with a refused request; it must not come back in the response or reach the log. */
@@ -102,7 +103,7 @@ class RateLimitIT {
     void seed() {
         jdbc.update("INSERT INTO TEAM (ID, NAME) VALUES (?, 'Synthetic Rate Team')", TEAM);
         CaseSeed seed = new CaseSeed(jdbc);
-        for (long person : new long[] {SEARCHER, OTHER, HTMX, UPLOADER, EXPORTER, LIMITED, AUDITOR}) {
+        for (long person : new long[] {SEARCHER, OTHER, HTMX, UPLOADER, EXPORTER, LIMITED, AUDITOR, AUDIT_EXPORTER}) {
             jdbc.update(
                     "INSERT INTO APP_USER (ID, EXTERNAL_ID, DISPLAY_NAME, EMAIL, DISABLED, CREATED_AT)"
                             + " VALUES (?, ?, 'Synthetic Person', ?, FALSE, CURRENT_TIMESTAMP)",
@@ -111,7 +112,10 @@ class RateLimitIT {
                     "user-" + person + "@example.invalid");
             seed.member(person, TEAM, TeamRole.ANALYST);
         }
-        jdbc.update("INSERT INTO APP_USER_GLOBAL_ROLE (USER_ID, GLOBAL_ROLE) VALUES (?, 'COMPLIANCE_ADMIN')", AUDITOR);
+        for (long auditor : new long[] {AUDITOR, AUDIT_EXPORTER}) {
+            jdbc.update(
+                    "INSERT INTO APP_USER_GLOBAL_ROLE (USER_ID, GLOBAL_ROLE) VALUES (?, 'COMPLIANCE_ADMIN')", auditor);
+        }
         number = seed.caseRow(TEAM, UPLOADER, Sensitivity.STANDARD, CaseStatus.OPEN);
         entityManager.flush();
     }
@@ -189,6 +193,24 @@ class RateLimitIT {
                 .andExpect(status().isTooManyRequests())
                 .andExpect(header().string("Retry-After", HOUR))
                 .andExpect(content().string(not(containsString(SENT))));
+    }
+
+    @Test
+    @WithAppUser(id = AUDIT_EXPORTER, globalRole = GlobalRole.COMPLIANCE_ADMIN)
+    void theAuditExportDrawsOnTheSameSearchBucket() throws Exception {
+        for (int i = 0; i < 3; i++) {
+            mvc.perform(get("/admin/audit").param("actor", SENT)).andExpect(status().isOk());
+        }
+
+        mvc.perform(get("/admin/audit/export.csv").param("actor", SENT))
+                .andExpect(status().isTooManyRequests())
+                .andExpect(header().string("Retry-After", HOUR));
+        assertThat(jdbc.queryForObject(
+                        "SELECT COUNT(*) FROM AUDIT_EVENT WHERE ACTION = 'AUDIT_EXPORTED' AND ACTOR_ID = ?",
+                        Long.class,
+                        AUDIT_EXPORTER))
+                .as("a refused export is not audited")
+                .isZero();
     }
 
     @Test

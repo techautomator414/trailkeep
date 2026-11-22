@@ -30,7 +30,8 @@ import org.springframework.test.context.DynamicPropertySource;
 /**
  * The audit screen in a real browser after a real OIDC login as {@code compliance.admin} (#274): reached from the case
  * types page by keyboard, it has one h1 and a captioned table of events (the sign-in itself is one) with row headers;
- * the filters are labelled and submit from the keyboard; a range that is too long is announced next to the dates.
+ * the filters are labelled and submit from the keyboard, and the export button is described by its hint; a range that
+ * is too long is announced next to the dates.
  * axe finds 0 violations and the Nu checker 0 errors in each state, with no CSP problem in the console.
  */
 // "IT" is the Failsafe suffix Part B mandates for integration tests, not an abbreviation.
@@ -110,6 +111,8 @@ class AuditAccessibilityIT {
         assertThat(shell.heading()).isEqualTo("Audit trail");
         assertThat(page.locator("table caption").textContent()).isEqualTo("Audit events, newest first");
         assertThat(page.locator("tbody th[scope=row] time").count()).isGreaterThanOrEqualTo(1);
+        assertThat(page.getAttribute("#tk-audit-export-csv", "aria-describedby"))
+                .isEqualTo("tk-audit-export-hint");
         assertThat(shell.axeViolations()).isEmpty();
         assertThat(consoleProblems).isEmpty();
 
