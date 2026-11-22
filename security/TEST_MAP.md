@@ -266,27 +266,30 @@ All run as Playwright or HTTP tests against the real server inside `./mvnw verif
 - **The plan:** `security/zap/plan.yaml`.
   - The spider (capped) and the AJAX spider run first.
   - Then the hand-written API description, `security/zap/openapi.yaml`, imported with the session's CSRF token and the seeded identifiers.
-  - Then ZAP's default active-scan policy over the application and the management port.
+  - Then ZAP's default active-scan policy, in two active scans (#231), each with its input vectors set by the `activeScan-config` job before it:
+    - first, every route of the application and the management port, with no form body attacked (query strings and the requests themselves), capped at 60 minutes;
+    - last of all scanning jobs, the form bodies of every POST path, with no query string attacked, over the `trailkeep-forms` context: the application without its CSV downloads, so that every page is checked for a stored payload. Capped at 60 minutes.
+  - Every page's query string is attacked before any form stores one of ZAP's payloads, so no rule there takes a stored payload, shown back escaped, as proof. Before the split, that produced a template-injection false positive on the cases list (90035), then suppressed.
+  - The CSV downloads (`/cases/export.csv`, `/reports/aging.csv`, `/reports/compliance.csv`, `/reports/runs/{id}.csv`, `/admin/audit/export.csv`) are attacked by every rule in the first scan, but are not places the second scan looks for stored payloads: they are attachments with nosniff, never rendered, and carry titles and names verbatim by design. As a sink, the export produced the stored-XSS false positive 40014, then suppressed.
   - The plan fails on any alert of Medium or higher.
 - **Rate limits in the scan stack:** `app.rate-limit.search.*` and `upload.*` are raised to the test-profile values (100000) in `dast-app.sh`, with `enabled` kept true. The scanner is exempted from availability throttling so the active scan reaches search and upload; at the production limits it was refused 429 almost every time, which ZAP's boolean SQL-injection rule reads as an injection, and it lost coverage (#270). `RateLimitIT` verifies the control itself; the prod profile still refuses `enabled: false`.
 - **Identities:** `compliance.admin` and `alpha.analyst`, each on its own stack built from the commit. The stack is set up by `.github/scripts/dast-app.sh` and seeded by `DastSessionIT`, which runs only in the scan, not in `./mvnw verify`.
 - **The verdict:** `.github/scripts/dast-zap.sh` runs the scan and `.github/scripts/dast-verdict.sh` decides.
-  - In a release, a partial scan also fails: an active scan cut off at its cap, or a plan stopped by a High insight.
+  - In a release, a partial scan also fails: either active scan cut off at its cap or not shown completing in `zap.log`, or a plan stopped by a High insight.
   - In nightly, a partial scan only warns.
 - **Pinned on every PR:**
-  - `ZapPlanTest`: the gate, the crawl caps, the API import and every suppression's justification, review and expiry;
-  - `DastVerdictTest`: the verdict policy;
+  - `ZapPlanTest`: the gate, the crawl caps, the API import, the two active scans (order, input vectors, caps, and the `trailkeep-forms` context equal to the description's application paths without the `.csv` downloads) and every suppression's justification, review and expiry;
+  - `DastVerdictTest`: the verdict policy, for each active scan;
   - `OpenApiCoverageTest`: the description against every mapped operation.
 - **Suppressions** (`security/zap/suppressions.yaml`). Each needs a justification, the reviewing PR and an expiry at most 90 days out. An expired entry stops suppressing.
 
 | Rule | Where | Reviewed in | Expires |
 |---|---|---|---|
-| `zap:90035` SSTI | `/cases` | #225 | 2027-02-14 |
-| `zap:40014` persistent XSS | `/cases/export.csv` | #225 | 2027-02-14 |
 | `zap:40018` SQL injection | `/admin/sla-policies/{id}` | #225 | 2027-02-14 |
 | `zap:40042` Spring Actuator information leak | `localhost:8081/actuator/health` | #233 | 2027-02-14 |
+| `zap:90035` Server Side Template Injection | `POST /admin/{case-types,sla-policies,teams}[/{id}]` | #283 | 2027-02-20 |
 
-90035 and 40014 share a root cause, ZAP's own stored payloads (#231). Its fix is due before their expiry.
+The suppressions of rule 90035 (SSTI, `/cases`) and rule 40014 (persistent XSS, `/cases/export.csv`) were removed in #231, with the split active scan described above: their cause was ZAP's own stored payloads. A narrower 90035 entry remains for the three admin configuration forms, where the forms scan reads its own stored payload back from each form's own list page; no scan ordering can separate the two (owner-approved, 2026-11-22).
 
 ## Gaps
 

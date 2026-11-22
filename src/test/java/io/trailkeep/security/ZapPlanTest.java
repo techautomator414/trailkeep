@@ -34,6 +34,9 @@ class ZapPlanTest {
 
     private static final Path PLAN = Path.of("security/zap/plan.yaml");
     private static final Path SUPPRESSIONS = Path.of("security/zap/suppressions.yaml");
+    private static final Path OPENAPI = Path.of("security/zap/openapi.yaml");
+    private static final String FORMS = "trailkeep-forms";
+    private static final String APPLICATION = "http://localhost:8080";
     private static final Pattern PULL_REQUEST =
             Pattern.compile("https://github\\.com/techautomator414/trailkeep/pull/[0-9]+");
     private static final int MAX_DAYS = 90;
@@ -102,9 +105,13 @@ class ZapPlanTest {
                 .isNotEmpty()
                 .allSatisfy(job -> assertThat(job).containsEntry("alwaysRun", true));
         assertThat(jobs)
-                .filteredOn(job -> List.of("spider", "spiderAjax", "activeScan").contains(job.get("type")))
-                .hasSize(3)
+                .filteredOn(job -> List.of("spider", "spiderAjax").contains(job.get("type")))
+                .hasSize(2)
                 .allSatisfy(job -> assertThat(map(job.get("parameters"))).containsEntry("context", "trailkeep"));
+        assertThat(jobs)
+                .filteredOn(job -> "activeScan".equals(job.get("type")))
+                .extracting(job -> map(job.get("parameters")).get("context"))
+                .containsExactly("trailkeep", FORMS);
         assertThat(jobs)
                 .filteredOn(job -> "spiderAjax".equals(job.get("type")))
                 .singleElement()
@@ -132,6 +139,97 @@ class ZapPlanTest {
                 .satisfies(job -> assertThat(map(job.get("parameters")))
                         .containsEntry("source", "sitestree")
                         .containsEntry("fileName", "/zap/wrk/reports/sites-tree.yaml"));
+    }
+
+    /**
+     * The form bodies are attacked last (#231). Rules that find a payload an earlier rule stored through a form, shown
+     * back escaped, took it as proof of template injection on the cases list and of stored XSS in the CSV export. So
+     * the active scan runs twice: first every route with no form body attacked, then, last of all scanning jobs, the
+     * form bodies of the POST paths, over the application without its CSV downloads, with no query string attacked.
+     * Each part's input vectors come from the activeScan-config job just before it, which sets nothing else (no
+     * exclusions, no scanner options); the two caps add up to the single scan's 120 minutes.
+     */
+    @Test
+    void theFormBodiesAreAttackedLastInTheirOwnScan() throws IOException {
+        List<Map<String, Object>> jobs = list(load(PLAN).get("jobs"));
+        List<Object> types = jobs.stream().map(job -> job.get("type")).toList();
+        int first = types.indexOf("activeScan");
+        int last = types.lastIndexOf("activeScan");
+        assertThat(types.stream().filter("activeScan"::equals)).hasSize(2);
+        assertThat(types.subList(last + 1, types.size()))
+                .doesNotContainAnyElementsOf(List.of("spider", "spiderAjax", "openapi", "activeScan-config"));
+
+        Map<String, Object> pages = inputVectors(jobs.get(first - 1));
+        assertThat(map(pages.get("postData"))).containsOnly(Map.entry("enabled", false));
+        assertThat(pages).containsOnlyKeys("postData");
+        Map<String, Object> forms = inputVectors(jobs.get(last - 1));
+        assertThat(map(forms.get("urlQueryStringAndDataDrivenNodes"))).containsOnly(Map.entry("enabled", false));
+        assertThat(map(forms.get("postData"))).containsEntry("enabled", true).doesNotContainValue(false);
+        assertThat(forms).containsOnlyKeys("urlQueryStringAndDataDrivenNodes", "postData");
+
+        List<Map<String, Object>> scans = List.of(
+                map(jobs.get(first).get("parameters")), map(jobs.get(last).get("parameters")));
+        assertThat(scans)
+                .allSatisfy(scan -> assertThat(scan)
+                        .containsEntry("maxRuleDurationInMins", 5)
+                        .hasEntrySatisfying(
+                                "maxScanDurationInMins",
+                                minutes -> assertThat((Integer) minutes).isPositive()));
+        assertThat(scans.stream()
+                        .mapToInt(scan -> (Integer) scan.get("maxScanDurationInMins"))
+                        .sum())
+                .isLessThanOrEqualTo(120);
+    }
+
+    /**
+     * The second active scan's context is the application without its CSV downloads, as the API description (which
+     * {@link OpenApiCoverageTest} keeps equal to what the application serves) lists them. Every POST path must be in
+     * it, or its form body is attacked by neither scan; every page must be in it, since a stored payload can show up on
+     * any of them; and only the {@code .csv} downloads are left out: attachments never rendered, where the stored-XSS
+     * rule would find a case title verbatim by design. ZAP matches a context by path, as here; the Automation Framework
+     * includes everything under each of the context's {@code urls}, so they count as include paths. The sign-in and
+     * sign-out paths are excluded from both contexts.
+     */
+    @Test
+    void theFormsContextIsTheApplicationWithoutItsCsvDownloads() throws IOException {
+        List<Map<String, Object>> contexts = list(map(load(PLAN).get("env")).get("contexts"));
+        Map<String, Object> all = contexts.getFirst();
+        Map<String, Object> forms = contexts.stream()
+                .filter(context -> FORMS.equals(context.get("name")))
+                .findFirst()
+                .orElseThrow();
+        List<String> excludes = strings(forms.get("excludePaths"));
+        assertThat(excludes).containsAll(strings(all.get("excludePaths")));
+        List<String> includes = new ArrayList<>(strings(forms.get("includePaths")));
+        strings(forms.get("urls")).forEach(url -> includes.add(Pattern.quote(url) + ".*"));
+
+        List<String> wrong = new ArrayList<>();
+        for (Map.Entry<String, Object> path : map(load(OPENAPI).get("paths")).entrySet()) {
+            Map<String, Object> item = map(path.getValue());
+            String server = item.containsKey("servers")
+                    ? String.valueOf(list(item.get("servers")).getFirst().get("url"))
+                    : APPLICATION;
+            String url = server + path.getKey().replaceAll("\\{[^}]+}", "1");
+            boolean expected = server.equals(APPLICATION)
+                    && !matchesAny(strings(all.get("excludePaths")), url)
+                    && !path.getKey().endsWith(".csv");
+            boolean inForms = matchesAny(includes, url) && !matchesAny(excludes, url);
+            if (expected != inForms) {
+                wrong.add(path.getKey() + (expected ? ": missing from " : ": wrongly in ") + FORMS);
+            }
+        }
+        assertThat(wrong).isEmpty();
+    }
+
+    private static boolean matchesAny(List<String> regexes, String url) {
+        return regexes.stream()
+                .anyMatch(regex -> Pattern.compile(regex).matcher(url).matches());
+    }
+
+    private static Map<String, Object> inputVectors(Map<String, Object> job) {
+        assertThat(job).containsEntry("type", "activeScan-config");
+        assertThat(job).doesNotContainKeys("parameters", "excludePaths");
+        return map(job.get("inputVectors"));
     }
 
     @Test

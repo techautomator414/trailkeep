@@ -6,7 +6,7 @@
 # started (WP-28 parts c, d and e), with security/zap/openapi.yaml filled in for the plan's API import, then:
 #   - copies ZAP's own zap.log next to the reports, and removes the session value and its CSRF token from all of them
 #     before upload;
-#   - lists every alert of Medium or higher in the job summary, with the active scan's duration and the peak heap;
+#   - lists every alert of Medium or higher in the job summary, with each active scan's duration and the peak heap;
 #   - hands what it read to dast-verdict.sh, which decides pass or fail (in release, a partial scan fails; in
 #     nightly, it warns) and is unit-tested by DastVerdictTest.
 # ZAP runs with an explicit heap ($ZAP_HEAP, default 6g) instead of a quarter of the runner's memory, and with
@@ -95,26 +95,41 @@ if [ -s "${report}" ]; then
   gating="$(jq '[.site[].alerts[] | select((.riskcode | tonumber) >= 2 and .confidence != "0")] | length' "${report}")"
   stopped="$(jq -r '.stoppingInsight // empty | "\(.key) at \(.statistic) (\(.reason))"' "${report}")"
 fi
-# The scanner logs "completed host <site> in <seconds>s" for each host when it ends, whether it finished or reached its
-# cap. The context scans two hosts, the application and its management server: the scan's time is the longer one,
-# and a host with no completion means no completion for the scan.
+# The plan's active scan runs as several activeScan jobs, each with its own context and cap (#231). Each job's part of
+# zap.log runs from its "Job activeScan started" line to the next job's. There, the scanner logs "completed host <site>
+# in <seconds>s" for each host of the job's context when it ends, whether it finished or reached its cap: the job's
+# time is the longest, and a host with no completion means no completion for the job ("-"). When the scanner overruns
+# its cap, the Automation Framework terminates the job itself and the scanner logs no completion: that is a cut-off
+# job too. dast-verdict.sh gets one time and one cap per job, in plan order.
 active=""
-for host in $(yq '.env.contexts[0].urls[] | capture("^(?P<host>https?://[^/]+)").host' security/zap/plan.yaml); do
-  seconds="$({ grep -o -E "completed host ${host} in [0-9.]+s" "${work}/zap.log" || true; } \
-    | tail -1 | sed -E 's/.* in ([0-9.]+)s/\1/')"
-  if [ -z "${seconds}" ]; then
-    active="none"
-  elif [ "${active}" != "none" ]; then
-    active="$(printf '%s\n%s\n' "${active:-0}" "${seconds}" | sort -g | tail -1)"
+cap=""
+times=""
+part="$(mktemp)"
+count="$(yq '[.jobs[] | select(.type == "activeScan")] | length' security/zap/plan.yaml)"
+for ((job = 0; job < count; job++)); do
+  context="$(yq "[.jobs[] | select(.type == \"activeScan\")][${job}].parameters.context" security/zap/plan.yaml)"
+  limit="$(yq "[.jobs[] | select(.type == \"activeScan\")][${job}].parameters.maxScanDurationInMins * 60" \
+    security/zap/plan.yaml)"
+  awk -v job="$((job + 1))" '/Job activeScan started/ { started++ } started == job' "${work}/zap.log" > "${part}"
+  longest=""
+  for host in $(context="${context}" yq '.env.contexts[] | select(.name == strenv(context)) | .urls[]
+      | capture("^(?P<host>https?://[^/]+)").host' security/zap/plan.yaml | sort -u); do
+    seconds="$({ grep -o -E "completed host ${host} in [0-9.]+s" "${part}" || true; } \
+      | tail -1 | sed -E 's/.* in ([0-9.]+)s/\1/')"
+    if [ -z "${seconds}" ]; then
+      longest="-"
+    elif [ "${longest}" != "-" ]; then
+      longest="$(printf '%s\n%s\n' "${longest:-0}" "${seconds}" | sort -g | tail -1)"
+    fi
+  done
+  if grep -q -F 'Job activeScan terminated' "${part}"; then
+    longest="${limit}"
   fi
+  active="${active:+${active} }${longest:--}"
+  cap="${cap:+${cap} }${limit}"
+  times="${times:+${times}; }$((job + 1)) of ${count} (${context}) ${longest:--} s of a ${limit} s cap"
 done
-[ "${active}" = "none" ] && active=""
-cap="$(yq '.jobs[] | select(.type == "activeScan") | .parameters.maxScanDurationInMins * 60' security/zap/plan.yaml)"
-# When the scanner overruns its cap, the Automation Framework terminates the job itself and the scanner logs no
-# completion: that is a cut-off scan too.
-if grep -q -F 'Job activeScan terminated' "${work}/zap.log"; then
-  active="${cap}"
-fi
+rm -f "${part}"
 skipped="$({ grep -c -F 'skipped plugin [exceeded max rule time]' "${work}/zap.log" || true; })"
 peak="$(sort -n "${work}/heap-samples.txt" | tail -1)"
 
@@ -128,7 +143,7 @@ peak="$(sort -n "${work}/heap-samples.txt" | tail -1)"
     jq -r '.site[].alerts[] | select(.confidence == "0")
       | "- suppressed (security/zap/suppressions.yaml): \(.name) (rule \(.pluginid))"' "${report}"
   fi
-  echo "Active scan: ${active:-no completion in zap.log} s of a ${cap} s cap. Peak heap in use: $((${peak:-0} / 1024)) MiB of ${heap}."
+  echo "Active scans (\"-\": no completion in zap.log): ${times}. Peak heap in use: $((${peak:-0} / 1024)) MiB of ${heap}."
 } >> "${GITHUB_STEP_SUMMARY:-/dev/stdout}"
 
 bash "$(dirname "$0")/dast-verdict.sh" "${mode}" "${identity}" "${still}" "${status}" "${written}" "${gating}" \

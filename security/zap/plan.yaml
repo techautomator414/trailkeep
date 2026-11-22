@@ -23,6 +23,28 @@ env:
         - "http://localhost:8080/logout"
         - "http://localhost:8080/oauth2/.*"
         - "http://localhost:8080/login/.*"
+    # The second active scan's routes (#231): the application without its CSV downloads. That scan attacks the form
+    # bodies of the POST paths only after the first has attacked every page, so no rule there finds a payload an
+    # earlier rule stored through a form and shown back escaped (a team or case type named zj{{41120|add:69330}}zj in
+    # the cases filter options, read as template injection). It attacks no query string, so the pages are here as the
+    # places a stored payload can show up: the stored-XSS and template-injection rules look for their payloads on every
+    # page of the context. The CSV downloads are not such places: they are attachments with nosniff, never rendered,
+    # and carry titles and names verbatim by design (formula cells defused), so a case titled with a script tag would
+    # read as stored XSS there. The first scan attacks them with every rule. ZapPlanTest keeps the context equal to the
+    # description's application paths without the .csv ones.
+    - name: trailkeep-forms
+      urls:
+        - http://localhost:8080/
+      includePaths:
+        - "http://localhost:8080.*"
+      excludePaths:
+        - "http://localhost:8080/logout"
+        - "http://localhost:8080/oauth2/.*"
+        - "http://localhost:8080/login/.*"
+        - "http://localhost:8080/cases/export\\.csv"
+        - "http://localhost:8080/reports/(aging|compliance)\\.csv"
+        - "http://localhost:8080/reports/runs/[^/]+\\.csv"
+        - "http://localhost:8080/admin/audit/export\\.csv"
   parameters:
     failOnError: true
     failOnWarning: false
@@ -79,11 +101,41 @@ jobs:
     parameters:
       maxDuration: 10
 
+  # The active scan runs in two parts (#231), each configured by the activeScan-config job before it (which sets the
+  # input vectors for the active scans that follow, starting from ZAP's defaults each time). Their caps add up to the
+  # one 120-minute cap the single scan had.
+  # 1. Every page and route of the application and the management port, with every rule, but no form body attacked:
+  #    query strings and the requests themselves only, so nothing the scan sends stores a payload yet.
+  - type: activeScan-config
+    inputVectors:
+      postData:
+        enabled: false
+
   - type: activeScan
     parameters:
       context: trailkeep
       maxRuleDurationInMins: 5
-      maxScanDurationInMins: 120
+      maxScanDurationInMins: 60
+
+  # 2. Last, the form bodies of every POST, with every rule, over the trailkeep-forms context, and no query string,
+  #    which the first part attacked. GWT and DWR bodies stay enabled as in ZAP's own defaults, so the second part's
+  #    input vectors are exactly the body vectors the single scan had.
+  - type: activeScan-config
+    alwaysRun: true
+    inputVectors:
+      urlQueryStringAndDataDrivenNodes:
+        enabled: false
+      postData:
+        enabled: true
+        googleWebToolkit: true
+        directWebRemoting: true
+
+  - type: activeScan
+    alwaysRun: true
+    parameters:
+      context: trailkeep-forms
+      maxRuleDurationInMins: 5
+      maxScanDurationInMins: 60
 
   - type: passiveScan-wait
     alwaysRun: true

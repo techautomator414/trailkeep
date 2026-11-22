@@ -125,6 +125,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Security
 
+- The DAST scan no longer reports most of ZAP's own stored payloads as findings, and its suppressions are narrower
+  (#231). The
+  active scan attacked admin and case forms early, storing team, case type and case names that were its own payloads;
+  later rules found them, shown escaped, and took them as proof: template injection on the cases list (90035) and
+  stored XSS in the CSV export (40014), both suppressed until 2027-02-14. `security/zap/plan.yaml` now runs the active
+  scan in two parts, each with its input vectors set by an `activeScan-config` job: every route with no form body
+  attacked, then, last, the form bodies of every POST path with no query string attacked (60-minute caps each, adding
+  up to the single scan's 120). The second part runs over a new `trailkeep-forms` context, the application without its
+  five CSV downloads, so every page is still checked for a stored payload; the CSV downloads are attachments with
+  nosniff, never rendered, that carry titles verbatim by design, and the first part attacks them with every rule. The
+  40014 entry and the `/cases` 90035 entry are removed from `security/zap/suppressions.yaml`. A narrower 90035 entry
+  replaces the latter, for the create and edit POSTs of the case-type, SLA-policy and team forms only: the second part
+  stores a payload-named entry through such a form and reads it back, escaped, from that form's own list page, which
+  no ordering of the scan can separate (reviewed in #283, expires 2027-02-20). 40018 and 40042 have other causes and
+  stay. `dast-zap.sh` reads each scan's completion from its own part of `zap.log`, and `dast-verdict.sh` treats either
+  one cut off or missing as a partial scan (a failure in release). `ZapPlanTest` pins the order, the input vectors and
+  the caps, and keeps the forms context equal to the API description's application paths without the `.csv` ones;
+  `DastVerdictTest` covers each scan's cut-off.
 - Hardening follow-ups from the threat model (#276): the prod mail properties now set
   `mail.smtp.ssl.checkserveridentity: true` explicitly (JavaMail defaults to false), pinned by `MailStartTlsTest` on the
   real `JavaMailSenderImpl` session; a `TrailkeepPurgeNotSucceeding` alert in the optional Prometheus rules fires when

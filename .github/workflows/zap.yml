@@ -15,9 +15,10 @@
 #     writes the identity's SESSION cookie, its CSRF token and the data set's identifiers to target/dast (never
 #     uploaded);
 #   - ZAP, pinned by digest, runs security/zap/plan.yaml with that cookie: the crawl, then the hand-written API
-#     description security/zap/openapi.yaml, then the active scan of both. It fails on any alert of Medium or higher
-#     that security/zap/suppressions.yaml does not suppress (every entry carries a reviewed justification and an
-#     expiry).
+#     description security/zap/openapi.yaml, then the active scan of both, in two parts: every route with no form body
+#     attacked, then the POST paths' form bodies last (#231), with every page but the CSV downloads checked for stored
+#     payloads. It fails on any alert of Medium or higher that security/zap/suppressions.yaml does not suppress (every
+#     entry carries a reviewed justification and an expiry).
 # No secret is used: the job token reads the repository and nothing else.
 name: zap
 

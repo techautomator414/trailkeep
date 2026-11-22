@@ -14,32 +14,6 @@
 #   reviewed:      that approval's date (YYYY-MM-DD)
 #   expires:       at most 90 days after reviewed; an expired entry stops suppressing and the alert fails again
 suppressions:
-  - ruleId: 90035
-    url: '^http://localhost:8080/cases(\?.*)?$'
-    justification: >-
-      Server Side Template Injection (High) on GET /cases with a filters payload such as zj{{21180|add:48150}}zj, in
-      nightly run 43872426475, is a false positive. The page ZAP took as proof, /cases?filters=1, lists case types,
-      teams and owners as filter options, and earlier in the same scan ZAP had created entries through the admin
-      forms whose names are its own payloads (zj{{41120|add:69330}}zj, a th:text expression). Those names are shown
-      as escaped literal text and never evaluated; ZAP found its expected number as an operand inside one of its own
-      stored payloads. The options are rendered with th:text, which escapes them, no template uses th:utext, and no
-      user value is ever parsed as a template.
-    reviewedIn: https://github.com/techautomator414/trailkeep/pull/225
-    reviewed: 2026-11-16
-    expires: 2027-02-14
-  - ruleId: 40014
-    url: '^http://localhost:8080/cases/export\.csv(\?.*)?$'
-    justification: >-
-      Cross Site Scripting (Persistent, High, Medium confidence) on GET /cases/export.csv, parameter title, in the
-      #225 proof run 43926027838 (alpha.analyst), is a false positive. ZAP stored a script tag as a case title through
-      the case form and found it in the CSV export, which carries case titles verbatim by design. The export is
-      served as text/csv with Content-Disposition attachment and X-Content-Type-Options nosniff
-      (CaseExportController), so no browser renders it as HTML; ZAP itself reported no evidence in the response.
-      Every HTML page that shows the title escapes it (th:text). Proposed by the builder in #225 for the release
-      manager's review.
-    reviewedIn: https://github.com/techautomator414/trailkeep/pull/225
-    reviewed: 2026-11-16
-    expires: 2027-02-14
   - ruleId: 40042
     url: '^http://localhost:8081/actuator/health$'
     justification: >-
@@ -66,3 +40,17 @@ suppressions:
     reviewedIn: https://github.com/techautomator414/trailkeep/pull/225
     reviewed: 2026-11-16
     expires: 2027-02-14
+  - ruleId: 90035
+    url: '^http://localhost:8080/admin/(case-types|sla-policies|teams)(/\d+)?$'
+    justification: >-
+      Server Side Template Injection on the create and edit POSTs of the three admin configuration forms, in release
+      run 44968375979 (compliance.admin, POST /admin/case-types, parameter slaPolicyId), is a false positive from ZAP's
+      own stored payload. Earlier in the same forms scan an attack on the name field created a case type named
+      zj{{47320|add:85600}}zj; the SSTI rule then found its expected 47320 as an operand inside that stored name on
+      GET /admin/case-types. Names on these list pages render escaped through th:text (case-types.html,
+      sla-policies.html, teams.html), no template uses th:utext, and no user value is parsed as a template. No ordering
+      of the active scans can separate a form from its own list page. Scoped to those three forms only; the /cases
+      entry it replaces is removed in #231.
+    reviewedIn: https://github.com/techautomator414/trailkeep/pull/283
+    reviewed: 2026-11-22
+    expires: 2027-02-20
