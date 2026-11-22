@@ -171,7 +171,7 @@ The links in the verification column go to the TEST_MAP section that names the c
 
 | # | Threat | Control | Verified by | Residual |
 |---|---|---|---|---|
-| 5.1 | S/I: a fake relay, or mail read on the wire | STARTTLS required in `prod`; the server's identity is checked by Angus Mail's default (`mail.smtp.ssl.checkserveridentity`, true in 2.0.5) | [Transport]: `MailStartTlsTest` (STARTTLS); none for the identity check | The identity check is a library default, not pinned by a test ([RR-18](#residual-risks)) |
+| 5.1 | S/I: a fake relay, or mail read on the wire | STARTTLS required in `prod`; the relay's certificate must name the host it was reached by (`mail.smtp.ssl.checkserveridentity: true`, set explicitly in `application-prod.yml` since #276) | [Transport]: `MailStartTlsTest` (STARTTLS and the identity check) | None known ([RR-18](#residual-risks), closed) |
 | 5.2 | I: mail carries case content to a mailbox outside Trailkeep | mails carry the case number, title, due date, names and a link only; never a description, subject, comment, message or closure summary | [Injection]: `MailTemplatesTest`; [Privacy]: `ClosureRequestIT`, `NotificationServiceIT`; [Logging]: `LoggingRulesIT` | Titles go out ([RR-9](#residual-risks)) |
 | 5.3 | T: a link in a mail sends people elsewhere (phishing through the template) | links only into the application; values escaped | [Privacy]: `NotificationServiceIT`; [Injection]: `MailTemplatesTest` | None known |
 | 5.4 | D: the relay is down | the outbox queues and retries; alerts TrailkeepMailNotSending, TrailkeepMailBacklog and TrailkeepMailFailed | none | Delayed mail, not lost |
@@ -184,7 +184,7 @@ The links in the verification column go to the TEST_MAP section that names the c
 | 6.2 | T: purge deletes a case under legal hold or not yet due | each chunk re-read `FOR UPDATE` with every condition, so a hold placed meanwhile wins; grants allow only the tombstone `UPDATE` of four `CASE_RECORD` columns and deletes of case content | [SoD]: `PurgeIT`, `LegalHoldIT`, `PostgresDatabaseGrantsIT`; [Privacy]: `ArchiveJobIT` | None known |
 | 6.3 | R: what a purge removed is unknown | one `CASE_PURGED` audit row per case with the counts of what went | [SoD]: `PurgeIT` | None known |
 | 6.4 | I/E: the purge pod reaches more than it needs | `purge` profile starts no web application, registers no OIDC client, sends no mail; egress to DNS and the database only | [SoD]: `PurgeProfileIT`, `PurgeCronJobManifestTest` | It keeps the `clamav-ca` mount (TEST_MAP [SoD]) |
-| 6.5 | D: retention is never enforced | the CronJob ships suspended until retention is enabled; its last success is in `JOB_RUN` and on the System screen | none | No alert when the purge stops running ([RR-14](#residual-risks)) |
+| 6.5 | D: retention is never enforced | the CronJob ships suspended until retention is enabled; its last success is in `JOB_RUN` and on the System screen; once it is unsuspended, the optional `TrailkeepPurgeNotSucceeding` rule fires after 36 hours without a success (#276) | [Availability]: `ManagementEndpointsIT` (the rule ships) | The alert needs the optional rules component and kube-state-metrics ([RR-14](#residual-risks)) |
 
 ### TB7: the migration Job
 
@@ -246,11 +246,11 @@ process) or **platform** (the database, cluster, storage or secret store).
 | RR-11 | ClamAV signatures are as fresh as the image; clamd accepts any admitted pod (no mTLS); `external` mode stores files `NOT_SCANNED` and relies on the organization's own scanner. | deployer | Position: ADR-0012, ADR-0013 |
 | RR-12 | Transport beyond the edge depends on the deployment: router-to-pod is plain HTTP unless re-encrypted; database TLS is the JDBC URL (TEST_MAP [Gaps] 9); `APP_PROXY_PATTERN` must match the router only. | deployer | Position: TEST_MAP [Gaps] 9 |
 | RR-13 | The import credential can write domain rows directly and read every mapped table; staging outlives its TTL by up to one schedule interval, or indefinitely if the TTL CronJob is deleted early; the content claim must be encrypted at rest; the importer's plain SHA-256 mapping hash awaits review (TEST_MAP [Gaps] 23). | deployer, project | Position: importer design §10, N-j |
-| RR-14 | The purge CronJob ships suspended and no alert fires when it stops succeeding; the System screen shows it as unchecked. | deployer, project | Open |
+| RR-14 | The purge CronJob ships suspended, so retention is enforced only once an overlay enables it. `TrailkeepPurgeNotSucceeding` (#276) then fires when it has not succeeded for 36 hours, but only where the optional Prometheus rules and kube-state-metrics are deployed; the System screen shows the purge as unchecked. | deployer | Open |
 | RR-15 | Supply chain: SonarCloud and Dependency-Check skipped (#30); no admission policy ships, so the deployer must verify the signature and pin the digest; a compromised maintainer account or tag yields a validly signed image, which then runs with schema-owner rights in the migration Job. | project, deployer | Tracked: #30 |
 | RR-16 | Personal data is not erasable on request: users are disabled, never deleted; name snapshots stay in the audit trail; mail rows stay unless their case is purged or their report run expires. | deployer (privacy policy) | Open |
 | RR-17 | Application and router logs are stored and retained by the platform. | platform | Position: BUILD_PLAN §9 |
-| RR-18 | The SMTP server identity check relies on the mail library's default, which no test pins. | project | Open |
+| RR-18 | The SMTP server identity check relied on the mail library's default, which no test pinned. | project | Closed: set explicitly in `prod` and pinned by `MailStartTlsTest` (#276) |
 | RR-19 | The management port relies on the overlay's monitoring namespace label and on NetworkPolicy enforcement. | deployer | Open |
 
 ## Re-check cadence
@@ -268,6 +268,7 @@ by `SecurityTestMapTest`), and updates the residual risks.
 |---|---|---|---|
 | 2026-11-21 | Phase 5 (before the Phase 6 gate) | `b3f418b` | First version (#248) |
 | 2026-11-22 | Phase 5 | `8d09078` | The Compliance Admin audit screen and export (#274): the export half of RR-8 resolved; DATA_MAP "Audit" and "Exports" updated |
+| 2026-11-22 | 0.3.0 release prep | `369b889` | #276's purge alert and SMTP identity test (#282): RR-14 narrowed, RR-18 closed, threats 5.1 and 6.5 updated |
 
 [IA]: TEST_MAP.md#identity-ia
 [AC]: TEST_MAP.md#authorization-ac
