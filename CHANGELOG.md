@@ -7,6 +7,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- Image builds that are scanned but never published resolve their dependencies offline (#290). Central's long 429
+  windows, and a brief not-found for a file that exists (`spring-boot-starter-parent:pom:4.1.2`), failed main's image
+  build inside `docker build`, where the whole tree was resolved cold. `build-image.sh` now takes a dependency mode:
+  - `offline` (main.yml's image job, zap.yml's scan image): the runner builds the jar itself through the job's own
+    `~/.m2` cache (issue 252; main.yml's image job gains Temurin and that cache), copies the repository into the build
+    context as `target/image/m2-seed`, and the Containerfile runs Maven `-o` against it. Central's hosts resolve to
+    127.0.0.1 inside the build, so the build proves it needs no network for dependencies. CycloneDX's goals declare
+    `requiresOnline`, so these scanned images carry no embedded `META-INF/sbom/application.cdx.json`; the published
+    image, built cold, keeps it, and neither Trivy's image scan nor main.yml's SBOM gate reads that file.
+  - `cold`, the default, and what release.yml asks for: the published image resolves every dependency from Central,
+    as before, and a cold build deletes any seed left in the workspace (#230's rule: no cached repository contents in a
+    published artefact).
+  `.mvn/maven.config` raises the resolver retry for the cold paths (release verify, the release image, CI jobs on a
+  cache miss) from 6 retries of up to 60 s to 10 of up to 120 s. `ImageBuildDependenciesTest` pins the modes.
+
 ### Added
 
 - An audit trail screen for Compliance Admins, `GET /admin/audit` (#274, BUILD_PLAN §3.2 "View audit across all

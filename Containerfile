@@ -47,10 +47,20 @@ RUN printf '%s\n' 'retry = 8' 'retry-max-time = 600' 'retry-all-errors' > "$HOME
 # (a plain local `docker build`) MVNW_REPOURL stays unset, the wrapper downloads from Central and the .curlrc above
 # applies. MVNW_REPOURL is only for the wrapper: it unsets it before starting Maven, so dependency downloads are
 # unchanged (resolver retry from .mvn/maven.config, cold). MVNW_VERBOSE makes the wrapper log where it fetched from.
+#
+# Issue 290: the dependencies themselves. For images that are scanned but never published (main.yml, zap.yml),
+# build-image.sh's offline mode puts the job's Maven repository in the context as target/image/m2-seed, and this step
+# then runs Maven offline (-o) against it: nothing is resolved from Central, which the build cannot reach anyway. With
+# no seed (release.yml's cold mode, or a local build) Maven resolves from Central as before. One difference: the
+# CycloneDX goals declare requiresOnline, so Maven skips them offline and these scanned images carry no embedded
+# META-INF/sbom/application.cdx.json. The published image is built cold and keeps it; Trivy's image scan reads the jars
+# in lib/, and the SBOM it gates on is main.yml's sbom job, both unaffected.
 RUN seed="$PWD/target/image/maven-seed" \
  && if [ -d "$seed" ]; then export MVNW_REPOURL="file://$seed"; fi \
+ && repository="$PWD/target/image/m2-seed" \
+ && if [ -d "$repository" ]; then offline="-o -Dmaven.repo.local=$repository"; else offline=""; fi \
  && MVNW_VERBOSE=true ./mvnw -B -ntp --version \
- && ./mvnw -B -ntp -DskipTests package \
+ && ./mvnw -B -ntp $offline -DskipTests package \
  && cp target/trailkeep-*.jar /home/default/app.jar \
  && java -Djarmode=tools -jar /home/default/app.jar extract --layers --destination /home/default/extracted
 

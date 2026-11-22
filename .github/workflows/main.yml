@@ -278,6 +278,26 @@ jobs:
       - name: Lint Kubernetes manifests
         run: kube-linter lint deploy/
 
+      - name: Set up Temurin 21
+        # build-image.sh's offline mode builds the jar on the runner first, to fill the Maven repository it seeds.
+        uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 # v6.2.0
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Restore the Maven repository and wrapper
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.m2/repository
+            ~/.m2/wrapper
+          # One cache per job (issue 244), as in the other jobs. This image is scanned, never published, so its build
+          # may resolve from this cache (issue 290); release.yml builds the published image cold.
+          key: maven-${{ runner.os }}-${{ github.job }}-${{ hashFiles('**/pom.xml', '.mvn/wrapper/maven-wrapper.properties') }}
+          restore-keys: |
+            maven-${{ runner.os }}-${{ github.job }}-
+            maven-${{ runner.os }}-
+
       - name: Restore the checksum-pinned Maven distribution for the image build
         # Only the zip pinned by distributionSha256Sum, never repository contents: build-image.sh verifies it before use
         # and downloads once if it is missing or does not match (issue 240). Exact key, no restore-keys.
@@ -286,8 +306,8 @@ jobs:
           path: target/image/maven-seed
           key: maven-seed-${{ hashFiles('.mvn/wrapper/maven-wrapper.properties') }}
 
-      - name: Build the image from digest-pinned UBI 9 bases
-        run: .github/scripts/build-image.sh "${IMAGE}" "0.0.0-main+${GITHUB_SHA::12}"
+      - name: Build the image from digest-pinned UBI 9 bases, resolving dependencies offline
+        run: .github/scripts/build-image.sh "${IMAGE}" "0.0.0-main+${GITHUB_SHA::12}" offline
 
       - name: Scan the image (fails on fixable HIGH or CRITICAL)
         # The JSON and SARIF reports keep every finding. The gate ignores vulnerabilities that have no fixed

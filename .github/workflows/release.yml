@@ -117,7 +117,9 @@ jobs:
         run: |
           set -euo pipefail
           version="${GITHUB_REF_NAME#v}"
-          .github/scripts/build-image.sh "${IMAGE}:${version}" "${version}"
+          # cold: the published image resolves every dependency from Maven Central, never from a cache (issues 230,
+          # 290). A 429 here is waited out by the resolver retry, or the release is re-run.
+          .github/scripts/build-image.sh "${IMAGE}:${version}" "${version}" cold
 
       - name: Scan the exact image that will be pushed (fails on fixable HIGH or CRITICAL)
         # Same policy as main.yml (issue #11): unfixed base-image findings are reported in the evidence pack,

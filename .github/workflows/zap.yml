@@ -96,8 +96,9 @@ jobs:
           path: target/image/maven-seed
           key: maven-seed-${{ hashFiles('.mvn/wrapper/maven-wrapper.properties') }}
 
-      - name: Build the image from digest-pinned UBI 9 bases
-        run: .github/scripts/build-image.sh "${IMAGE}" "0.0.0-dast+${GITHUB_SHA::12}"
+      - name: Build the image from digest-pinned UBI 9 bases, resolving dependencies offline
+        # The scan image is never published, in either mode, so it may resolve from this job's cache (issue 290).
+        run: .github/scripts/build-image.sh "${IMAGE}" "0.0.0-dast+${GITHUB_SHA::12}" offline
 
       - name: Start PostgreSQL, Keycloak, ClamAV and Mailpit
         run: docker compose up --detach --wait postgres keycloak mailpit clamav clamav-tls
