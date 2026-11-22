@@ -15,8 +15,8 @@ request text is a 400; search and upload are rate-limited per person; the import
 sources, and ADR-0014 is accepted; the STRIDE threat model and the data map are written, with their hardening
 follow-ups; the purge CronJob gets its own egress policy and manifest tests; the published image is verified before its
 GitHub Release; Compliance Admins get an audit trail screen with an audited CSV export; the importer's staging TTL runs
-on a schedule; two concurrency 500s are fixed; the DAST scan attacks form bodies last, so two suppressions of ZAP's
-own stored payloads are gone; and the image builds no longer fail on Maven Central's rate limits.
+on a schedule; two concurrency 500s are fixed; the DAST scan attacks form bodies last, so its suppressions of ZAP's
+own stored payloads are removed or narrowed; and the image builds no longer fail on Maven Central's rate limits.
 WP-29 (the Section 508 conformance pass) and WP-30 (the evidence pack and 1.0.0) remain. `HANDOFF.md` records the
 state and the open issues.
 

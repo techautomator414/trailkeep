@@ -33,7 +33,7 @@ and keeps an evidence-grade history.
 > - **Security:** every configured-but-untested control of the security test map is now tested; a control character in
 >   any request text is a 400; search and upload are rate-limited per person; the importer requires verified TLS from
 >   its JDBC sources (ADR-0014 accepted); the SMTP relay's identity is checked; the DAST scan attacks form bodies last,
->   which removed two suppressions.
+>   which removed two suppressions and left one narrower entry, expiring 2027-02-20.
 > - **Documents:** the STRIDE threat model ([`security/THREAT_MODEL.md`](security/THREAT_MODEL.md)) and the data map
 >   ([`security/DATA_MAP.md`](security/DATA_MAP.md)).
 > - **Operations:** an audit trail screen for Compliance Admins with an audited CSV export; the importer's staging TTL
