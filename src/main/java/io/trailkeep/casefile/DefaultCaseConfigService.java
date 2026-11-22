@@ -102,6 +102,15 @@ class DefaultCaseConfigService implements CaseConfigService {
     @Override
     public long saveCaseType(Actor actor, @Nullable Long id, CaseTypeCommand command) {
         requireComplianceAdmin(actor);
+        // The row lock comes first, before the name check and before any outcome is touched: a concurrent save of the
+        // same type queues here. Taken later, one save held FOR UPDATE for the name update while the other deleted
+        // outcomes and ran the foreign key's share check on that row, and PostgreSQL deadlocked them (issue 284).
+        CaseType caseType = id == null
+                ? null
+                : caseTypes
+                        .findLockedById(id)
+                        .orElseThrow(() -> new CaseConfigException(Kind.NOT_FOUND, "no such type"));
+        final CaseTypeCommand before = caseType == null ? null : view(caseType).values();
         requireFreeName(caseTypes.findByName(command.name().strip()).map(CaseType::getId), id);
         if (policies.findById(command.slaPolicyId()).isEmpty()) {
             throw new CaseConfigException(Kind.INVALID, "unknown SLA policy");
@@ -111,8 +120,6 @@ class DefaultCaseConfigService implements CaseConfigService {
         if (new HashSet<>(cleanOutcomes).size() != cleanOutcomes.size()) {
             throw new CaseConfigException(Kind.INVALID, "outcomes must be distinct");
         }
-        CaseType caseType = id == null ? null : findCaseType(id);
-        final CaseTypeCommand before = caseType == null ? null : view(caseType).values();
         if (caseType == null) {
             caseType = caseTypes.save(new CaseType(command));
         } else {
