@@ -40,3 +40,17 @@ suppressions:
     reviewedIn: https://github.com/techautomator414/trailkeep/pull/225
     reviewed: 2026-11-16
     expires: 2027-02-14
+  - ruleId: 90035
+    url: '^http://localhost:8080/admin/(case-types|sla-policies|teams)(/\d+)?$'
+    justification: >-
+      Server Side Template Injection on the create and edit POSTs of the three admin configuration forms, in release
+      run 44968375979 (compliance.admin, POST /admin/case-types, parameter slaPolicyId), is a false positive from ZAP's
+      own stored payload. Earlier in the same forms scan an attack on the name field created a case type named
+      zj{{47320|add:85600}}zj; the SSTI rule then found its expected 47320 as an operand inside that stored name on
+      GET /admin/case-types. Names on these list pages render escaped through th:text (case-types.html,
+      sla-policies.html, teams.html), no template uses th:utext, and no user value is parsed as a template. No ordering
+      of the active scans can separate a form from its own list page. Scoped to those three forms only; the /cases
+      entry it replaces is removed in #231.
+    reviewedIn: https://github.com/techautomator414/trailkeep/pull/283
+    reviewed: 2026-11-22
+    expires: 2027-02-20

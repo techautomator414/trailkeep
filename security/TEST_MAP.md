@@ -287,8 +287,9 @@ All run as Playwright or HTTP tests against the real server inside `./mvnw verif
 |---|---|---|---|
 | `zap:40018` SQL injection | `/admin/sla-policies/{id}` | #225 | 2027-02-14 |
 | `zap:40042` Spring Actuator information leak | `localhost:8081/actuator/health` | #233 | 2027-02-14 |
+| `zap:90035` Server Side Template Injection | `POST /admin/{case-types,sla-policies,teams}[/{id}]` | #283 | 2027-02-20 |
 
-The suppressions of rule 90035 (SSTI, `/cases`) and rule 40014 (persistent XSS, `/cases/export.csv`) were removed in #231, with the split active scan described above: their cause was ZAP's own stored payloads.
+The suppressions of rule 90035 (SSTI, `/cases`) and rule 40014 (persistent XSS, `/cases/export.csv`) were removed in #231, with the split active scan described above: their cause was ZAP's own stored payloads. A narrower 90035 entry remains for the three admin configuration forms, where the forms scan reads its own stored payload back from each form's own list page; no scan ordering can separate the two (owner-approved, 2026-11-22).
 
 ## Gaps
 
