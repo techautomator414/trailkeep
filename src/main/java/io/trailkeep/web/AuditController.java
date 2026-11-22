@@ -51,6 +51,9 @@ class AuditController {
     /** Events a page. */
     static final int PAGE_SIZE = 50;
 
+    /** The highest page number accepted: six digits, so an offset never exceeds 49,999,950. */
+    static final int MAX_PAGE = 999_999;
+
     /** The most days one search covers; {@link AuditTrailService#MAX_RANGE} leaves room for a daylight-saving hour. */
     static final int MAX_DAYS = 31;
 
@@ -136,17 +139,17 @@ class AuditController {
         AuditFilter filter = new AuditFilter(
                 from.atStartOfDay(zone).toInstant(),
                 to.plusDays(1).atStartOfDay(zone).toInstant(),
-                blankToNull(form.actor()),
-                blankToNull(form.entity()),
-                blankToNull(form.action()),
+                form.actor().isEmpty() ? null : form.actor(),
+                form.entity().isEmpty() ? null : form.entity(),
+                form.action().isEmpty() ? null : form.action(),
                 caseId);
         int number = pageNumber(parameters.getFirst("page"));
-        AuditPage found = trail.search(scope, filter, (number - 1) * PAGE_SIZE, PAGE_SIZE);
-        int pages = (int) Math.min(Math.max(1, (found.total() + PAGE_SIZE - 1) / PAGE_SIZE), Integer.MAX_VALUE);
+        AuditPage found = trail.search(scope, filter, offset(number), PAGE_SIZE);
+        int pages = (int) Math.min(Math.max(1, (found.total() + PAGE_SIZE - 1) / PAGE_SIZE), MAX_PAGE);
         if (number > pages) {
             // A page past the end, perhaps from an old link: the last page instead.
             number = pages;
-            found = trail.search(scope, filter, (number - 1) * PAGE_SIZE, PAGE_SIZE);
+            found = trail.search(scope, filter, offset(number), PAGE_SIZE);
         }
         model.addAttribute("rows", found.records());
         model.addAttribute("caseNumbers", caseNumbers(actor, found.records()));
@@ -167,6 +170,14 @@ class AuditController {
                                 .toList())
                 .forEach((id, ref) -> numbers.put(id, ref.number().toString()));
         return numbers;
+    }
+
+    /** The rows before a page, checked against {@link #MAX_PAGE} where it is computed. */
+    private static int offset(int number) {
+        if (number < 1 || number > MAX_PAGE) {
+            throw new Invalid();
+        }
+        return Math.toIntExact(((long) number - 1) * PAGE_SIZE);
     }
 
     private static int pageNumber(@Nullable String requested) {
@@ -202,10 +213,6 @@ class AuditController {
             throw new Invalid();
         }
         return text;
-    }
-
-    private static @Nullable String blankToNull(String value) {
-        return value.isEmpty() ? null : value;
     }
 
     /** Anyone without the audit scope. */

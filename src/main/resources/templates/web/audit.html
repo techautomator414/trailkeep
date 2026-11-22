@@ -1,10 +1,7 @@
 <!DOCTYPE html>
 <!-- SPDX-License-Identifier: Apache-2.0 -->
-<!-- The audit trail for Compliance Admins (BUILD_PLAN §3.2, §9; #274). A plain GET form filters by a required range of
-     days, the actor, the entity type, the action and a case number; plain links page through, so nothing here needs a
-     script. A range problem is announced next to the dates (aria-invalid, aria-describedby). Each time is a <time>
-     element (UTC in datetime, app.timezone as text). A redacted value arrives as its length only and reads "redacted
-     (n characters)"; every other value is written with th:text, so it is escaped. -->
+<!-- The audit trail for Compliance Admins (#274): a plain GET form and links, no script. A redacted value arrives as
+     its length only; every other value is written with th:text, so it is escaped. -->
 <html lang="en" xmlns:th="http://www.thymeleaf.org" th:replace="~{web/layout :: page(~{::title}, ~{::main})}">
 <head><title th:text="#{tk.audit.title} + ' · ' + ${@branding.name()}">Audit trail</title></head>
 <body>

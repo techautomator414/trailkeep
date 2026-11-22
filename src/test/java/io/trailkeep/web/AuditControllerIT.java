@@ -211,6 +211,8 @@ class AuditControllerIT {
         mvc.perform(audit("2001-03-01", "2001-03-31").param("action", "LOGIN%"))
                 .andExpect(status().isUnprocessableContent());
         mvc.perform(audit("2001-03-01", "2001-03-31").param("page", "0")).andExpect(status().isUnprocessableContent());
+        mvc.perform(audit("2001-03-01", "2001-03-31").param("page", String.valueOf(AuditController.MAX_PAGE + 1)))
+                .andExpect(status().isUnprocessableContent());
         mvc.perform(audit("2001-03-01", "2001-03-31").param("actor", "x".repeat(201)))
                 .andExpect(status().isUnprocessableContent());
     }
