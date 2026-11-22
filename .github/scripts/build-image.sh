@@ -3,12 +3,30 @@
 # Copyright 2026 Charlie Genova and contributors
 #
 # Builds the Containerfile from base images pinned by digest at build time.
-# Usage: build-image.sh <image-ref> <version>
+# Usage: build-image.sh <image-ref> <version> [cold|offline]
 # Writes the resolved base digests to target/image/base-images.txt for the evidence pack.
+#
+# Dependencies (issue 290):
+#   cold     (the default, and what release.yml asks for) the image build resolves every dependency from Maven Central,
+#            with the resolver retry of .mvn/maven.config. No repository contents come from a cache into a published
+#            image (issue 230).
+#   offline  (main.yml, zap.yml: images that are scanned, never published) the runner first builds the jar itself,
+#            through the job's own ~/.m2 cache (issue 252), then copies that repository into the build context as
+#            target/image/m2-seed. The image build runs Maven offline against it and cannot reach Central at all: its
+#            hosts resolve to 127.0.0.1 inside the build. Central refusing or briefly not finding a file can no longer
+#            fail these builds.
 set -euo pipefail
 
 image_ref="$1"
 version="$2"
+mode="${3:-cold}"
+case "$mode" in
+  cold | offline) ;;
+  *)
+    echo "build-image.sh: dependency mode must be cold or offline, not '${mode}'" >&2
+    exit 2
+    ;;
+esac
 
 builder_repo="registry.access.redhat.com/ubi9/openjdk-21"
 runtime_repo="registry.access.redhat.com/ubi9/openjdk-21-runtime"
@@ -47,6 +65,18 @@ seed_maven_distribution() {
   return 1
 }
 
+# Offline mode only. The runner's `package` resolves exactly what the image build's `package` needs, from the job's
+# cache (and, on a cache miss, from Central with the resolver retry), so the copy is complete for an offline build.
+# The repository is named explicitly: Maven takes user.home from the account, not from $HOME, and the copy must be of
+# the repository this `package` filled, which is the one the job's cache step restores.
+seed_maven_repository() {
+  local repository="${HOME}/.m2/repository"
+  ./mvnw -B -ntp -Dmaven.repo.local="$repository" -DskipTests package
+  rm -rf target/image/m2-seed
+  cp -a "$repository" target/image/m2-seed
+  echo "Maven repository seed: $(du -sh target/image/m2-seed | cut -f1) from ${repository}"
+}
+
 resolve() {
   skopeo inspect --retry-times 3 --format '{{.Digest}}' "docker://$1:${base_tag}"
 }
@@ -64,10 +94,21 @@ mkdir -p target/image
 
 seed_maven_distribution
 
+offline_args=()
+if [ "$mode" = offline ]; then
+  seed_maven_repository
+  offline_args=(--add-host repo.maven.apache.org:127.0.0.1 --add-host repo1.maven.org:127.0.0.1)
+else
+  # A seed left by an earlier offline build in the same workspace must never reach a cold build's context.
+  rm -rf target/image/m2-seed
+  echo "Maven repository seed: none (cold build: dependencies come from Maven Central)"
+fi
+
 created="$(git log -1 --format=%cI)"
 
 docker build \
   --file Containerfile \
+  "${offline_args[@]}" \
   --build-arg "BUILDER_IMAGE=${builder_image}" \
   --build-arg "RUNTIME_IMAGE=${runtime_image}" \
   --build-arg "VERSION=${version}" \

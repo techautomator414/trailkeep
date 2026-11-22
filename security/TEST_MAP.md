@@ -205,6 +205,7 @@ The status column records what is in effect today, not what is planned.
 - **The image scanned by Trivy and checked by Dockle; manifests by kube-linter:** `.github/workflows/main.yml#image`.
 - **Actions pinned by commit SHA:** reviewed in PRs, with actionlint in `.github/workflows/ci.yml#actionlint`.
 - **Release-time signature, SBOM attestation and SLSA provenance:** `.github/workflows/release.yml`, checked after publishing by `.github/workflows/verify-image.yml` (see gap 22).
+- **The published image resolves its dependencies cold; only scanned images build offline from their job's cache** (#290, after #230): `ImageBuildDependenciesTest` pins release.yml's `cold` mode and its job's lack of any Maven cache, the `offline` mode of main.yml's and zap.yml's image builds, the script's cold default (which drops any seed), the offline build's blocked Central hosts, and the resolver retry budget.
 
 **Configured only:**
 - Dependabot, weekly;
