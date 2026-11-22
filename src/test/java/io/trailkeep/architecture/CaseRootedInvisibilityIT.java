@@ -9,6 +9,7 @@ import com.tngtech.archunit.base.DescribedPredicate;
 import com.tngtech.archunit.core.domain.JavaClass;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.tngtech.archunit.core.importer.ImportOption;
+import io.trailkeep.audit.AuditTrailService.AuditFilter;
 import io.trailkeep.casefile.CaseFilter;
 import io.trailkeep.casefile.CaseListQuery;
 import io.trailkeep.casefile.CaseScopeService;
@@ -26,6 +27,7 @@ import io.trailkeep.user.UserPermissions;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -242,6 +244,11 @@ class CaseRootedInvisibilityIT {
         if (type == LocalDate.class) {
             // The day the reports' ages count to: a few days after CaseSeed's identified-on date.
             return LocalDate.of(2026, 11, 7);
+        }
+        if (type == AuditFilter.class) {
+            // The audit search (#274): every event of the last day, case-less ones included.
+            return new AuditFilter(
+                    Instant.now().minus(Duration.ofDays(1)), Instant.now().plusSeconds(60), null, null, null, null);
         }
         if (type == Instant.class) {
             // The compliance period's bounds; an empty period still counts the open cases.
