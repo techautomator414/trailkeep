@@ -19,8 +19,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   length and never its HMAC, and every other value is escaped. Searches draw on the search rate limit. `V20` adds
   `IX_AUDIT_AT (AT_TS, ID)`: without it every search read the whole trail. Tested by `AuditControllerIT` (every role,
   filters, paging, redaction, escaping, range bounds), `AuditTrailServiceIT`, `AuditChangesTest`,
-  `CasePermissionServiceTest`, `RateLimitIT` and `AuditAccessibilityIT` (axe and Nu). The CSV export follows in a
-  second pull request.
+  `CasePermissionServiceTest`, `RateLimitIT` and `AuditAccessibilityIT` (axe and Nu).
+- The audit trail's CSV export, `GET /admin/audit/export.csv` (#274, BUILD_PLAN §9 "audit export for Compliance
+  Admins"), offered on the audit screen with its filters, for the same people. It holds the filtered events newest
+  first, as far as the moment of export, up to `app.export.max-rows` (more is a 422 on the screen, nothing exported),
+  with the changed fields as on screen: a redacted value as "redacted (n characters)", never its HMAC. Every cell goes
+  through `CsvFormat`, so a formula is defused. Each export is audited as `AUDIT_EXPORTED` with its row count and the
+  screen's query, in the transaction that counts it, like `CASES_EXPORTED`; it draws on the search rate limit. Tested
+  by `AuditExportIT` and `RateLimitIT`.
 
 ### Fixed
 

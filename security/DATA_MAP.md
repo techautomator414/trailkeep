@@ -169,11 +169,11 @@ duties").
   Admin who is not a System Admin: the audit screen `/admin/audit` (`AuditController`, #274) shows every event in a
   range of at most 31 days, 50 a page, with the actor's name snapshot, entity, action, case number and old and new
   values; a redacted value as its length only, never its HMAC. The client address is not shown. Verified by
-  `AuditControllerIT` (TEST_MAP "Audit"). No export at this commit (threat model, RR-8).
+  `AuditControllerIT` (TEST_MAP "Audit"). The same events leave as the audit CSV (see [Exports](#exports)).
 - **Read by, in the database:** app S I; purge I; import S I; nobody U or D (`PostgresDatabaseGrantsIT`,
   `OracleDatabaseGrantsIT`).
 - **Retention:** indefinite; kept through the purge. Any trimming is a DBA decision outside the application.
-- **Leaves the system:** not through the application.
+- **Leaves the system:** as the Compliance Admin audit CSV, redacted values as their length (`AuditExportIT`).
 
 ## Sessions
 
@@ -218,10 +218,12 @@ duties").
 | Cases list CSV (`GET /cases/export.csv`) | case number, title, status, sensitivity, priority, type, team, owner, SLA state and due day, opened day. Subject and description are replaced by a redaction marker unless details were asked for and the exporter is a Manager of that case's team or a Compliance Admin. Only cases the exporter reads; at most `app.export.max-rows` (default 10000) |
 | Report CSVs | the aging and SLA-compliance reports as on screen (see [Reports](#reports)) |
 | Stored report run CSV (`/reports/runs/{id}.csv`) | the run as stored |
+| Audit trail CSV (`GET /admin/audit/export.csv`, #274) | the audit screen's filtered events, newest first: time, actor's name snapshot, origin, entity type and id, action, case number, the changed fields with a redacted value as "redacted (n characters)" (never its HMAC), request id. No client address. Compliance Admins who are not System Admins only; at most `app.export.max-rows` |
 
 - **Read by:** the exporter, for what their scope reads (`CaseExportIT`, `CaseExportControllerIT`).
 - **Retention:** nothing is stored: exports stream with `Cache-Control: no-store`. Each export is audited:
-  `CASES_EXPORTED` with row count, query and the details flag; `REPORT_EXPORTED`; `REPORT_RUN_DOWNLOADED`.
+  `CASES_EXPORTED` with row count, query and the details flag; `REPORT_EXPORTED`; `REPORT_RUN_DOWNLOADED`;
+  `AUDIT_EXPORTED` with row count and the screen's query (`AuditExportIT`).
 - **Leaves the system:** yes, to the person's device, outside Trailkeep's control. Cells are guarded against formula
   injection (`CsvFormatTest`).
 

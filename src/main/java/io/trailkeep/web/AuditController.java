@@ -9,6 +9,9 @@ import io.trailkeep.audit.AuditTrailService.AuditPage;
 import io.trailkeep.casefile.CaseException;
 import io.trailkeep.casefile.CaseService;
 import io.trailkeep.casefile.CaseService.Actor;
+import io.trailkeep.report.AuditExportService;
+import io.trailkeep.report.AuditExportService.Ready;
+import io.trailkeep.report.AuditExportService.TooMany;
 import io.trailkeep.security.CaseAction;
 import io.trailkeep.security.CasePermissionService;
 import io.trailkeep.security.TrailkeepOidcUser;
@@ -19,6 +22,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import java.time.InstantSource;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.time.temporal.ChronoUnit;
 import java.util.HashMap;
@@ -28,13 +32,18 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.regex.Pattern;
 import org.jspecify.annotations.Nullable;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.stereotype.Controller;
+import org.springframework.ui.ExtendedModelMap;
 import org.springframework.ui.Model;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.servlet.ModelAndView;
+import org.springframework.web.servlet.View;
+import org.springframework.web.util.UriComponentsBuilder;
 
 /**
  * The audit trail for Compliance Admins (BUILD_PLAN §3.2 "View audit across all cases", §9; #274). A plain GET form
@@ -43,7 +52,8 @@ import org.springframework.web.bind.annotation.RequestParam;
  * and a case number; {@value #PAGE_SIZE} events a page, newest first, case-less events included. Only the security
  * module's audit scope opens it: anyone else, a System Admin included, gets 403, as on the other admin screens. A
  * range the form cannot prevent (backwards or too long) is the form again with the reason, 422; a value no field
- * accepts is a plain 422. A redacted value arrives as its length only. The screen reads and records nothing.
+ * accepts is a plain 422. A redacted value arrives as its length only. The screen reads and records nothing; the CSV
+ * export of the same filter is audited by {@link AuditExportService}.
  */
 @Controller
 class AuditController {
@@ -58,11 +68,13 @@ class AuditController {
     static final int MAX_DAYS = 31;
 
     private static final String VIEW = "web/audit";
+    private static final DateTimeFormatter STAMP = DateTimeFormatter.ofPattern("yyyyMMdd-HHmm");
     private static final Pattern CODE = Pattern.compile("[A-Z][A-Z0-9_]{0,39}");
     private static final Pattern PAGE = Pattern.compile("[1-9][0-9]{0,5}");
 
     private final CasePermissionService permissions;
     private final AuditTrailService trail;
+    private final AuditExportService exports;
     private final CaseService cases;
     private final CasePage page;
     private final InstantSource clock;
@@ -71,12 +83,14 @@ class AuditController {
     AuditController(
             CasePermissionService permissions,
             AuditTrailService trail,
+            AuditExportService exports,
             CaseService cases,
             CasePage page,
             InstantSource clock,
             AppProperties app) {
         this.permissions = permissions;
         this.trail = trail;
+        this.exports = exports;
         this.cases = cases;
         this.page = page;
         this.clock = clock;
@@ -103,7 +117,59 @@ class AuditController {
             HttpServletResponse response,
             Model model) {
         Actor actor = page.actor(principal);
-        final CaseScope scope = permissions.auditScope(actor.permissions()).orElseThrow(Forbidden::new);
+        CaseScope scope = permissions.auditScope(actor.permissions()).orElseThrow(Forbidden::new);
+        AuditFilter filter = filter(actor, parameters, response, model);
+        if (filter != null) {
+            list(actor, scope, filter, pageNumber(parameters.getFirst("page")), model);
+        }
+        return VIEW;
+    }
+
+    /**
+     * The same filter as CSV ({@link AuditExportService}): an attachment named after the time of export in {@code
+     * app.timezone}. A filter matching more than {@code app.export.max-rows} events is the screen's first page
+     * again with the reason, 422, and nothing is exported or audited.
+     */
+    @GetMapping("/admin/audit/export.csv")
+    @RateLimited(RateLimited.Route.SEARCH)
+    ModelAndView export(
+            @AuthenticationPrincipal TrailkeepOidcUser principal,
+            @RequestParam MultiValueMap<String, String> parameters,
+            HttpServletResponse response) {
+        Actor actor = page.actor(principal);
+        CaseScope scope = permissions.auditScope(actor.permissions()).orElseThrow(Forbidden::new);
+        ExtendedModelMap model = new ExtendedModelMap();
+        AuditFilter filter = filter(actor, parameters, response, model);
+        if (filter == null) {
+            return new ModelAndView(VIEW, model);
+        }
+        Form form = (Form) Objects.requireNonNull(model.getAttribute("f"));
+        String query = UriComponentsBuilder.newInstance()
+                .queryParam("from", form.from())
+                .queryParam("to", form.to())
+                .queryParam("actor", form.actor())
+                .queryParam("entity", form.entity())
+                .queryParam("action", form.action())
+                .queryParam("case", form.caseNumber())
+                .build()
+                .getQuery();
+        return switch (exports.export(actor, scope, filter, Objects.requireNonNull(query))) {
+            case Ready ready -> new ModelAndView(csv(ready));
+            case TooMany tooMany -> {
+                response.setStatus(HttpStatus.UNPROCESSABLE_CONTENT.value());
+                list(actor, scope, filter, 1, model);
+                model.addAttribute("exportProblem", tooMany);
+                yield new ModelAndView(VIEW, model);
+            }
+        };
+    }
+
+    /**
+     * Reads the filters into the model as the form shows them; {@code null} when the page as it stands is the answer:
+     * a range problem (422) or a case number no case has.
+     */
+    private @Nullable AuditFilter filter(
+            Actor actor, MultiValueMap<String, String> parameters, HttpServletResponse response, Model model) {
         LocalDate today = LocalDate.ofInstant(clock.instant(), zone);
         LocalDate from = date(parameters.getFirst("from"), today.minusDays(6));
         LocalDate to = date(parameters.getFirst("to"), today);
@@ -124,7 +190,7 @@ class AuditController {
         if (to.isBefore(from) || ChronoUnit.DAYS.between(from, to) >= MAX_DAYS) {
             response.setStatus(HttpStatus.UNPROCESSABLE_CONTENT.value());
             model.addAttribute("rangeProblem", true);
-            return VIEW;
+            return null;
         }
         Long caseId = null;
         if (!form.caseNumber().isEmpty()) {
@@ -133,17 +199,20 @@ class AuditController {
                         .id();
             } catch (CaseException unknown) {
                 model.addAttribute("caseUnknown", true);
-                return VIEW;
+                return null;
             }
         }
-        AuditFilter filter = new AuditFilter(
+        return new AuditFilter(
                 from.atStartOfDay(zone).toInstant(),
                 to.plusDays(1).atStartOfDay(zone).toInstant(),
                 form.actor().isEmpty() ? null : form.actor(),
                 form.entity().isEmpty() ? null : form.entity(),
                 form.action().isEmpty() ? null : form.action(),
                 caseId);
-        int number = pageNumber(parameters.getFirst("page"));
+    }
+
+    private void list(Actor actor, CaseScope scope, AuditFilter filter, int requested, Model model) {
+        int number = requested;
         AuditPage found = trail.search(scope, filter, offset(number), PAGE_SIZE);
         int pages = (int) Math.min(Math.max(1, (found.total() + PAGE_SIZE - 1) / PAGE_SIZE), MAX_PAGE);
         if (number > pages) {
@@ -156,7 +225,19 @@ class AuditController {
         model.addAttribute("total", found.total());
         model.addAttribute("page", number);
         model.addAttribute("pages", pages);
-        return VIEW;
+    }
+
+    /** Writes the CSV as the response body, an attachment that is never cached or sniffed. */
+    private View csv(Ready export) {
+        String fileName = "audit-" + STAMP.format(clock.instant().atZone(zone)) + ".csv";
+        return (model, request, response) -> {
+            response.setContentType("text/csv;charset=UTF-8");
+            // The name is "audit-" and digits, so it needs no quoting beyond the quotes.
+            response.setHeader(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + fileName + "\"");
+            response.setHeader("X-Content-Type-Options", "nosniff");
+            response.setHeader(HttpHeaders.CACHE_CONTROL, "private, no-store");
+            export.writeTo(response.getOutputStream());
+        };
     }
 
     /** The numbers of the page's cases, by id, read through the viewer's scope. */

@@ -93,6 +93,7 @@ The status column records what is in effect today, not what is planned.
 - **The runtime user cannot update or delete audit rows (database grants):** `PostgresDatabaseGrantsIT` and `OracleDatabaseGrantsIT`, against `GrantsMatrix`.
 - **Case timelines and restricted filtering:** `AuditTrailServiceIT`.
 - **The whole trail, case-less events included, is readable by Compliance Admins only, on a bounded, paged screen; redacted values stay redacted** (#274, BUILD_PLAN §3.2 "View audit across all cases"): `AuditControllerIT` refuses every other role with 403, a System Admin who also holds Compliance Admin included, and checks each filter, paging, the 31-day range bound, escaping, and that a redacted value reads "redacted (n characters)" with neither its plaintext nor its HMAC on the page; `CasePermissionServiceTest` (the grant), `AuditTrailServiceIT` (only an unrestricted scope sees anything; wildcards in the actor filter are text), `AuditChangesTest` (the read model carries no HMAC), `AuditAccessibilityIT` (axe and Nu).
+- **The audit export is audited, bounded and redacted** (#274, BUILD_PLAN §9 "audit export for Compliance Admins"): `AuditExportIT` checks the CSV line by line (newest first, case numbers, a redacted value as its length with no HMAC, a formula cell defused), one `AUDIT_EXPORTED` event with the row count and the filter, a 422 with nothing exported or audited over `app.export.max-rows` or for a bad range, and 403 with nothing audited for a System Admin or an Analyst; `RateLimitIT` shows it draws on the search bucket and a refused export is not audited.
 - **A restricted-case view and download each write one event:** `RestrictedViewAuditIT`.
 - **One application clock:** `InstantSourceConfigTest`.
 
@@ -108,7 +109,7 @@ The status column records what is in effect today, not what is planned.
 - **Uploads: abuse through the browser:** `UploadAbuseBrowserIT` (disguised and dangerous files refused and stored nowhere; a hostile name downloads as a plain attachment).
 - **Uploads: external-scanning mode:** `ExternalScanningUploadIT`, `ScanningModeTest`.
 - **Markdown rendered then sanitized:** `MarkdownRendererTest` over the XSS corpus; `StoredReportSanitizerTest`.
-- **CSV export cells defeat formula injection:** `CsvFormatTest`.
+- **CSV export cells defeat formula injection:** `CsvFormatTest`; through the audit export, `AuditExportIT`.
 - **Content-Disposition cannot be split by a file name:** `AttachmentDispositionTest`, `CaseAttachmentDownloadIT`.
 - **Malformed input is a 400, never a 500 or an echo:** `MalformedParametersIT`, `MalformedMultipartIT` (every mapped route), `ControlCharactersIT` and `ControlCharacterSweepIT` (a control character in a parameter name or value, every mapped route; `UploadIntakeTest`, `CaseAttachmentUploadIT` for an upload's file name).
 - **Bean Validation reaching the web layer is a 422:** `WebShellIT`.
@@ -191,7 +192,7 @@ The status column records what is in effect today, not what is planned.
 - **Bounded concurrent downloads, 503 with `Retry-After` when full:** `CaseAttachmentDownloadIT`, `ConcurrentDownloadHeapIT`.
 - **The scheduler lock:** `SlaEvaluatorIT`.
 - **Management endpoints only on the management port, and only health, info and prometheus:** `ManagementEndpointsIT`.
-- **Per-user rate limits on search and upload** (`RateLimitInterceptor`, #247): `RateLimitIT` drives each limit to a 429 with `Retry-After`, on the error page and as the htmx problem fragment, without echoing what was sent; shows a refused upload is never scanned, the CSV export and the audit search (#274) share the search bucket, another person is unaffected, and each refusal is counted on `trailkeep.rate_limit.refusals` and logged with the user id and route only. `TokenBucketsTest` covers refill, the wait reported, idle-bucket eviction and a wrapping monotonic clock; `RateLimitInterceptorTest` that the prod profile refuses `app.rate-limit.enabled=false` and that the shipped limits are on. `ShellAccessibilityIT` runs axe and the Nu validator on the 429 page and the swapped htmx fragment.
+- **Per-user rate limits on search and upload** (`RateLimitInterceptor`, #247): `RateLimitIT` drives each limit to a 429 with `Retry-After`, on the error page and as the htmx problem fragment, without echoing what was sent; shows a refused upload is never scanned, the CSV export, the audit search and the audit export (#274) share the search bucket, another person is unaffected, and each refusal is counted on `trailkeep.rate_limit.refusals` and logged with the user id and route only. `TokenBucketsTest` covers refill, the wait reported, idle-bucket eviction and a wrapping monotonic clock; `RateLimitInterceptorTest` that the prod profile refuses `app.rate-limit.enabled=false` and that the shipped limits are on. `ShellAccessibilityIT` runs axe and the Nu validator on the 429 page and the swapped htmx fragment.
   - **Platform:** the buckets are in memory per replica, so a multi-replica deployment also sets a limit at the route or ingress (`deploy/README.md`, "Runtime properties").
 
 **Configured only:** database pool sizing.
@@ -223,7 +224,7 @@ The status column records what is in effect today, not what is planned.
 
 ### Privacy
 **Verified:**
-- **Export redaction (no restricted rows, details redacted for readers):** `CaseExportControllerIT`, `CaseExportIT`.
+- **Export redaction (no restricted rows, details redacted for readers):** `CaseExportControllerIT`, `CaseExportIT`; the audit export writes a redacted value as its length only: `AuditExportIT`.
 - **Mail without the closure summary:** `ClosureRequestIT`.
 - **Personal mail links only into the application:** `NotificationServiceIT`.
 - **Retention with legal hold:** `PurgeIT`, `LegalHoldIT`, `ArchiveJobIT`.

@@ -169,8 +169,9 @@ app:
       capacity: 30
       refill: 30
       window: 10m
-  # CSV export of the cases list (WP-15 part 4): a filter matching more than max-rows cases is refused (422) and the
-  # person narrows it. The export streams in pages of 500 rows inside one read-only transaction.
+  # CSV export of the cases list (WP-15 part 4) and of the audit trail (#274): a filter matching more than max-rows cases
+  # or events is refused (422) and the person narrows it. Each export streams in pages of 500 rows inside one read-only
+  # transaction.
   export:
     max-rows: 10000
   # app.base-url (the address people open the application at, the start of every deep link in a mail) has no default
