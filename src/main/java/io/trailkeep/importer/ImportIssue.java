@@ -117,6 +117,22 @@ class ImportIssue {
         this.createdAt = at;
     }
 
+    /**
+     * A dry run's issue: a finding about a row, or about no single row.
+     *
+     * @param runId the run
+     * @param subject the entity
+     * @param keyHash the keyed hash of the row's canonical key, or {@code null}
+     * @param finding what was found
+     * @param at when
+     * @return the issue, not yet saved
+     */
+    static ImportIssue dryRun(
+            long runId, Subject subject, @Nullable String keyHash, ChildRules.Finding finding, Instant at) {
+        return new ImportIssue(
+                runId, Stage.DRY_RUN, subject, keyHash, finding.severity(), finding.code(), finding.detail(), at);
+    }
+
     @Override
     public boolean equals(@Nullable Object other) {
         return this == other || (other instanceof ImportIssue that && id != null && id.equals(that.id));

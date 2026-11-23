@@ -172,7 +172,8 @@ class DryRunCommand {
                 properties.hashKeySpec(),
                 now,
                 summary(rules, teams, mapping, matcher, now),
-                LedgerDelta.of(ledger, caseImports, found.getSourceId(), hash, properties.allowMappingChange()));
+                LedgerDelta.of(ledger, caseImports, found.getSourceId(), hash, properties.allowMappingChange()),
+                matcher);
         Outcome checked = checkRows(pass, rules, children, matcher).plus(deltaIssues(pass));
         checked = checked.plus(runIssues(
                 runId,
@@ -236,7 +237,7 @@ class DryRunCommand {
     /**
      * One dry run's settings: {@code limits.maxErrorRate}, the codes {@code limits.acceptSkip} keeps out of it, the
      * key that hashes each row's key into its issues, the run's time, the aggregates it counts, and what the import
-     * ledger holds of its source.
+     * ledger holds of its source, and the matcher that looks up each page of people at once (#173).
      */
     private record Pass(
             long runId,
@@ -245,7 +246,8 @@ class DryRunCommand {
             SecretKey hashKey,
             Instant now,
             DryRunSummary summary,
-            LedgerDelta delta) {}
+            LedgerDelta delta,
+            PeopleMatcher people) {}
 
     /**
      * The delta's issues about no staged row: the finding about the mapping the ledger's rows were loaded under, and a
@@ -255,8 +257,8 @@ class DryRunCommand {
         long recorded = 0;
         Finding mapping = pass.delta().mapping();
         if (mapping != null) {
-            transactions.executeWithoutResult(
-                    status -> issues.save(issue(pass.runId(), Subject.MAPPING, null, mapping, pass.now())));
+            transactions.executeWithoutResult(status ->
+                    issues.save(ImportIssue.dryRun(pass.runId(), Subject.MAPPING, null, mapping, pass.now())));
             recorded++;
         }
         for (Subject subject : LedgerDelta.ENTITIES) {
@@ -268,8 +270,8 @@ class DryRunCommand {
 
     /** Records each row's finding under its key's keyed hash, in one transaction. */
     private void keyed(Pass pass, Subject subject, Map<String, Finding> found) {
-        transactions.executeWithoutResult(status -> found.forEach((key, finding) ->
-                issues.save(issue(pass.runId(), subject, KeyedHash.hex(pass.hashKey(), key), finding, pass.now()))));
+        transactions.executeWithoutResult(status -> found.forEach((key, finding) -> issues.save(
+                ImportIssue.dryRun(pass.runId(), subject, KeyedHash.hex(pass.hashKey(), key), finding, pass.now()))));
     }
 
     /**
@@ -281,10 +283,10 @@ class DryRunCommand {
         List<Finding> found = new ArrayList<>();
         teamsWithoutOwner.forEach(team -> found.add(new Finding("DEFAULT_OWNER_MISSING", Severity.FATAL, team)));
         transactions.executeWithoutResult(status -> {
-            found.forEach(finding -> issues.save(issue(runId, Subject.CASE, null, finding, now)));
+            found.forEach(finding -> issues.save(ImportIssue.dryRun(runId, Subject.CASE, null, finding, now)));
             if (unscanned > 0) {
                 Finding warning = new Finding("NOT_SCANNED", Severity.WARNING, unscanned);
-                issues.save(issue(runId, Subject.ATTACHMENT, null, warning, now));
+                issues.save(ImportIssue.dryRun(runId, Subject.ATTACHMENT, null, warning, now));
             }
         });
         return new Outcome(0, found.size() + (unscanned > 0 ? 1 : 0), found.size());
@@ -306,6 +308,7 @@ class DryRunCommand {
         for (List<T> page = staging.page(type, runId, null, PAGE);
                 !page.isEmpty();
                 page = staging.page(type, runId, after, PAGE)) {
+            prepare(pass, type, page);
             LedgerDelta.Parents parents = pass.delta()
                     .parents(
                             staging,
@@ -330,7 +333,7 @@ class DryRunCommand {
                         ? pass.delta().changed(row, before, closed)
                         : closedParent != null ? List.of(closedParent) : rules.apply(row, parents.found(caseKey));
                 for (Finding problem : findings) {
-                    found.add(issue(runId, subject, keyHash, problem, now));
+                    found.add(ImportIssue.dryRun(runId, subject, keyHash, problem, now));
                     fatal += problem.severity() == Severity.FATAL ? 1 : 0;
                 }
             }
@@ -346,11 +349,19 @@ class DryRunCommand {
         // load wrote are not loaded again, so the rate is of the others.
         if (subject != Subject.PERSON && failed > pass.maxErrorRate() * (rows - held)) {
             Finding rate = new Finding("ERROR_RATE_EXCEEDED", Severity.FATAL, failed);
-            transactions.executeWithoutResult(status -> issues.save(issue(runId, subject, null, rate, now)));
+            transactions.executeWithoutResult(
+                    status -> issues.save(ImportIssue.dryRun(runId, subject, null, rate, now)));
             recorded++;
             fatal++;
         }
         return new Outcome(rows, recorded, fatal);
+    }
+
+    /** A page of people is looked up at once, before its rows are matched one by one (#173). */
+    private static <T extends StagedRow> void prepare(Pass pass, Class<T> type, List<T> page) {
+        if (type == StagedPerson.class) {
+            pass.people().prepare(page.stream().map(StagedPerson.class::cast).toList());
+        }
     }
 
     /** An empty summary of this dry run, with its SLA forecast for the go-live day. */
@@ -376,19 +387,6 @@ class DryRunCommand {
         LocalDate day = properties.goLive();
         Instant start = day == null ? now : day.atStartOfDay(app.timezone()).toInstant();
         return start.isAfter(now) ? start : now;
-    }
-
-    private static ImportIssue issue(
-            long runId, Subject subject, @Nullable String keyHash, Finding finding, Instant now) {
-        return new ImportIssue(
-                runId,
-                ImportIssue.Stage.DRY_RUN,
-                subject,
-                keyHash,
-                finding.severity(),
-                finding.code(),
-                finding.detail(),
-                now);
     }
 
     private ImportRun load(long runId) {
