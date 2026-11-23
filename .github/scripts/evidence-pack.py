@@ -31,6 +31,7 @@ MANIFEST = Path(".github/release/evidence-pack.txt")
 MIGRATIONS = Path("src/main/resources/db/migration")
 TAG = re.compile(r"v(\d+)\.(\d+)\.(\d+)(?:[-+][0-9A-Za-z.+-]+)?")
 ISSUER = "https://token.actions.githubusercontent.com"
+GENERATED = {"generated:accessibility", "generated:flyway", "generated:verify", "generated:index", "generated:sums"}
 UNSIGNED = {"SHA256SUMS", "SHA256SUMS.sigstore.json"}  # the checksums cannot list themselves or their own signature
 ZIP_TIME = (1980, 1, 1, 0, 0, 0)  # fixed, so the same inputs give the same zip
 
@@ -66,6 +67,9 @@ def read_manifest(path: Path) -> list[Row]:
         if row.since != "all":
             parse_version("v" + row.since)
         kind, _, name = row.source.partition(":")
+        known = kind in ("artifact", "repo") and name or row.source in GENERATED | {"workflow", "registry"}
+        if not known:
+            sys.exit(f"{path}:{number}: unknown source {row.source}")
         if kind == "artifact" and "/" not in name and row.file != name + ".zip":
             sys.exit(f"{path}:{number}: a whole artifact is packed as {name}.zip, not {row.file}")
         if (row.file == "-") != (kind == "registry"):
@@ -147,8 +151,9 @@ def accessibility(artifacts: Path) -> str:
     return (
         "# Accessibility test results\n\n"
         "Every screen's accessibility IT renders it in Chromium, runs axe (the WCAG 2.0, 2.1 and 2.2 A and AA rules)\n"
-        "and asserts 0 violations, and validates the HTML with the Nu HTML Checker (BUILD_PLAN §10.2). Counts from the\n"
-        "release run's failsafe reports (test-reports.zip). The manual conformance evidence is the ACR (accessibility/).\n\n"
+        "and asserts 0 violations, and validates the HTML with the Nu HTML Checker (BUILD_PLAN §10.2). Counts from\n"
+        "the release run's failsafe reports (test-reports.zip). The manual conformance evidence is the ACR\n"
+        "(accessibility/).\n\n"
         "| Test class | Tests | Failures | Errors | Skipped |\n|---|---:|---:|---:|---:|\n"
         + "\n".join(rows)
         + f"\n\n{len(rows)} classes, {executed} tests run, 0 failed.\n"
@@ -266,13 +271,13 @@ def assemble(args: argparse.Namespace) -> None:
             if row.required(version):
                 errors.append(f"{row.file} ({row.requirement}) could not be produced from {row.source}")
     fail_if(errors)
-    (pack / "EVIDENCE.md").write_text(index(args, rows, present, version), encoding="utf-8")
+    (pack / "EVIDENCE.md").write_text(index(args, rows, present), encoding="utf-8")
     sums = [f"{sha256(path)}  {path.name}" for path in sorted(pack.iterdir()) if path.name not in UNSIGNED]
     (pack / "SHA256SUMS").write_text("\n".join(sums) + "\n", encoding="utf-8")
     print(f"assembled {len(sums) + 1} files in {pack}")
 
 
-def index(args: argparse.Namespace, rows: list[Row], present: set[str], version: tuple[int, int, int]) -> str:
+def index(args: argparse.Namespace, rows: list[Row], present: set[str]) -> str:
     commit = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True, check=False).stdout.strip()
     lines = [
         f"# Trailkeep {args.tag}: release evidence",
@@ -281,8 +286,10 @@ def index(args: argparse.Namespace, rows: list[Row], present: set[str], version:
         f"- Commit: `{commit or 'unknown'}`",
         f"- Release run: {args.run_url}",
         "- What the pack must contain: `.github/release/evidence-pack.txt` at this tag (BUILD_PLAN §12.3, WP-30).",
-        "- Every file here is listed in `SHA256SUMS`, which `SHA256SUMS.sigstore.json` signs; `VERIFY.md` has the commands.",
-        "- Files from the repository are the reviewed, checked-in copies at this commit, never written at release time.",
+        "- Every file here is listed in `SHA256SUMS`, which `SHA256SUMS.sigstore.json` signs; `VERIFY.md` has the",
+        "  commands.",
+        "- Files from the repository are the reviewed, checked-in copies at this commit, never written at release",
+        "  time.",
         "",
         "| Requirement | File | Source | How to verify |",
         "|---|---|---|---|",
