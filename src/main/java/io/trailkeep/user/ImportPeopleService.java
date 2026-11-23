@@ -32,7 +32,7 @@ public interface ImportPeopleService {
     record ImportPrincipals(long importer, long legacyApproval) {}
 
     /**
-     * The two principals, seeded by {@code V11__import_principals}.
+     * The two principals, seeded by {@code V11__import_principals}, read once and then kept.
      *
      * @return their ids
      * @throws IllegalStateException if either row is missing
