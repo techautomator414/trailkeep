@@ -234,13 +234,15 @@ abstract class AbstractRestoreDrillIT {
                 try (Connection connection = connect(source, owner)) {
                     seed(source, owner, connection, report);
                     insertAdmin(connection);
-                    // What V20 costs an upgrade at this volume (docs/RUNBOOK.md): the same index, built and dropped.
-                    report.run("V20's index built on the 500 000 audit events (a copy, then dropped)", () -> {
-                        try (Statement statement = connection.createStatement()) {
-                            statement.execute("CREATE INDEX IX_DRILL_AUDIT_AT ON AUDIT_EVENT (AT_TS, ID)");
-                            statement.execute("DROP INDEX IX_DRILL_AUDIT_AT");
-                        }
-                    });
+                    // What V20 costs an upgrade at this volume (docs/RUNBOOK.md): its index dropped and built again by
+                    // V20's own statement (Oracle refuses a second index on the same columns), so the schema is
+                    // unchanged.
+                    try (Statement statement = connection.createStatement()) {
+                        statement.execute("DROP INDEX IX_AUDIT_AT");
+                        report.run(
+                                "V20's index built again on the 500 000 audit events",
+                                () -> statement.execute("CREATE INDEX IX_AUDIT_AT ON AUDIT_EVENT (AT_TS, ID)"));
+                    }
                     long bytes = report.time(
                             "Attachments written (" + AttachmentSeed.FILES + " files)",
                             () -> AttachmentSeed.write(connection));
@@ -265,6 +267,7 @@ abstract class AbstractRestoreDrillIT {
                         + before.values().stream()
                                 .mapToLong(DatabaseFingerprint.Table::rows)
                                 .sum() + " rows; search index " + indexBefore);
+                report.fact("Tables fingerprinted: " + String.join(", ", before.keySet()));
                 path = dumpPath(source);
                 String sourcePath = path;
                 long backupMs = report.run("**Backup**", () -> backup(source, theOwner, sourcePath));
