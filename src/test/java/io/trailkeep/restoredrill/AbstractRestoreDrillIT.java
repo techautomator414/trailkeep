@@ -79,7 +79,7 @@ abstract class AbstractRestoreDrillIT {
             Observation observed) {}
 
     /** This run's HMAC key, the canary values written under it, and where the backup file is kept between hosts. */
-    private record Run(DrillReport report, byte[] key, String hmacKey, List<String> canaries, Path local) {}
+    private record Run(DrillReport report, String hmacKey, List<String> canaries, Path local) {}
 
     abstract String vendorProfile();
 
@@ -162,7 +162,6 @@ abstract class AbstractRestoreDrillIT {
         }
         Run run = new Run(
                 new DrillReport(title(), fileName()),
-                key,
                 Base64.getEncoder().encodeToString(key),
                 canaries,
                 Path.of("target", "restore-drill", fileName().replace(".md", ".dump")));
@@ -306,7 +305,8 @@ abstract class AbstractRestoreDrillIT {
                             .isNotNull()
                             .isGreaterThanOrEqualTo(mark));
             report.fact("Sequences: all " + sequences.size() + " at or above their source marks");
-            DrillApplication.verifyCanaries(connection, run.canaries(), run.key());
+            DrillApplication.verifyCanaries(
+                    connection, run.canaries(), Base64.getDecoder().decode(run.hmacKey()));
             report.fact("Audit: the " + CANARIES + " redacted canary values confirm under the retained HMAC key and"
                     + " under no other");
         }
