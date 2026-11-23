@@ -2,7 +2,9 @@
 // Copyright 2026 Charlie Genova and contributors
 package io.trailkeep.user;
 
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -48,6 +50,27 @@ public interface ImportPeopleDirectory {
      * @return the users, by id; empty when none
      */
     List<PersonMatch> byEmail(String email);
+
+    /**
+     * {@link #byExternalId} for many external ids at once, in one query per 500 (#173): what the dry run and the load
+     * ask for a page of legacy people.
+     *
+     * @param externalIds the legacy people's external ids
+     * @return each external id that matched, to its user, exactly as {@link #byExternalId} answers it; an id that
+     *     matched nobody is absent
+     */
+    Map<String, PersonMatch> byExternalIds(Collection<String> externalIds);
+
+    /**
+     * {@link #byEmail} for many addresses at once (#173): one query per 500 addresses written in ASCII, which the
+     * database upper-cases as Java's root locale does, so the batch compares exactly what {@link #byEmail} compares; an
+     * address with any other character is still looked up on its own.
+     *
+     * @param emails the legacy people's email addresses
+     * @return each address that matched, as given, to its users exactly as {@link #byEmail} answers it; an address
+     *     that matched nobody is absent
+     */
+    Map<String, List<PersonMatch>> byEmails(Collection<String> emails);
 
     /**
      * Every enabled user, whose email address and external id {@code relink-owners} hashes to match the open cases

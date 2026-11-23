@@ -96,27 +96,40 @@ on the same day.
 
 ## Results on PostgreSQL, the full corpus
 
-Each row is the stack up to and including that PR (`main` is ac75e07); (b) to (d) add their rows. Peak heap is the
+Each row is the stack up to and including that PR (`main` is ac75e07); (c) and (d) add their rows. Peak heap is the
 highest heap sampled while the command ran, "after GC" the highest heap left after a collection, which is what the
 command holds.
 
 | Code | Dry run s | Dry-run statements | Dry-run transactions | Dry-run heap MiB (peak / after GC) | Load s | Load rows/s | Load statements | Load transactions | Load heap MiB (peak / after GC) |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
 | `main` | 426.7 | 757 038 | 756 303 | 467 / 296 | 1 826.3 | 357 | 4 871 236 | 800 787 | 467 / 288 |
+| + (b) batched people | 13.0 | 10 059 | 9 328 | 468 / 296 | 1 441.2 | 452 | 4 124 257 | 53 812 | 525 / 319 |
 
-The other commands: `validate-mapping` 0.5 s, `extract` 209 s (5 500 rows/s, 4 649 statements), `reconcile` 22 s
-(9 047 statements), `purge-staging` 0.8 s (13 statements). Dry-run digest `a986672e6dd74d3f`, load digest
-`b85f4f2d62f88af8`.
+The other commands did not change: `validate-mapping` 0.5 s, `extract` 208 to 209 s (5 500 rows/s, 4 649
+statements), `reconcile` 22 to 23 s (9 047 statements), `purge-staging` 0.8 to 0.9 s (13 statements). Both runs gave
+the same dry-run digest (`a986672e6dd74d3f`) and load digest (`b85f4f2d62f88af8`).
 
-The dry run and the load are where the time is: 7 and 30 minutes of the 41 the whole import takes. Both run about one
-transaction per row. The most frequent queries say why: the dry run asked the directory about each legacy person one
-query at a time (499 000 email and 250 777 external-id lookups), and the load did the same (1 454 779 and 499 000),
-each lookup outside a transaction being a transaction of its own (Spring Data's repository methods are transactional).
-The load's 4.9 million statements are, after those, nearly all per child row. (b) to (d) take these in turn.
+On `main` the dry run and the load are where the time is: 7 and 30 minutes of the 41 the whole import takes, each
+about one transaction per row, for the people lookups (b) explains. The load's 4.9 million statements are, after those,
+nearly all per child row, which (c) and (d) take in turn.
+
+### What each fix did
+
+**(b) Batched people (#173).** `main` asked the directory about each legacy person one query at a time: 499 000
+email and 250 777 external-id lookups in the dry run, and 1 454 779 and 499 000 in the load. Each lookup outside a
+transaction was a transaction of its own (Spring Data's repository methods are transactional), which is where the
+"about one transaction per row" came from. `PeopleMatcher.prepare` now asks, for a page of people, one query per way
+of matching and 500 values, in `people.match` order, so a way is asked only for the people an earlier way did not
+match. The dry run fell from 427 s to 13 s, its transactions from 756 303 to 9 328, one per page; the load from
+1 826 s to 1 441 s and from 800 787 transactions to 53 812, about one per case (§8.2).
 
 ## Correctness
 
 The run asserts the outcome at volume and reports the digests above; each fix compares them with the run before it.
+
+- (b): the same dry-run and load digests as `main` at the full corpus; `PeopleMatcherBatchTest`, for every order of
+  `people.match`, matches pages of people batched exactly as the one-by-one matcher does, and `AbstractImportPeopleIT`
+  checks the batched directory queries on both vendors; the importer ITs.
 
 ## The nightly job
 
@@ -130,4 +143,7 @@ time; it would be a new gate, so it is the owner's call.
 
 ## What remains
 
-(b), (c) and (d) take the people lookups, the memory and the load's statements in turn, each with its row above.
+- **The load** still makes 4.1 million statements: 1.2 million external-id queries for the two import principals, read
+  again for every imported case and comment, then nearly all the rest per child row. (c) and (d).
+- **Memory**: the dry run and the load keep every legacy person they have matched, 296 to 319 MiB after GC at 500 000
+  people, against the design's "no stage holds more than one batch". (c).

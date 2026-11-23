@@ -196,7 +196,10 @@ class LoadCommand {
                         pass.now(),
                         () -> issues.deleteByRunIdAndStageAndSubject(runId, ImportIssue.Stage.LOAD, Subject.CASE));
         try {
-            pages(StagedPerson.class, runId, page -> page.forEach(pass.people()::person));
+            pages(StagedPerson.class, runId, page -> {
+                pass.people().prepare(page);
+                page.forEach(pass.people()::person);
+            });
             pages(StagedCase.class, runId, page -> loadPage(pass, progress, page));
             ChildOnlyLoad.Extended extended =
                     new ChildOnlyLoad(pass.children()).load(pass.lock(), pass.people(), pass.importer());
