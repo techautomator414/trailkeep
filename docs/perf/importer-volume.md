@@ -120,13 +120,13 @@ The run asserts the outcome at volume and reports the digests above; each fix co
 
 ## The nightly job
 
-The importer is **not** added to the nightly `perf` job. The nightly job fails on BUILD_PLAN's targets, and the plan has
-no target for an import, so the run would be a table nobody gates on; the importer's behaviour is already proven on
-every pull request by the importer ITs, on both vendors on `main`; and the full corpus takes 41 minutes here (11 once
-(b) to (d) are in) before the hosted runner's slower disks, beside a job whose timeout is 30 minutes. The run is made
-by hand at release time and with any change to the dry run or the load, like the Oracle 500k run and k6. If a guard is
-wanted, the cheap and stable one is a statements-per-row ceiling at a tenth of the corpus, not a time; that is the
-owner's call.
+The importer is **not** added to the nightly `perf` job. That job fails on BUILD_PLAN's targets and the plan sets none
+for an import, so a nightly run would add a table nothing gates on, at 41 minutes a night on this machine on `main`
+(the source is seeded and extracted every time). The importer's behaviour is proven on every pull request by the
+importer ITs, and on Oracle on `main`. The volume run is made by hand at release time and with any change to the dry
+run or the load, like the Oracle 500k run and k6. If a nightly guard is wanted, the stable one is a ceiling on
+statements and transactions per row at a tenth of the corpus (a few minutes, and blind to the runner's speed), not a
+time; it would be a new gate, so it is the owner's call.
 
 ## What remains
 
