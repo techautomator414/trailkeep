@@ -20,6 +20,8 @@ import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.sql.Connection;
 import java.sql.DriverManager;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.sql.Statement;
 import java.sql.Timestamp;
 import java.time.Instant;
@@ -39,6 +41,7 @@ import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.boot.context.event.ApplicationStartedEvent;
 import org.springframework.context.ApplicationEvent;
 import org.springframework.context.ConfigurableApplicationContext;
+import org.springframework.jdbc.core.RowCallbackHandler;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
 /**
@@ -59,6 +62,9 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 abstract class AbstractImportVolumePerfIT extends DryRunSupport {
 
     private static final Logger LOG = LoggerFactory.getLogger(AbstractImportVolumePerfIT.class);
+
+    /** Cases per query of {@link #contentDigest}. */
+    private static final int DIGEST_SLICE = 2_000;
 
     private static final String PASSWORD = "Tk" + HexFormat.of().formatHex(new SecureRandom().generateSeed(12));
 
@@ -147,6 +153,8 @@ abstract class AbstractImportVolumePerfIT extends DryRunSupport {
         assertThat(count("SELECT COUNT(*) FROM IMPORT_ISSUE WHERE RUN_ID = ? AND STAGE = 'LOAD'", run))
                 .isZero();
         report.note("Load digest (owners, snapshots and authors): " + loadDigest());
+        report.note("Load content digest (cases, comments, search text, history, audit rows, ledger and hashes): "
+                + contentDigest());
 
         timed(report, "reconcile", ImportVolumeCorpus.written(), run, mapping, reports);
         assertThat(jdbc.queryForObject("SELECT STATUS FROM IMPORT_RUN WHERE ID = ?", String.class, run))
@@ -210,6 +218,68 @@ abstract class AbstractImportVolumePerfIT extends DryRunSupport {
                 (row, index) -> row.getString(1) + " " + row.getTimestamp(2).toInstant() + " " + row.getString(3) + " "
                         + row.getString(4)));
         return digest(lines);
+    }
+
+    /**
+     * Everything the load wrote, row by row in id order, as one SHA-256: the cases, their comments with bodies, search
+     * text, legacy history, audit rows, and ledger rows with their parts and written hashes. Ids are in it: each
+     * vendor's sequences start afresh in the test's container and hand out ids in the order the load asks, so a change
+     * to how rows are batched must leave them as they were. Left out are only the values keyed by the per-process audit
+     * HMAC key (the history's and the audit rows' redacted values) and the times the load stamps.
+     */
+    private String contentDigest() {
+        MessageDigest sha = sha256();
+        List<Long> cases = jdbc.queryForList(LOADED + " ORDER BY ID", Long.class);
+        String ledger = "SOURCE_ID = '" + ImportVolumeCorpus.SOURCE + "' AND CASE_ID BETWEEN ? AND ?";
+        for (String sql : List.of(
+                "SELECT ID, CASE_NUMBER, LEGACY_REF, STATUS, OWNER_ID, OWNER_NAME_SNAPSHOT, CLOSED_AT FROM CASE_RECORD"
+                        + " WHERE ID BETWEEN ? AND ? AND LEGACY_REF LIKE 'perf1:%' ORDER BY ID",
+                "SELECT ID, CASE_ID, CREATED_AT, AUTHOR_ID, AUTHOR_NAME_SNAPSHOT, BODY FROM CASE_COMMENT"
+                        + " WHERE CASE_ID BETWEEN ? AND ? ORDER BY ID",
+                "SELECT CASE_ID, SEARCH_TEXT FROM CASE_SEARCH WHERE CASE_ID BETWEEN ? AND ? ORDER BY CASE_ID",
+                "SELECT ID, CASE_ID, AT_TS, WHO_NAME_SNAPSHOT, KIND, FIELD_NAME, OLD_VALUE, NEW_VALUE, OLD_LENGTH,"
+                        + " NEW_LENGTH FROM CASE_IMPORTED_EVENT WHERE CASE_ID BETWEEN ? AND ? ORDER BY ID",
+                "SELECT ID, ACTOR_ID, ACTOR_NAME_SNAPSHOT, ORIGIN, CASE_ID, ENTITY_TYPE, ENTITY_ID, ACTION"
+                        + " FROM AUDIT_EVENT WHERE CASE_ID BETWEEN ? AND ? ORDER BY ID",
+                "SELECT ID, ENTITY, LEGACY_KEY, CASE_ID, TARGET_ID, ROW_HASH, MAPPING_HASH, STATUS, CLOSED_AT,"
+                        + " WRITTEN_HASH, CLOSURE_HASH FROM IMPORT_LEDGER WHERE " + ledger + " ORDER BY ID",
+                "SELECT LEDGER_ID, PART_NO, COMMENT_ID FROM IMPORT_LEDGER_PART WHERE LEDGER_ID IN (SELECT ID FROM"
+                        + " IMPORT_LEDGER WHERE " + ledger + ") ORDER BY LEDGER_ID, PART_NO")) {
+            sha.update((sql + "\n").getBytes(StandardCharsets.UTF_8));
+            // A slice of cases at a time: the driver holds a result whole, and the corpus has 500 000 comments.
+            for (int from = 0; from < cases.size(); from += DIGEST_SLICE) {
+                long first = cases.get(from);
+                long last = cases.get(Math.min(cases.size(), from + DIGEST_SLICE) - 1);
+                jdbc.query(
+                        sql,
+                        (RowCallbackHandler) row -> sha.update(line(row).getBytes(StandardCharsets.UTF_8)),
+                        first,
+                        last);
+            }
+        }
+        return HexFormat.of().formatHex(sha.digest()).substring(0, 16);
+    }
+
+    /** A row as text: numbers and times alike on both vendors' drivers, every other value as the driver reads it. */
+    private static String line(ResultSet row) throws SQLException {
+        StringBuilder line = new StringBuilder();
+        for (int column = 1; column <= row.getMetaData().getColumnCount(); column++) {
+            Object value = row.getObject(column);
+            line.append(
+                            value instanceof Timestamp time
+                                    ? time.toInstant().toString()
+                                    : value instanceof Number number ? number.toString() : row.getString(column))
+                    .append('\t');
+        }
+        return line.append('\n').toString();
+    }
+
+    private static MessageDigest sha256() {
+        try {
+            return MessageDigest.getInstance("SHA-256");
+        } catch (NoSuchAlgorithmException impossible) {
+            throw new IllegalStateException(impossible);
+        }
     }
 
     private static String digest(List<String> lines) {
