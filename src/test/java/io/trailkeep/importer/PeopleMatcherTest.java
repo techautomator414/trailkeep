@@ -107,7 +107,11 @@ class PeopleMatcherTest {
 
     private PeopleMatcher matcher(String order, Map<String, String> defaults) {
         return new PeopleMatcher(
-                people, cases, YAMLMapper.builder().build().readTree("people: { match: " + order + " }"), defaults);
+                people,
+                cases,
+                YAMLMapper.builder().build().readTree("people: { match: " + order + " }"),
+                defaults,
+                keys -> List.of());
     }
 
     private static PersonMatch user(long id) {

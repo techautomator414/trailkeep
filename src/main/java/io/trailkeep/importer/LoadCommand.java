@@ -29,6 +29,7 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.InstantSource;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -196,10 +197,6 @@ class LoadCommand {
                         pass.now(),
                         () -> issues.deleteByRunIdAndStageAndSubject(runId, ImportIssue.Stage.LOAD, Subject.CASE));
         try {
-            pages(StagedPerson.class, runId, page -> {
-                pass.people().prepare(page);
-                page.forEach(pass.people()::person);
-            });
             pages(StagedCase.class, runId, page -> loadPage(pass, progress, page));
             ChildOnlyLoad.Extended extended =
                     new ChildOnlyLoad(pass.children()).load(pass.lock(), pass.people(), pass.importer());
@@ -249,7 +246,12 @@ class LoadCommand {
                         now,
                         app.timezone()),
                 teams,
-                new PeopleMatcher(peopleDirectory, caseImports, mapping, lookups.defaultOwners()),
+                new PeopleMatcher(
+                        peopleDirectory,
+                        caseImports,
+                        mapping,
+                        lookups.defaultOwners(),
+                        keys -> staging.byKeys(StagedPerson.class, found.getId(), keys)),
                 new ChildLoads(
                         new CommentLoad(children),
                         new AttachmentLoad(children, attachmentImports, mapping, properties.contentArea(), maxBytes),
@@ -258,16 +260,21 @@ class LoadCommand {
 
     /** One page of staged cases: those the ledger holds or with an ERROR are skipped, the others loaded one by one. */
     private void loadPage(Pass pass, Progress progress, List<StagedCase> page) {
+        Map<String, String> hashes = page.stream()
+                .map(row -> row.getKey().legacyKey())
+                .collect(Collectors.toMap(Function.identity(), key -> KeyedHash.hex(pass.hashKey(), key)));
+        Map<String, ChildLoads.Staged> children = pass.children().staged(List.copyOf(hashes.keySet()));
+        List<@Nullable String> named = new ArrayList<>();
+        page.forEach(row -> named.add(row.getOwnerKey()));
+        children.values().forEach(staged -> named.addAll(staged.people()));
+        // The page's people, read from staging and matched: the load holds no more of them than a page.
+        pass.people().resolve(named);
         Set<String> done = Set.copyOf(ledger.loaded(
                 pass.run().sourceId(),
                 Subject.CASE,
                 page.stream().map(row -> row.getKey().legacyKey()).toList()));
-        Map<String, String> hashes = page.stream()
-                .map(row -> row.getKey().legacyKey())
-                .collect(Collectors.toMap(Function.identity(), key -> KeyedHash.hex(pass.hashKey(), key)));
         Set<String> failed =
                 Set.copyOf(issues.keyHashesWith(pass.run().runId(), Subject.CASE, Severity.ERROR, hashes.values()));
-        Map<String, ChildLoads.Staged> children = pass.children().staged(List.copyOf(hashes.keySet()));
         for (StagedCase row : page) {
             String key = row.getKey().legacyKey();
             String keyHash = Objects.requireNonNull(hashes.get(key), "hashed");

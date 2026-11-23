@@ -155,7 +155,12 @@ class DryRunCommand {
                 caseImports.caseTypes().stream().collect(Collectors.toMap(ImportCaseType::name, Function.identity())),
                 now,
                 app.timezone());
-        PeopleMatcher matcher = new PeopleMatcher(people, caseImports, mapping, lookups.defaultOwners());
+        PeopleMatcher matcher = new PeopleMatcher(
+                people,
+                caseImports,
+                mapping,
+                lookups.defaultOwners(),
+                keys -> staging.byKeys(StagedPerson.class, runId, keys));
         transactions.executeWithoutResult(status -> {
             issues.deleteByRunIdAndStage(runId, ImportIssue.Stage.DRY_RUN);
             figures.deleteByRunId(runId);
@@ -308,7 +313,7 @@ class DryRunCommand {
         for (List<T> page = staging.page(type, runId, null, PAGE);
                 !page.isEmpty();
                 page = staging.page(type, runId, after, PAGE)) {
-            prepare(pass, type, page);
+            pass.people().page(type, page);
             LedgerDelta.Parents parents = pass.delta()
                     .parents(
                             staging,
@@ -355,13 +360,6 @@ class DryRunCommand {
             fatal++;
         }
         return new Outcome(rows, recorded, fatal);
-    }
-
-    /** A page of people is looked up at once, before its rows are matched one by one (#173). */
-    private static <T extends StagedRow> void prepare(Pass pass, Class<T> type, List<T> page) {
-        if (type == StagedPerson.class) {
-            pass.people().prepare(page.stream().map(StagedPerson.class::cast).toList());
-        }
     }
 
     /** An empty summary of this dry run, with its SLA forecast for the go-live day. */

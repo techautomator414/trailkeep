@@ -193,6 +193,37 @@ public class StagingStore {
         return children;
     }
 
+    /**
+     * A run's staged rows of one entity with these canonical keys: the people a page of cases and their children name,
+     * which the dry run and the load read a page at a time rather than hold for the whole run.
+     *
+     * @param <T> the entity's row type
+     * @param type the entity's row type
+     * @param runId the run
+     * @param keys canonical keys
+     * @return the rows staged with them, in no order
+     */
+    @Transactional(readOnly = true)
+    public <T extends StagedRow> List<T> byKeys(Class<T> type, long runId, List<String> keys) {
+        List<T> rows = new ArrayList<>();
+        for (int from = 0; from < keys.size(); from += KEYS_PER_QUERY) {
+            CriteriaBuilder criteria = entityManager.getCriteriaBuilder();
+            // Typed by the class literal of the common supertype, so the query is visibly no string (Semgrep).
+            CriteriaQuery<StagedRow> query = criteria.createQuery(StagedRow.class);
+            Root<T> row = query.from(type);
+            query.select(row)
+                    .where(
+                            criteria.equal(row.get("key").get("runId"), runId),
+                            row.get("key")
+                                    .get("legacyKey")
+                                    .in(keys.subList(from, Math.min(keys.size(), from + KEYS_PER_QUERY))));
+            entityManager.createQuery(query).getResultList().stream()
+                    .map(type::cast)
+                    .forEach(rows::add);
+        }
+        return rows;
+    }
+
     private <T extends StagedRow> int delete(Class<T> type, long runId) {
         CriteriaBuilder criteria = entityManager.getCriteriaBuilder();
         CriteriaDelete<T> delete = criteria.createCriteriaDelete(type);
