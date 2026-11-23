@@ -11,6 +11,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - Keycloak 26.8.2-2 (compose and test image) and the Nu Html Checker image digest, landed as one change because
   ComposeImagesTest fails on either Dependabot PR alone (supersedes #279 and #280); compose-only alpine/openssl 3.5.8.
+- ClamAV 1.5.4 in compose.yaml and the test image together, since ComposeImagesTest fails on the Dependabot PR alone
+  (supersedes #294). It is a security release: it fixes CVE-2026-20337, -20338, -20339, -20345, -20346, -20347 and
+  -20348 and CVE-2025-8088 (bundled UnRAR).
 
 ### Fixed
 

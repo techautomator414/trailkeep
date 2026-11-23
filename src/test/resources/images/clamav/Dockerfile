@@ -4,4 +4,4 @@
 # ClamAV, the real scanner of the upload ITs (RealClamd).
 # The one place this image is named: TestImages reads the FROM line, and Dependabot's docker ecosystem
 # proposes updates to the tag and the digest (issue 235). Keep exactly one FROM, pinned by digest.
-FROM clamav/clamav:1.5.3@sha256:d06c1d6a451d616e1dd79b42f44c8c8c291bba9cf4e75ebc4d0e43c1c6dd87bb
+FROM clamav/clamav:1.5.4@sha256:7054e3f34308c384ea43cd786ea17abf899bd44af40af9f1b099853d7a5c214e
