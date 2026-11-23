@@ -10,6 +10,10 @@
 spring:
   main:
     web-application-type: none
+  # One thread: connections are opened as needed rather than filling the web replicas' pool of 20 (application.yml).
+  datasource:
+    hikari:
+      minimum-idle: 1
   autoconfigure:
     exclude: org.springframework.boot.security.oauth2.client.autoconfigure.OAuth2ClientAutoConfiguration
   flyway:

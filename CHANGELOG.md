@@ -30,6 +30,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   the slowest in 1.5 s, and ten clients reading at 20 KB/s use at most one connection between them, so exports need
   neither a semaphore nor a temporary file. `DefaultCaseExportServiceTest` and `DefaultAuditExportServiceTest` count
   the writes that reach the response while a transaction is open and require none (the old code made 25 and 11).
+- Each web replica's database pool is 20 connections, set in `application.yml` (WP-30, `docs/perf/release-500k.md`
+  "Pool sizing"); it was Hikari's default, 10, never set. An attachment download holds a connection while it streams,
+  and up to 8 may stream at once: measured at the 500k seed, eight slow downloads beside the k6 mix left two
+  connections for everything else, throughput fell from about 60 to 16 requests a second, and the list's p95 (890 ms)
+  and the search's (2.9 s) missed their targets; with 20 the same run kept 48 requests a second, 275 ms and 622 ms.
+  Without downloads, 10 and 20 are the same at normal load, and at twice the release run's load 20 gives 13 % more
+  throughput and a quarter off the search's p95. Hikari keeps the pool full, so a deployment's database must allow
+  replicas × 20 sessions; the purge, importer and migration profiles set `minimum-idle: 1`, so their single-threaded
+  Jobs open connections only as they need them. `deploy/README.md` gives the sizing rule (at least the download slots
+  plus 10) and the Oracle session parameters it touches.
 
 ## [0.3.0] - 2026-11-22
 
