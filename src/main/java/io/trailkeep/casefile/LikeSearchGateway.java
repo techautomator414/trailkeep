@@ -12,7 +12,6 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 import java.util.Locale;
-import java.util.function.Function;
 
 /**
  * The portable {@link SearchGateway}: {@code CASE_ID IN (SELECT … FROM CASE_SEARCH WHERE SEARCH_TEXT LIKE ? ESCAPE
@@ -32,8 +31,11 @@ class LikeSearchGateway implements SearchGateway {
 
     @Override
     public Predicate matches(String text, Root<CaseRecord> caseRoot, CriteriaQuery<?> query, CriteriaBuilder cb) {
-        List<String> words = words(text);
-        return numberOrText(text, caseRoot, query, cb, haystack -> containsEach(words, haystack, cb));
+        Subquery<Long> matching = query.subquery(Long.class);
+        Root<CaseSearch> search = matching.from(CaseSearch.class);
+        matching.select(search.<Long>get("caseId"))
+                .where(containsEach(words(text), search.get("text"), cb).toArray(Predicate[]::new));
+        return cb.or(numberContains(text, caseRoot, cb), caseRoot.get("id").in(matching));
     }
 
     /**
@@ -53,28 +55,15 @@ class LikeSearchGateway implements SearchGateway {
     }
 
     /**
-     * The case number containing the text, or a {@code CASE_SEARCH} row satisfying every predicate on its text.
+     * The case number containing the text, ignoring case.
      *
      * @param text the search text
      * @param caseRoot the {@code CaseRecord} root of the query
-     * @param query the query being built, for the subquery
      * @param cb the criteria builder
-     * @param textMatches the predicates on {@code SEARCH_TEXT}, all of which must hold
      * @return the predicate
      */
-    static Predicate numberOrText(
-            String text,
-            Root<CaseRecord> caseRoot,
-            CriteriaQuery<?> query,
-            CriteriaBuilder cb,
-            Function<Expression<String>, List<Predicate>> textMatches) {
-        Subquery<Long> matching = query.subquery(Long.class);
-        Root<CaseSearch> search = matching.from(CaseSearch.class);
-        matching.select(search.<Long>get("caseId"))
-                .where(textMatches.apply(search.<String>get("text")).toArray(Predicate[]::new));
-        return cb.or(
-                cb.like(cb.upper(caseRoot.<String>get("caseNumber")), contains(text.toUpperCase(Locale.ROOT)), ESCAPE),
-                caseRoot.get("id").in(matching));
+    static Predicate numberContains(String text, Root<CaseRecord> caseRoot, CriteriaBuilder cb) {
+        return cb.like(cb.upper(caseRoot.<String>get("caseNumber")), contains(text.toUpperCase(Locale.ROOT)), ESCAPE);
     }
 
     /**

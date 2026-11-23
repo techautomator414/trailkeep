@@ -14,6 +14,7 @@ import io.trailkeep.testsupport.WithAppUser;
 import io.trailkeep.user.GlobalRole;
 import io.trailkeep.user.TeamRole;
 import java.util.List;
+import java.util.Locale;
 import java.util.concurrent.atomic.AtomicBoolean;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.BeforeEach;
@@ -191,20 +192,19 @@ abstract class AbstractComments500kPerfIT {
     @Test
     @Order(6)
     void theSearchIsPlannedAsExpected() {
-        plan("SELECT COUNT(*) FROM CASE_RECORD r WHERE r.STATUS <> 'ARCHIVED' AND (UPPER(r.CASE_NUMBER) LIKE"
-                        + " '%KESTREL%' OR r.ID IN (SELECT CASE_ID FROM CASE_SEARCH WHERE "
-                        + searchTextMatches("kestrel") + "))")
-                .forEach(line -> report().add("Plan, search for a comment word: " + line));
+        plan(searchCount("kestrel")).forEach(line -> report().add("Plan, search for a comment word: " + line));
     }
 
     /**
-     * The vendor adapter's condition on {@code CASE_SEARCH} for one word of letters, as the search's statement holds
-     * it, for the plan.
+     * The count of a search for one word of letters, in the shape the vendor's adapter gives it, for the plan.
      *
      * @param word a lower-case word of letters
-     * @return the condition
+     * @return the statement
      */
-    String searchTextMatches(String word) {
-        return "SEARCH_TEXT LIKE '%" + word + "%'";
+    String searchCount(String word) {
+        return "SELECT COUNT(*) FROM CASE_RECORD r WHERE r.STATUS <> 'ARCHIVED' AND (UPPER(r.CASE_NUMBER) LIKE '%"
+                + word.toUpperCase(Locale.ROOT)
+                + "%' OR r.ID IN (SELECT CASE_ID FROM CASE_SEARCH WHERE SEARCH_TEXT LIKE"
+                + " '%" + word + "%'))";
     }
 }

@@ -8,6 +8,7 @@ import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Locale;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import javax.sql.DataSource;
@@ -67,9 +68,12 @@ class OracleComments500kPerfIT extends AbstractComments500kPerfIT {
     }
 
     @Override
-    String searchTextMatches(String word) {
-        // OracleTextSearchGateway: a word of letters is decided by the CONTEXT index alone (ADR-0017).
-        return "CONTAINS(SEARCH_TEXT, '%" + word + "%') > 0";
+    String searchCount(String word) {
+        // OracleTextSearchGateway: CASE_SEARCH left-joined on the CONTEXT index; a word of letters is decided by the
+        // index alone (ADR-0017).
+        return "SELECT COUNT(*) FROM CASE_RECORD r LEFT JOIN CASE_SEARCH s ON s.CASE_ID = r.ID AND CONTAINS(s.SEARCH_TEXT,"
+                + " '%" + word + "%') > 0 WHERE r.STATUS <> 'ARCHIVED' AND (UPPER(r.CASE_NUMBER) LIKE '%"
+                + word.toUpperCase(Locale.ROOT) + "%' OR s.CASE_ID IS NOT NULL)";
     }
 
     @Override
