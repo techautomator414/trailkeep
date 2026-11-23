@@ -1,0 +1,104 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Charlie Genova and contributors
+#
+# Downloads Trivy's vulnerability and Java databases once per job, so every scan in the job (with
+# --skip-db-update --skip-java-db-update) uses the same database and a stalled registry fails fast (issue #303).
+# Run after setup-scanners.
+#
+# - Each database has a fallback list: mirror.gcr.io first, then ghcr.io. Every attempt tries each repository on its
+#   own, under `timeout`, so a stalled mirror costs one timeout before ghcr.io is tried; 3 attempts in all.
+# - cache: "true" (main.yml, nightly) keeps the two database directories in actions/cache, keyed by UTC date. The
+#   download is always attempted, and Trivy refreshes an older cached database; the cache is only the fallback if
+#   every attempt fails. cache: "false" (release.yml) never restores anything: the release scan uses a freshly
+#   downloaded database or the job fails.
+# - Either way, the job fails if a database is missing or too old, by its own UpdatedAt: 48 h for the vulnerability DB
+#   (rebuilt every 6 h, so 48 h tolerates a day and a half of missed builds) and 96 h for the Java DB (an artifact
+#   index with no CVEs; Trivy's own NextUpdate for it is UpdatedAt + 72 h, plus a day of slack). So the cache can only
+#   rescue a job while it is recent, however old the restored key. A scan is never skipped.
+# - A failed job skips actions/cache's post-step save (it saves only on success), so a stale copy can never be stored
+#   under a newer key. restore-keys stays: the first run of each UTC day has no exact hit, and then the prefix match
+#   is the only fallback, which the age bound keeps safe.
+name: trivy-db
+description: Download the Trivy vulnerability and Java databases with fallback repositories, bounded retries and an optional cache.
+inputs:
+  cache:
+    description: 'Restore and save the databases with actions/cache ("true"), or always download cold ("false").'
+    required: false
+    default: "false"
+runs:
+  using: composite
+  steps:
+    - name: Get the UTC date for the cache key
+      if: inputs.cache == 'true'
+      id: date
+      shell: bash
+      run: echo "utc=$(date -u +%F)" >> "$GITHUB_OUTPUT"
+
+    - name: Restore the Trivy databases
+      if: inputs.cache == 'true'
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: |
+          ~/.cache/trivy/db
+          ~/.cache/trivy/java-db
+        key: trivy-db-${{ runner.os }}-${{ steps.date.outputs.utc }}
+        restore-keys: |
+          trivy-db-${{ runner.os }}-
+
+    - name: Download the Trivy databases (fallback repositories, bounded retries)
+      shell: bash
+      env:
+        DB_REPOSITORIES: mirror.gcr.io/aquasec/trivy-db:2,ghcr.io/aquasecurity/trivy-db:2
+        JAVA_DB_REPOSITORIES: mirror.gcr.io/aquasec/trivy-java-db:1,ghcr.io/aquasecurity/trivy-java-db:1
+        ATTEMPT_TIMEOUT: 60s
+        DB_MAX_AGE_HOURS: "48"
+        JAVA_DB_MAX_AGE_HOURS: "96"
+      run: |
+        set -uo pipefail
+        trivy_dir="${XDG_CACHE_HOME:-$HOME/.cache}/trivy"
+
+        fetch() { # label only-flag repo-flag comma-separated-repositories
+          local repo attempt
+          for attempt in 1 2 3; do
+            IFS=',' read -ra repos <<< "$4"
+            for repo in "${repos[@]}"; do
+              if timeout "$ATTEMPT_TIMEOUT" trivy image --quiet "$2" "$3" "$repo"; then
+                echo "$1 downloaded from $repo (attempt $attempt)"
+                return 0
+              fi
+              echo "::warning::$1 download from $repo failed or timed out (attempt $attempt of 3)"
+            done
+            sleep $((attempt * 5))
+          done
+          return 1
+        }
+
+        failed=0
+        fetch "Vulnerability DB" --download-db-only --db-repository "$DB_REPOSITORIES" || failed=1
+        fetch "Java DB" --download-java-db-only --java-db-repository "$JAVA_DB_REPOSITORIES" || failed=1
+
+        # Every DB, fresh or cached, must exist and be younger than its bound, judged by the DB's own UpdatedAt (the
+        # build time in metadata.json), not by the cache key. A cached copy is thus accepted only while it is recent.
+        check_age() { # label dir max-hours db-file
+          local meta="$trivy_dir/$2/metadata.json" db updated age
+          db="$trivy_dir/$2/$4"
+          if [ ! -s "$db" ] || [ ! -s "$meta" ]; then
+            echo "::error::$1 is missing in $trivy_dir/$2: the scan cannot run without it"
+            return 1
+          fi
+          updated=$(jq -r .UpdatedAt "$meta")
+          age=$(( ( $(date -u +%s) - $(date -u -d "$updated" +%s 2>/dev/null || echo 0) ) / 3600 ))
+          if [ "$age" -gt "$3" ]; then
+            echo "::error::$1 was built $age h ago (UpdatedAt $updated), older than the $3 h bound: refusing to scan with it"
+            return 1
+          fi
+          echo "$1 is $age h old (bound $3 h)"
+        }
+        bad=0
+        check_age "Vulnerability DB" db "$DB_MAX_AGE_HOURS" trivy.db || bad=1
+        check_age "Java DB" java-db "$JAVA_DB_MAX_AGE_HOURS" trivy-java.db || bad=1
+        [ "$bad" -eq 0 ] || exit 1
+        if [ "$failed" -ne 0 ]; then
+          echo "::warning::A download failed on every attempt; scanning with the cached database, within its age bound."
+        fi
+        trivy --version
