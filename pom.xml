@@ -861,12 +861,13 @@
         <artifactId>maven-failsafe-plugin</artifactId>
         <configuration>
           <!-- Oracle ITs run only in the oracle-it profile's per-image executions; heap ITs only in heap-256m;
-               perf ITs (a 50 000-case seed, minutes long) only in the perf-it profile's perf-50k execution; the
+               perf ITs (a 50 000-case seed, minutes long) only in the perf-it profile's perf-50k execution, and
+               the 500k-comment ones only in its perf-500k and opt-in perf-500k-oracle executions; the
                role-conflict perf ITs (a 6-million-row audit seed, tens of minutes on Oracle) only in its opt-in
                role-conflict execution, which no workflow runs;
                SQL Server source ITs only in the sqlserver-it profile's sqlserver execution; the DAST seeding step,
                which needs a running stack, only in the dast profile's dast execution. -->
-          <excludedGroups>oracle,heap,perf,perf-role-conflict,sqlserver,dast</excludedGroups>
+          <excludedGroups>oracle,heap,perf,perf-500k,perf-500k-oracle,perf-role-conflict,sqlserver,dast</excludedGroups>
         </configuration>
         <executions>
           <execution>
@@ -903,7 +904,10 @@
         Performance on a synthetic 50 000-case seed (WP-15 part 5, docs/perf/cases-list-50k.md): the ITs tagged perf,
         in a JVM of their own, with their own PostgreSQL container. Run by hand and by the nightly workflow with
           ./mvnw -Pperf-it test-compile org.apache.maven.plugins:maven-failsafe-plugin:integration-test@perf-50k org.apache.maven.plugins:maven-failsafe-plugin:verify@perf-50k
-        The p50/p95/max table is written to target/perf/cases-list-50k.md.
+        The p50/p95/max table is written to target/perf/cases-list-50k.md. The same with 500 000 comments on top (WP-30,
+        docs/perf/release-500k.md): the ITs tagged perf-500k, in the perf-500k execution, likewise in a JVM and container
+        of their own; the nightly workflow runs both executions in one command, and the table is written to
+        target/perf/comments-500k-postgresql.md.
       -->
       <id>perf-it</id>
       <build>
@@ -923,6 +927,36 @@
                   <excludedGroups combine.self="override"/>
                   <reportsDirectory>${project.build.directory}/failsafe-reports/perf-50k</reportsDirectory>
                   <summaryFile>${project.build.directory}/failsafe-reports/perf-50k/failsafe-summary.xml</summaryFile>
+                </configuration>
+              </execution>
+              <execution>
+                <id>perf-500k</id>
+                <goals>
+                  <goal>integration-test</goal>
+                  <goal>verify</goal>
+                </goals>
+                <configuration>
+                  <groups>perf-500k</groups>
+                  <excludedGroups combine.self="override"/>
+                  <reportsDirectory>${project.build.directory}/failsafe-reports/perf-500k</reportsDirectory>
+                  <summaryFile>${project.build.directory}/failsafe-reports/perf-500k/failsafe-summary.xml</summaryFile>
+                </configuration>
+              </execution>
+              <execution>
+                <!-- Opt-in, not in any workflow (Oracle seeds the 500k comments in minutes): ./mvnw -Pperf-it
+                     test-compile org.apache.maven.plugins:maven-failsafe-plugin:integration-test@perf-500k-oracle
+                     org.apache.maven.plugins:maven-failsafe-plugin:verify@perf-500k-oracle
+                     (-Dtrailkeep.oracle.image=oracle-xe for xe 21); see docs/perf/release-500k.md. -->
+                <id>perf-500k-oracle</id>
+                <goals>
+                  <goal>integration-test</goal>
+                  <goal>verify</goal>
+                </goals>
+                <configuration>
+                  <groups>perf-500k-oracle</groups>
+                  <excludedGroups combine.self="override"/>
+                  <reportsDirectory>${project.build.directory}/failsafe-reports/perf-500k-oracle</reportsDirectory>
+                  <summaryFile>${project.build.directory}/failsafe-reports/perf-500k-oracle/failsafe-summary.xml</summaryFile>
                 </configuration>
               </execution>
               <execution>

@@ -135,6 +135,12 @@ measurement in WP-30, with the evidence to weigh them against.
 
 ### Exports and database connections
 
+**Superseded by WP-30** (`release-500k.md`, "Exports and database connections"): measured under concurrency, holding
+the connection while streaming also deadlocked the pool, because committing the response saves the session through a
+second connection. Both exports now read each page in a transaction of its own and write it afterwards. Recommendations
+1 and 2 above were weighed there too, with the 500k run, and are not applied. What follows is the WP-15 analysis as it
+was.
+
 An export holds one database connection for as long as it streams. It reads its pages inside one read-only
 transaction while it writes the response. The measured hold for 9 645 rows with details is about **0.5 s**:
 - 506 ms p50 and 536 ms max in-process, with the whole request inside the transaction;

@@ -7,6 +7,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- Performance at the 500k seed (WP-30 part a, `docs/perf/release-500k.md`). BUILD_PLAN's "500k" is comments: the
+  50 000 cases of `cases-list-50k.md` plus `perf/seed-comments-postgresql.sql`, 500 000 synthetic, deterministic
+  comments with their search text and `COMMENT_ADDED` audit events (8 a case, 208 on every hundredth), which make each
+  case's search text about seventeen times longer; `perf/seed-cases-oracle.sql` and `perf/seed-comments-oracle.sql`
+  write the same rows on Oracle. `PostgresComments500kPerfIT` (tag `perf-500k`, execution `perf-500k`) and
+  `OracleComments500kPerfIT` (`perf-500k-oracle`, opt-in) time the list, three searches, the case page and History
+  tab of a 208-comment case, the aging report and posting a comment, in process, and assert the targets; they share
+  `PerfReport` with `PerfCasesListIT`. The nightly `perf` job runs the 50k and the 500k executions in one command
+  (about three minutes more) and uploads both tables as the `perf` artifact. `perf/k6/release-mix.js` is the
+  release-time HTTP run: the lists, searches, case and History pages, dashboard, an Analyst's view, the reports and the
+  export, signed in through the identity provider. On PostgreSQL every target is met at the 500k seed with ten
+  requests always in flight (k6: list p95 190 ms, search 496 ms, the 208-comment case page 390 ms, the aging report
+  under 0.3 s). On Oracle the every-team search misses: about 0.3 s at 50k, 2.0 to 2.4 s at 500k, against 1 s, which
+  is BUILD_PLAN's condition for pulling the v1.1 vendor search adapters forward; that is left to the owner, and
+  `OracleComments500kPerfIT` fails on it until then. The cases-list indexes of `cases-list-50k.md` are not added (no
+  `V21`): the list reads no comments and did not slow down, and the recommended `(OPENED_AT, ID)` index would not
+  serve the list's `DESC NULLS LAST, ID ASC` order; the page records the matching index and when it pays.
+
 ### Changed
 
 - Keycloak 26.8.2-2 (compose and test image) and the Nu Html Checker image digest, landed as one change because
@@ -49,6 +69,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   replicas × 20 sessions; the purge, importer and migration profiles set `minimum-idle: 1`, so their single-threaded
   Jobs open connections only as they need them. `deploy/README.md` gives the sizing rule (at least the download slots
   plus 10) and the Oracle session parameters it touches.
+- `perf/k6/cases-smoke.js` keeps the identity provider's cookies too: Keycloak 26 marks them `Secure`, so over the
+  local stack's plain http the sign-in was refused with a 400 and the smoke could not run.
 
 ## [0.3.0] - 2026-11-22
 

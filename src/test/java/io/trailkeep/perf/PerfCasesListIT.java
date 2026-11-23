@@ -17,7 +17,6 @@ import io.trailkeep.user.TeamRole;
 import io.trailkeep.user.UserPermissions;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -35,8 +34,6 @@ import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestMethodOrder;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
@@ -52,9 +49,10 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
  * The cases list at 50 000 cases on PostgreSQL (WP-15 part 5; IMPLEMENTATION_PLAN WP-15 "p95 < 500 ms at 50k"). The
  * synthetic seed {@code perf/seed-cases-postgresql.sql} is applied once and committed to this class's own container
  * (the {@code perf} failsafe execution runs in a JVM of its own, never next to other tests). Each scenario is a full
- * request through security, the controller, the scoped queries and Thymeleaf, sent {@value #WARM_UP} times to warm
- * up and then {@value #SAMPLES} times measured; the p50, p95 and max go to {@code target/perf/cases-list-50k.md}.
- * The targets are asserted: {@code GET /cases} p95 under 500 ms and the search p95 under 1 s.
+ * request through security, the controller, the scoped queries and Thymeleaf, sent {@value PerfReport#WARM_UP} times
+ * to warm up and then {@value PerfReport#SAMPLES} times measured; the p50, p95 and max go to {@code
+ * target/perf/cases-list-50k.md}. The targets are asserted: {@code GET /cases} p95 under 500 ms and the search p95
+ * under 1 s.
  */
 // "IT" is the Failsafe suffix Part B mandates for integration tests, not an abbreviation.
 @SuppressWarnings("checkstyle:AbbreviationAsWordInName")
@@ -71,13 +69,11 @@ class PerfCasesListIT {
     static final long ANALYST = 900_000_001L;
     static final long ANALYST_TEAM = 900_000_001L;
 
-    private static final Logger LOG = LoggerFactory.getLogger(PerfCasesListIT.class);
-    private static final int WARM_UP = 10;
-    private static final int SAMPLES = 60;
     private static final long LIST_TARGET_MS = 500;
     private static final long SEARCH_TARGET_MS = 1000;
     private static final AtomicBoolean SEEDED = new AtomicBoolean();
-    private static final List<String> REPORT = Collections.synchronizedList(new ArrayList<>());
+    private static final PerfReport REPORT =
+            new PerfReport("Cases list at 50 000 cases (PerfCasesListIT)", "cases-list-50k.md");
 
     @Autowired
     private MockMvc mvc;
@@ -249,62 +245,14 @@ class PerfCasesListIT {
 
     @AfterAll
     static void writeReport() throws IOException {
-        Path out = Path.of("target", "perf", "cases-list-50k.md");
-        Files.createDirectories(out.getParent());
-        List<String> lines = new ArrayList<>();
-        lines.add("# Cases list at 50 000 cases (PerfCasesListIT)");
-        lines.add("");
-        lines.add("| Scenario | p50 ms | p95 ms | max ms |");
-        lines.add("|---|---:|---:|---:|");
-        synchronized (REPORT) {
-            REPORT.stream().filter(line -> line.startsWith("|")).forEach(lines::add);
-            lines.add("");
-            REPORT.stream().filter(line -> !line.startsWith("|")).forEach(lines::add);
-        }
-        Files.write(out, lines, StandardCharsets.UTF_8);
-        lines.forEach(line -> LOG.info("{}", line));
+        REPORT.write();
     }
 
-    /** Sends a request, warms up, measures, records the percentiles and returns the p95 in milliseconds. */
     private long p95(String scenario, MockHttpServletRequestBuilder request) throws Exception {
-        for (int i = 0; i < WARM_UP; i++) {
-            mvc.perform(request).andExpect(status().isOk());
-        }
-        List<Long> times = new ArrayList<>(SAMPLES);
-        for (int i = 0; i < SAMPLES; i++) {
-            long started = System.nanoTime();
-            mvc.perform(request).andExpect(status().isOk());
-            times.add((System.nanoTime() - started) / 1_000);
-        }
-        return record(scenario, times);
+        return REPORT.p95(mvc, scenario, request);
     }
 
     private void timed(String scenario, Runnable call) {
-        for (int i = 0; i < WARM_UP; i++) {
-            call.run();
-        }
-        List<Long> times = new ArrayList<>(SAMPLES);
-        for (int i = 0; i < SAMPLES; i++) {
-            long started = System.nanoTime();
-            call.run();
-            times.add((System.nanoTime() - started) / 1_000);
-        }
-        record(scenario, times);
-    }
-
-    /** Records p50, p95 and max of times in microseconds, as milliseconds; returns the p95 in whole milliseconds. */
-    private static long record(String scenario, List<Long> times) {
-        List<Long> sorted = new ArrayList<>(times);
-        Collections.sort(sorted);
-        long p50 = sorted.get(sorted.size() / 2);
-        long p95 = sorted.get((int) Math.ceil(sorted.size() * 0.95) - 1);
-        REPORT.add(String.format(
-                Locale.ROOT,
-                "| %s | %.1f | %.1f | %.1f |",
-                scenario,
-                p50 / 1000.0,
-                p95 / 1000.0,
-                sorted.get(sorted.size() - 1) / 1000.0));
-        return p95 / 1000;
+        REPORT.timed(scenario, call);
     }
 }
