@@ -18,10 +18,12 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -38,7 +40,8 @@ import org.springframework.transaction.support.TransactionTemplate;
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE)
 class UserSignInServiceIT {
 
-    private static final String EMAIL = "user@example.test";
+    private final List<String> subjects = new ArrayList<>();
+    private final List<Long> teamIds = new ArrayList<>();
 
     @Autowired
     private UserSignInService service;
@@ -57,6 +60,14 @@ class UserSignInServiceIT {
 
     @Autowired
     private TransactionTemplate transactions;
+
+    @Autowired
+    private JdbcTemplate jdbc;
+
+    @AfterEach
+    void removeCommittedRows() {
+        CommittedSignIns.remove(jdbc, subjects, teamIds);
+    }
 
     @Autowired
     private AuditTrailService auditTrail;
@@ -85,7 +96,7 @@ class UserSignInServiceIT {
             assertThat(event.actorName()).isIn("Old Name", "New Name").doesNotContain("@");
             assertThat(String.valueOf(event.changes().oldValuesJson())
                             + event.changes().newValuesJson())
-                    .doesNotContain(EMAIL);
+                    .doesNotContain(CommittedSignIns.email(subject));
         });
     }
 
@@ -127,6 +138,7 @@ class UserSignInServiceIT {
         String subject = subject();
         UserAccount account = signedIn(service.signIn(identity(subject, "Lead"), Set.of()));
         Team team = teams.save(new Team("Team " + UUID.randomUUID()));
+        teamIds.add(id(team));
         memberships.save(new AppUserTeam(new AppUserTeamId(account.id(), id(team)), TeamRole.MANAGER));
 
         UserAccount again = signedIn(service.signIn(
@@ -187,12 +199,14 @@ class UserSignInServiceIT {
         return ((SignInOutcome.SignedIn) outcome).account();
     }
 
-    private static ExternalIdentity identity(String subject, String name) {
-        return new ExternalIdentity(subject, name, EMAIL);
+    private ExternalIdentity identity(String subject, String name) {
+        return new ExternalIdentity(subject, name, CommittedSignIns.email(subject));
     }
 
-    private static String subject() {
-        return "subject-" + UUID.randomUUID();
+    private String subject() {
+        String subject = "subject-" + UUID.randomUUID();
+        subjects.add(subject);
+        return subject;
     }
 
     private static Long id(Team team) {
