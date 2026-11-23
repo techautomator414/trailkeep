@@ -9,6 +9,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Audited re-send of failed mail (#318): Compliance Admins list `FAILED` outbox mail at `/admin/outbox` (recipient
+  partly hidden, case numbers only for cases they may read) and put chosen mails, at most 50 at a time, back to
+  `PENDING` with a `MAIL_REQUEUED` audit event each, in the same transaction; two admins choosing one mail move it
+  once. RUNBOOK §8.2 uses it and keeps the SQL as break-glass.
 - Semgrep, gitleaks and CodeQL now run in the release (#321, IMPLEMENTATION_PLAN Part G "release" column), and
   publishing waits for them. `ci.yml` and `codeql.yml` are callable (`workflow_call`) with their triggers, rules and job
   names unchanged. gitleaks scans every commit since the previous release tag (the action sees no commits on a tag

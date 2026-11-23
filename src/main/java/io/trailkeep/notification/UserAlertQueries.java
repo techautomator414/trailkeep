@@ -6,6 +6,7 @@ import io.trailkeep.shared.access.CaseScope;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.CriteriaQuery;
+import jakarta.persistence.criteria.Path;
 import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
 import jakarta.persistence.criteria.Subquery;
@@ -87,19 +88,33 @@ class UserAlertQueries {
         if (unreadOnly) {
             all.add(cb.isNull(alert.get("readAt")));
         }
-        if (!scope.isUnrestricted()) {
-            Predicate noCase = cb.isNull(alert.get("caseId"));
-            EntityType<?> caseEntity = caseEntity();
-            if (caseEntity == null) {
-                all.add(noCase);
-            } else {
-                Subquery<Long> readable = query.subquery(Long.class);
-                Root<?> caseRoot = readable.from(caseEntity);
-                readable.select(caseRoot.<Long>get("id")).where(scope.toPredicate(caseRoot, query, cb));
-                all.add(cb.or(noCase, alert.<Long>get("caseId").in(readable)));
-            }
-        }
+        all.add(listed(scope, alert.get("caseId"), query, cb));
         return all.toArray(Predicate[]::new);
+    }
+
+    /**
+     * Whether a row naming a case (or none) is visible to the scope: no case always is, a case only while the scope
+     * reads it; an unrestricted scope sees everything. Fails closed when the case entity is not registered.
+     *
+     * @param scope the scope
+     * @param caseId the row's case id attribute
+     * @param query the query being built
+     * @param cb the criteria builder
+     * @return the predicate
+     */
+    Predicate listed(CaseScope scope, Path<Long> caseId, CriteriaQuery<?> query, CriteriaBuilder cb) {
+        if (scope.isUnrestricted()) {
+            return cb.conjunction();
+        }
+        Predicate noCase = cb.isNull(caseId);
+        EntityType<?> caseEntity = caseEntity();
+        if (caseEntity == null) {
+            return noCase;
+        }
+        Subquery<Long> readable = query.subquery(Long.class);
+        Root<?> caseRoot = readable.from(caseEntity);
+        readable.select(caseRoot.<Long>get("id")).where(scope.toPredicate(caseRoot, query, cb));
+        return cb.or(noCase, caseId.in(readable));
     }
 
     private @Nullable EntityType<?> caseEntity() {
