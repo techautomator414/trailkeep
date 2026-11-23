@@ -10,7 +10,6 @@ import io.trailkeep.audit.AuditTrailService;
 import io.trailkeep.shared.access.CaseScope;
 import io.trailkeep.testsupport.PostgresTestcontainersConfiguration;
 import io.trailkeep.testsupport.RequiresDocker;
-import jakarta.persistence.EntityManager;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -24,16 +23,19 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
-/** Provisioning, global-role sync, the System-Admin conflict rule and disabled refusal, on PostgreSQL. */
+/**
+ * Provisioning, global-role sync, the System-Admin conflict rule and disabled refusal, on PostgreSQL. Not
+ * transactional: a sign-in runs its own transactions and refuses to run inside a caller's, so each test commits and
+ * uses its own subject.
+ */
 // "IT" is the Failsafe suffix Part B mandates for integration tests, not an abbreviation.
 @SuppressWarnings("checkstyle:AbbreviationAsWordInName")
 @RequiresDocker
 @ActiveProfiles("test")
 @Import(PostgresTestcontainersConfiguration.class)
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE)
-@Transactional
 class UserSignInServiceIT {
 
     private static final String EMAIL = "user@example.test";
@@ -54,7 +56,7 @@ class UserSignInServiceIT {
     private AppUserGlobalRoleRepository globalRoles;
 
     @Autowired
-    private EntityManager entityManager;
+    private TransactionTemplate transactions;
 
     @Autowired
     private AuditTrailService auditTrail;
@@ -68,7 +70,6 @@ class UserSignInServiceIT {
 
         UserAccount first = signedIn(service.signIn(identity(subject, "Old Name"), Set.of()));
         UserAccount second = signedIn(service.signIn(identity(subject, "New Name"), Set.of()));
-        flushAndClear();
 
         assertThat(second.id()).isEqualTo(first.id());
         AppUser stored = users.findByExternalId(subject).orElseThrow();
@@ -93,9 +94,7 @@ class UserSignInServiceIT {
         String subject = subject();
 
         signedIn(service.signIn(identity(subject, "Admin"), Set.of(GlobalRole.COMPLIANCE_ADMIN)));
-        flushAndClear();
         UserAccount account = signedIn(service.signIn(identity(subject, "Admin"), Set.of(GlobalRole.SYSTEM_ADMIN)));
-        flushAndClear();
 
         assertThat(account.globalRoles()).containsExactly(GlobalRole.SYSTEM_ADMIN);
         assertThat(globalRoles.findByIdUserId(account.id()))
@@ -119,7 +118,6 @@ class UserSignInServiceIT {
 
         UserAccount account = signedIn(service.signIn(identity(subject, "Same"), Set.of(GlobalRole.COMPLIANCE_ADMIN)));
         signedIn(service.signIn(identity(subject, "Same"), Set.of(GlobalRole.COMPLIANCE_ADMIN)));
-        flushAndClear();
 
         assertThat(actions(account.id())).containsExactly("USER_PROVISIONED", "LOGIN", "GLOBAL_ROLES_CHANGED", "LOGIN");
     }
@@ -129,13 +127,10 @@ class UserSignInServiceIT {
         String subject = subject();
         UserAccount account = signedIn(service.signIn(identity(subject, "Lead"), Set.of()));
         Team team = teams.save(new Team("Team " + UUID.randomUUID()));
-        flushAndClear();
         memberships.save(new AppUserTeam(new AppUserTeamId(account.id(), id(team)), TeamRole.MANAGER));
-        flushAndClear();
 
         UserAccount again = signedIn(service.signIn(
                 identity(subject, "Lead"), Set.of(GlobalRole.SYSTEM_ADMIN, GlobalRole.COMPLIANCE_ADMIN)));
-        flushAndClear();
 
         assertThat(again.globalRoles()).containsExactly(GlobalRole.COMPLIANCE_ADMIN);
         assertThat(again.teamRoles()).isEqualTo(Map.of(team.getName(), TeamRole.MANAGER));
@@ -146,7 +141,6 @@ class UserSignInServiceIT {
         assertThat(actions(account.id())).containsSubsequence("LOGIN", "ROLE_CONFLICT", "GLOBAL_ROLES_CHANGED");
 
         memberships.delete(memberships.findByIdUserId(account.id()).getFirst());
-        flushAndClear();
         UserAccount resolved = signedIn(service.signIn(identity(subject, "Lead"), Set.of(GlobalRole.SYSTEM_ADMIN)));
 
         assertThat(resolved.globalRoles()).containsExactly(GlobalRole.SYSTEM_ADMIN);
@@ -157,16 +151,14 @@ class UserSignInServiceIT {
     void disabledUserIsRefusedAndNothingIsUpdated() {
         String subject = subject();
         UserAccount account = signedIn(service.signIn(identity(subject, "Before"), Set.of()));
-        users.findById(account.id()).orElseThrow().disable();
-        flushAndClear();
+        transactions.executeWithoutResult(
+                status -> users.findById(account.id()).orElseThrow().disable());
         final @Nullable Instant lastLoginBefore =
                 users.findById(account.id()).orElseThrow().getLastLoginAt();
-        flushAndClear();
 
         final int eventsBefore = audit(account.id()).size();
 
         SignInOutcome outcome = service.signIn(identity(subject, "After"), Set.of(GlobalRole.COMPLIANCE_ADMIN));
-        flushAndClear();
 
         assertThat(outcome).isEqualTo(new SignInOutcome.Disabled(account.id()));
         AppUser after = users.findById(account.id()).orElseThrow();
@@ -205,10 +197,5 @@ class UserSignInServiceIT {
 
     private static Long id(Team team) {
         return java.util.Objects.requireNonNull(team.getId());
-    }
-
-    private void flushAndClear() {
-        entityManager.flush();
-        entityManager.clear();
     }
 }

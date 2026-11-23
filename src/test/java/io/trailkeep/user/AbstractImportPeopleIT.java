@@ -53,7 +53,7 @@ abstract class AbstractImportPeopleIT {
     private TeamAdminService teamAdmin;
 
     @Autowired
-    private UserSignInService signIn;
+    private UserSignInServiceImpl signIn;
 
     @Autowired
     private AppUserRepository users;
@@ -98,10 +98,12 @@ abstract class AbstractImportPeopleIT {
 
     @Test
     void signingInWithAPrincipalsSubjectIsRefusedAndChangesNothing() {
-        SignInOutcome outcome = signIn.signIn(
+        // The sign-in's transactional body: signIn itself refuses to run inside this test's transaction.
+        SignInOutcome outcome = signIn.signInProvisioned(
                 new ExternalIdentity(
                         ImportPeopleService.PRINCIPAL_PREFIX + "import", "Someone Else", "someone@example.invalid"),
-                Set.of(GlobalRole.COMPLIANCE_ADMIN));
+                Set.of(GlobalRole.COMPLIANCE_ADMIN),
+                Instant.now());
 
         assertThat(outcome).isEqualTo(new SignInOutcome.Disabled(IMPORTER_ID));
         assertThat(directory.displayName(IMPORTER_ID)).contains("Trailkeep import");
