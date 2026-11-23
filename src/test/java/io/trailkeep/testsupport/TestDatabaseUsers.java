@@ -80,6 +80,14 @@ public final class TestDatabaseUsers implements Callback {
             readableProbe(context.getConnection());
             return;
         }
+        createGrantees();
+    }
+
+    /**
+     * Creates the three grantees if they do not exist, as before a migrate: for a database that is restored rather
+     * than migrated, whose grants name them.
+     */
+    public void createGrantees() {
         try (Connection admin = adminConnection();
                 Statement statement = admin.createStatement()) {
             statement.execute(script());
