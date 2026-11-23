@@ -1,33 +1,15 @@
 -- SPDX-License-Identifier: Apache-2.0
 -- Copyright 2026 Charlie Genova and contributors
--- V21 search index, Oracle (WP-30 part a2, #299; ADR-0017). An Oracle Text CONTEXT index on
--- CASE_SEARCH.SEARCH_TEXT for OracleTextSearchGateway, which narrows the LIKE search with it: at the 500k seed LIKE
--- reads every case's CLOB, twice a search (docs/perf/release-500k.md). PostgreSQL's V21 is a trigram index instead.
---
--- Parameters, each a system preference of CTXSYS, so the schema owner needs no CTXAPP role and no CTX_DDL grant:
---   DIRECT_DATASTORE, NULL_FILTER   the column's own text, already plain
---   BASIC_LEXER, BASIC_WORDLIST     Oracle's defaults whatever the database language, so tokens are the same everywhere:
---                                   runs of letters and digits, upper-cased; OracleTextQuery relies on that
---   EMPTY_STOPLIST                  every word is indexed: "the" is a word a search must find
---   SYNC (ON COMMIT)                the committing transaction indexes its rows before its commit returns
---   TRANSACTIONAL                   a query also reads rows not yet indexed, the session's own uncommitted ones included,
---                                   so a search never misses text its writer has saved (BUILD_PLAN section 4 "Search")
---   OPTIMIZE (AUTO_DAILY)           CTXSYS's scheduler optimises the index nightly (each commit adds index fragments)
--- Oracle Text must be installed (it is by default; the slim container images remove it). No entity change; grants are
--- unchanged: the runtime, purge and import users write CASE_SEARCH as before, and Oracle Text maintains the index.
---
--- No optimizer statistics on the index. When a CONTEXT index has them, Oracle Text estimates a CONTAINS predicate's
--- selectivity by running the query, and the optimizer asks for that estimate at every execution of a statement whose
--- query is bound: at the 500k seed it doubled every search. Without them the estimate is immediate. So the index's
--- statistics are deleted and CASE_SEARCH's are locked as they stand, which the automatic statistics job respects
--- (deploy/README.md: do not unlock them or gather them with force). The table is read by its primary key, the index
--- or a full scan, which need no fresh statistics.
---
--- Built ONLINE: without it, every write to CASE_SEARCH fails with ORA-29861 (index LOADING) until the build ends, and
--- the previous release keeps serving while the migration Job runs; ONLINE queues those writes and indexes them after.
---
--- Re-runnable, as Oracle commits DDL: after a failure and "flyway repair", the block drops an index a failed build left
--- unusable, builds the index unless it is there and usable, and deletes and locks the statistics again.
+-- V21 search index, Oracle (WP-30 part a2, #299; ADR-0017 has the reasons and the measurements). An Oracle Text
+-- CONTEXT index on CASE_SEARCH.SEARCH_TEXT for OracleTextSearchGateway. Needs Oracle Text installed (it is by
+-- default); every preference is a CTXSYS system preference, so the owner needs no CTXAPP role. BASIC_LEXER and
+-- BASIC_WORDLIST rather than the language-dependent defaults (OracleTextQuery relies on their tokens); EMPTY_STOPLIST;
+-- SYNC (ON COMMIT) TRANSACTIONAL, so a search never lags a write; OPTIMIZE (AUTO_DAILY) by CTXSYS's scheduler. Built
+-- ONLINE: otherwise writes fail with ORA-29861 during the build while the previous release still serves.
+-- The index's optimizer statistics are deleted and CASE_SEARCH's locked: with them, Oracle Text estimates every
+-- CONTAINS by running it, at every execution (deploy/README.md: do not unlock or force-gather them).
+-- Re-runnable after "flyway repair": an index a failed build left unusable is dropped and built again.
+-- No entity change; grants unchanged: the runtime, purge and import users write CASE_SEARCH as before.
 DECLARE
   v_found  PLS_INTEGER;
   v_usable PLS_INTEGER;

@@ -38,14 +38,7 @@ class LikeSearchGateway implements SearchGateway {
         return cb.or(numberContains(text, caseRoot, cb), caseRoot.get("id").in(matching));
     }
 
-    /**
-     * The words every case's search text must contain: the text split at white space, lower-cased like the stored
-     * text, without repeats, at most {@link #MAX_WORDS}. Every adapter matches these words, so they agree on what a
-     * search means.
-     *
-     * @param text the search text, stripped and not blank
-     * @return the words, in the order written
-     */
+    /** The words every adapter matches: split at white space, lower-cased, distinct, at most {@link #MAX_WORDS}. */
     static List<String> words(String text) {
         return Arrays.stream(text.split("\\s+"))
                 .map(CaseSearch::normalized)
@@ -54,26 +47,12 @@ class LikeSearchGateway implements SearchGateway {
                 .toList();
     }
 
-    /**
-     * The case number containing the text, ignoring case.
-     *
-     * @param text the search text
-     * @param caseRoot the {@code CaseRecord} root of the query
-     * @param cb the criteria builder
-     * @return the predicate
-     */
+    /** The case number containing the text, ignoring case. */
     static Predicate numberContains(String text, Root<CaseRecord> caseRoot, CriteriaBuilder cb) {
         return cb.like(cb.upper(caseRoot.<String>get("caseNumber")), contains(text.toUpperCase(Locale.ROOT)), ESCAPE);
     }
 
-    /**
-     * One {@code LIKE '%word%'} per word.
-     *
-     * @param words lower-cased words
-     * @param haystack {@code SEARCH_TEXT}
-     * @param cb the criteria builder
-     * @return the predicates
-     */
+    /** One {@code LIKE '%word%'} on {@code SEARCH_TEXT} per lower-cased word. */
     static List<Predicate> containsEach(Collection<String> words, Expression<String> haystack, CriteriaBuilder cb) {
         return words.stream()
                 .map(word -> cb.like(haystack, contains(word), ESCAPE))
