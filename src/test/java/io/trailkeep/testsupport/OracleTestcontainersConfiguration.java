@@ -34,6 +34,9 @@ public class OracleTestcontainersConfiguration {
     /** Image used when the property is absent: the name of {@code images/oracle-free}. */
     public static final String DEFAULT_IMAGE = "oracle-free";
 
+    /** System property: the size in MB of the three redo log groups to give the container (opt-in). */
+    public static final String REDO_PROPERTY = "trailkeep.oracle.redo-mb";
+
     private static final Duration STARTUP = Duration.ofMinutes(5);
 
     /** The started container per image; one image per Failsafe execution, so one entry per JVM. */
@@ -80,8 +83,64 @@ public class OracleTestcontainersConfiguration {
             container = new org.testcontainers.oracle.OracleContainer(name).withStartupTimeout(STARTUP);
         }
         container.start();
+        resizeRedo(container);
         Runtime.getRuntime().addShutdownHook(new Thread(container::stop, "stop-" + name.getRepository()));
         return container;
+    }
+
+    /**
+     * Opt-in, {@code -Dtrailkeep.oracle.redo-mb=512}: replaces the image's two 20 MB redo log groups with three of
+     * that size, as a production database has (issue 308, {@code deploy/README.md}); a no-op without the property.
+     * Runs as {@code SYSTEM} in the root container, where the redo logs are, before any test touches the database.
+     */
+    private static void resizeRedo(JdbcDatabaseContainer<?> container) {
+        String size = System.getProperty(REDO_PROPERTY);
+        if (size == null || size.isBlank() || "0".equals(size.strip())) {
+            return;
+        }
+        int megabytes = Integer.parseInt(size.strip());
+        String root = container.getJdbcUrl().replaceAll("(?i)(free|xe)pdb1$", "$1");
+        try (java.sql.Connection connection =
+                        java.sql.DriverManager.getConnection(root, "system", container.getPassword());
+                java.sql.Statement st = connection.createStatement()) {
+            java.util.List<Integer> old = new java.util.ArrayList<>();
+            String dir;
+            try (java.sql.ResultSet rs = st.executeQuery("SELECT GROUP# FROM V$LOG ORDER BY GROUP#")) {
+                while (rs.next()) {
+                    old.add(rs.getInt(1));
+                }
+            }
+            try (java.sql.ResultSet rs = st.executeQuery("SELECT MEMBER FROM V$LOGFILE WHERE ROWNUM = 1")) {
+                rs.next();
+                String member = rs.getString(1);
+                dir = member.substring(0, member.lastIndexOf('/') + 1);
+            }
+            int first = old.get(old.size() - 1) + 1;
+            // Three groups at least: the image has two, and a group still ACTIVE (needed for crash recovery) cannot be
+            // reused, so with two a switch waits for the checkpoint of the other.
+            for (int i = 0; i < Math.max(3, old.size()); i++) {
+                st.execute("ALTER DATABASE ADD LOGFILE GROUP " + (first + i) + " ('" + dir + "redo" + (first + i)
+                        + ".log') SIZE " + megabytes + "M");
+            }
+            for (int group : old) {
+                // A group can be dropped once it is INACTIVE: switch away from it and checkpoint.
+                for (int attempt = 0; attempt < 20; attempt++) {
+                    String status;
+                    try (java.sql.ResultSet rs = st.executeQuery("SELECT STATUS FROM V$LOG WHERE GROUP# = " + group)) {
+                        rs.next();
+                        status = rs.getString(1);
+                    }
+                    if ("INACTIVE".equals(status)) {
+                        break;
+                    }
+                    st.execute("ALTER SYSTEM SWITCH LOGFILE");
+                    st.execute("ALTER SYSTEM CHECKPOINT");
+                }
+                st.execute("ALTER DATABASE DROP LOGFILE GROUP " + group);
+            }
+        } catch (java.sql.SQLException failed) {
+            throw new IllegalStateException("Cannot resize the redo logs to " + megabytes + " MB", failed);
+        }
     }
 
     @Bean

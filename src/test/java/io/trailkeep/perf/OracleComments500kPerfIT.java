@@ -14,6 +14,8 @@ import java.util.stream.Collectors;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Tag;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.jdbc.autoconfigure.JdbcConnectionDetails;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 
@@ -30,11 +32,35 @@ import org.springframework.test.context.ActiveProfiles;
 @Import(OracleTestcontainersConfiguration.class)
 class OracleComments500kPerfIT extends AbstractComments500kPerfIT {
 
+    static {
+        // Representative redo (issue 308, deploy/README.md): the image's 20 MB groups stall one comment post in sixty
+        // for about a minute; -Dtrailkeep.oracle.redo-mb=0 measures the image as shipped. Set before the container
+        // starts, which is when the first Spring context loads.
+        if (System.getProperty(OracleTestcontainersConfiguration.REDO_PROPERTY) == null) {
+            System.setProperty(OracleTestcontainersConfiguration.REDO_PROPERTY, "512");
+        }
+    }
+
     /** A line holding only "/", which ends every statement of the Oracle seeds. */
     private static final Pattern SLASH_LINE = Pattern.compile("(?m)^/[ \\t]*$");
 
     private static final PerfReport REPORT = new PerfReport(
             "50 000 cases and 500 000 comments on Oracle (OracleComments500kPerfIT)", "comments-500k-oracle.md");
+
+    private final OracleWaitDiagnostics diagnostics = new OracleWaitDiagnostics();
+
+    @Autowired
+    JdbcConnectionDetails connection;
+
+    @Override
+    void diagnosticsStart() {
+        diagnostics.start(connection);
+    }
+
+    @Override
+    void diagnosticsFinish() {
+        diagnostics.finish().forEach(line -> report().add("Diagnostics, comment post: " + line));
+    }
 
     @Override
     void applySeeds(DataSource dataSource) {

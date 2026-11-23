@@ -180,14 +180,25 @@ abstract class AbstractComments500kPerfIT {
     void postingToLongThreadIsTimed() throws Exception {
         // Last, because it adds comments: the search text append, the audit event and the owner's mail on a case whose
         // text is already about 36 000 characters long.
-        report().p95(
-                        mvc,
-                        "POST /cases/{number}/comments (208 comments and more)",
-                        post("/cases/" + LONG_THREAD + "/comments")
-                                .param("body", "Perf comment.")
-                                .with(csrf()),
-                        status().is3xxRedirection());
+        diagnosticsStart();
+        try {
+            report().p95(
+                            mvc,
+                            "POST /cases/{number}/comments (208 comments and more)",
+                            post("/cases/" + LONG_THREAD + "/comments")
+                                    .param("body", "Perf comment.")
+                                    .with(csrf()),
+                            status().is3xxRedirection());
+        } finally {
+            diagnosticsFinish();
+        }
     }
+
+    /** Opt-in evidence before the comment post scenario; vendors without any do nothing. */
+    void diagnosticsStart() {}
+
+    /** Opt-in evidence after the comment post scenario. */
+    void diagnosticsFinish() {}
 
     @Test
     @Order(6)
