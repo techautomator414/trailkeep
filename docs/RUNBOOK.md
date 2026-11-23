@@ -483,14 +483,14 @@ worked example `docs/importer/worked-example.md`. Go-live is the last run agains
    SELECT IDX_SYNC_TYPE FROM CTX_USER_INDEXES WHERE IDX_NAME = 'IX_CASE_SEARCH_TEXT';    -- ON COMMIT
    ```
 
-   Name `OPTIMIZE (AUTO_DAILY)` in that statement: on Oracle 21 `REPLACE METADATA SYNC` drops it from the index's
-   metadata. The nightly jobs keep running, but the next restore recreates the index without them (found by the
-   restore drill, `docs/ops/restore-drill.md`).
-
    then, *as a DBA*, `REVOKE EXECUTE ON CTXSYS.CTX_DDL FROM <owner>;`. Do not skip the sync: switching back to
    `ON COMMIT` does not index the rows already waiting; the first commit afterwards would, inside a user's request.
    If `CTX_USER_PENDING` is not 0 after the sync, run it again and check `CTX_USER_INDEX_ERRORS`. Leave `CASE_SEARCH`'s
    statistics locked ([13](#13-standing-database-decisions)).
+
+   Name `OPTIMIZE (AUTO_DAILY)` in the last `ALTER INDEX`: on Oracle 21 `REPLACE METADATA SYNC` drops it from the
+   index's metadata. The nightly jobs keep running, but the next restore recreates the index without them (found by
+   the restore drill, `docs/ops/restore-drill.md`).
 8. Run `reconcile` **before the cut-over opens** (design §9, N-i); the verdict must be `RECONCILED`.
 9. Open Trailkeep to users. Run `purge-staging`. Lock `TRAILKEEP_IMPORT`. Take a backup.
 10. Delete the staging TTL `CronJob` once `status` shows every run's staging purged; keep `trailkeep-import-hash-key`
