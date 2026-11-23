@@ -27,65 +27,13 @@ jobs:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
       NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
 
-  # Performance on PostgreSQL in process: the cases list at 50 000 synthetic cases (WP-15 part 5,
-  # docs/perf/cases-list-50k.md), then the 500k seed, the same cases with 500 000 comments (WP-30,
-  # docs/perf/release-500k.md), each in its own JVM and container. Every scenario is a full request (security, scoped
-  # queries, Thymeleaf), and the job fails if a list or case page p95 reaches 500 ms, a search p95 1 s or the aging
-  # report 30 s. The k6 runs (perf/k6/) need a running app behind the identity provider and a quiet machine, so they
-  # run by hand at release time, as does the Oracle 500k run (perf-500k-oracle).
+  # Performance on PostgreSQL in process at the 50k and the 500k seed; a regression past a target fails it. The same
+  # workflow runs in release.yml, so the two columns cannot drift apart.
   perf:
-    name: perf (50k cases and 500k comments on PostgreSQL)
-    runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    name: perf
+    uses: ./.github/workflows/perf.yml
     permissions:
       contents: read
-    steps:
-      - name: Check out
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      - name: Set up Temurin 21
-        uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6.3.0
-        with:
-          distribution: temurin
-          java-version: "21"
-
-      - name: Restore the Maven repository and wrapper
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: |
-            ~/.m2/repository
-            ~/.m2/wrapper
-          # One cache per job (issue 244): GitHub keeps the first save for a key, so a key shared by jobs with different
-          # needs holds whatever the first job to finish resolved. Each job saves what it needs. A pom change restores
-          # this job's newest earlier cache, then any job's, so Maven Central is asked for what changed, not for
-          # everything (issue 224).
-          key: maven-${{ runner.os }}-${{ github.job }}-${{ hashFiles('**/pom.xml', '.mvn/wrapper/maven-wrapper.properties') }}
-          restore-keys: |
-            maven-${{ runner.os }}-${{ github.job }}-
-            maven-${{ runner.os }}-
-
-      # Both measurements run before either verdict, so a failing 50k run still leaves the 500k table.
-      - name: Measure at the 50k and the 500k seed
-        run: >-
-          ./mvnw -B -ntp -Pperf-it test-compile
-          org.apache.maven.plugins:maven-failsafe-plugin:integration-test@perf-50k
-          org.apache.maven.plugins:maven-failsafe-plugin:integration-test@perf-500k
-          org.apache.maven.plugins:maven-failsafe-plugin:verify@perf-50k
-          org.apache.maven.plugins:maven-failsafe-plugin:verify@perf-500k
-
-      - name: Upload the measurements
-        if: always()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: perf
-          path: |
-            target/perf
-            target/failsafe-reports/perf-50k
-            target/failsafe-reports/perf-500k
-          if-no-files-found: ignore
-          retention-days: 30
 
   # The authenticated ZAP full scan (WP-28), one job per scan identity on its own ephemeral stack. Here it reports:
   # a red ZAP run blocks no merge (decision Q4, unlike a red Oracle run). release.yml runs the same workflow and

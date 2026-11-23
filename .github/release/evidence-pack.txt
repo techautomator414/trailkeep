@@ -1,0 +1,60 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Charlie Genova and contributors
+#
+# The release evidence pack (BUILD_PLAN §12.3; IMPLEMENTATION_PLAN WP-30): every file a GitHub Release carries, where it
+# comes from, and from which version it is required. Read by .github/scripts/evidence-pack.py, which builds the pack in
+# release.yml and refuses to publish one with a required file missing, and by ReleaseEvidencePackTest, which checks
+# that every source below is produced by the release run or checked in. docs/RELEASING.md explains the procedure.
+#
+# One row per line, five fields separated by " | ":
+#   file         the name in the pack; "-" for evidence kept in the registry beside the image, not in the pack
+#   source       artifact:<name>                 the artifact <name> of the release run, zipped as <name>.zip
+#                artifact:<name>/<path>          one file of that artifact
+#                repo:<path>                     a reviewed, checked-in file (or directory, zipped) at the tagged commit
+#                generated:<what>                written by evidence-pack.py from the run (accessibility, flyway,
+#                                                verify, index, sums)
+#                workflow                        written by release.yml after the pack is assembled
+#                registry                        attached to the image in GHCR by the release run
+#   since        all, or a version (1.0.0): the first version whose release must carry it. Before that it is attached
+#                when the run produced it.
+#   requirement  what the plan asks for, in its words
+#   verify       how a reader checks it (VERIFY.md has the exact commands)
+#
+EVIDENCE.md | generated:index | all | Evidence index: each requirement, its file and how to verify it | sha256sum -c SHA256SUMS
+VERIFY.md | generated:verify | all | Verification commands for the image, the SBOM, the provenance, the pack and the tag | Read it; the commands use this tag and digest
+SHA256SUMS | generated:sums | all | Checksums of every file in the pack | sha256sum -c SHA256SUMS
+SHA256SUMS.sigstore.json | workflow | all | Keyless signature of SHA256SUMS by release.yml at this tag | cosign verify-blob (VERIFY.md)
+CHANGELOG-section.md | artifact:release-preflight/CHANGELOG-section.md | all | CHANGELOG section for this version | Same text as CHANGELOG.md at the tag
+tag-signature.txt | artifact:release-preflight/tag-signature.txt | all | Signed tag: tag object, target commit and GitHub's signature verdict | git tag -v, or the GitHub API (VERIFY.md)
+image-digest.txt | artifact:image-evidence/image-digest.txt | all | Image digest | The digest every cosign and slsa-verifier command uses
+- | registry | all | Image Sigstore signature (keyless cosign) | cosign verify (VERIFY.md)
+- | registry | all | SBOM attestation (CycloneDX) on the image | cosign verify-attestation --type cyclonedx (VERIFY.md)
+- | registry | all | SLSA provenance (slsa-github-generator, level 3) | slsa-verifier verify-image (VERIFY.md)
+base-images.txt | artifact:image-evidence/base-images.txt | all | Digest-pinned base images of the published image | Compare with the Containerfile at the tag
+bom.json | artifact:image-evidence/bom.json | all | SBOM (CycloneDX JSON) | cosign verify-blob with bom.json.sigstore.json (VERIFY.md)
+bom.json.sigstore.json | artifact:image-evidence/bom.json.sigstore.json | all | Keyless signature of the SBOM | cosign verify-blob (VERIFY.md)
+test-reports.zip | artifact:test-reports | all | Test and coverage report; PostgreSQL integration test results (JUnit XML, JaCoCo) | Every test passed or the release would have stopped at its verify job
+accessibility-tests.md | generated:accessibility | all | axe results per screen (with the Nu HTML check), from the accessibility ITs | Counts come from test-reports.zip (failsafe-reports/TEST-*AccessibilityIT.xml)
+oracle-it-reports.zip | artifact:oracle-it-reports | all | Oracle integration test results (XE 21 and Free 23) | JUnit XML
+sqlserver-it-reports.zip | artifact:sqlserver-it-reports | all | SQL Server source integration test results (importer) | JUnit XML
+static-analysis.zip | artifact:static-analysis | all | SAST reports of the verify build (SpotBugs with FindSecBugs, Checkstyle) | Both gates fail the build on any finding
+trivy-sbom-report.zip | artifact:trivy-sbom-report | all | SCA report: Trivy over the SBOM (SARIF and JSON) | Fixable High or Critical fails the release
+image-scan-reports.zip | artifact:image-scan-reports | all | Container scan reports: Trivy (SARIF and JSON) and Dockle | Fixable High or Critical fails the release
+dependency-check-report.zip | artifact:dependency-check-report | 1.0.0 | SCA report: OWASP Dependency-Check (HTML and SARIF) | Runs only with the NVD API key (issue 30)
+zap-reports-compliance.admin.zip | artifact:zap-reports-compliance.admin | all | DAST report: authenticated ZAP full and API scan as the Compliance Admin | Medium or higher fails the release
+zap-reports-alpha.analyst.zip | artifact:zap-reports-alpha.analyst | all | DAST report: authenticated ZAP full and API scan as an Analyst | Medium or higher fails the release
+zap-suppressions.yaml | repo:security/zap/suppressions.yaml | all | Suppressions with justifications (DAST; each with an expiry) | Reviewed in pull requests; DastVerdictTest
+spotbugs-exclude.xml | repo:config/spotbugs/exclude.xml | all | Suppressions with justifications (SpotBugs) | Reviewed in pull requests
+THIRD-PARTY.txt | artifact:test-reports/generated-sources/license/THIRD-PARTY.txt | all | Licence report (THIRD-PARTY.txt) | Every licence is on licenses-allowed.txt or the build fails
+licenses-allowed.txt | repo:security/licenses-allowed.txt | all | Licence allow-list the licence report is checked against | Reviewed in pull requests
+flyway-schema.txt | generated:flyway | all | Flyway schema version | The highest versioned migration per folder, with each file's SHA-256
+perf.zip | artifact:perf | all | Performance at the 50k and 500k seed, measured by this release run (in process, PostgreSQL) | A p95 past its target fails the release
+perf-release-500k.md | repo:docs/perf/release-500k.md | all | Performance: k6 at the 50k and 500k seed, the Oracle 500k run and pool sizing, recorded by hand | Dated runs in the page; EVIDENCE.md gives its last commit
+perf-importer-volume.md | repo:docs/perf/importer-volume.md | all | Performance: the importer at the release volume | EVIDENCE.md gives its last commit
+restore-drill.md | repo:docs/ops/restore-drill.md | all | Restore drill on PostgreSQL and Oracle | EVIDENCE.md gives its last commit
+RUNBOOK.md | repo:docs/RUNBOOK.md | 1.0.0 | Operator's runbook | EVIDENCE.md gives its last commit
+security-test-map.md | repo:security/TEST_MAP.md | all | Security test map: each control, its test and where it runs | SecurityTestMapTest resolves every name in it
+threat-model.md | repo:security/THREAT_MODEL.md | all | Threat model | EVIDENCE.md gives its last commit
+data-map.md | repo:security/DATA_MAP.md | all | Data map | EVIDENCE.md gives its last commit
+accessibility.zip | repo:accessibility | all | Accessibility folder: ACR drafts, manual test scripts and logs | EVIDENCE.md gives its last commit
+ACR.md | repo:accessibility/ACR.md | 1.0.0 | Accessibility Conformance Report (VPAT 2.5) with the manual test matrix (WP-29) | Not a draft: the release refuses a file whose title says DRAFT
