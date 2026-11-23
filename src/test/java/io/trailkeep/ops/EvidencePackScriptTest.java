@@ -12,6 +12,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -21,11 +22,14 @@ import org.junit.jupiter.api.io.TempDir;
  * for every artifact {@code .github/release/evidence-pack.txt} names: a complete pack assembles and checks; a missing
  * artifact, a failed accessibility test, a file deferred until 1.0.0 at 1.0.0, a tampered, missing or unlisted file in
  * the pack, a version with no CHANGELOG section and a 1.0.0 document that calls itself a draft each stop the release.
- * Needs {@code python3} (every GitHub runner has it); skipped without it.
+ * Needs {@code /usr/bin/python3} (every GitHub runner has it) or {@code -Dtrailkeep.python}; skipped without it.
  */
 class EvidencePackScriptTest {
 
     private static final Path SCRIPT = Path.of(".github/scripts/evidence-pack.py");
+    private static final String PYTHON_PROPERTY = "trailkeep.python";
+    private static final String PYTHON_DEFAULT = "/usr/bin/python3";
+    private static final Optional<Path> PYTHON = python();
 
     @Test
     void completePackAssemblesAndChecks(@TempDir Path dir) throws Exception {
@@ -170,8 +174,8 @@ class EvidencePackScriptTest {
     }
 
     private static Run run(List<String> args) throws IOException, InterruptedException {
-        assumeTrue(python(), "python3 is not installed");
-        List<String> command = new ArrayList<>(List.of("python3", "-I", SCRIPT.toString()));
+        assumeTrue(PYTHON.isPresent(), "no python3 interpreter at " + PYTHON_DEFAULT + " or -D" + PYTHON_PROPERTY);
+        List<String> command = new ArrayList<>(List.of(PYTHON.orElseThrow().toString(), "-I", SCRIPT.toString()));
         command.addAll(args);
         Process process = new ProcessBuilder(command).redirectErrorStream(true).start();
         String output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
@@ -179,19 +183,20 @@ class EvidencePackScriptTest {
         return new Run(process.exitValue(), output);
     }
 
-    private static boolean python() {
-        try {
-            Process probe = new ProcessBuilder("python3", "--version")
-                    .redirectErrorStream(true)
-                    .start();
-            probe.getInputStream().readAllBytes();
-            return probe.waitFor(10, TimeUnit.SECONDS) && probe.exitValue() == 0;
-        } catch (IOException e) {
-            return false;
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            return false;
+    /**
+     * The interpreter by absolute path, never by a PATH lookup: {@code -Dtrailkeep.python=<absolute path>} if given,
+     * else {@code /usr/bin/python3} (Ubuntu's, on every GitHub runner and in the release job's image). Empty if it is
+     * not an executable file, so the tests are skipped rather than run against something else.
+     */
+    private static Optional<Path> python() {
+        String override = System.getProperty(PYTHON_PROPERTY, "");
+        Path interpreter = Path.of(override.isBlank() ? PYTHON_DEFAULT : override);
+        if (!interpreter.isAbsolute()) {
+            throw new IllegalArgumentException(PYTHON_PROPERTY + " must be an absolute path: " + interpreter);
         }
+        return Files.isRegularFile(interpreter) && Files.isExecutable(interpreter)
+                ? Optional.of(interpreter)
+                : Optional.empty();
     }
 
     private record Run(int exit, String output) {}
