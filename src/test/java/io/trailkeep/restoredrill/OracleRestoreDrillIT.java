@@ -36,7 +36,9 @@ import org.testcontainers.containers.JdbcDatabaseContainer;
  * runbook's go-live import is: the schema owner switches {@code IX_CASE_SEARCH_TEXT} to manual sync, the rows are
  * loaded, the owner synchronises the index once and restores {@code SYNC (ON COMMIT)}. {@code CTX_DDL} is granted to
  * the owner by {@code SYS} for that window only and revoked after it (the owner needs no such grant otherwise, and on
- * Free 23 {@code SYSTEM} cannot grant it). The containers get three 512 MB redo log groups (issue 308). Opt-in: the
+ * Free 23 {@code SYSTEM} cannot grant it). The last step names {@code OPTIMIZE (AUTO_DAILY)} again: on XE 21 a {@code
+ * REPLACE METADATA SYNC} drops it from the index's metadata, so the next import would recreate the index without its
+ * nightly optimisation (the drill caught that). The containers get three 512 MB redo log groups (issue 308). Opt-in: the
  * {@code perf-it} profile's {@code restore-drill-oracle} execution, which no workflow runs.
  */
 // "IT" is the Failsafe suffix Part B mandates for integration tests, not an abbreviation.
@@ -122,8 +124,8 @@ class OracleRestoreDrillIT extends AbstractRestoreDrillIT {
                     .isEqualTo("0");
             report.run(
                     "Index back to SYNC (ON COMMIT) (schema owner)",
-                    () -> statement.execute(
-                            "ALTER INDEX IX_CASE_SEARCH_TEXT PARAMETERS ('REPLACE METADATA SYNC (ON COMMIT)')"));
+                    () -> statement.execute("ALTER INDEX IX_CASE_SEARCH_TEXT PARAMETERS"
+                            + " ('REPLACE METADATA SYNC (ON COMMIT) OPTIMIZE (AUTO_DAILY)')"));
             assertThat(single(statement, "SELECT IDX_SYNC_TYPE FROM CTX_USER_INDEXES"))
                     .isEqualTo("ON COMMIT");
         } finally {
