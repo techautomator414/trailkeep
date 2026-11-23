@@ -115,7 +115,7 @@ services:
 
   oracle:
     profiles: ["oracle"]
-    image: gvenzl/oracle-free:23-slim@sha256:6d61d267a3b978c24c5ac1790e62e927416a0aec446bd86e4b3a1527562757bd
+    image: gvenzl/oracle-free:23@sha256:188ff1612d2abe1f33a8999aa9a5495a372031fc71b68fca8f375315f28e065d
     environment:
       ORACLE_PASSWORD: trailkeep-dev # dev-only SYS/SYSTEM password
       APP_USER: trailkeep

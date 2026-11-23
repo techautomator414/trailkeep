@@ -9,18 +9,19 @@ import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
 import jakarta.persistence.criteria.Subquery;
 import java.util.Arrays;
+import java.util.Collection;
+import java.util.List;
 import java.util.Locale;
-import org.springframework.stereotype.Component;
 
 /**
- * The portable v1 {@link SearchGateway}: {@code CASE_ID IN (SELECT … FROM CASE_SEARCH WHERE SEARCH_TEXT LIKE ?
- * ESCAPE '\' AND …)}, one bound pattern per word, or the case number containing the text. {@code SEARCH_TEXT} is
- * stored lower-cased (see {@link CaseSearch}) and the words are lower-cased here, so no function is applied to the
- * {@code CLOB}. It is a scan on both vendors, which ADR-0006 accepts at 50k cases. Criteria, not native SQL: JPA
- * expresses {@code LIKE} on the {@code CLOB}/{@code text} column on both vendors, and only a predicate lets the
- * scope filter in the same statement. {@code %}, {@code _} and the escape character in the text match themselves.
+ * The portable {@link SearchGateway}: {@code CASE_ID IN (SELECT … FROM CASE_SEARCH WHERE SEARCH_TEXT LIKE ? ESCAPE
+ * '\' AND …)}, one bound pattern per word, or the case number containing the text. {@code SEARCH_TEXT} is stored
+ * lower-cased (see {@link CaseSearch}) and the words are lower-cased here, so no function is applied to the {@code
+ * CLOB}. Criteria, not native SQL: JPA expresses {@code LIKE} on the {@code CLOB}/{@code text} column on both vendors,
+ * and only a predicate lets the scope filter in the same statement. {@code %}, {@code _} and the escape character in
+ * the text match themselves. On PostgreSQL the patterns are answered from the trigram index of V21; on Oracle it is a
+ * scan, and {@link OracleTextSearchGateway} narrows it with Oracle Text (ADR-0017).
  */
-@Component
 class LikeSearchGateway implements SearchGateway {
 
     /** Words beyond this many are ignored, which only widens the result. */
@@ -32,17 +33,30 @@ class LikeSearchGateway implements SearchGateway {
     public Predicate matches(String text, Root<CaseRecord> caseRoot, CriteriaQuery<?> query, CriteriaBuilder cb) {
         Subquery<Long> matching = query.subquery(Long.class);
         Root<CaseSearch> search = matching.from(CaseSearch.class);
-        Expression<String> haystack = search.<String>get("text");
-        Predicate[] words = Arrays.stream(text.split("\\s+"))
-                .map(word -> word.toLowerCase(Locale.ROOT))
+        matching.select(search.<Long>get("caseId"))
+                .where(containsEach(words(text), search.get("text"), cb).toArray(Predicate[]::new));
+        return cb.or(numberContains(text, caseRoot, cb), caseRoot.get("id").in(matching));
+    }
+
+    /** The words every adapter matches: split at white space, lower-cased, distinct, at most {@link #MAX_WORDS}. */
+    static List<String> words(String text) {
+        return Arrays.stream(text.split("\\s+"))
+                .map(CaseSearch::normalized)
                 .distinct()
                 .limit(MAX_WORDS)
+                .toList();
+    }
+
+    /** The case number containing the text, ignoring case. */
+    static Predicate numberContains(String text, Root<CaseRecord> caseRoot, CriteriaBuilder cb) {
+        return cb.like(cb.upper(caseRoot.<String>get("caseNumber")), contains(text.toUpperCase(Locale.ROOT)), ESCAPE);
+    }
+
+    /** One {@code LIKE '%word%'} on {@code SEARCH_TEXT} per lower-cased word. */
+    static List<Predicate> containsEach(Collection<String> words, Expression<String> haystack, CriteriaBuilder cb) {
+        return words.stream()
                 .map(word -> cb.like(haystack, contains(word), ESCAPE))
-                .toArray(Predicate[]::new);
-        matching.select(search.<Long>get("caseId")).where(words);
-        return cb.or(
-                cb.like(cb.upper(caseRoot.<String>get("caseNumber")), contains(text.toUpperCase(Locale.ROOT)), ESCAPE),
-                caseRoot.get("id").in(matching));
+                .toList();
     }
 
     /** A {@code LIKE} pattern matching any value that contains the text literally. */

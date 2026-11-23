@@ -162,9 +162,25 @@ The order for a fresh install and for every release:
 
 ### Search indexes (V21)
 
-V21 indexes `CASE_SEARCH.SEARCH_TEXT` for the cases search (ADR-0017). On PostgreSQL it needs one thing before the
-migration `Job` runs, and no new grant for the runtime, purge or import users. (Oracle's V21 comes with its adapter.)
+V21 indexes `CASE_SEARCH.SEARCH_TEXT` for the cases search (ADR-0017). It needs one thing per vendor before the
+migration `Job` runs, and no new grant for the runtime, purge or import users.
 
+- **Oracle: Oracle Text must be installed.** It is part of every edition and installed by default; check with `SELECT
+  STATUS FROM DBA_REGISTRY WHERE COMP_ID = 'CONTEXT'` (`VALID`). The `-slim` container images remove it. The owner
+  needs **no further privilege**: the index uses `CTXSYS`'s system preferences only, so neither the `CTXAPP` role nor
+  `EXECUTE ON CTXSYS.CTX_DDL` is needed, and `TRAILKEEP_OWNER`'s `CREATE TABLE` covers the index's own tables. The
+  index is synchronised in each committing transaction (`SYNC (ON COMMIT)`), so a search never lags a write, and
+  `CTXSYS` optimises it nightly through two `DBMS_SCHEDULER` jobs it owns (`DR$…$OTJ`, `DR$…$OFJ`); they need
+  `JOB_QUEUE_PROCESSES` above 0, the default. V21 also deletes the index's optimizer statistics and **locks
+  `CASE_SEARCH`'s**: with statistics, Oracle Text estimates every search by running it first, which doubled search
+  time at the 500k seed. The automatic statistics job skips locked tables; do not unlock them or gather them with
+  `force => TRUE` (if someone did, `EXEC DBMS_STATS.DELETE_INDEX_STATS('<owner>', 'IX_CASE_SEARCH_TEXT', force =>
+  TRUE)` restores the speed). Building the index over the 500k seed took 17 to 33 s on Free 23 and 95 s on XE 21 (the
+  container's 20 MB redo logs, another database busy on the same disk); the index is built `ONLINE`, so the running
+  release keeps writing `CASE_SEARCH` meanwhile (without it those writes would fail with ORA-29861). If the `Job`
+  fails during the build, run `flyway repair` (or delete the failed row of `flyway_schema_history`) and run the `Job`
+  again: the script drops an index left unusable and builds it anew. `APP_SEARCH_ADAPTER=like` makes the application
+  search without the index (a scan, as before 1.0.0); the index is still maintained.
 - **PostgreSQL: the `pg_trgm` extension.** It ships with PostgreSQL and is a trusted extension (13+), so
   `TRAILKEEP_OWNER` creates it when it may create in the database (`GRANT CREATE ON DATABASE <db> TO
   trailkeep_owner`). Otherwise a database administrator runs `CREATE EXTENSION IF NOT EXISTS pg_trgm;` once, in any

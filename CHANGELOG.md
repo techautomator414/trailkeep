@@ -9,6 +9,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- The Oracle Text search adapter (#299, part 2, ADR-0017): at the 500k seed the Oracle `LIKE` search took 2.0 to 2.4 s
+  against its 1 s target. Oracle's V21 adds an Oracle Text `CONTEXT` index on `CASE_SEARCH.SEARCH_TEXT` and
+  `OracleTextSearchGateway` puts `CONTAINS` in front of the `LIKE` match: each word's longest run of letters and
+  digits (three or more, at most two runs a search) is looked up as `%run%`, which can only narrow, and `LIKE` still
+  decides every word that is not such a run, so the results are the `LIKE` adapter's (`OracleSearchParityIT` compares
+  both for five kinds of reader). Nothing typed reaches Oracle Text but those runs, so no search can be read as query
+  syntax. A query Oracle Text would refuse for expanding to too many tokens (DRG-51030) is probed first, once a
+  transaction, and falls back to `LIKE`. The adapter left-joins `CASE_SEARCH`, because Oracle 21 evaluates `CONTAINS`
+  row by row under the `LIKE` adapter's `OR`-ed subquery. The index is built online, synchronised on commit and
+  transactional, so a search never lags a write, and optimised nightly by `CTXSYS`; it uses system preferences only,
+  so the schema owner needs no new privilege; it has no optimizer statistics and `CASE_SEARCH`'s are locked, because
+  with them Oracle Text estimates every search by running it first. One known difference: a word found only past the
+  first 255 bytes of an unbroken run of letters and digits is not found. `app.search.adapter` (`oracle-text` or
+  `like`) is set by each vendor profile. At the 500k seed the Oracle searches now take 0.40 to 0.72 s p95 on Free 23
+  and 0.42 to 0.76 s on XE 21 (`OracleComments500kPerfIT` passes on both images); posting to a 208-comment case takes
+  about 0.1 s on Oracle, which re-indexes its text on commit (`docs/perf/release-500k.md`). The Oracle test images and
+  the compose Oracle service are now the full `gvenzl/oracle-xe:21` and `gvenzl/oracle-free:23`: the `-slim` images
+  remove Oracle Text. Oracle deployments need Oracle Text installed (it is by default; deploy/README.md, "Search
+  indexes (V21)"). The Oracle perf seeds no longer gather `CASE_SEARCH`.
+
 - A trigram index for the cases search on PostgreSQL (#299, part 1, ADR-0017): V21 creates `pg_trgm` if absent and a
   GIN index on `CASE_SEARCH.SEARCH_TEXT`, which answers the `LIKE` adapter's unchanged `'%word%'` patterns; PostgreSQL
   rechecks each candidate, so results are unchanged. BUILD_PLAN §12 pulls the v1.1 vendor search adapters into 1.0.0
