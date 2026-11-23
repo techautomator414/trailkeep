@@ -75,12 +75,14 @@ The report reduces what the importer decided to digests, so a change can be show
 
 - **Dry-run digest**: every dry-run issue and every figure of the run summary (the forecast day left out).
 - **Load digest**: each loaded case's owner and owner snapshot, and each comment's author and snapshot.
-- **Load content digest**: everything the load wrote, row by row in id order: the cases, the comments with
-  their bodies, the search text, the legacy history, the audit rows, and the ledger rows with their parts, canonical
-  hashes and written hashes. Ids are in it on purpose: the sequences start afresh in the test's container and hand out
-  ids in the order the load asks for them, so a change to how rows are batched must leave every id where it was. Only
-  values keyed by the per-process audit HMAC key (redacted history values, the audit rows' JSON) and the times the load
-  stamps are left out.
+- **Load content digest**: everything the load wrote, row by row in id order: the cases, the comments with their
+  bodies, the search text, the legacy history, the audit rows with their JSON, and the ledger rows with their parts,
+  canonical hashes and written hashes. Ids are in it on purpose: the sequences start afresh in the test's container and
+  hand out ids in the order the load asks for them, so a change to how rows are batched must leave every id where it
+  was. Every command runs with one fixed test audit HMAC key, so the redacted values and the written hashes over them
+  are the same from run to run. Only the times the load stamps and the ledger's mapping hash (the mapping file names the
+  run's temporary folder) are left out. `-Dtrailkeep.perf.import.content-rows=<file>` writes the rows too, so two runs
+  whose digests differ can be compared line by line.
 
 `reconcile` then recomputes every written hash from Trailkeep and compares it with the ledger, so a run that reaches
 `RECONCILED` has also proven that the ledger describes what was written.

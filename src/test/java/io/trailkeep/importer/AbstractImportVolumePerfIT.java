@@ -12,6 +12,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import io.trailkeep.testsupport.PostgresTestcontainersConfiguration;
 import jakarta.persistence.EntityManagerFactory;
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.io.Writer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -26,6 +29,7 @@ import java.sql.Statement;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.HexFormat;
 import java.util.List;
 import org.hibernate.SessionFactory;
@@ -65,6 +69,17 @@ abstract class AbstractImportVolumePerfIT extends DryRunSupport {
 
     /** Cases per query of {@link #contentDigest}. */
     private static final int DIGEST_SLICE = 2_000;
+
+    /**
+     * The audit HMAC key every command runs with: fixed for the test, so the redacted values the load writes, and the
+     * written hashes over them, are the same from run to run and can be in {@link #contentDigest}. A test fixture,
+     * derived from a plain phrase, never a deployment's key.
+     */
+    private static final String AUDIT_KEY =
+            Base64.getEncoder().encodeToString("trailkeep-perf-fixture-audit-key".getBytes(StandardCharsets.US_ASCII));
+
+    /** Opt-in: a file to write {@link #contentDigest}'s rows to, so two runs whose digests differ can be compared. */
+    private static final String CONTENT_ROWS = System.getProperty("trailkeep.perf.import.content-rows", "");
 
     private static final String PASSWORD = "Tk" + HexFormat.of().formatHex(new SecureRandom().generateSeed(12));
 
@@ -187,7 +202,8 @@ abstract class AbstractImportVolumePerfIT extends DryRunSupport {
     /** Times each command's runner, and counts its statements, through the context it starts. */
     @Override
     void configure(SpringApplicationBuilder builder) {
-        builder.properties("spring.jpa.properties.hibernate.generate_statistics=true")
+        builder.properties(
+                        "spring.jpa.properties.hibernate.generate_statistics=true", "app.audit.hmac-key=" + AUDIT_KEY)
                 .listeners((ApplicationEvent event) -> {
                     if (event instanceof ApplicationStartedEvent) {
                         started = System.nanoTime();
@@ -224,11 +240,21 @@ abstract class AbstractImportVolumePerfIT extends DryRunSupport {
      * Everything the load wrote, row by row in id order, as one SHA-256: the cases, their comments with bodies, search
      * text, legacy history, audit rows, and ledger rows with their parts and written hashes. Ids are in it: each
      * vendor's sequences start afresh in the test's container and hand out ids in the order the load asks, so a change
-     * to how rows are batched must leave them as they were. Left out are only the values keyed by the per-process audit
-     * HMAC key (the history's and the audit rows' redacted values) and the times the load stamps.
+     * to how rows are batched must leave them as they were. The redacted values are in it too, since every command runs
+     * with {@link #AUDIT_KEY}. Left out are only the times the load stamps and the ledger's mapping hash, which covers
+     * the mapping file, and that names the run's temporary folder. With {@code -Dtrailkeep.perf.import.content-rows=}
+     * a file, the rows are written to it as well.
      */
-    private String contentDigest() {
+    private String contentDigest() throws IOException {
         MessageDigest sha = sha256();
+        try (Writer rows =
+                CONTENT_ROWS.isEmpty() ? Writer.nullWriter() : Files.newBufferedWriter(Path.of(CONTENT_ROWS))) {
+            digestRows(sha, rows);
+        }
+        return HexFormat.of().formatHex(sha.digest()).substring(0, 16);
+    }
+
+    private void digestRows(MessageDigest sha, Writer rows) {
         List<Long> cases = jdbc.queryForList(LOADED + " ORDER BY ID", Long.class);
         String ledger = "SOURCE_ID = '" + ImportVolumeCorpus.SOURCE + "' AND CASE_ID BETWEEN ? AND ?";
         for (String sql : List.of(
@@ -237,11 +263,13 @@ abstract class AbstractImportVolumePerfIT extends DryRunSupport {
                 "SELECT ID, CASE_ID, CREATED_AT, AUTHOR_ID, AUTHOR_NAME_SNAPSHOT, BODY FROM CASE_COMMENT"
                         + " WHERE CASE_ID BETWEEN ? AND ? ORDER BY ID",
                 "SELECT CASE_ID, SEARCH_TEXT FROM CASE_SEARCH WHERE CASE_ID BETWEEN ? AND ? ORDER BY CASE_ID",
-                "SELECT ID, CASE_ID, AT_TS, WHO_NAME_SNAPSHOT, KIND, FIELD_NAME, OLD_VALUE, NEW_VALUE, OLD_LENGTH,"
-                        + " NEW_LENGTH FROM CASE_IMPORTED_EVENT WHERE CASE_ID BETWEEN ? AND ? ORDER BY ID",
-                "SELECT ID, ACTOR_ID, ACTOR_NAME_SNAPSHOT, ORIGIN, CASE_ID, ENTITY_TYPE, ENTITY_ID, ACTION"
-                        + " FROM AUDIT_EVENT WHERE CASE_ID BETWEEN ? AND ? ORDER BY ID",
-                "SELECT ID, ENTITY, LEGACY_KEY, CASE_ID, TARGET_ID, ROW_HASH, MAPPING_HASH, STATUS, CLOSED_AT,"
+                "SELECT ID, CASE_ID, AT_TS, WHO_NAME_SNAPSHOT, KIND, FIELD_NAME, OLD_VALUE, NEW_VALUE, OLD_HMAC,"
+                        + " NEW_HMAC, OLD_LENGTH, NEW_LENGTH FROM CASE_IMPORTED_EVENT WHERE CASE_ID BETWEEN ? AND ?"
+                        + " ORDER BY ID",
+                "SELECT ID, ACTOR_ID, ACTOR_NAME_SNAPSHOT, ORIGIN, CASE_ID, ENTITY_TYPE, ENTITY_ID, ACTION,"
+                        + " OLD_VALUES_JSON, NEW_VALUES_JSON FROM AUDIT_EVENT WHERE CASE_ID BETWEEN ? AND ?"
+                        + " ORDER BY ID",
+                "SELECT ID, ENTITY, LEGACY_KEY, CASE_ID, TARGET_ID, ROW_HASH, STATUS, CLOSED_AT,"
                         + " WRITTEN_HASH, CLOSURE_HASH FROM IMPORT_LEDGER WHERE " + ledger + " ORDER BY ID",
                 "SELECT LEDGER_ID, PART_NO, COMMENT_ID FROM IMPORT_LEDGER_PART WHERE LEDGER_ID IN (SELECT ID FROM"
                         + " IMPORT_LEDGER WHERE " + ledger + ") ORDER BY LEDGER_ID, PART_NO")) {
@@ -252,12 +280,19 @@ abstract class AbstractImportVolumePerfIT extends DryRunSupport {
                 long last = cases.get(Math.min(cases.size(), from + DIGEST_SLICE) - 1);
                 jdbc.query(
                         sql,
-                        (RowCallbackHandler) row -> sha.update(line(row).getBytes(StandardCharsets.UTF_8)),
+                        (RowCallbackHandler) row -> {
+                            String line = line(row);
+                            sha.update(line.getBytes(StandardCharsets.UTF_8));
+                            try {
+                                rows.write(line);
+                            } catch (IOException failed) {
+                                throw new UncheckedIOException(failed);
+                            }
+                        },
                         first,
                         last);
             }
         }
-        return HexFormat.of().formatHex(sha.digest()).substring(0, 16);
     }
 
     /** A row as text: numbers and times alike on both vendors' drivers, every other value as the driver reads it. */
