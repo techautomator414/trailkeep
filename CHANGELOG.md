@@ -9,24 +9,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
-- The release evidence pack, complete and checked (WP-30 part d, `docs/RELEASING.md`). `.github/release/evidence-pack.txt`
-  lists every file a GitHub Release carries (BUILD_PLAN §12.3 and WP-30), where it comes from and the first version that
-  requires it; `.github/scripts/evidence-pack.py` builds the pack from the release run's artifacts and the tagged
-  checkout, and the release fails if a required file cannot be produced, the pack holds an unlisted file, or a checksum
-  does not match. New in the pack: `EVIDENCE.md` (each requirement, its file and how to verify it), `VERIFY.md` (the
-  cosign, slsa-verifier and tag commands for this tag and digest), a keyless signature over `SHA256SUMS`, the licence
-  report as `THIRD-PARTY.txt`, an accessibility table from the axe ITs, SpotBugs and Checkstyle reports, the
-  performance tables of a release-run perf job, the k6 and Oracle 500k results, the importer volume run, the restore
-  drill, the security test map, threat model and data map, the suppression files and licence allow-list, the
-  accessibility folder, the Flyway schema version, the CHANGELOG section and the tag's signature state. A new
-  `preflight` job checks, before anything is built: the tag points at the commit being built, the CHANGELOG has the
-  version's section, and the checked-in files exist; from 1.0.0 also that the tag is signed and verified by GitHub, that
-  `SONAR_TOKEN` and `NVD_API_KEY` are set (no skipped scanner), and that the runbook and `accessibility/ACR.md` exist and
-  are not drafts, and Dependency-Check's report is required. The nightly perf job moved to `perf.yml`, which the
-  release now runs too (cold, no cache), so a p95 past its target stops a release. The release notes give the exact
-  signing identity instead of a pattern. `ReleaseEvidencePackTest` pins the workflow to the list and
-  `EvidencePackScriptTest` runs the script against fixtures. Before this, a missing report was skipped silently: the
-  v0.3.0 pack has no Dependency-Check report.
+- The release evidence pack, complete and checked (WP-30 part d, `docs/RELEASING.md`).
+  `.github/release/evidence-pack.txt` lists every file a GitHub Release carries (BUILD_PLAN §12.3 and WP-30), where it
+  comes from and the first version that requires it; `.github/scripts/evidence-pack.py` builds the pack from the release
+  run's artifacts and the tagged checkout, and the release fails if a required file cannot be produced, the pack holds
+  an unlisted file, or a checksum does not match. New in the pack: `EVIDENCE.md` (each requirement, its file and how to
+  verify it), `VERIFY.md` (the cosign, slsa-verifier and tag commands for this tag and digest), a keyless signature over
+  `SHA256SUMS`, the licence report as `THIRD-PARTY.txt`, an accessibility table from the axe ITs, SpotBugs and
+  Checkstyle reports, the performance tables of a release-run perf job, the k6 and Oracle 500k results, the importer
+  volume run, the restore drill, the runbook, the security test map, threat model and data map, the suppression files
+  and licence allow-list, the accessibility folder, the Flyway schema version, the CHANGELOG section and the tag's
+  signature state. A new `preflight` job checks, before anything is built: the tag points at the commit being built, the
+  CHANGELOG has the version's section, and the checked-in files exist; from 1.0.0 also that the tag is signed and
+  verified by GitHub, that `SONAR_TOKEN` and `NVD_API_KEY` are set (no skipped scanner) and that `accessibility/ACR.md`
+  exists and is not a draft, and Dependency-Check's report is required. The nightly perf job moved to `perf.yml`, which
+  the release now runs too (cold, no cache), so a p95 past its target stops a release. The release notes give the exact
+  signing identity instead of a pattern, as does the runbook's image check, which now points to `VERIFY.md`.
+  `ReleaseEvidencePackTest` pins the workflow to the list and `EvidencePackScriptTest` runs the script against fixtures.
+  Before this, a missing report was skipped silently: the v0.3.0 pack has no Dependency-Check report.
+
 - A restore drill on both vendors (WP-30 part c, `docs/ops/restore-drill.md`): the 500k seed plus 2 000 attachments
   (348 MiB, in the database as the application stores them) and audit events written by the application are backed up
   with `pg_dump` or Data Pump `expdp` (`FLASHBACK_TIME`), the database is destroyed, and a new one is restored

@@ -56,16 +56,15 @@ request that made it.
 1. **WP-29 is merged**: the ACR (VPAT 2.5) with the manual test matrix is at `accessibility/ACR.md`, its title does not
    say DRAFT, it has no "Does Not Support", and each "Partially Supports" has a dated ticket. If WP-29 names the file
    differently, change the `ACR.md` row of `.github/release/evidence-pack.txt` in the same pull request.
-2. **The runbook is merged** (`docs/RUNBOOK.md`, #316).
-3. **Owner: the secret-gated scans run** (issue 30): `SONAR_TOKEN` and `NVD_API_KEY` are repository secrets, and the last
+2. **Owner: the secret-gated scans run** (issue 30): `SONAR_TOKEN` and `NVD_API_KEY` are repository secrets, and the last
    `main` run shows SonarCloud and Dependency-Check green, not skipped. From 1.0.0 the preflight refuses a release
    without them, and the pack requires `dependency-check-report.zip`.
-4. **Fresh hand-run evidence**: on the release candidate commit, re-run the k6 mix and the Oracle 500k run
+3. **Fresh hand-run evidence**: on the release candidate commit, re-run the k6 mix and the Oracle 500k run
    (`docs/perf/release-500k.md`) and, if the schema or the attachment path changed since, the restore drill
    (`docs/ops/restore-drill.md`); record the dated results in those pages by pull request.
-5. **A green nightly on the candidate commit** (ZAP in nightly mode, perf, the Oracle matrix), so the release run holds
+4. **A green nightly on the candidate commit** (ZAP in nightly mode, perf, the Oracle matrix), so the release run holds
    no surprises.
-6. **The release pull request** (release manager): move the `[Unreleased]` entries of `CHANGELOG.md` under
+5. **The release pull request** (release manager): move the `[Unreleased]` entries of `CHANGELOG.md` under
    `## [1.0.0] - <date>`, leave an empty `[Unreleased]` above it, and merge. The preflight refuses a version with no
    section.
 

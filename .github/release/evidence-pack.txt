@@ -52,7 +52,7 @@ perf.zip | artifact:perf | all | Performance at the 50k and 500k seed, measured 
 perf-release-500k.md | repo:docs/perf/release-500k.md | all | Performance: k6 at the 50k and 500k seed, the Oracle 500k run and pool sizing, recorded by hand | Dated runs in the page; EVIDENCE.md gives its last commit
 perf-importer-volume.md | repo:docs/perf/importer-volume.md | all | Performance: the importer at the release volume | EVIDENCE.md gives its last commit
 restore-drill.md | repo:docs/ops/restore-drill.md | all | Restore drill on PostgreSQL and Oracle | EVIDENCE.md gives its last commit
-RUNBOOK.md | repo:docs/RUNBOOK.md | 1.0.0 | Operator's runbook | EVIDENCE.md gives its last commit
+RUNBOOK.md | repo:docs/RUNBOOK.md | all | Operator's runbook | EVIDENCE.md gives its last commit
 security-test-map.md | repo:security/TEST_MAP.md | all | Security test map: each control, its test and where it runs | SecurityTestMapTest resolves every name in it
 threat-model.md | repo:security/THREAT_MODEL.md | all | Threat model | EVIDENCE.md gives its last commit
 data-map.md | repo:security/DATA_MAP.md | all | Data map | EVIDENCE.md gives its last commit
