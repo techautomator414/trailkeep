@@ -107,8 +107,9 @@ One desktop machine (the hardware of `docs/perf/release-500k.md`: a 16-core Ryze
 databases in Docker with the images' default settings, both database containers on the same disk. The machine runs
 other services, so times move by some percent between runs.
 
-Times in seconds, from the final run of each (`target/restore-drill/*.md`). Earlier runs of the same code were within
-a few seconds, except where noted.
+Times in seconds (`target/restore-drill/*.md`). After these runs the drill's code was only split into smaller classes;
+the split code was run again on all three and passed every check, with restore to serving at 22.9 / 104.3 / 87.2 s
+(the PostgreSQL run beside a full build). Other runs were within a few seconds, except where noted.
 
 | Step | PostgreSQL 16 | Oracle Free 23 | Oracle XE 21 |
 |---|---:|---:|---:|
