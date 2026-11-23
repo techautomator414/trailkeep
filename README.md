@@ -76,6 +76,7 @@ container. No JavaScript build toolchain, no JSON API in v1, no Lombok.
 | [`CLAUDE.md`](CLAUDE.md) | Working agreement for AI coding sessions (much of this code is written with AI assistance; every PR passes the same gates regardless of author) |
 | [`HANDOFF.md`](HANDOFF.md) | Where the build stands at 0.3.0 (written at 0.1.0, refreshed after each phase and release): what is merged, what is not, decisions taken, open issues, and the next work package |
 | [`CHANGELOG.md`](CHANGELOG.md) | What each release and each merged pull request changed |
+| [`docs/RELEASING.md`](docs/RELEASING.md) | How a version is released: the release run, the evidence pack, the owner's steps (signed tag, secrets) and what to do when a run fails |
 | [`adr/`](adr/README.md) | Architecture decision records, including the ones that superseded a line of the plans |
 
 ## Quick start
