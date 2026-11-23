@@ -58,15 +58,17 @@ Secrets are mounted as files from the platform's secret store
 
 1. Read the release's `CHANGELOG.md` section, and the migration table in [2.3](#23-what-each-migration-costs) for every
    migration between your version and the new one.
-2. Verify the image and note its digest:
+2. Verify the image and note its digest (the release's `image-digest.txt`), with cosign v3 or later:
 
    ```sh
    cosign verify ghcr.io/techautomator414/trailkeep@<digest> \
-     --certificate-identity-regexp '^https://github.com/techautomator414/trailkeep/' \
+     --certificate-identity 'https://github.com/techautomator414/trailkeep/.github/workflows/release.yml@refs/tags/<tag>' \
      --certificate-oidc-issuer https://token.actions.githubusercontent.com
    ```
 
-   Check: cosign prints the verified claims and exits 0. Anything else: stop, do not deploy.
+   Check: cosign prints the verified claims and exits 0. Anything else: stop, do not deploy. The release's `VERIFY.md`
+   has this command filled in, plus the SBOM, provenance and evidence-pack checks; `EVIDENCE.md` indexes the scan, test,
+   performance and accessibility evidence your approval process may ask for ([docs/RELEASING.md](RELEASING.md)).
 3. Check the database prerequisites in [13](#13-standing-database-decisions) (Oracle Text and a full image, redo
    logs, `JOB_QUEUE_PROCESSES`, `pg_trgm`).
 4. **Take a backup** ([4.2](#42-postgresql) or [4.3](#43-oracle)) and keep it until the new release has run a day.

@@ -1,0 +1,80 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Charlie Genova and contributors
+#
+# Performance on PostgreSQL in process (IMPLEMENTATION_PLAN Part G, "k6 performance at 50k/500k seed", nightly and
+# release tag): the cases list at 50 000 synthetic cases (WP-15 part 5, docs/perf/cases-list-50k.md), then the 500k
+# seed, the same cases with 500 000 comments (WP-30, docs/perf/release-500k.md), each in its own JVM and container.
+# Every scenario is a full request (security, scoped queries, Thymeleaf), and the job fails if a list or case page p95
+# reaches 500 ms, a search p95 1 s or the aging report 30 s. Called by nightly.yml and by release.yml, whose evidence
+# pack attaches the tables (WP-30 part d). The k6 runs (perf/k6/) need a running app behind the identity provider and a
+# quiet machine, so they run by hand before a release and are recorded in docs/perf/release-500k.md, as is the Oracle
+# 500k run (perf-500k-oracle); the release attaches that page too.
+name: perf
+
+on:
+  workflow_call:
+    inputs:
+      maven-cache:
+        # release.yml passes false: its evidence comes from Maven Central, never from a cache another workflow saved
+        # (issue 224, the same reason release.yml's verify job restores none).
+        description: Restore and save this job's Maven repository cache
+        type: boolean
+        default: true
+
+permissions: {}
+
+jobs:
+  perf:
+    name: perf (50k cases and 500k comments on PostgreSQL)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Temurin 21
+        uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6.3.0
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Restore the Maven repository and wrapper
+        if: inputs.maven-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.m2/repository
+            ~/.m2/wrapper
+          # One cache per job (issue 244): GitHub keeps the first save for a key, so a key shared by jobs with different
+          # needs holds whatever the first job to finish resolved. Each job saves what it needs. A pom change restores
+          # this job's newest earlier cache, then any job's, so Maven Central is asked for what changed, not for
+          # everything (issue 224).
+          key: maven-${{ runner.os }}-${{ github.job }}-${{ hashFiles('**/pom.xml', '.mvn/wrapper/maven-wrapper.properties') }}
+          restore-keys: |
+            maven-${{ runner.os }}-${{ github.job }}-
+            maven-${{ runner.os }}-
+
+      # Both measurements run before either verdict, so a failing 50k run still leaves the 500k table.
+      - name: Measure at the 50k and the 500k seed
+        run: >-
+          ./mvnw -B -ntp -Pperf-it test-compile
+          org.apache.maven.plugins:maven-failsafe-plugin:integration-test@perf-50k
+          org.apache.maven.plugins:maven-failsafe-plugin:integration-test@perf-500k
+          org.apache.maven.plugins:maven-failsafe-plugin:verify@perf-50k
+          org.apache.maven.plugins:maven-failsafe-plugin:verify@perf-500k
+
+      - name: Upload the measurements
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: perf
+          path: |
+            target/perf
+            target/failsafe-reports/perf-50k
+            target/failsafe-reports/perf-500k
+          if-no-files-found: ignore
+          retention-days: 30
