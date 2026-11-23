@@ -64,7 +64,9 @@ class ImageBuildDependenciesTest {
         String job = modes("release.yml").keySet().iterator().next();
 
         List<String> release = trivyDbCacheInputs("release.yml", job);
-        assertThat(release).as("trivy-db steps in release.yml's " + job + " job").containsExactly("false");
+        assertThat(release)
+                .as("trivy-db steps in release.yml's " + job + " job")
+                .containsExactly("false");
         for (JsonNode step : steps("release.yml", job)) {
             assertThat(step.path("uses").asString("").startsWith("actions/cache")
                             && step.at("/with/path").asString("").contains("trivy"))
