@@ -47,28 +47,27 @@ export const options = {
 let signedIn = false;
 
 /**
- * The application's session cookie is Secure, so over plain http (the local stack) k6 would store it and never send
- * it back. Redirects are therefore followed by hand, and every cookie the application sets, on any response, is copied
- * into the jar as a non-secure cookie for BASE_URL; behind TLS this changes nothing.
+ * The application's session cookie is Secure, and so are the identity provider's (Keycloak 26), so over plain http
+ * (the local stack) k6 would store them and never send them back. Redirects are therefore followed by hand, and every
+ * cookie a response sets is copied into the jar as a non-secure cookie for that response's origin; behind TLS this
+ * changes nothing.
  */
-function keepAppCookies(res) {
-  if (!res.url.startsWith(BASE_URL)) {
-    return;
-  }
+function keepCookies(res) {
+  const origin = res.url.replace(/^(https?:\/\/[^/]+).*$/, '$1');
   const jar = http.cookieJar();
   Object.values(res.cookies).flat().forEach((cookie) => {
-    jar.set(BASE_URL, cookie.name, cookie.value, { path: cookie.path || '/', secure: false });
+    jar.set(origin, cookie.name, cookie.value, { path: cookie.path || '/', secure: false });
   });
 }
 
 function follow(res) {
   let hops = 0;
-  keepAppCookies(res);
+  keepCookies(res);
   while (res.status >= 300 && res.status < 400 && hops < 10) {
     const location = res.headers.Location;
     const next = location.startsWith('http') ? location : res.url.replace(/^(https?:\/\/[^/]+).*$/, '$1') + location;
     res = http.get(next, { redirects: 0, tags: { name: 'sign-in' } });
-    keepAppCookies(res);
+    keepCookies(res);
     hops++;
   }
   return res;
@@ -94,7 +93,7 @@ function signIn() {
 
 function page(path, name, expected) {
   const res = http.get(`${BASE_URL}${path}`, { tags: { name } });
-  keepAppCookies(res);
+  keepCookies(res);
   check(res, {
     [`${name} is 200`]: (r) => r.status === 200,
     [`${name} shows ${expected}`]: (r) => r.body.includes(expected),
@@ -114,7 +113,7 @@ export function browse() {
 export function exportOnce() {
   signIn();
   const res = http.get(`${BASE_URL}/cases/export.csv?type=900000001`, { tags: { name: 'export' }, timeout: '60s' });
-  keepAppCookies(res);
+  keepCookies(res);
   check(res, {
     'export is a CSV attachment': (r) => r.status === 200
       && String(r.headers['Content-Disposition'] || '').startsWith('attachment'),

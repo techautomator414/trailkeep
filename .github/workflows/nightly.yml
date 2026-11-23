@@ -27,12 +27,14 @@ jobs:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
       NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
 
-  # The cases list at 50 000 synthetic cases on PostgreSQL (WP-15 part 5, docs/perf/cases-list-50k.md): every
-  # scenario is a full request in-process (security, scoped queries, Thymeleaf), and the job fails if GET /cases p95
-  # reaches 500 ms or the search p95 reaches 1 s. The k6 smoke (perf/k6/cases-smoke.js) needs a running app behind the
-  # identity provider and runs by hand; the 500k-comment k6 run arrives with WP-30.
+  # Performance on PostgreSQL in process: the cases list at 50 000 synthetic cases (WP-15 part 5,
+  # docs/perf/cases-list-50k.md), then the 500k seed, the same cases with 500 000 comments (WP-30,
+  # docs/perf/release-500k.md), each in its own JVM and container. Every scenario is a full request (security, scoped
+  # queries, Thymeleaf), and the job fails if a list or case page p95 reaches 500 ms, a search p95 1 s or the aging
+  # report 30 s. The k6 runs (perf/k6/) need a running app behind the identity provider and a quiet machine, so they
+  # run by hand at release time, as does the Oracle 500k run (perf-500k-oracle).
   perf:
-    name: perf (50k cases on PostgreSQL)
+    name: perf (50k cases and 500k comments on PostgreSQL)
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
@@ -64,17 +66,24 @@ jobs:
             maven-${{ runner.os }}-${{ github.job }}-
             maven-${{ runner.os }}-
 
-      - name: Measure the cases list at 50k
-        run: ./mvnw -B -ntp -Pperf-it test-compile org.apache.maven.plugins:maven-failsafe-plugin:integration-test@perf-50k org.apache.maven.plugins:maven-failsafe-plugin:verify@perf-50k
+      # Both measurements run before either verdict, so a failing 50k run still leaves the 500k table.
+      - name: Measure at the 50k and the 500k seed
+        run: >-
+          ./mvnw -B -ntp -Pperf-it test-compile
+          org.apache.maven.plugins:maven-failsafe-plugin:integration-test@perf-50k
+          org.apache.maven.plugins:maven-failsafe-plugin:integration-test@perf-500k
+          org.apache.maven.plugins:maven-failsafe-plugin:verify@perf-50k
+          org.apache.maven.plugins:maven-failsafe-plugin:verify@perf-500k
 
       - name: Upload the measurements
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: perf-50k
+          name: perf
           path: |
             target/perf
             target/failsafe-reports/perf-50k
+            target/failsafe-reports/perf-500k
           if-no-files-found: ignore
           retention-days: 30
 

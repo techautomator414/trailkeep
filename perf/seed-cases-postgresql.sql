@@ -80,6 +80,15 @@ SELECT c.ID, lower(c.TITLE || ' ' || c.DESCRIPTION), c.UPDATED_AT
   FROM CASE_RECORD c
  WHERE c.ID > 900000000;
 
+-- For k6 on the local stack only (perf/k6/release-mix.js): if the local profile's dev-realm Analyst exists, it joins
+-- Perf Team 01 too, so a one-team view of the seed can be measured over HTTP. Elsewhere (PerfCasesListIT) there is no
+-- such user and this inserts nothing.
+INSERT INTO APP_USER_TEAM (USER_ID, TEAM_ID, ROLE_IN_TEAM)
+SELECT u.ID, 900000001, 'ANALYST'
+  FROM APP_USER u
+ WHERE u.EXTERNAL_ID = '00000000-0000-4000-8000-000000000002'
+   AND NOT EXISTS (SELECT 1 FROM APP_USER_TEAM m WHERE m.USER_ID = u.ID AND m.TEAM_ID = 900000001);
+
 ANALYZE APP_USER;
 ANALYZE APP_USER_TEAM;
 ANALYZE TEAM;

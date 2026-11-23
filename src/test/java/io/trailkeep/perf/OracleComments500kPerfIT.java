@@ -1,0 +1,79 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 Charlie Genova and contributors
+package io.trailkeep.perf;
+
+import io.trailkeep.testsupport.OracleTestcontainersConfiguration;
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.List;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
+import javax.sql.DataSource;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.Tag;
+import org.springframework.context.annotation.Import;
+import org.springframework.test.context.ActiveProfiles;
+
+/**
+ * The 500k seed on Oracle (WP-30), where {@code SEARCH_TEXT} is a {@code CLOB} and {@code LIKE} reads it as one.
+ * Opt-in, in the {@code perf-it} profile's {@code perf-500k-oracle} execution, which no workflow runs (seeding takes
+ * minutes on Oracle, and the search misses its target until the vendor adapter exists; see {@code
+ * docs/perf/release-500k.md}). The image is {@code trailkeep.oracle.image} as for {@code
+ * -Poracle-it}. The table goes to {@code target/perf/comments-500k-oracle.md}.
+ */
+// "IT" is the Failsafe suffix Part B mandates for integration tests, not an abbreviation.
+@SuppressWarnings("checkstyle:AbbreviationAsWordInName")
+@Tag("perf-500k-oracle")
+@ActiveProfiles("oracle-test")
+@Import(OracleTestcontainersConfiguration.class)
+class OracleComments500kPerfIT extends AbstractComments500kPerfIT {
+
+    /** A line holding only "/", which ends every statement of the Oracle seeds. */
+    private static final Pattern SLASH_LINE = Pattern.compile("(?m)^/[ \\t]*$");
+
+    private static final PerfReport REPORT = new PerfReport(
+            "50 000 cases and 500 000 comments on Oracle (OracleComments500kPerfIT)", "comments-500k-oracle.md");
+
+    @Override
+    void applySeeds(DataSource dataSource) {
+        // The scripts are written for SQL*Plus: every statement, PL/SQL blocks included, ends with a line holding only
+        // "/", and no other line starts with one. Split on those lines, drop the comment lines, run each statement.
+        for (String file : List.of("seed-cases-oracle.sql", "seed-comments-oracle.sql")) {
+            String script;
+            try {
+                script = Files.readString(Path.of("perf", file));
+            } catch (IOException unreadable) {
+                throw new UncheckedIOException(unreadable);
+            }
+            SLASH_LINE
+                    .splitAsStream(script)
+                    .map(statement -> statement
+                            .lines()
+                            .filter(line -> !line.startsWith("--"))
+                            .collect(Collectors.joining("\n"))
+                            .strip())
+                    .filter(sql -> !sql.isEmpty())
+                    .forEach(jdbc::execute);
+        }
+    }
+
+    @Override
+    List<String> plan(String sql) {
+        // EXPLAIN PLAN needs no privilege on the V$ views (the executed cursor's plan does); this is the optimizer's
+        // plan.
+        jdbc.execute("EXPLAIN PLAN FOR " + sql);
+        return jdbc.queryForList("SELECT PLAN_TABLE_OUTPUT FROM TABLE(DBMS_XPLAN.DISPLAY)", String.class);
+    }
+
+    @Override
+    PerfReport report() {
+        return REPORT;
+    }
+
+    @AfterAll
+    static void writeReport() throws IOException {
+        REPORT.write();
+    }
+}
