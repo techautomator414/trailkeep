@@ -241,13 +241,18 @@ jobs:
       - name: Install scanners
         uses: ./.github/actions/setup-scanners
 
+      - name: Download the Trivy databases (cached by date; see the action)
+        uses: ./.github/actions/trivy-db
+        with:
+          cache: "true"
+
       - name: Scan the SBOM (fails on HIGH or CRITICAL)
         run: |
           set -euo pipefail
           mkdir -p reports
-          trivy sbom --format json --output reports/trivy-sbom.json sbom/bom.json
-          trivy sbom --format sarif --output reports/trivy-sbom.sarif sbom/bom.json
-          trivy sbom --format table --severity HIGH,CRITICAL --exit-code 1 sbom/bom.json
+          trivy sbom --skip-db-update --skip-java-db-update --format json --output reports/trivy-sbom.json sbom/bom.json
+          trivy sbom --skip-db-update --skip-java-db-update --format sarif --output reports/trivy-sbom.sarif sbom/bom.json
+          trivy sbom --skip-db-update --skip-java-db-update --format table --severity HIGH,CRITICAL --exit-code 1 sbom/bom.json
 
       - name: Upload the report
         if: always()
@@ -274,6 +279,11 @@ jobs:
 
       - name: Install scanners
         uses: ./.github/actions/setup-scanners
+
+      - name: Download the Trivy databases (cached by date; see the action)
+        uses: ./.github/actions/trivy-db
+        with:
+          cache: "true"
 
       - name: Lint Kubernetes manifests
         run: kube-linter lint deploy/
@@ -318,9 +328,9 @@ jobs:
           set -euo pipefail
           mkdir -p reports
           cp target/image/base-images.txt reports/
-          trivy image --format json --output reports/trivy-image.json "${IMAGE}"
-          trivy image --format sarif --output reports/trivy-image.sarif "${IMAGE}"
-          trivy image --format table --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 "${IMAGE}"
+          trivy image --skip-db-update --skip-java-db-update --format json --output reports/trivy-image.json "${IMAGE}"
+          trivy image --skip-db-update --skip-java-db-update --format sarif --output reports/trivy-image.sarif "${IMAGE}"
+          trivy image --skip-db-update --skip-java-db-update --format table --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 "${IMAGE}"
 
       - name: Check image configuration with Dockle
         run: |
