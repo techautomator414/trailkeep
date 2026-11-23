@@ -12,6 +12,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Keycloak 26.8.2-2 (compose and test image) and the Nu Html Checker image digest, landed as one change because
   ComposeImagesTest fails on either Dependabot PR alone (supersedes #279 and #280); compose-only alpine/openssl 3.5.8.
 
+### Fixed
+
+- The cases list's CSV export and the audit trail's export no longer deadlock the database pool (WP-30, #84, #91).
+  Both read their rows in pages of 500 inside one read-only transaction while they wrote the response, and the first
+  write commits the response, which saves the person's session through a second connection. With as many exports in
+  flight as the pool has connections, each held one and waited for another until Hikari's 30 s acquire timeout:
+  measured on a pool of 10, ten concurrent case exports gave five 500s after 30 s, ten audit exports gave ten, and a
+  list request made meanwhile waited 27 s. A slow client also held its connection for the whole download. Each page,
+  with its team and owner names or its case numbers, is now read in a short read-only transaction of its own and
+  written to the client after that transaction has ended (Part B: no network I/O inside a transaction). Consistency is
+  unchanged: both vendors run at READ COMMITTED, where each statement already saw its own moment, and the audit
+  export's end stays pinned to its count. On the same pool, twenty concurrent exports of either kind now all succeed,
+  the slowest in 1.5 s, and ten clients reading at 20 KB/s use at most one connection between them, so exports need
+  neither a semaphore nor a temporary file. `DefaultCaseExportServiceTest` and `DefaultAuditExportServiceTest` count
+  the writes that reach the response while a transaction is open and require none (the old code made 25 and 11).
+
 ## [0.3.0] - 2026-11-22
 
 Hardening before 1.0.0, with no new work package: the follow-ups of WP-28's security test map and of the threat model
