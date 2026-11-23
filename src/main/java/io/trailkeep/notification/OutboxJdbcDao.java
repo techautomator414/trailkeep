@@ -50,6 +50,9 @@ class OutboxJdbcDao {
             + " WHERE o.id = :id AND o.status = :sending";
     private static final String REAP = "UPDATE NotificationOutbox o SET o.status = :pending, o.lockedUntil = NULL,"
             + " o.nextAttemptAt = :now WHERE o.status = :sending AND o.lockedUntil < :now";
+    private static final String REQUEUE = "UPDATE NotificationOutbox o SET o.status = :pending, o.attempts = 0,"
+            + " o.nextAttemptAt = :now, o.lockedUntil = NULL, o.lastError = NULL"
+            + " WHERE o.id = :id AND o.status = :failed";
     private static final String COUNT = "SELECT COUNT(o) FROM NotificationOutbox o WHERE o.status = :status";
     private static final String OLDEST_PENDING =
             "SELECT MIN(o.createdAt) FROM NotificationOutbox o WHERE o.status = :status";
@@ -184,6 +187,26 @@ class OutboxJdbcDao {
                 .setParameter("now", now)
                 .executeUpdate());
         return Objects.requireNonNullElse(reaped, 0);
+    }
+
+    /**
+     * Puts a {@code FAILED} row back to {@code PENDING} with its attempts reset, due now (#318). A conditional update
+     * in the caller's transaction, so the audit event commits with it; of two callers racing for one row the second
+     * waits for the first's commit, then matches nothing.
+     *
+     * @param id the row
+     * @param now when the row is due again
+     * @return {@code true} if this call moved the row, {@code false} if it was not {@code FAILED} any more
+     */
+    boolean requeue(long id, Instant now) {
+        return entityManager
+                        .createQuery(REQUEUE)
+                        .setParameter("pending", OutboxStatus.PENDING)
+                        .setParameter("failed", OutboxStatus.FAILED)
+                        .setParameter("now", now)
+                        .setParameter("id", id)
+                        .executeUpdate()
+                == 1;
     }
 
     /**
