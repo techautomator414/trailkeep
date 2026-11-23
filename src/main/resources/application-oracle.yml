@@ -27,6 +27,11 @@ spring:
       ts: TIMESTAMP(3)
   jpa:
     properties:
+      hibernate:
+        query:
+          # Hibernate would create 24 HTE_* global temporary tables at start-up for its HQL insert-select strategy
+          # (issue #317); Flyway owns the schema and Trailkeep has no such statement. See the class.
+          insert_strategy: io.trailkeep.shared.persistence.NoTempTableInsertStrategy
       # Fix the dialect version (ADR-0004). These OVERRIDE the product name and version Hibernate detects from
       # the connection; they do not skip detection (that would need hibernate.boot.allow_jdbc_metadata_access=false).
       # 21.0 matches the gvenzl/oracle-xe:21 CI image (no native BOOLEAN). CI also runs gvenzl/oracle-free:23
