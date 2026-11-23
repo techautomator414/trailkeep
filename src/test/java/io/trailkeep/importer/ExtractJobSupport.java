@@ -181,8 +181,17 @@ abstract class ExtractJobSupport {
         if (source != null) {
             builder.initializers(context -> context.getBeanFactory().registerSingleton("memorySource", source));
         }
+        configure(builder);
         return builder.run(args);
     }
+
+    /**
+     * Adds to the importer's context before it starts; nothing here. The volume perf IT times each command and
+     * counts its statements through it.
+     *
+     * @param builder the importer's application, configured as the Job runs it
+     */
+    void configure(SpringApplicationBuilder builder) {}
 
     /** Staged rows of a run: persons, cases, comments, attachments, events. */
     List<Integer> staged(long run) {

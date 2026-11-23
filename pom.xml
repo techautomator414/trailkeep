@@ -864,10 +864,12 @@
                perf ITs (a 50 000-case seed, minutes long) only in the perf-it profile's perf-50k execution, and
                the 500k-comment ones only in its perf-500k and opt-in perf-500k-oracle executions; the
                role-conflict perf ITs (a 6-million-row audit seed, tens of minutes on Oracle) only in its opt-in
-               role-conflict execution, which no workflow runs;
+               role-conflict execution, which no workflow runs; the importer volume perf ITs (a legacy source of
+               50 000 cases, 500 000 notes and 500 000 people, tens of minutes) only in its opt-in perf-import and
+               perf-import-oracle executions;
                SQL Server source ITs only in the sqlserver-it profile's sqlserver execution; the DAST seeding step,
                which needs a running stack, only in the dast profile's dast execution. -->
-          <excludedGroups>oracle,heap,perf,perf-500k,perf-500k-oracle,perf-role-conflict,sqlserver,dast</excludedGroups>
+          <excludedGroups>oracle,heap,perf,perf-500k,perf-500k-oracle,perf-role-conflict,perf-import,perf-import-oracle,sqlserver,dast</excludedGroups>
         </configuration>
         <executions>
           <execution>
@@ -957,6 +959,41 @@
                   <excludedGroups combine.self="override"/>
                   <reportsDirectory>${project.build.directory}/failsafe-reports/perf-500k-oracle</reportsDirectory>
                   <summaryFile>${project.build.directory}/failsafe-reports/perf-500k-oracle/failsafe-summary.xml</summaryFile>
+                </configuration>
+              </execution>
+              <execution>
+                <!-- Opt-in, not in any workflow: ./mvnw -Pperf-it test-compile
+                     org.apache.maven.plugins:maven-failsafe-plugin:integration-test@perf-import
+                     org.apache.maven.plugins:maven-failsafe-plugin:verify@perf-import
+                     (-Dtrailkeep.perf.import.scale=0.1 for a tenth of the corpus); see docs/perf/importer-volume.md. -->
+                <id>perf-import</id>
+                <goals>
+                  <goal>integration-test</goal>
+                  <goal>verify</goal>
+                </goals>
+                <configuration>
+                  <groups>perf-import</groups>
+                  <excludedGroups combine.self="override"/>
+                  <!-- The importer Job's heap: 75 % (Containerfile) of its 1536Mi limit (deploy/jobs/importer). -->
+                  <argLine>@{argLine} -Xmx1152m</argLine>
+                  <reportsDirectory>${project.build.directory}/failsafe-reports/perf-import</reportsDirectory>
+                  <summaryFile>${project.build.directory}/failsafe-reports/perf-import/failsafe-summary.xml</summaryFile>
+                </configuration>
+              </execution>
+              <execution>
+                <!-- Opt-in, not in any workflow: the same with Trailkeep on Oracle, @perf-import-oracle
+                     (-Dtrailkeep.oracle.image=oracle-xe for xe 21); see docs/perf/importer-volume.md. -->
+                <id>perf-import-oracle</id>
+                <goals>
+                  <goal>integration-test</goal>
+                  <goal>verify</goal>
+                </goals>
+                <configuration>
+                  <groups>perf-import-oracle</groups>
+                  <excludedGroups combine.self="override"/>
+                  <argLine>@{argLine} -Xmx1152m</argLine>
+                  <reportsDirectory>${project.build.directory}/failsafe-reports/perf-import-oracle</reportsDirectory>
+                  <summaryFile>${project.build.directory}/failsafe-reports/perf-import-oracle/failsafe-summary.xml</summaryFile>
                 </configuration>
               </execution>
               <execution>
