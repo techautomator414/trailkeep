@@ -51,7 +51,7 @@
     <error-prone.version>2.52.0</error-prone.version>
     <nullaway.version>0.14.3</nullaway.version>
     <spotbugs.version>4.10.5</spotbugs.version>
-    <playwright.version>1.64.0</playwright.version>
+    <playwright.version>1.65.0</playwright.version>
     <!-- Overrides Spring Boot 4.1.2's 4.1.1: Spring Session 4.1.1 (and 4.0.5) are published under the "Broadcom
          Foundation License", which is not on security/licenses-allowed.txt; 4.1.0 is the latest Apache-2.0 release
          of this line. Revisit with the maintainers before any upgrade (PR 10 "Plan deviations"). -->
@@ -68,7 +68,7 @@
          up to 2026-11-03, including GHSA-47x2-9gq9-jg3m (denial of service via repeated allowed attributes), which
          applies to every policy; the later advisories concern SVG, srcset and ping, which the policy never allows. -->
     <commonmark.version>0.32.0</commonmark.version>
-    <json-schema-validator.version>3.0.6</json-schema-validator.version>
+    <json-schema-validator.version>3.0.9</json-schema-validator.version>
     <jsqlparser.version>5.4</jsqlparser.version>
     <re2j.version>1.8</re2j.version>
     <commons-csv.version>1.14.1</commons-csv.version>
