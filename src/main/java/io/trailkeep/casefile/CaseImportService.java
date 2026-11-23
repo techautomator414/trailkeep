@@ -129,6 +129,19 @@ public interface CaseImportService {
     long importComment(ImportRun run, ImportedComment comment);
 
     /**
+     * Adds a case's imported comments as {@link #importComment} adds one, in the caller's transaction, with one read of
+     * the case and one write of its search text for all of them (WP-30 part b): the load writes every comment of a case
+     * at once, and a comment at a time cost the 500 000-note corpus several round trips per comment.
+     *
+     * @param run the run
+     * @param comments the comments, all of one case, in the order they were written
+     * @return their ids, in the same order
+     * @throws CaseException {@code INVALID} for a blank or over-long body, a future time or comments of more than one
+     *     case, before any is written; {@code NOT_FOUND} for an unknown case
+     */
+    List<Long> importComments(ImportRun run, List<ImportedComment> comments);
+
+    /**
      * A case type as the dry run checks staged cases against it (WP-26 part q, design §7.1), and the load names it.
      *
      * @param id its id, which an imported case's fields carry

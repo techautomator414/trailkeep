@@ -88,10 +88,10 @@ record ChildLoads(CommentLoad comments, AttachmentLoad attachments, EventLoad ev
             PeopleMatcher people,
             CaseComments.Author importer) {
         List<Long> continued = new ArrayList<>();
-        for (CaseComments.Comment comment : texts) {
-            List<Long> ids = comments.write(created, comment);
-            if (comment.staged() == null) {
-                continued.addAll(ids);
+        List<List<Long>> written = comments.write(created, texts);
+        for (int i = 0; i < texts.size(); i++) {
+            if (texts.get(i).staged() == null) {
+                continued.addAll(written.get(i));
             }
         }
         attachments.write(created, scanned, people, importer);

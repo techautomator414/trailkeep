@@ -40,15 +40,6 @@ import org.springframework.transaction.annotation.Transactional;
 @CaseAccessPath
 class DefaultCaseImportService implements CaseImportService {
 
-    /** The audit snapshot of an imported comment: the body redacted as for any comment, the run in the details. */
-    record ImportedCommentSnapshot(
-            @Redacted String body,
-            @Nullable Long authorId,
-            String authorName,
-            Instant writtenAt,
-            long runId,
-            long approverId) {}
-
     /**
      * The audit snapshot of an imported case: flat, subject and description redacted as for any case, the run in the
      * details (design §7.4); the legacy reference, the internal identity the import ledger keeps, stays out.
@@ -81,11 +72,7 @@ class DefaultCaseImportService implements CaseImportService {
             + " c.updatedBy = :by, c.version = c.version + 1"
             + " where c.id = :id and c.ownerId = :from and c.status = :open";
 
-    /** {@code CASE_COMMENT.AUTHOR_NAME_SNAPSHOT}; the importer shortens longer legacy names with an issue. */
-    private static final int MAX_AUTHOR_NAME = 200;
-
     private final CaseRecordRepository cases;
-    private final CaseSearchJdbcDao search;
     private final CaseWrittenJdbcDao written;
     private final CaseTypeRepository caseTypes;
     private final CaseTypeOutcomeRepository outcomes;
@@ -97,6 +84,7 @@ class DefaultCaseImportService implements CaseImportService {
     private final ImportPeopleService people;
     private final AuditRecorder audit;
     private final ImportHolds holds;
+    private final ImportedComments importedComments;
     private final InstantSource clock;
     private final ZoneId zone;
     private final String prefix;
@@ -118,7 +106,6 @@ class DefaultCaseImportService implements CaseImportService {
             AppProperties app,
             CaseProperties properties) {
         this.cases = cases;
-        this.search = search;
         this.written = written;
         this.caseTypes = caseTypes;
         this.outcomes = outcomes;
@@ -130,6 +117,7 @@ class DefaultCaseImportService implements CaseImportService {
         this.people = people;
         this.audit = audit;
         this.holds = new ImportHolds(entityManager, audit, directory);
+        this.importedComments = new ImportedComments(cases, search, entityManager, directory, people, audit, clock);
         this.clock = clock;
         this.zone = app.timezone();
         this.prefix = properties.numberPrefix();
@@ -270,49 +258,12 @@ class DefaultCaseImportService implements CaseImportService {
 
     @Override
     public long importComment(ImportRun run, ImportedComment comment) {
-        Instant now = clock.instant();
-        String body = comment.body().replace("\r\n", "\n");
-        if (body.isBlank()
-                || body.length() > CaseComment.MAX_BODY
-                || comment.authorName().isBlank()
-                || comment.authorName().length() > MAX_AUTHOR_NAME
-                || comment.writtenAt().isAfter(now)) {
-            throw invalid("a comment is 1 to 20000 characters, has an author name and was written in the past");
-        }
-        CaseRecord record = cases.findOne(CaseScope.system(), comment.caseNumber())
-                .orElseThrow(() -> new CaseException(Kind.NOT_FOUND, "case not found"));
-        if (!record.isImported()) {
-            // The relaxations are for imported history; a case created in Trailkeep takes comments as anyone posts.
-            throw invalid("only an imported case takes imported comments");
-        }
-        long caseId = Objects.requireNonNull(record.getId(), "persisted");
-        CaseComment imported =
-                CaseComment.of(caseId, body, comment.authorId(), comment.authorName(), comment.writtenAt());
-        entityManager.persist(imported);
-        entityManager.flush();
-        if (!search.append(caseId, "\n" + body, now)) {
-            throw new IllegalStateException("an imported case has its search row from its import");
-        }
-        long commentId = Objects.requireNonNull(imported.getId(), "persisted");
-        long principal = people.principals().importer();
-        audit.record(new AuditEntry(
-                principal,
-                directory.displayName(principal).orElse("Trailkeep import"),
-                AuditOrigin.IMPORT,
-                caseId,
-                "COMMENT",
-                commentId,
-                "COMMENT_IMPORTED",
-                audit.diff(
-                        null,
-                        new ImportedCommentSnapshot(
-                                body,
-                                comment.authorId(),
-                                comment.authorName(),
-                                comment.writtenAt(),
-                                run.runId(),
-                                run.approverId()))));
-        return commentId;
+        return importComments(run, List.of(comment)).getFirst();
+    }
+
+    @Override
+    public List<Long> importComments(ImportRun run, List<ImportedComment> comments) {
+        return importedComments.write(run, comments);
     }
 
     /** Whether a case still waits for its legacy owner: open, not purged and still the default owner's. */

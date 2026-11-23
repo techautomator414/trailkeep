@@ -89,31 +89,38 @@ The report reduces what the importer decided to digests, so a change can be show
 
 ### Hardware and software
 
-One desktop machine: a 16-core AMD Ryzen 9 5900XT, 62 GB RAM, NVMe storage; PostgreSQL 16 (`postgres:16-alpine`,
-default settings) and Oracle in Testcontainers, the application in the Failsafe JVM on Temurin 21 with `-Xmx1152m`. The
-machine runs other services, so times move by some percent between runs; the timed runs were made one after the other
-on the same day. Ten minutes of a niced IT run overlapped (c)'s load, whose time may therefore be a little high (a
-second run of (c), under heavier load, took 1 294 s).
+One desktop machine: a 16-core AMD Ryzen 9 5900XT, 62 GB RAM, NVMe storage; PostgreSQL 16 (`postgres:16-alpine`, default
+settings) and Oracle in Testcontainers, the application in the Failsafe JVM on Temurin 21 with `-Xmx1152m`. The machine
+runs other services, so times move by some percent between runs. The timed runs below were made one after the other on
+the same day. Ten minutes of a niced IT run overlapped (c)'s load, whose time may therefore be a little high (a second
+run of (c), under heavier load, took 1 294 s).
 
 ## Results on PostgreSQL, the full corpus
 
-Each row is the stack up to and including that PR (`main` is ac75e07); (d) adds its row. Peak heap is the
-highest heap sampled while the command ran, "after GC" the highest heap left after a collection, which is what the
-command holds.
+Each row is the stack up to and including that PR (`main` is ac75e07). Peak heap is the highest heap sampled while the
+command ran, "after GC" the highest heap left after a collection, which is what the command holds.
 
 | Code | Dry run s | Dry-run statements | Dry-run transactions | Dry-run heap MiB (peak / after GC) | Load s | Load rows/s | Load statements | Load transactions | Load heap MiB (peak / after GC) |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
 | `main` | 426.7 | 757 038 | 756 303 | 467 / 296 | 1 826.3 | 357 | 4 871 236 | 800 787 | 467 / 288 |
 | + (b) batched people | 13.0 | 10 059 | 9 328 | 468 / 296 | 1 441.2 | 452 | 4 124 257 | 53 812 | 525 / 319 |
 | + (c) principals once, one page of people | 20.3 | 12 571 | 12 634 | 252 / 126 | 1 261.9 | 517 | 2 968 326 | 51 111 | 325 / 157 |
+| + (d) a case's children together | 20.6 | 12 571 | 12 634 | 227 / 126 | 390.3 | 1 671 | 1 028 326 | 51 111 | 451 / 156 |
 
 The other commands did not change: `validate-mapping` 0.5 s, `extract` 208 to 209 s (5 500 rows/s, 4 649
 statements), `reconcile` 22 to 23 s (9 047 statements), `purge-staging` 0.8 to 0.9 s (13 statements). Every run gave
-the same dry-run digest (`a986672e6dd74d3f`) and load digest (`b85f4f2d62f88af8`).
+the same dry-run digest (`a986672e6dd74d3f`) and load digest (`b85f4f2d62f88af8`). The content digest, measured
+with the stack up to (c) and with (d) in, is `a92fb3fe56fee37c` both times (the runs that measured it are not the
+timed ones above; at a fiftieth of the corpus the dumped rows are byte-identical).
 
 On `main` the dry run and the load are where the time is: 7 and 30 minutes of the 41 the whole import takes, each
 about one transaction per row, for the people lookups (b) explains. The load's 4.9 million statements are, after those,
 nearly all per child row, which (c) and (d) take in turn.
+
+From `main` to the end of the stack: the dry run is **21 times faster** (427 s to 21 s) and holds **less than half the
+heap** (296 to 126 MiB after GC); the load is **4.7 times faster** (1 826 s to 390 s, 357 to 1 671 rows/s) with **a
+fifth of the statements** and **a sixteenth of the transactions**. The whole import of the release corpus, extract to
+purge, went from 41 minutes to 11.
 
 ### What each fix did
 
@@ -134,6 +141,60 @@ more than halves what the dry run holds (296 to 126 MiB after GC) and what the l
 hold no longer grows with the number of legacy people, as the design's memory rule asks. The load's statements fell from
 4.1 to 3.0 million and its time from 1 441 s to 1 262 s.
 
+**(d) A case's comments and history together.** After (c), the load's 2 968 326 statements were nearly all per child
+row: each comment read its case again, was inserted and flushed alone, appended to the search text, audited, read back
+for its written hash and given its ledger row; each history row likewise. A flush per row means no JDBC batching, even
+though `hibernate.jdbc.batch_size` is 50 and the entities' sequences are pooled. `CaseImportService.importComments`
+now takes a case's comments at once: one read of the case, every comment and audit row persisted with the id its
+pooled sequence gives, one flush, and one search append of every body in order (the text one append per comment would
+leave). The load reads a case's comments back once and its history once, then saves the ledger rows, so the inserts go
+in batches of 50. The load fell from 1 262 s to 390 s.
+
+### Transactions: by design, not by accident
+
+The dry run's and the load's "one transaction per row" on `main` was accidental: it was the people lookups, each in a
+transaction of its own (b). What remains is by design. The dry run spends a few transactions on each page of 500 rows
+(12 634 for 1 152 000 rows). The load writes **one case per transaction** (50 000 of its 51 111), as §8.2 requires: a
+case is fully in or absent, a refused case becomes a `LOAD` issue while the load goes on, and a crashed load resumes at
+the next case. Several cases per transaction with a savepoint each was considered and not built: rolling back to a
+savepoint leaves Hibernate's persistence context holding the rolled-back case's entities; the gain is bounded by the
+cost of a commit, one part of the 7.8 ms a case now takes with its twelve children on average; and it would weaken the
+one rule the resume logic rests on.
+
+## Results on Oracle
+
+Trailkeep on Oracle Free 23, its redo resized to three groups of 512 MB as `deploy/README.md` asks, the source still
+PostgreSQL, at **a tenth of the corpus** (5 000 cases, 50 000 notes, 50 000 people; 115 200 rows staged, 65 200
+written). A tenth, because on `main` the Oracle load writes 108 rows/s, so the full corpus would take about 100 minutes
+for the load alone; every cost compared here is per row, per page or per case, and the one that dominates on Oracle
+(below) is per case, so the tenth measures the same things a tenth as long.
+
+| Code | Dry run s | Dry-run statements | Dry-run transactions | Load s | Load rows/s | Load statements | Load transactions | Load heap after GC MiB |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| `main` | 27.9 | 76 626 | 75 084 | 602.3 | 108 | 488 702 | 79 527 | 194 |
+| + (b) and (c) | 6.0 | 2 382 | 1 638 | 596.4 | 109 | 298 614 | 5 481 | 180 |
+| + (d) | 6.1 | 2 382 | 1 638 | 435.8 | 150 | 104 614 | 5 481 | 162 |
+
+On Oracle (b) and (c) were measured together. All three runs gave the same dry-run digest (`fb13a4467224464f`), load
+digest (`c529ac6a628ba8e2`) and **content digest** (`bdb9a210f10d2701`): on Oracle the whole stack writes exactly what
+`main` writes, id for id.
+
+The statements and transactions fall as on PostgreSQL, but the load's time barely moved until (d), and even after (d) a
+case costs 87 ms. **The Oracle Text index is that time.** V21's `IX_CASE_SEARCH_TEXT` (ADR-0017) is `SYNC (ON COMMIT)
+TRANSACTIONAL`, so every case's commit synchronises the index, 50 000 times at the full corpus. Two runs of (d)'s code
+with the index changed only for the load, by the schema owner:
+
+| Index during the load | Load s | Load rows/s | Then |
+|---|---:|---:|---|
+| `SYNC (ON COMMIT)`, as V21 creates it | 435.8 | 150 | – |
+| dropped (to measure, not a proposal) | 63.9 | 1 020 | – |
+| `REPLACE METADATA SYNC (MANUAL)` | 67.3 | 969 | `CTX_DDL.SYNC_INDEX` once: 1.8 s, nothing pending, every case found by `CONTAINS`; then `REPLACE METADATA SYNC (ON COMMIT)` |
+
+So on Oracle about 85 % of the load is the per-commit index sync, and one sync after the load costs 2 s instead of 6
+minutes at a tenth of the corpus (an hour at the full corpus). The index stays `TRANSACTIONAL` throughout, so a search
+during the load still finds unsynced rows. This is not built here: the import user has no DDL right on the index, and
+granting one, or making it a step of the import runbook, is the owner's decision (see "What remains").
+
 ## Correctness
 
 The run asserts the outcome at volume and reports the digests above; each fix compares them with the run before it.
@@ -144,19 +205,32 @@ The run asserts the outcome at volume and reports the digests above; each fix co
 - (c): the same digests again; `DefaultImportPeopleTest` (the principals are read once and kept, and a missing one
   fails every call until its row exists); `PeopleMatcherBatchTest` matches page by page as one by one, and asking about
   a person outside the current page fails rather than reading as unmatched; the importer ITs.
+- (d): the same dry-run and load digests, and the same content digest as the stack before (d), so every row the load
+  writes, its id and every written hash are unchanged; `CaseCommentImportIT` (a case's comments imported together are
+  written as one by one: the same order, each audited, the same search text; one refused comment, or comments of two
+  cases, write nothing); the importer ITs on both vendors; and on Oracle the same content digest as `main` itself.
 
 ## The nightly job
 
 The importer is **not** added to the nightly `perf` job. That job fails on BUILD_PLAN's targets and the plan sets none
-for an import, so a nightly run would add a table nothing gates on, at 41 minutes a night on this machine on `main`
-(the source is seeded and extracted every time). The importer's behaviour is proven on every pull request by the
-importer ITs, and on Oracle on `main`. The volume run is made by hand at release time and with any change to the dry
-run or the load, like the Oracle 500k run and k6. If a nightly guard is wanted, the stable one is a ceiling on
-statements and transactions per row at a tenth of the corpus (a few minutes, and blind to the runner's speed), not a
-time; it would be a new gate, so it is the owner's call.
+for an import, so a nightly run would add a table nothing gates on, at 11 minutes a night on this machine (the source is
+seeded and extracted every time). The importer's behaviour is proven on every pull request by the importer ITs, and on
+Oracle on `main`. The volume run is made by hand at release time and with any change to the dry run or the load, like
+the Oracle 500k run and k6. If a nightly guard is wanted, the stable one is a ceiling on statements and transactions per
+row at a tenth of the corpus (a few minutes, and blind to the runner's speed), not a time; it would be a new gate, so it
+is the owner's call.
 
 ## What remains
 
-- **The load** still makes 3.0 million statements for 652 000 rows, nearly all per child row: each comment reads its
-  case again, is inserted and flushed alone, appended to the search text, audited, read back for its written hash and
-  given its ledger row, and each history row likewise, so no insert is batched. (d).
+- **On Oracle, the Oracle Text sync per case** (above): about 85 % of the load. The measured remedy is an operator step
+  around the initial load, as the schema owner: `ALTER INDEX IX_CASE_SEARCH_TEXT PARAMETERS ('REPLACE METADATA SYNC
+  (MANUAL)')` before it, then `CTX_DDL.SYNC_INDEX('IX_CASE_SEARCH_TEXT')` and `ALTER INDEX IX_CASE_SEARCH_TEXT
+  PARAMETERS ('REPLACE METADATA SYNC (ON COMMIT)')` after it. Whether it belongs in the runbook (WP-30's later part),
+  in the Job with a new grant, or nowhere, is the owner's call.
+- **The extract** is now the longest command on PostgreSQL: 209 s, 5 500 rows/s, for 1 152 000 rows. It was not part
+  of #173 and was not investigated here.
+- **Per-case reads in `importCase`**: the case type, the team and the SLA policy are read for every case in its own
+  transaction. Caching them for the load would save a few statements a case.
+- **`reWriteBatchedInserts=true`** on the PostgreSQL JDBC URL would let the driver send each batch as one multi-row
+  insert. It is a deployment setting, not code, and was not measured.
+- The cases-list index recommendations of `cases-list-50k.md` are WP-30 part a's (`release-500k.md`), not this page's.
