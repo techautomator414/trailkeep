@@ -92,7 +92,8 @@ The report reduces what the importer decided to digests, so a change can be show
 One desktop machine: a 16-core AMD Ryzen 9 5900XT, 62 GB RAM, NVMe storage; PostgreSQL 16 (`postgres:16-alpine`,
 default settings) and Oracle in Testcontainers, the application in the Failsafe JVM on Temurin 21 with `-Xmx1152m`. The
 machine runs other services, so times move by some percent between runs; the timed runs were made one after the other
-on the same day.
+on the same day. Ten minutes of a niced IT run overlapped (c)'s load, whose time may therefore be a little high (a
+second run of (c), under heavier load, took 1 294 s).
 
 ## Results on PostgreSQL, the full corpus
 
@@ -126,11 +127,12 @@ match. The dry run fell from 427 s to 13 s, its transactions from 756 303 to 9 3
 
 **(c) The import principals once, and one page of people.** The load still ran 1 204 804 external-id queries: every
 imported comment and case asked `ImportPeopleService.principals()` for the two import principals, which read them by
-external id each time. They are read once now: V11 seeds them with fixed ids that no sequence issues. The dry run and the load also stopped holding every legacy person they had matched: they hold one page, and a
-page of cases or children resolves the people it names from staging first. That costs the dry run 7 s (it reads the
-people a page names again) and more than halves what the dry run holds (296 to 126 MiB after GC) and what the load
-holds (319 to 157 MiB): what they hold no longer grows with the number of legacy people, as the design's memory rule
-asks. The load's statements fell from 4.1 to 3.0 million and its time from 1 441 s to 1 262 s.
+external id each time. They are read once now: V11 seeds them with fixed ids that no sequence issues. The dry run and
+the load also stopped holding every legacy person they had matched: they hold one page, and a page of cases or children
+resolves the people it names from staging first. That costs the dry run 7 s (it reads the people a page names again) and
+more than halves what the dry run holds (296 to 126 MiB after GC) and what the load holds (319 to 157 MiB): what they
+hold no longer grows with the number of legacy people, as the design's memory rule asks. The load's statements fell from
+4.1 to 3.0 million and its time from 1 441 s to 1 262 s.
 
 ## Correctness
 
