@@ -5,6 +5,8 @@
 # opentelemetry-api>=1.37,<1.38, which carry open Dependabot alerts (mcp fixed in 1.30.0, opentelemetry-api in 1.45.1).
 # CI installs the lockfile with --no-deps and uses only `semgrep scan` and `semgrep --test`, never `semgrep mcp`, so
 # the lock takes the fixed releases and the whole opentelemetry family moves together to keep it consistent.
+# Semgrep also pins wcmatch~=8.3, below 11.2 which fixes the glob ReDoS GHSA-53pm-wgxf-c6qf; CI uses wcmatch only through
+# Semgrep's path filtering, and the semgrep job's scan and rule tests prove the newer release works.
 # Remove an override once a Semgrep release no longer pins the package below its fixed version.
 mcp>=1.30.0,<2
 opentelemetry-api>=1.45.1
@@ -12,3 +14,4 @@ opentelemetry-sdk>=1.45.1
 opentelemetry-proto>=1.45.1
 opentelemetry-exporter-otlp-proto-common>=1.45.1
 opentelemetry-exporter-otlp-proto-http>=1.45.1
+wcmatch>=11.2
