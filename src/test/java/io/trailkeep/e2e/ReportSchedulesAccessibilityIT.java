@@ -123,8 +123,9 @@ class ReportSchedulesAccessibilityIT {
         assertClean("Report schedules");
 
         page.locator("#main").focus();
-        // Past the six Compliance Admin links (SLA policies to System, the audit trail included since #274).
-        tabTo(TEAM_NAME, 7);
+        // Past the seven Compliance Admin links (SLA policies to System, the audit trail since #274, Failed mail since
+        // #318).
+        tabTo(TEAM_NAME, 8);
         page.keyboard().press("Enter");
         page.waitForURL(url -> url.endsWith("/admin/report-schedules/" + TEAM));
         assertClean("Aging report for " + TEAM_NAME);
