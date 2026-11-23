@@ -164,7 +164,7 @@ The status column records what is in effect today, not what is planned.
 ### Data at rest
 **Verified:** attachment hashes recorded and checked when stored. `CaseAttachmentUploadIT` covers this ("stored, verified and audited").
 
-**Platform:** Oracle TDE or PostgreSQL volume encryption, and backups. Nothing in the repository tests them.
+**Platform:** Oracle TDE or PostgreSQL volume encryption, and the backup schedule, storage and retention. Nothing in the repository tests them. A restore from the vendors' logical backups (`pg_dump`, Data Pump) is drilled by hand at the release volume (`PostgresRestoreDrillIT`, `OracleRestoreDrillIT`, `docs/ops/restore-drill.md`).
 
 ### Logging
 **Verified:**
@@ -306,7 +306,7 @@ Controls with no automated verification, or only part of it, one line each. A cl
 7. **No CORS:** closed, verified by `NoCorsIT` (#245).
 8. **SMTP STARTTLS required:** closed, verified by `MailStartTlsTest` (#245).
 9. **App → Oracle over `tcps`:** no test. Position: the JDBC URL is a deployment value, and nothing in the repository connects to a deployed Oracle; the deploying organization verifies it.
-10. **Data at rest (TDE or volume encryption, backups):** nothing tested in the repository. Position: a platform responsibility under BUILD_PLAN §9, owned by the database and storage platform.
+10. **Data at rest (TDE or volume encryption, backups):** encryption and the backups themselves are not tested in the repository. Position: a platform responsibility under BUILD_PLAN §9, owned by the database and storage platform. That a logical backup restores complete and usable is drilled by hand on both vendors (`docs/ops/restore-drill.md`, WP-30), not on every build.
 11. **Logging rules (no restricted text, ids not emails, control characters escaped):** closed, verified by `LoggingRulesIT` and `JsonLoggingIT` (#245).
 12. **Error attributes off (`spring.web.error.include-*`):** closed, verified by `ErrorPropertiesTest` (#245). The old `server.error.*` keys were not read under Spring Boot 4; `ConfigurationKeysTest` guards against that recurring.
 13. **Rate limiting on search and upload:** closed, verified by `RateLimitIT` (#247). Built in-house (a token bucket per user in memory), not with Bucket4j; per replica, with a platform limit at the route for multi-replica deployments.

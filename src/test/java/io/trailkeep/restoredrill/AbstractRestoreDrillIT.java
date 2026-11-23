@@ -2,66 +2,31 @@
 // Copyright 2026 Charlie Genova and contributors
 package io.trailkeep.restoredrill;
 
+import static io.trailkeep.restoredrill.DrillApplication.APP_USER;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.asyncDispatch;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 
-import io.trailkeep.TrailkeepApplication;
-import io.trailkeep.audit.AuditEntry;
-import io.trailkeep.audit.AuditOrigin;
-import io.trailkeep.audit.AuditRecorder;
-import io.trailkeep.audit.Redacted;
+import io.trailkeep.restoredrill.DrillApplication.Observation;
+import io.trailkeep.restoredrill.DrillReport.Action;
 import io.trailkeep.shared.persistence.DatabaseVendor;
 import io.trailkeep.testsupport.RequiresDocker;
 import io.trailkeep.testsupport.TestDatabaseUsers;
-import io.trailkeep.testsupport.WithAppUser;
-import io.trailkeep.testsupport.WithAppUserSecurityContextFactory;
-import io.trailkeep.user.GlobalRole;
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.SecureRandom;
 import java.sql.Connection;
 import java.sql.DriverManager;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.HexFormat;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Properties;
-import java.util.SplittableRandom;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-import javax.crypto.Mac;
-import javax.crypto.spec.SecretKeySpec;
 import org.flywaydb.core.Flyway;
-import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
-import org.springframework.boot.WebApplicationType;
-import org.springframework.boot.builder.SpringApplicationBuilder;
-import org.springframework.boot.jdbc.autoconfigure.JdbcConnectionDetails;
 import org.springframework.context.ConfigurableApplicationContext;
-import org.springframework.mock.web.MockHttpSession;
-import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
-import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.MvcResult;
-import org.springframework.test.web.servlet.setup.MockMvcBuilders;
-import org.springframework.transaction.PlatformTransactionManager;
-import org.springframework.transaction.support.TransactionTemplate;
-import org.springframework.web.context.WebApplicationContext;
-import org.testcontainers.containers.Container.ExecResult;
 import org.testcontainers.containers.JdbcDatabaseContainer;
 import org.testcontainers.utility.MountableFile;
 
@@ -91,19 +56,9 @@ import org.testcontainers.utility.MountableFile;
 @RequiresDocker
 abstract class AbstractRestoreDrillIT {
 
-    static final String APP_USER = "trailkeep_app";
-    static final String PURGE_USER = "trailkeep_purge";
-    static final String IMPORT_USER = "trailkeep_import";
-
-    /** The Compliance Admin of the 500k perf IT, who reads every team. */
-    static final long ADMIN = 900_000_999L;
-
-    /** Seeded files downloaded through the application: single-chunk and multi-chunk ones, first and last. */
-    private static final List<Integer> DOWNLOADED = List.of(1, 50, 777, 1000, 1999, 2000);
-
+    private static final String PURGE_USER = "trailkeep_purge";
+    private static final String IMPORT_USER = "trailkeep_import";
     private static final int CANARIES = 10;
-    private static final String CANARY_TYPE = "RESTORE_DRILL";
-    private static final Pattern HMAC = Pattern.compile("\"hmac\"\\s*:\\s*\"([0-9a-f]{64})\"");
     private static final SecureRandom RANDOM = new SecureRandom();
 
     /**
@@ -115,19 +70,16 @@ abstract class AbstractRestoreDrillIT {
      */
     record Owner(String username, String password, String schema) {}
 
-    /**
-     * A backup file inside a database container.
-     *
-     * @param path its path in the container
-     * @param bytes its size
-     */
-    record Dump(String path, long bytes) {}
+    /** What the source held and served, for the restored copy to match. */
+    private record Before(
+            Owner owner,
+            Map<String, DatabaseFingerprint.Table> tables,
+            Map<String, String> index,
+            Map<String, Long> sequences,
+            Observation observed) {}
 
-    /** The application's view of the data, before and after: the search's rows and the downloads' SHA-256. */
-    private record Observation(long searchRows, Map<Integer, String> downloads) {}
-
-    /** A snapshot with one redacted component, as the audit trail stores a case's description. */
-    private record Canary(@Redacted String value) {}
+    /** This run's HMAC key, the canary values written under it, and where the backup file is kept between hosts. */
+    private record Run(DrillReport report, byte[] key, String hmacKey, List<String> canaries, Path local) {}
 
     abstract String vendorProfile();
 
@@ -200,168 +152,203 @@ abstract class AbstractRestoreDrillIT {
         return new Properties();
     }
 
-    /** Carries the Compliance Admin the application's requests are made as. */
-    @WithAppUser(id = ADMIN, globalRole = GlobalRole.COMPLIANCE_ADMIN)
-    private static final class Admin {}
-
     @Test
-    void aBackupRestoredIntoANewDatabaseIsCompleteAndServes() throws Exception {
-        DrillReport report = new DrillReport(title(), fileName());
+    void restoredCopyIsCompleteAndServes() throws Exception {
         byte[] key = new byte[32];
         RANDOM.nextBytes(key);
-        String hmacKey = Base64.getEncoder().encodeToString(key);
         List<String> canaries = new ArrayList<>();
         for (int i = 0; i < CANARIES; i++) {
             canaries.add("restore drill canary " + HexFormat.of().formatHex(RANDOM.generateSeed(8)));
         }
-        Path local = Path.of("target", "restore-drill", fileName().replace(".md", ".dump"));
+        Run run = new Run(
+                new DrillReport(title(), fileName()),
+                key,
+                Base64.getEncoder().encodeToString(key),
+                canaries,
+                Path.of("target", "restore-drill", fileName().replace(".md", ".dump")));
         try {
-            Files.createDirectories(local.getParent());
-            Owner owner;
-            Map<String, DatabaseFingerprint.Table> before;
-            Map<String, String> indexBefore;
-            Map<String, Long> sequencesBefore;
-            Observation observed;
-            String path;
-            JdbcDatabaseContainer<?> source = report.time("Source database started", this::newDatabase);
-            try {
-                TestDatabaseUsers users = users(source);
-                owner = newOwner(source, users);
-                Owner theOwner = owner;
-                report.run(
-                        "Schema migrated (migration Job profile)",
-                        () -> migrationJob(source, theOwner, users).close());
-                try (Connection connection = connect(source, owner)) {
-                    seed(source, owner, connection, report);
-                    insertAdmin(connection);
-                    // What V20 costs an upgrade at this volume (docs/RUNBOOK.md): its index dropped and built again by
-                    // V20's own statement (Oracle refuses a second index on the same columns), so the schema is
-                    // unchanged.
-                    try (Statement statement = connection.createStatement()) {
-                        statement.execute("DROP INDEX IX_AUDIT_AT");
-                        report.run(
-                                "V20's index built again on the 500 000 audit events",
-                                () -> statement.execute("CREATE INDEX IX_AUDIT_AT ON AUDIT_EVENT (AT_TS, ID)"));
-                    }
-                    long bytes = report.time(
-                            "Attachments written (" + AttachmentSeed.FILES + " files)",
-                            () -> AttachmentSeed.write(connection));
-                    report.fact("Attachments: " + AttachmentSeed.FILES + " files, " + mib(bytes)
-                            + " MiB of incompressible content, in 1 MiB chunks");
-                }
-                try (ConfigurableApplicationContext app = report.time(
-                        "Application started on the source (runtime user)",
-                        () -> application(source, theOwner, users, hmacKey))) {
-                    writeCanaries(app, canaries, 0);
-                    observed = observe(app);
-                }
-                try (Connection connection = connect(source, owner)) {
-                    before = report.time(
-                            "Source fingerprinted (every row of every table)",
-                            () -> DatabaseFingerprint.of(connection, theOwner.schema()));
-                    indexBefore = indexState(source, connection);
-                    sequencesBefore = sequences(connection);
-                    report.fact("Database size: " + mib(databaseBytes(connection)) + " MiB");
-                }
-                report.fact("Source: " + before.size() + " tables, "
-                        + before.values().stream()
-                                .mapToLong(DatabaseFingerprint.Table::rows)
-                                .sum() + " rows; search index " + indexBefore);
-                report.fact("Tables fingerprinted: " + String.join(", ", before.keySet()));
-                path = dumpPath(source);
-                String sourcePath = path;
-                long backupMs = report.run("**Backup**", () -> backup(source, theOwner, sourcePath));
-                long size = fileSize(source, path);
-                report.fact("Backup: " + mib(size) + " MiB in " + seconds(backupMs) + " s");
-                report.run(
-                        "Backup copied off the database host",
-                        () -> source.copyFileFromContainer(path, local.toString()));
-            } finally {
-                source.stop();
-            }
-            report.fact("Source database destroyed");
+            Files.createDirectories(run.local().getParent());
+            Before before = backUpSource(run);
+            run.report().fact("Source database destroyed");
+            long rto = restoreAndProve(run, before);
+            run.report()
+                    .fact("Recovery time measured (copy in, restore, migration Job, application start): " + seconds(rto)
+                            + " s");
+        } finally {
+            Files.deleteIfExists(run.local());
+            run.report().write();
+        }
+    }
 
-            long rto = 0;
-            JdbcDatabaseContainer<?> target = report.time("New empty database started", this::newDatabase);
-            try {
-                TestDatabaseUsers users = users(target);
-                users.createGrantees();
-                String targetPath = dumpPath(target);
-                Owner theOwner = owner;
-                rto += report.run(
-                        "Backup copied to the new database host",
-                        () -> target.copyFileToContainer(MountableFile.forHostPath(local, 0644), targetPath));
-                rto += report.run("**Restore**", () -> restore(target, theOwner, targetPath, report));
-                try (Connection connection = connect(target, owner)) {
-                    Map<String, DatabaseFingerprint.Table> after = report.time(
-                            "Restored copy fingerprinted", () -> DatabaseFingerprint.of(connection, theOwner.schema()));
-                    assertThat(after)
-                            .as("every table, its row count and every value")
-                            .isEqualTo(before);
-                    report.fact("Rows and values: all " + after.size() + " tables match the source, digest for digest");
-                    Map<String, String> indexAfter = indexState(target, connection);
-                    assertThat(indexAfter).as("the search index's state").isEqualTo(indexBefore);
-                    report.fact("Search index after the restore: " + indexAfter);
-                    Map<String, Long> sequencesAfter = sequences(connection);
-                    sequencesBefore.forEach((name, mark) -> assertThat(sequencesAfter.get(name))
+    // --- the source --------------------------------------------------------------------------------------------------
+
+    private Before backUpSource(Run run) throws Exception {
+        DrillReport report = run.report();
+        JdbcDatabaseContainer<?> source = report.time("Source database started", this::newDatabase);
+        try {
+            TestDatabaseUsers users = users(source);
+            Owner owner = newOwner(source, users);
+            report.run(
+                    "Schema migrated (migration Job profile)",
+                    () -> DrillApplication.migrationJob(vendorProfile(), source, owner, users)
+                            .close());
+            seedSource(source, owner, report);
+            Observation observed;
+            try (ConfigurableApplicationContext app = report.time(
+                    "Application started on the source (runtime user)",
+                    () -> DrillApplication.start(vendorProfile(), source, owner, users, run.hmacKey()))) {
+                DrillApplication.writeCanaries(app, run.canaries(), 0);
+                observed = DrillApplication.observe(app);
+            }
+            Before before = fingerprint(source, owner, observed, report);
+            String path = dumpPath(source);
+            long backupMs = report.run("**Backup**", () -> backup(source, owner, path));
+            report.fact("Backup: " + mib(DrillDatabase.fileSize(source, path)) + " MiB in " + seconds(backupMs) + " s");
+            report.run(
+                    "Backup copied off the database host",
+                    () -> source.copyFileFromContainer(path, run.local().toString()));
+            return before;
+        } finally {
+            source.stop();
+        }
+    }
+
+    private void seedSource(JdbcDatabaseContainer<?> source, Owner owner, DrillReport report) throws Exception {
+        try (Connection connection = connect(source, owner)) {
+            seed(source, owner, connection, report);
+            DrillApplication.insertAdmin(connection);
+            // What V20 costs an upgrade at this volume (docs/RUNBOOK.md): its index dropped and built again by V20's
+            // own
+            // statement (Oracle refuses a second index on the same columns), so the schema is unchanged.
+            try (Statement statement = connection.createStatement()) {
+                statement.execute("DROP INDEX IX_AUDIT_AT");
+                report.run(
+                        "V20's index built again on the 500 000 audit events",
+                        () -> statement.execute("CREATE INDEX IX_AUDIT_AT ON AUDIT_EVENT (AT_TS, ID)"));
+            }
+            long bytes = report.time(
+                    "Attachments written (" + AttachmentSeed.FILES + " files)", () -> AttachmentSeed.write(connection));
+            report.fact("Attachments: " + AttachmentSeed.FILES + " files, " + mib(bytes)
+                    + " MiB of incompressible content, in 1 MiB chunks");
+        }
+    }
+
+    private Before fingerprint(JdbcDatabaseContainer<?> source, Owner owner, Observation observed, DrillReport report)
+            throws Exception {
+        try (Connection connection = connect(source, owner)) {
+            Map<String, DatabaseFingerprint.Table> tables = report.time(
+                    "Source fingerprinted (every row of every table)",
+                    () -> DatabaseFingerprint.of(connection, owner.schema()));
+            Before before = new Before(owner, tables, indexState(source, connection), sequences(connection), observed);
+            report.fact("Database size: " + mib(databaseBytes(connection)) + " MiB");
+            report.fact("Source: " + tables.size() + " tables, "
+                    + tables.values().stream()
+                            .mapToLong(DatabaseFingerprint.Table::rows)
+                            .sum()
+                    + " rows; search index " + before.index());
+            report.fact("Tables fingerprinted: " + String.join(", ", tables.keySet()));
+            return before;
+        }
+    }
+
+    // --- the restored copy -------------------------------------------------------------------------------------------
+
+    /** Restores into a new database and proves it; returns the milliseconds from copy-in to a serving application. */
+    private long restoreAndProve(Run run, Before before) throws Exception {
+        DrillReport report = run.report();
+        Owner owner = before.owner();
+        JdbcDatabaseContainer<?> target = report.time("New empty database started", this::newDatabase);
+        try {
+            TestDatabaseUsers users = users(target);
+            users.createGrantees();
+            String path = dumpPath(target);
+            long rto = report.run(
+                    "Backup copied to the new database host",
+                    () -> target.copyFileToContainer(MountableFile.forHostPath(run.local(), 0644), path));
+            rto += report.run("**Restore**", () -> restore(target, owner, path, report));
+            compare(target, run, before);
+            rto += report.run(
+                    "Migration Job profile: Flyway validate, nothing pending",
+                    validateFlyway(target, owner, users, report));
+            rto += serve(target, run, before, users);
+            try (Connection runtime = users.login(APP_USER)) {
+                AttachmentSeed.Check check = report.time(
+                        "Every attachment read back as the runtime user",
+                        () -> AttachmentSeed.check(runtime, owner.schema()));
+                assertThat(check.problems())
+                        .as("attachments whose chunks do not match")
+                        .isEmpty();
+                assertThat(check.files()).isEqualTo(AttachmentSeed.FILES);
+                report.fact("Attachments: all " + check.files() + " files, " + mib(check.bytes())
+                        + " MiB, match their recorded size and SHA-256");
+            }
+            return rto;
+        } finally {
+            target.stop();
+        }
+    }
+
+    private void compare(JdbcDatabaseContainer<?> target, Run run, Before before) throws Exception {
+        DrillReport report = run.report();
+        try (Connection connection = connect(target, before.owner())) {
+            Map<String, DatabaseFingerprint.Table> after = report.time(
+                    "Restored copy fingerprinted",
+                    () -> DatabaseFingerprint.of(connection, before.owner().schema()));
+            assertThat(after).as("every table, its row count and every value").isEqualTo(before.tables());
+            report.fact("Rows and values: all " + after.size() + " tables match the source, digest for digest");
+            Map<String, String> index = indexState(target, connection);
+            assertThat(index).as("the search index's state").isEqualTo(before.index());
+            report.fact("Search index after the restore: " + index);
+            Map<String, Long> sequences = sequences(connection);
+            before.sequences()
+                    .forEach((name, mark) -> assertThat(sequences.get(name))
                             .as("sequence " + name)
                             .isNotNull()
                             .isGreaterThanOrEqualTo(mark));
-                    report.fact("Sequences: all " + sequencesAfter.size() + " at or above their source marks");
-                    verifyCanaries(connection, canaries, key);
-                    report.fact("Audit: the " + CANARIES + " redacted canary values confirm under the retained"
-                            + " HMAC key and under no other");
-                }
-                rto += report.run("Migration Job profile: Flyway validate, nothing pending", () -> {
-                    try (ConfigurableApplicationContext job = migrationJob(target, theOwner, users)) {
-                        Flyway flyway = job.getBean(Flyway.class);
-                        flyway.validate();
-                        assertThat(flyway.info().pending())
-                                .as("pending migrations")
-                                .isEmpty();
-                        report.fact(
-                                "Flyway: validate passed, " + flyway.info().applied().length + " applied, 0 pending");
-                    }
-                });
-                long started = System.nanoTime();
-                try (ConfigurableApplicationContext app = report.time(
-                        "Application started on the restored copy (runtime user)",
-                        () -> application(target, theOwner, users, hmacKey))) {
-                    rto += (System.nanoTime() - started) / 1_000_000;
-                    Observation now =
-                            report.time("Health, search and downloads through the application", () -> observe(app));
-                    assertThat(now).as("what the application serves").isEqualTo(observed);
-                    report.fact("Application: healthy; the search finds the same " + now.searchRows() + " cases; "
-                            + DOWNLOADED.size() + " downloads give the same bytes (SHA-256)");
-                    writeCanaries(app, List.of("written after the restore"), CANARIES);
-                    report.fact("Writes: the application records new audit events on the restored copy");
-                }
-                try (Connection runtime = users.login(APP_USER)) {
-                    AttachmentSeed.Check check = report.time(
-                            "Every attachment read back as the runtime user",
-                            () -> AttachmentSeed.check(runtime, theOwner.schema()));
-                    assertThat(check.problems())
-                            .as("attachments whose chunks do not match")
-                            .isEmpty();
-                    assertThat(check.files()).isEqualTo(AttachmentSeed.FILES);
-                    report.fact("Attachments: all " + check.files() + " files, " + mib(check.bytes())
-                            + " MiB, match their recorded size and SHA-256");
-                }
-            } finally {
-                target.stop();
+            report.fact("Sequences: all " + sequences.size() + " at or above their source marks");
+            DrillApplication.verifyCanaries(connection, run.canaries(), run.key());
+            report.fact("Audit: the " + CANARIES + " redacted canary values confirm under the retained HMAC key and"
+                    + " under no other");
+        }
+    }
+
+    private Action validateFlyway(
+            JdbcDatabaseContainer<?> target, Owner owner, TestDatabaseUsers users, DrillReport report) {
+        return () -> {
+            try (ConfigurableApplicationContext job =
+                    DrillApplication.migrationJob(vendorProfile(), target, owner, users)) {
+                Flyway flyway = job.getBean(Flyway.class);
+                flyway.validate();
+                assertThat(flyway.info().pending()).as("pending migrations").isEmpty();
+                report.fact("Flyway: validate passed, " + flyway.info().applied().length + " applied, 0 pending");
             }
-            report.fact("Recovery time measured (copy in, restore, migration Job, application start): " + seconds(rto)
-                    + " s");
-        } finally {
-            Files.deleteIfExists(local);
-            report.write();
+        };
+    }
+
+    /** Starts the application on the restored copy and checks what it serves; returns the start's milliseconds. */
+    private long serve(JdbcDatabaseContainer<?> target, Run run, Before before, TestDatabaseUsers users)
+            throws Exception {
+        DrillReport report = run.report();
+        long started = System.nanoTime();
+        try (ConfigurableApplicationContext app = report.time(
+                "Application started on the restored copy (runtime user)",
+                () -> DrillApplication.start(vendorProfile(), target, before.owner(), users, run.hmacKey()))) {
+            final long ms = (System.nanoTime() - started) / 1_000_000;
+            Observation now = report.time(
+                    "Health, search and downloads through the application", () -> DrillApplication.observe(app));
+            assertThat(now).as("what the application serves").isEqualTo(before.observed());
+            report.fact("Application: healthy; the search finds the same " + now.searchRows() + " cases; "
+                    + DrillApplication.DOWNLOADED.size() + " downloads give the same bytes (SHA-256)");
+            DrillApplication.writeCanaries(app, List.of("written after the restore"), CANARIES);
+            report.fact("Writes: the application records new audit events on the restored copy");
+            return ms;
         }
     }
 
     // --- the database ------------------------------------------------------------------------------------------------
 
     TestDatabaseUsers users(JdbcDatabaseContainer<?> database) {
-        return new TestDatabaseUsers(vendor(), details(database), APP_USER, PURGE_USER, IMPORT_USER);
+        return new TestDatabaseUsers(vendor(), DrillDatabase.details(database), APP_USER, PURGE_USER, IMPORT_USER);
     }
 
     Connection connect(JdbcDatabaseContainer<?> database, Owner owner) throws SQLException {
@@ -374,208 +361,6 @@ abstract class AbstractRestoreDrillIT {
     Connection admin(JdbcDatabaseContainer<?> database) throws SQLException {
         String admin = vendor() == DatabaseVendor.ORACLE ? "system" : database.getUsername();
         return DriverManager.getConnection(database.getJdbcUrl(), admin, database.getPassword());
-    }
-
-    /**
-     * Runs a command in the database's container and fails with its output if it fails.
-     *
-     * @param database the container
-     * @param command the command and its arguments
-     * @return its standard output and error, joined
-     * @throws Exception if it cannot run or exits non-zero
-     */
-    static String exec(JdbcDatabaseContainer<?> database, String... command) throws Exception {
-        ExecResult result = database.execInContainer(command);
-        String output = result.getStdout() + result.getStderr();
-        if (result.getExitCode() != 0) {
-            throw new IllegalStateException(command[0] + " exited " + result.getExitCode() + ":\n" + output);
-        }
-        return output;
-    }
-
-    private static long fileSize(JdbcDatabaseContainer<?> database, String path) throws Exception {
-        return Long.parseLong(exec(database, "stat", "-c", "%s", path).strip());
-    }
-
-    private static JdbcConnectionDetails details(JdbcDatabaseContainer<?> database) {
-        return new JdbcConnectionDetails() {
-            @Override
-            public String getUsername() {
-                return database.getUsername();
-            }
-
-            @Override
-            public String getPassword() {
-                return database.getPassword();
-            }
-
-            @Override
-            public String getJdbcUrl() {
-                return database.getJdbcUrl();
-            }
-        };
-    }
-
-    private static void insertAdmin(Connection owner) throws SQLException {
-        try (PreparedStatement user = owner.prepareStatement("INSERT INTO APP_USER (ID, EXTERNAL_ID, DISPLAY_NAME,"
-                        + " EMAIL, DISABLED, CREATED_AT) VALUES (?, 'perf-admin', 'Perf Compliance Admin',"
-                        + " 'perf-admin@example.invalid', ?, CURRENT_TIMESTAMP)");
-                PreparedStatement role = owner.prepareStatement(
-                        "INSERT INTO APP_USER_GLOBAL_ROLE (USER_ID, GLOBAL_ROLE) VALUES (?, ?)")) {
-            user.setLong(1, ADMIN);
-            user.setBoolean(2, false);
-            user.executeUpdate();
-            role.setLong(1, ADMIN);
-            role.setString(2, GlobalRole.COMPLIANCE_ADMIN.name());
-            role.executeUpdate();
-        }
-    }
-
-    // --- the application ---------------------------------------------------------------------------------------------
-
-    /** The migration Job's profile as the schema owner, as {@code prod,migrate} runs before every rollout. */
-    private ConfigurableApplicationContext migrationJob(
-            JdbcDatabaseContainer<?> database, Owner owner, TestDatabaseUsers users) {
-        return new SpringApplicationBuilder(TrailkeepApplication.class)
-                .web(WebApplicationType.NONE)
-                .profiles(vendorProfile(), "migrate")
-                .initializers(context -> context.getBeanFactory().registerSingleton("testDatabaseUsers", users))
-                .run(
-                        "--spring.datasource.url=" + database.getJdbcUrl(),
-                        "--spring.datasource.username=" + owner.username(),
-                        "--spring.datasource.password=" + owner.password(),
-                        "--app.db.schema=" + owner.schema());
-    }
-
-    /** The web application as the runtime user, Flyway off, on free ports, as the web Deployment runs. */
-    private ConfigurableApplicationContext application(
-            JdbcDatabaseContainer<?> database, Owner owner, TestDatabaseUsers users, String hmacKey)
-            throws SQLException {
-        return new SpringApplicationBuilder(TrailkeepApplication.class)
-                .web(WebApplicationType.SERVLET)
-                .profiles(vendorProfile())
-                .run(
-                        "--spring.datasource.url=" + database.getJdbcUrl(),
-                        "--spring.datasource.username=" + APP_USER,
-                        "--spring.datasource.password=" + users.newPassword(APP_USER),
-                        "--spring.flyway.enabled=false",
-                        "--app.db.schema=" + owner.schema(),
-                        "--app.audit.hmac-key=" + hmacKey,
-                        "--server.port=0",
-                        "--management.server.port=0");
-    }
-
-    private Observation observe(ConfigurableApplicationContext app) throws Exception {
-        String port = app.getEnvironment().getProperty("local.management.port");
-        HttpResponse<String> health;
-        try (HttpClient client = HttpClient.newHttpClient()) {
-            health = client.send(
-                    HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/actuator/health"))
-                            .build(),
-                    HttpResponse.BodyHandlers.ofString());
-        }
-        assertThat(health.statusCode()).as("health: " + health.body()).isEqualTo(200);
-
-        MockMvc mvc = MockMvcBuilders.webAppContextSetup((WebApplicationContext) app)
-                .apply(springSecurity())
-                .build();
-        MockHttpSession admin = adminSession();
-        assertThat(body(mvc, "/cases?q=kestrel", admin))
-                .as("the cases page with a search")
-                .isNotEmpty();
-        long rows = new String(body(mvc, "/cases/export.csv?q=kestrel", admin), StandardCharsets.UTF_8)
-                        .lines()
-                        .count()
-                - 1;
-        assertThat(rows).as("cases the search finds").isPositive();
-        Map<Integer, String> downloads = new LinkedHashMap<>();
-        for (int i : DOWNLOADED) {
-            byte[] content =
-                    body(mvc, "/cases/" + AttachmentSeed.caseNumber(i) + "/attachments/" + AttachmentSeed.id(i), admin);
-            byte[] seeded = new byte[AttachmentSeed.size(i)];
-            new SplittableRandom(AttachmentSeed.id(i)).nextBytes(seeded);
-            assertThat(content).as("download of seeded file " + i).isEqualTo(seeded);
-            downloads.put(i, HexFormat.of().formatHex(AttachmentSeed.sha256(content)));
-        }
-        return new Observation(rows, downloads);
-    }
-
-    private static byte[] body(MockMvc mvc, String url, MockHttpSession admin) throws Exception {
-        MvcResult result = mvc.perform(get(url).session(admin)).andReturn();
-        if (result.getRequest().isAsyncStarted()) {
-            result = mvc.perform(asyncDispatch(result)).andReturn();
-        }
-        assertThat(result.getResponse().getStatus())
-                .as(url + " -> " + result.getResponse().getHeader("Location"))
-                .isEqualTo(200);
-        return result.getResponse().getContentAsByteArray();
-    }
-
-    /**
-     * A signed-in session of the Compliance Admin, as the shared session store holds one after an OIDC login: the
-     * security context and the login time. {@code SessionPermissionsFilter} reloads the person's roles from the
-     * database on every request, so the restored copy's user tables are exercised too.
-     */
-    private static MockHttpSession adminSession() {
-        WithAppUser user = Objects.requireNonNull(Admin.class.getAnnotation(WithAppUser.class));
-        MockHttpSession session = new MockHttpSession();
-        session.setAttribute(
-                HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY,
-                new WithAppUserSecurityContextFactory().createSecurityContext(user));
-        session.setAttribute("trailkeep.loginAt", System.currentTimeMillis());
-        return session;
-    }
-
-    // --- the audit canaries ------------------------------------------------------------------------------------------
-
-    /** Writes one case-less audit event per value through the application, each value redacted to an HMAC. */
-    private static void writeCanaries(ConfigurableApplicationContext app, List<String> values, int firstId) {
-        AuditRecorder recorder = app.getBean(AuditRecorder.class);
-        new TransactionTemplate(app.getBean(PlatformTransactionManager.class)).executeWithoutResult(status -> {
-            for (int i = 0; i < values.size(); i++) {
-                recorder.record(new AuditEntry(
-                        null,
-                        "Restore drill",
-                        AuditOrigin.SYSTEM,
-                        null,
-                        CANARY_TYPE,
-                        (long) firstId + i,
-                        "CANARY",
-                        recorder.diff(null, new Canary(values.get(i)))));
-            }
-        });
-    }
-
-    private static void verifyCanaries(Connection owner, List<String> values, byte[] key) throws Exception {
-        byte[] other = new byte[key.length];
-        RANDOM.nextBytes(other);
-        List<String> stored = new ArrayList<>();
-        try (PreparedStatement statement = owner.prepareStatement(
-                "SELECT NEW_VALUES_JSON FROM AUDIT_EVENT WHERE ENTITY_TYPE = ? ORDER BY ENTITY_ID")) {
-            statement.setString(1, CANARY_TYPE);
-            try (ResultSet rows = statement.executeQuery()) {
-                while (rows.next()) {
-                    stored.add(hmacOf(rows.getString(1)));
-                }
-            }
-        }
-        assertThat(stored).as("canary audit events").hasSize(values.size());
-        for (int i = 0; i < values.size(); i++) {
-            assertThat(stored.get(i)).as("canary " + i + " under the key").isEqualTo(hmac(key, values.get(i)));
-            assertThat(stored.get(i)).as("canary " + i + " under another key").isNotEqualTo(hmac(other, values.get(i)));
-        }
-    }
-
-    private static String hmacOf(@Nullable String json) {
-        Matcher matcher = HMAC.matcher(String.valueOf(json));
-        assertThat(matcher.find()).as("an HMAC in " + json).isTrue();
-        return matcher.group(1);
-    }
-
-    private static String hmac(byte[] key, String value) throws Exception {
-        Mac mac = Mac.getInstance("HmacSHA256");
-        mac.init(new SecretKeySpec(key, "HmacSHA256"));
-        return HexFormat.of().formatHex(mac.doFinal(value.getBytes(StandardCharsets.UTF_8)));
     }
 
     static String mib(long bytes) {

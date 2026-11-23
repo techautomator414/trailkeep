@@ -38,8 +38,8 @@ import org.testcontainers.containers.JdbcDatabaseContainer;
  * the owner by {@code SYS} for that window only and revoked after it (the owner needs no such grant otherwise, and on
  * Free 23 {@code SYSTEM} cannot grant it). The last step names {@code OPTIMIZE (AUTO_DAILY)} again: on XE 21 a {@code
  * REPLACE METADATA SYNC} drops it from the index's metadata, so the next import would recreate the index without its
- * nightly optimisation (the drill caught that). The containers get three 512 MB redo log groups (issue 308). Opt-in: the
- * {@code perf-it} profile's {@code restore-drill-oracle} execution, which no workflow runs.
+ * nightly optimisation (the drill caught that). The containers get three 512 MB redo log groups (issue 308).
+ * Opt-in: the {@code perf-it} profile's {@code restore-drill-oracle} execution, which no workflow runs.
  */
 // "IT" is the Failsafe suffix Part B mandates for integration tests, not an abbreviation.
 @SuppressWarnings("checkstyle:AbbreviationAsWordInName")
@@ -146,7 +146,7 @@ class OracleRestoreDrillIT extends AbstractRestoreDrillIT {
 
     @Override
     void backup(JdbcDatabaseContainer<?> database, Owner owner, String path) throws Exception {
-        String log = exec(
+        String log = DrillDatabase.exec(
                 database,
                 "expdp",
                 "system/" + database.getPassword() + "@//localhost:1521/" + pdb(database),
@@ -161,7 +161,7 @@ class OracleRestoreDrillIT extends AbstractRestoreDrillIT {
 
     @Override
     void restore(JdbcDatabaseContainer<?> database, Owner owner, String path, DrillReport report) throws Exception {
-        String log = exec(
+        String log = DrillDatabase.exec(
                 database,
                 "impdp",
                 "system/" + database.getPassword() + "@//localhost:1521/" + pdb(database),
@@ -194,7 +194,8 @@ class OracleRestoreDrillIT extends AbstractRestoreDrillIT {
                     "CASE_SEARCH statistics locked",
                     single(
                             statement,
-                            "SELECT NVL(STATTYPE_LOCKED, 'NO') FROM USER_TAB_STATISTICS WHERE TABLE_NAME = 'CASE_SEARCH'"));
+                            "SELECT NVL(STATTYPE_LOCKED, 'NO') FROM USER_TAB_STATISTICS"
+                                    + " WHERE TABLE_NAME = 'CASE_SEARCH'"));
             state.put(
                     "index statistics",
                     single(
@@ -242,7 +243,7 @@ class OracleRestoreDrillIT extends AbstractRestoreDrillIT {
     private static void sysdba(JdbcDatabaseContainer<?> database, String sql) throws Exception {
         String script = "WHENEVER SQLERROR EXIT FAILURE\nALTER SESSION SET CONTAINER = " + pdb(database) + ";\n" + sql
                 + ";\nEXIT\n";
-        String output = exec(database, "bash", "-c", "sqlplus -s / as sysdba <<'EOF'\n" + script + "EOF");
+        String output = DrillDatabase.exec(database, "bash", "-c", "sqlplus -s / as sysdba <<'EOF'\n" + script + "EOF");
         assertThat(output).as(sql).doesNotContain("ORA-");
     }
 

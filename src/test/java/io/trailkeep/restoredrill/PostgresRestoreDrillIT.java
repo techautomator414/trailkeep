@@ -20,10 +20,10 @@ import org.testcontainers.containers.JdbcDatabaseContainer;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
 /**
- * The restore drill on PostgreSQL 16: {@code pg_dump} in the custom format, a new database, {@code pg_restore} with four
- * jobs and {@code vacuumdb --analyze-in-stages} (a dump carries no planner statistics). The owner is the container's
- * superuser, so {@code pg_trgm} is restored by the dump itself; a deployment whose owner may not create it has a DBA
- * create it first (deploy/README.md, "Search indexes (V21)"). Opt-in: the {@code perf-it} profile's {@code
+ * The restore drill on PostgreSQL 16: {@code pg_dump} in the custom format, a new database, {@code pg_restore} with
+ * four jobs and {@code vacuumdb --analyze-in-stages} (a dump carries no planner statistics). The owner is the
+ * container's superuser, so {@code pg_trgm} is restored by the dump itself; a deployment whose owner may not create it
+ * has a DBA create it first (deploy/README.md, "Search indexes (V21)"). Opt-in: the {@code perf-it} profile's {@code
  * restore-drill} execution, which no workflow runs.
  */
 // "IT" is the Failsafe suffix Part B mandates for integration tests, not an abbreviation.
@@ -87,14 +87,15 @@ class PostgresRestoreDrillIT extends AbstractRestoreDrillIT {
     @Override
     void backup(JdbcDatabaseContainer<?> database, Owner owner, String path) throws Exception {
         // The container's local socket trusts its own users; a deployment passes the password through ~/.pgpass.
-        exec(database, "pg_dump", "-U", owner.username(), "-d", database.getDatabaseName(), "-Fc", "-f", path);
+        DrillDatabase.exec(
+                database, "pg_dump", "-U", owner.username(), "-d", database.getDatabaseName(), "-Fc", "-f", path);
     }
 
     @Override
     void restore(JdbcDatabaseContainer<?> database, Owner owner, String path, DrillReport report) throws Exception {
         report.run(
                 "pg_restore, 4 jobs",
-                () -> exec(
+                () -> DrillDatabase.exec(
                         database,
                         "pg_restore",
                         "-U",
@@ -107,7 +108,7 @@ class PostgresRestoreDrillIT extends AbstractRestoreDrillIT {
                         path));
         report.run(
                 "vacuumdb --analyze-in-stages",
-                () -> exec(
+                () -> DrillDatabase.exec(
                         database,
                         "vacuumdb",
                         "-U",

@@ -9,6 +9,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- A restore drill on both vendors (WP-30 part c, `docs/ops/restore-drill.md`): the 500k seed plus 2 000 attachments
+  (348 MiB, in the database as the application stores them) and audit events written by the application are backed up
+  with `pg_dump` or Data Pump `expdp` (`FLASHBACK_TIME`), the database is destroyed, and a new one is restored
+  (`pg_restore` and `vacuumdb --analyze-in-stages`, or `impdp`, which rebuilds the Oracle Text index). The restored
+  copy must match the source table for table, every row and value (a digest of every column, attachment bytes and
+  audit JSON included); its search index must be in the same state (Oracle: valid, `ON COMMIT`, nothing pending, no
+  errors, `CASE_SEARCH` statistics still locked, `CTXSYS`'s nightly jobs back); the migration Job's profile must find
+  nothing pending with Flyway `validate` passing; the application must start as the runtime user, report healthy, find
+  the same cases, serve the same attachment bytes, confirm the redacted audit values under the retained HMAC key and
+  under no other, and write; every attachment's chunks must add up to its recorded size and SHA-256. Every check
+  passed on PostgreSQL 16, Oracle Free 23 and XE 21. Backup 26 / 50 / 34 s (447 / 879 / 879 MiB files), restore 13 /
+  85 / 76 s, restore to serving (copy in, restore, migration Job, start) 20 / 99 / 91 s. BUILD_PLAN states no RPO or
+  RTO; the numbers are what a deploying organization sets its own against. `PostgresRestoreDrillIT` and
+  `OracleRestoreDrillIT`, opt-in (`restore-drill`, `restore-drill-oracle`), not in any workflow. The drill loads the
+  Oracle seed as the go-live import should (index on manual sync, one `CTX_DDL.SYNC_INDEX`, back to `SYNC (ON
+  COMMIT)`), which verified the syntax on both images and found two things: the schema owner needs `EXECUTE ON
+  CTXSYS.CTX_DDL` for the sync (granted by `SYS` on Free 23, where `SYSTEM` cannot), and on XE 21 `REPLACE METADATA
+  SYNC (ON COMMIT)` drops `OPTIMIZE (AUTO_DAILY)` from the index's metadata, so a later restore recreated the index
+  without its nightly optimisation; restoring with `SYNC (ON COMMIT) OPTIMIZE (AUTO_DAILY)` keeps both. It also
+  measured V20's index at 500 000 audit events. THREAT_MODEL RR-1, TEST_MAP gap 10 and DATA_MAP "Backups" point to it.
+
 - The importer measured at the release volume (WP-30 part b, `docs/perf/importer-volume.md`): a synthetic legacy
   tracker of 500 000 people, 50 000 cases, 500 000 notes, 2 000 files and 100 000 history rows
   (`perf/seed-legacy-source-postgresql.sql`), imported end to end by `PostgresImportVolumePerfIT` (and
