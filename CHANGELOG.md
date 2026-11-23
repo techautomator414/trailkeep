@@ -9,6 +9,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- The importer measured at the release volume (WP-30 part b, `docs/perf/importer-volume.md`): a synthetic legacy
+  tracker of 500 000 people, 50 000 cases, 500 000 notes, 2 000 files and 100 000 history rows
+  (`perf/seed-legacy-source-postgresql.sql`), imported end to end by `PostgresImportVolumePerfIT` (and
+  `OracleImportVolumePerfIT`, Trailkeep on Oracle) under the Job's 1 152 MiB heap, with each command's time, heap,
+  statements and transactions, and digests of what the dry run decided and the load wrote. Opt-in (`perf-import`,
+  `perf-import-oracle`), not nightly. On `main` the dry run took 427 s and the load 1 826 s, each about one
+  transaction per row.
+
 - Oracle redo sizing documented and measured (#308): at the 500k seed one comment post in sixty stalled for 55 to 62 s
   on the gvenzl containers' 20 MB redo logs (`log file switch (checkpoint incomplete)` on XE 21, a block-range
   checkpoint behind DBW0 on Free 23); with three 512 MB groups the slowest of 60 posts took 0.1 to 0.3 s on both
