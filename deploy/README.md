@@ -7,6 +7,9 @@
 Reference manifests for OpenShift, usable on plain Kubernetes. They follow BUILD_PLAN §16. Everything marked
 `PLACEHOLDER` is set by the deploying organization in its own overlay; nothing here is specific to one site.
 
+This page describes the manifests. The on-call procedures that use them (upgrade, rollback, backup and restore,
+secret rotation, scaling, the import go-live, incidents, disaster recovery) are in `docs/RUNBOOK.md`.
+
 ## Layout
 
 | Path | What it is |
@@ -168,7 +171,9 @@ migration `Job` runs, and no new grant for the runtime, purge or import users.
 - **Oracle: Oracle Text must be installed.** It is part of every edition and installed by default; check with `SELECT
   STATUS FROM DBA_REGISTRY WHERE COMP_ID = 'CONTEXT'` (`VALID`). The `-slim` container images remove it. The owner
   needs **no further privilege**: the index uses `CTXSYS`'s system preferences only, so neither the `CTXAPP` role nor
-  `EXECUTE ON CTXSYS.CTX_DDL` is needed, and `TRAILKEEP_OWNER`'s `CREATE TABLE` covers the index's own tables. The
+  `EXECUTE ON CTXSYS.CTX_DDL` is needed, and `TRAILKEEP_OWNER`'s `CREATE TABLE` covers the index's own tables (the
+  go-live import's one-off manual sync does need `CTX_DDL`, granted by a DBA for that window: `docs/RUNBOOK.md`,
+  "Import go-live"). The
   index is synchronised in each committing transaction (`SYNC (ON COMMIT)`), so a search never lags a write, and
   `CTXSYS` optimises it nightly through two `DBMS_SCHEDULER` jobs it owns (`DR$…$OTJ`, `DR$…$OFJ`); they need
   `JOB_QUEUE_PROCESSES` above 0, the default. V21 also deletes the index's optimizer statistics and **locks
