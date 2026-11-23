@@ -182,13 +182,7 @@ class DefaultOutboxResendService implements OutboxResendService {
         });
         Map<Long, String> numbers = new HashMap<>();
         if (!caseIds.isEmpty()) {
-            entityManager
-                    .createQuery(
-                            "SELECT c.id, c.caseNumber FROM " + UserAlertQueries.CASE_ENTITY + " c WHERE c.id IN :ids",
-                            Tuple.class)
-                    .setParameter("ids", caseIds)
-                    .getResultList()
-                    .forEach(row -> numbers.put(row.get(0, Long.class), row.get(1, String.class)));
+            scoped.caseNumbers(caseIds).forEach(numbers::put);
         }
         return numbers;
     }

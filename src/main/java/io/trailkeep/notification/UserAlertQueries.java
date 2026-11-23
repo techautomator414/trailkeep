@@ -4,6 +4,7 @@ package io.trailkeep.notification;
 
 import io.trailkeep.shared.access.CaseScope;
 import jakarta.persistence.EntityManager;
+import jakarta.persistence.Tuple;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.CriteriaQuery;
 import jakarta.persistence.criteria.Path;
@@ -12,7 +13,10 @@ import jakarta.persistence.criteria.Root;
 import jakarta.persistence.criteria.Subquery;
 import jakarta.persistence.metamodel.EntityType;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
 
@@ -115,6 +119,32 @@ class UserAlertQueries {
         Root<?> caseRoot = readable.from(caseEntity);
         readable.select(caseRoot.<Long>get("id")).where(scope.toPredicate(caseRoot, query, cb));
         return cb.or(noCase, caseId.in(readable));
+    }
+
+    /**
+     * The case numbers of cases, by the case entity's registered name (this module may not depend on {@code casefile}).
+     * No scope is applied: the caller passes only ids it already read through a scope.
+     *
+     * @param caseIds the case ids
+     * @return case number by case id; empty if the case entity is not registered
+     */
+    Map<Long, String> caseNumbers(Collection<Long> caseIds) {
+        EntityType<?> caseEntity = caseEntity();
+        if (caseEntity == null || caseIds.isEmpty()) {
+            return Map.of();
+        }
+        CriteriaBuilder cb = entityManager.getCriteriaBuilder();
+        CriteriaQuery<Tuple> query = cb.createTupleQuery();
+        Root<?> root = query.from(caseEntity);
+        query.select(cb.tuple(
+                        root.<Long>get("id").alias("id"),
+                        root.<String>get("caseNumber").alias("number")))
+                .where(root.<Long>get("id").in(caseIds));
+        Map<Long, String> numbers = new HashMap<>();
+        for (Tuple row : entityManager.createQuery(query).getResultList()) {
+            numbers.put(row.get("id", Long.class), row.get("number", String.class));
+        }
+        return numbers;
     }
 
     private @Nullable EntityType<?> caseEntity() {
