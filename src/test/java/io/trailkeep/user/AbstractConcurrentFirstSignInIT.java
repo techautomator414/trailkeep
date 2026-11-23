@@ -20,6 +20,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -39,7 +40,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 abstract class AbstractConcurrentFirstSignInIT {
 
     private static final int SIGN_INS = 8;
-    private static final String EMAIL = "user@example.test";
+    private final List<String> subjects = new ArrayList<>();
 
     @Autowired
     private UserSignInService service;
@@ -56,9 +57,14 @@ abstract class AbstractConcurrentFirstSignInIT {
     @Autowired
     private TransactionTemplate transactions;
 
+    @AfterEach
+    void removeCommittedRows() {
+        CommittedSignIns.remove(jdbc, subjects, List.of());
+    }
+
     @Test
     void concurrentFirstSignInsOfOnePersonAllResolveToOneUser() throws Exception {
-        String subject = "subject-" + UUID.randomUUID();
+        String subject = subject();
 
         List<SignInOutcome> outcomes = concurrently(subject);
 
@@ -89,8 +95,8 @@ abstract class AbstractConcurrentFirstSignInIT {
 
     @Test
     void concurrentSignInsOfADisabledUserAreAllRefused() throws Exception {
-        String subject = "subject-" + UUID.randomUUID();
-        service.signIn(new ExternalIdentity(subject, "Before", EMAIL), Set.of());
+        String subject = subject();
+        service.signIn(new ExternalIdentity(subject, "Before", CommittedSignIns.email(subject)), Set.of());
         jdbc.update("UPDATE APP_USER SET DISABLED = ? WHERE EXTERNAL_ID = ?", true, subject);
 
         List<SignInOutcome> outcomes = concurrently(subject);
@@ -104,10 +110,17 @@ abstract class AbstractConcurrentFirstSignInIT {
 
     @Test
     void signInRefusesToRunInsideACallersTransaction() {
+        String subject = subject();
         assertThatThrownBy(() -> transactions.executeWithoutResult(status -> service.signIn(
-                        new ExternalIdentity("subject-" + UUID.randomUUID(), "Inside", EMAIL), Set.of())))
+                        new ExternalIdentity(subject, "Inside", CommittedSignIns.email(subject)), Set.of())))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("outside one");
+    }
+
+    private String subject() {
+        String subject = "subject-" + UUID.randomUUID();
+        subjects.add(subject);
+        return subject;
     }
 
     private List<SignInOutcome> concurrently(String subject) throws Exception {
@@ -121,7 +134,8 @@ abstract class AbstractConcurrentFirstSignInIT {
                     ready.countDown();
                     go.await();
                     return service.signIn(
-                            new ExternalIdentity(subject, "Concurrent", EMAIL), Set.of(GlobalRole.COMPLIANCE_ADMIN));
+                            new ExternalIdentity(subject, "Concurrent", CommittedSignIns.email(subject)),
+                            Set.of(GlobalRole.COMPLIANCE_ADMIN));
                 }));
             }
             assertThat(ready.await(30, TimeUnit.SECONDS)).isTrue();
