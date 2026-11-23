@@ -175,7 +175,15 @@ migration `Job` runs, and no new grant for the runtime, purge or import users.
   `CASE_SEARCH`'s**: with statistics, Oracle Text estimates every search by running it first, which doubled search
   time at the 500k seed. The automatic statistics job skips locked tables; do not unlock them or gather them with
   `force => TRUE` (if someone did, `EXEC DBMS_STATS.DELETE_INDEX_STATS('<owner>', 'IX_CASE_SEARCH_TEXT', force =>
-  TRUE)` restores the speed). Building the index over the 500k seed took 17 to 33 s on Free 23 and 95 s on XE 21 (the
+  TRUE)` restores the speed). **Size the redo logs: at least three groups of 512 MB** (`SELECT GROUP#, BYTES/1048576,
+  STATUS FROM V$LOG`). The gvenzl containers ship two 20 MB groups, and with them about one comment post in sixty
+  stalled for 55 to 62 s at the 500k seed (a post commits through `SYNC (ON COMMIT)`, which a log switch's checkpoint
+  can hold: `log file switch (checkpoint incomplete)` on XE 21, `enq: CR - block range reuse ckpt` on Free 23; the wait
+  events are in `docs/perf/release-500k.md`, issue 308); with three 512 MB groups the slowest of 60 posts took 0.1 to
+  0.3 s. The reasoning: a switch should come at most every 15 to 30 minutes at peak, so the checkpoint finishes before
+  the log is needed again (check `V$LOG_HISTORY`), and the seed's write burst is the worst case this release has. Add
+  groups with `ALTER DATABASE ADD LOGFILE`, then switch and drop the small ones once `INACTIVE`; size larger for a
+  heavier write rate. Building the index over the 500k seed took 17 to 33 s on Free 23 and 95 s on XE 21 (the
   container's 20 MB redo logs, another database busy on the same disk); the index is built `ONLINE`, so the running
   release keeps writing `CASE_SEARCH` meanwhile (without it those writes would fail with ORA-29861). If the `Job`
   fails during the build, run `flyway repair` (or delete the failed row of `flyway_schema_history`) and run the `Job`

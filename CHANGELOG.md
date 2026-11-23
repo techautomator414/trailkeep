@@ -9,6 +9,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Oracle redo sizing documented and measured (#308): at the 500k seed one comment post in sixty stalled for 55 to 62 s
+  on the gvenzl containers' 20 MB redo logs (`log file switch (checkpoint incomplete)` on XE 21, a block-range
+  checkpoint behind DBW0 on Free 23); with three 512 MB groups the slowest of 60 posts took 0.1 to 0.3 s on both
+  images. `deploy/README.md` now asks for at least three groups of 512 MB, `OracleComments500kPerfIT` runs in a
+  container resized that way (`-Dtrailkeep.oracle.redo-mb=0` for the image as shipped), and
+  `-Dtrailkeep.perf.oracle.diag=true` records the redo configuration, wait-event deltas and long waits around the
+  comment post (opt-in, perf IT only).
+
 - The Oracle Text search adapter (#299, part 2, ADR-0017): at the 500k seed the Oracle `LIKE` search took 2.0 to 2.4 s
   against its 1 s target. Oracle's V21 adds an Oracle Text `CONTEXT` index on `CASE_SEARCH.SEARCH_TEXT` and
   `OracleTextSearchGateway` puts `CONTAINS` in front of the `LIKE` match: each word's longest run of letters and

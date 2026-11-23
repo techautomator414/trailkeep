@@ -239,10 +239,50 @@ maintained as the comments are appended.
   was bound and the probe asked once per transaction, measured 1.5 to 2.1 s.
 - **Posting a comment costs more** on Oracle (23 ms to 107 ms p95 on Free 23, 53 ms on XE 21, for the 208-comment
   case): the commit re-indexes the case's whole search text, about 36 000 characters, before it returns
-  (`SYNC (ON COMMIT)`), and writes about 240 KB of redo doing so. In each run one post of the sixty took 36 to 46 s:
-  the container's redo logs are 20 MB, so right after the seed a log switch waits for a checkpoint and stalls the
-  commit. Like the 86 s outlier above, it is a property of the test container, reported rather than tuned away; size
-  redo logs for the write rate as for any Oracle Text application.
+  (`SYNC (ON COMMIT)`), and writes about 240 KB of redo doing so. **With the image's 20 MB redo logs one post of the
+  sixty stalls for 55 to 62 s; with three 512 MB groups none does** (issue 308, below). The IT therefore resizes its
+  container's redo to three 512 MB groups before it starts (`-Dtrailkeep.oracle.redo-mb=0` measures the image as
+  shipped), so its max is the cost of a post and not of a small test container.
+
+#### The comment-post stall (issue 308): redo size, measured
+
+`-Dtrailkeep.perf.oracle.diag=true` makes the IT snapshot `V$LOG`, `V$LOGFILE`, `V$LOG_HISTORY`, `V$SYSTEM_EVENT` and
+`V$SYSSTAT` around the comment-post scenario (as `SYSTEM` on the container's root) and sample every waiting session
+twice a second, blockers included. Comment post, 60 requests (p50 / p95 / max, ms):
+
+| | redo | p50 | p95 | max |
+|---|---|---:|---:|---:|
+| Free 23 | 2 x 20 MB (image), run 1 | 93.3 | 111.5 | **61 338** |
+| Free 23 | 2 x 20 MB (image), run 2 | 90.3 | 97.7 | **61 703** |
+| Free 23 | 3 x 512 MB, run 1 | 107.1 | 123.6 | 143.5 |
+| Free 23 | 3 x 512 MB, run 2 (the IT's default) | 93.4 | 100.3 | 106.9 |
+| XE 21 | 2 x 20 MB (image) | 35.0 | 54.5 | **54 931** |
+| XE 21 | 3 x 512 MB (the IT's default) | 38.8 | 48.0 | 332.2 |
+
+Wait events in the comment-post window (Free 23: run 2 with 20 MB, run 1 with 512 MB; XE 21: the two runs):
+
+| | Free 23, 20 MB | Free 23, 512 MB | XE 21, 20 MB | XE 21, 512 MB |
+|---|---:|---:|---:|---:|
+| `log file switch (checkpoint incomplete)` | 1 wait, 0.06 s | none | 9 waits, **137.9 s** | none |
+| `enq: CR - block range reuse ckpt` | 12 waits, **61.6 s** | 12 waits, 0.1 s | none | none |
+| `db file async I/O submit` (DBW0) | 28 waits, **62.1 s** | 15 waits, 0.14 s | 3 s seen waiting | none seen |
+| `redo log space requests` | +2 | +0 | **+1431** | +0 |
+| log switches in the window | 1 | 0 | 1 | 0 |
+
+- **XE 21** is the textbook case. The post stalled in `ctxsys.drvdml.com_sync_index` (the `ON COMMIT` sync) on
+  `log file switch (checkpoint incomplete)`, behind LGWR, 55 s at its longest. The seed had switched the 20 MB logs
+  about 150 times, and the checkpoint could not keep up.
+- **Free 23** shows it differently. The post waited about 61 s on `enq: CR - block range reuse ckpt`, held by CKPT,
+  which waited for DBW0, itself in `db file async I/O submit` for the same minute. A `NOCACHE` LOB (the default of the
+  `SEARCH_TEXT` `CLOB`) is read and written directly, which first checkpoints the dirty blocks of its range; the
+  stalled statement is `UPDATE CASE_SEARCH SET SEARCH_TEXT = SEARCH_TEXT || :1`. The log-switch event is only 0.06 s
+  here: on Free 23 redo size drives the stall through checkpoint pressure, not through a full log. What is measured is
+  that sized redo removes it; DBW0's own I/O path (`filesystemio_options` is `none` in the image) was not examined.
+- The window's redo was about 21 MB for about 70 posts (about 300 KB a post, matching the 240 KB above), roughly one
+  20 MB log's worth; with 512 MB none switched.
+- Reproduced twice on Free 23 and once on XE 21; sized redo removed it twice on Free 23 and once on XE 21. The 332 ms
+  max on XE 21 is one post and did not recur in the window's samples.
+
 - **Seeding** takes as long as before on Free 23, about 5.5 minutes, the commit-time indexing included; 7.8 minutes
   on XE 21.
 
