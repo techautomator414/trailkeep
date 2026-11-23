@@ -23,6 +23,9 @@
 -- (deploy/README.md: do not unlock them or gather them with force). The table is read by its primary key, the index
 -- or a full scan, which need no fresh statistics.
 --
+-- Built ONLINE: without it, every write to CASE_SEARCH fails with ORA-29861 (index LOADING) until the build ends, and
+-- the previous release keeps serving while the migration Job runs; ONLINE queues those writes and indexes them after.
+--
 -- Re-runnable, as Oracle commits DDL: after a failure and "flyway repair", the block drops an index a failed build left
 -- unusable, builds the index unless it is there and usable, and deletes and locks the statistics again.
 DECLARE
@@ -42,7 +45,7 @@ BEGIN
     EXECUTE IMMEDIATE 'CREATE INDEX IX_CASE_SEARCH_TEXT ON CASE_SEARCH (SEARCH_TEXT) INDEXTYPE IS CTXSYS.CONTEXT'
       || ' PARAMETERS (''DATASTORE CTXSYS.DIRECT_DATASTORE FILTER CTXSYS.NULL_FILTER LEXER CTXSYS.BASIC_LEXER'
       || ' WORDLIST CTXSYS.BASIC_WORDLIST STOPLIST CTXSYS.EMPTY_STOPLIST'
-      || ' SYNC (ON COMMIT) TRANSACTIONAL OPTIMIZE (AUTO_DAILY)'')';
+      || ' SYNC (ON COMMIT) TRANSACTIONAL OPTIMIZE (AUTO_DAILY)'') ONLINE';
   END IF;
   DBMS_STATS.DELETE_INDEX_STATS(USER, 'IX_CASE_SEARCH_TEXT', force => TRUE);
   DBMS_STATS.LOCK_TABLE_STATS(USER, 'CASE_SEARCH');
