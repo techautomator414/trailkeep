@@ -209,7 +209,7 @@ class CaseRootedInvisibilityIT {
         }
     }
 
-    private static Object argument(Class<?> type, Call call, Method method) {
+    private static @Nullable Object argument(Class<?> type, Call call, Method method) {
         if (type == CaseScope.class) {
             return call.scope();
         }
@@ -227,7 +227,7 @@ class CaseRootedInvisibilityIT {
     }
 
     /** A value that does not depend on the call: a page size, an empty action filter, no filter, the default query. */
-    private static Object fixedArgument(Class<?> type, Method method) {
+    private static @Nullable Object fixedArgument(Class<?> type, Method method) {
         if (type == int.class || type == Integer.class) {
             return LIMIT;
         }
@@ -250,11 +250,19 @@ class CaseRootedInvisibilityIT {
             return new AuditFilter(
                     Instant.now().minus(Duration.ofDays(1)), Instant.now().plusSeconds(60), null, null, null, null);
         }
+        if (isKeysetCursor(type)) {
+            // The keyset exports' cursors (#300): none is the first page, which is what every export starts with.
+            return null;
+        }
         if (type == Instant.class) {
             // The compliance period's bounds; an empty period still counts the open cases.
             return Instant.parse("2026-11-07T00:00:00Z");
         }
         return fail("Teach CaseRootedInvisibilityIT a value for " + type.getName() + " in " + method);
+    }
+
+    private static boolean isKeysetCursor(Class<?> type) {
+        return Set.of("ExportCursor", "Position").contains(type.getSimpleName());
     }
 
     private static String describe(@Nullable Object result) {

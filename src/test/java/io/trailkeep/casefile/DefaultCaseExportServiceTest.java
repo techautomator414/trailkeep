@@ -11,6 +11,8 @@ import static org.mockito.Mockito.when;
 import io.trailkeep.audit.AuditChanges;
 import io.trailkeep.audit.AuditRecorder;
 import io.trailkeep.casefile.CaseExportService.Ready;
+import io.trailkeep.casefile.CaseRecordQueries.ExportCursor;
+import io.trailkeep.casefile.CaseRecordQueries.ExportPage;
 import io.trailkeep.casefile.CaseService.Actor;
 import io.trailkeep.shared.CaseStatus;
 import io.trailkeep.shared.Sensitivity;
@@ -95,12 +97,14 @@ class DefaultCaseExportServiceTest {
     private GuardedStream export(int rows, Actor actor, boolean details) throws IOException {
         CaseRecordRepository cases = mock(CaseRecordRepository.class);
         when(cases.count(any(), any())).thenReturn((long) rows);
-        when(cases.export(any(), any(), anyInt())).thenAnswer(call -> {
+        when(cases.export(any(), any(), any(), anyInt())).thenAnswer(call -> {
             openWhileReading.add(open.get());
-            int first = (call.<CaseListQuery>getArgument(1).page() - 1) * PAGE;
-            return IntStream.range(first, Math.min(rows, first + PAGE))
+            ExportCursor after = call.getArgument(2);
+            int first = after == null ? 0 : (int) after.id() + 1;
+            List<CaseExportRow> page = IntStream.range(first, Math.min(rows, first + PAGE))
                     .mapToObj(DefaultCaseExportServiceTest::row)
                     .toList();
+            return new ExportPage(page, page.isEmpty() ? null : new ExportCursor(null, first + page.size() - 1));
         });
         UserDirectoryService directory = mock(UserDirectoryService.class);
         when(directory.teams(any())).thenAnswer(call -> {
@@ -124,7 +128,7 @@ class DefaultCaseExportServiceTest {
                 audit,
                 InstantSource.fixed(NOW),
                 app,
-                new ExportProperties(10_000),
+                new ExportProperties(10_000, PAGE),
                 new CountingTransactionManager());
 
         Ready ready = (Ready) exports.export(actor, ALL, details);

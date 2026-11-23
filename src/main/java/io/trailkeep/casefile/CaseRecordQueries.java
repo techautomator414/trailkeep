@@ -7,6 +7,7 @@ import io.trailkeep.shared.access.CaseScope;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import org.jspecify.annotations.Nullable;
 
 /** The scoped case queries; implemented with the Criteria API in {@link CaseRecordQueriesImpl}. */
 interface CaseRecordQueries {
@@ -70,16 +71,45 @@ interface CaseRecordQueries {
     List<CaseListRow> list(CaseScope scope, CaseListQuery query, int pageSize);
 
     /**
-     * One page of the CSV export: the rows {@link #list} gives for the same query, page and size, with the subject and
-     * the description, which the list never loads. The same {@code WHERE}, so a case missing from the list is missing
-     * from the export.
+     * Where the next page of the export resumes: the last row's sort key and id.
+     *
+     * @param key the sort key as the database computed it; {@code null} for a case without a due instant
+     * @param id the case id, the tiebreaker
+     */
+    record ExportCursor(@Nullable Object key, long id) {}
+
+    /**
+     * One page of the export.
+     *
+     * @param rows the rows
+     * @param last the cursor of the last row, {@code null} for an empty page
+     */
+    record ExportPage(List<CaseExportRow> rows, @Nullable ExportCursor last) {
+
+        /**
+         * Copies the list, so the record holds nothing mutable.
+         *
+         * @param rows the rows
+         * @param last the cursor of the last row
+         */
+        public ExportPage {
+            rows = List.copyOf(rows);
+        }
+    }
+
+    /**
+     * One keyset page of the CSV export: the rows {@link #list} gives for the same query, with the subject and the
+     * description, which the list never loads, strictly after a cursor in the query's order (any of the sort columns,
+     * either direction, then the id ascending). The same {@code WHERE}, so a case missing from the list is missing
+     * from the export, and no row committed between two pages can shift a boundary.
      *
      * @param scope the caller's scope
-     * @param query the filter, with "mine" already resolved to an owner, order and page
+     * @param query the filter, with "mine" already resolved to an owner, and the order; its page is ignored
+     * @param after the last row of the previous page, or {@code null} for the first page
      * @param pageSize the rows per page
-     * @return the page's rows
+     * @return the page's rows and the cursor to resume from
      */
-    List<CaseExportRow> export(CaseScope scope, CaseListQuery query, int pageSize);
+    ExportPage export(CaseScope scope, CaseListQuery query, @Nullable ExportCursor after, int pageSize);
 
     /**
      * Every distinct team and owner pair of the cases the scope reads, archived ones included, for the filters.

@@ -5,6 +5,7 @@ package io.trailkeep.report;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -14,7 +15,8 @@ import io.trailkeep.audit.AuditRecord;
 import io.trailkeep.audit.AuditRecorder;
 import io.trailkeep.audit.AuditTrailService;
 import io.trailkeep.audit.AuditTrailService.AuditFilter;
-import io.trailkeep.audit.AuditTrailService.AuditPage;
+import io.trailkeep.audit.AuditTrailService.AuditSlice;
+import io.trailkeep.audit.AuditTrailService.Position;
 import io.trailkeep.casefile.CaseService;
 import io.trailkeep.casefile.CaseService.Actor;
 import io.trailkeep.casefile.CaseService.CaseRef;
@@ -86,17 +88,17 @@ class DefaultAuditExportServiceTest {
     /** Exports {@code events} synthetic events, at most {@code maxRows}, into a guarded stream. */
     private GuardedStream export(int events, int maxRows) throws IOException {
         AuditTrailService trail = mock(AuditTrailService.class);
-        when(trail.search(any(), any(), anyInt(), anyInt())).thenAnswer(call -> {
-            int offset = call.getArgument(2);
-            int limit = call.getArgument(3);
-            if (limit > 1) {
-                openWhileReading.add(open.get());
-            }
-            List<AuditRecord> page = IntStream.range(offset, Math.min(events, offset + limit))
+        // The count sees at most the cap, as if the rest arrived after it: the stream must still stop there.
+        when(trail.count(any(), any(), anyLong())).thenReturn((long) Math.min(events, maxRows));
+        when(trail.searchAfter(any(), any(), anyLong(), any(), anyInt())).thenAnswer(call -> {
+            Position after = call.getArgument(3);
+            int limit = call.getArgument(4);
+            openWhileReading.add(open.get());
+            int first = after == null ? 0 : (int) after.id() + 1;
+            List<AuditRecord> page = IntStream.range(first, Math.min(events, first + limit))
                     .mapToObj(DefaultAuditExportServiceTest::event)
                     .toList();
-            // The count sees at most the cap, as if the rest arrived after it: the stream must still stop there.
-            return new AuditPage(page, limit == 1 ? Math.min(events, maxRows) : events);
+            return new AuditSlice(page, page.isEmpty() ? null : new Position(NOW, first + page.size() - 1));
         });
         CaseService cases = mock(CaseService.class);
         when(cases.refs(any(), any())).thenAnswer(call -> {
@@ -106,7 +108,7 @@ class DefaultAuditExportServiceTest {
         AuditRecorder audit = mock(AuditRecorder.class);
         when(audit.diff(any(), any())).thenReturn(AuditChanges.none());
         DefaultAuditExportService exports = new DefaultAuditExportService(
-                trail, audit, cases, InstantSource.fixed(NOW), maxRows, new CountingTransactionManager());
+                trail, audit, cases, InstantSource.fixed(NOW), maxRows, PAGE, new CountingTransactionManager());
         Actor admin = new Actor(new UserPermissions(1L, false, Set.of(GlobalRole.COMPLIANCE_ADMIN), Map.of()), "Admin");
         AuditFilter lastWeek =
                 new AuditFilter(NOW.minusSeconds(7 * 86_400L), NOW.minusSeconds(60), null, null, null, null);

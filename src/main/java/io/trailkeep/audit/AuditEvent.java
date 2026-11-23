@@ -12,6 +12,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.SequenceGenerator;
 import jakarta.persistence.Table;
 import java.time.Instant;
+import java.util.Objects;
 import org.hibernate.Length;
 import org.hibernate.annotations.Immutable;
 import org.jspecify.annotations.Nullable;
@@ -85,6 +86,11 @@ class AuditEvent {
         this.newValuesJson = entry.changes().newValuesJson();
         this.requestId = requestId;
         this.clientIp = clientIp;
+    }
+
+    /** The position of this event in the newest-first order of the trail. */
+    AuditTrailService.Position position() {
+        return new AuditTrailService.Position(at, Objects.requireNonNull(id));
     }
 
     AuditRecord toRecord() {
