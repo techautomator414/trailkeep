@@ -92,11 +92,12 @@ The report reduces what the importer decided to digests, so a change can be show
 One desktop machine: a 16-core AMD Ryzen 9 5900XT, 62 GB RAM, NVMe storage; PostgreSQL 16 (`postgres:16-alpine`,
 default settings) and Oracle in Testcontainers, the application in the Failsafe JVM on Temurin 21 with `-Xmx1152m`. The
 machine runs other services, so times move by some percent between runs; the timed runs were made one after the other
-on the same day.
+on the same day. Ten minutes of a niced IT run overlapped (c)'s load, whose time may therefore be a little high (a
+second run of (c), under heavier load, took 1 294 s).
 
 ## Results on PostgreSQL, the full corpus
 
-Each row is the stack up to and including that PR (`main` is ac75e07); (c) and (d) add their rows. Peak heap is the
+Each row is the stack up to and including that PR (`main` is ac75e07); (d) adds its row. Peak heap is the
 highest heap sampled while the command ran, "after GC" the highest heap left after a collection, which is what the
 command holds.
 
@@ -104,9 +105,10 @@ command holds.
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
 | `main` | 426.7 | 757 038 | 756 303 | 467 / 296 | 1 826.3 | 357 | 4 871 236 | 800 787 | 467 / 288 |
 | + (b) batched people | 13.0 | 10 059 | 9 328 | 468 / 296 | 1 441.2 | 452 | 4 124 257 | 53 812 | 525 / 319 |
+| + (c) principals once, one page of people | 20.3 | 12 571 | 12 634 | 252 / 126 | 1 261.9 | 517 | 2 968 326 | 51 111 | 325 / 157 |
 
 The other commands did not change: `validate-mapping` 0.5 s, `extract` 208 to 209 s (5 500 rows/s, 4 649
-statements), `reconcile` 22 to 23 s (9 047 statements), `purge-staging` 0.8 to 0.9 s (13 statements). Both runs gave
+statements), `reconcile` 22 to 23 s (9 047 statements), `purge-staging` 0.8 to 0.9 s (13 statements). Every run gave
 the same dry-run digest (`a986672e6dd74d3f`) and load digest (`b85f4f2d62f88af8`).
 
 On `main` the dry run and the load are where the time is: 7 and 30 minutes of the 41 the whole import takes, each
@@ -123,6 +125,15 @@ of matching and 500 values, in `people.match` order, so a way is asked only for 
 match. The dry run fell from 427 s to 13 s, its transactions from 756 303 to 9 328, one per page; the load from
 1 826 s to 1 441 s and from 800 787 transactions to 53 812, about one per case (§8.2).
 
+**(c) The import principals once, and one page of people.** The load still ran 1 204 804 external-id queries: every
+imported comment and case asked `ImportPeopleService.principals()` for the two import principals, which read them by
+external id each time. They are read once now: V11 seeds them with fixed ids that no sequence issues. The dry run and
+the load also stopped holding every legacy person they had matched: they hold one page, and a page of cases or children
+resolves the people it names from staging first. That costs the dry run 7 s (it reads the people a page names again) and
+more than halves what the dry run holds (296 to 126 MiB after GC) and what the load holds (319 to 157 MiB): what they
+hold no longer grows with the number of legacy people, as the design's memory rule asks. The load's statements fell from
+4.1 to 3.0 million and its time from 1 441 s to 1 262 s.
+
 ## Correctness
 
 The run asserts the outcome at volume and reports the digests above; each fix compares them with the run before it.
@@ -130,6 +141,9 @@ The run asserts the outcome at volume and reports the digests above; each fix co
 - (b): the same dry-run and load digests as `main` at the full corpus; `PeopleMatcherBatchTest`, for every order of
   `people.match`, matches pages of people batched exactly as the one-by-one matcher does, and `AbstractImportPeopleIT`
   checks the batched directory queries on both vendors; the importer ITs.
+- (c): the same digests again; `DefaultImportPeopleTest` (the principals are read once and kept, and a missing one
+  fails every call until its row exists); `PeopleMatcherBatchTest` matches page by page as one by one, and asking about
+  a person outside the current page fails rather than reading as unmatched; the importer ITs.
 
 ## The nightly job
 
@@ -143,7 +157,6 @@ time; it would be a new gate, so it is the owner's call.
 
 ## What remains
 
-- **The load** still makes 4.1 million statements: 1.2 million external-id queries for the two import principals, read
-  again for every imported case and comment, then nearly all the rest per child row. (c) and (d).
-- **Memory**: the dry run and the load keep every legacy person they have matched, 296 to 319 MiB after GC at 500 000
-  people, against the design's "no stage holds more than one batch". (c).
+- **The load** still makes 3.0 million statements for 652 000 rows, nearly all per child row: each comment reads its
+  case again, is inserted and flushed alone, appended to the search text, audited, read back for its written hash and
+  given its ledger row, and each history row likewise, so no insert is batched. (d).

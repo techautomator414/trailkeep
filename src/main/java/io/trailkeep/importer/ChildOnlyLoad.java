@@ -75,6 +75,9 @@ final class ChildOnlyLoad {
         while (!page.isEmpty()) {
             Map<String, ChildLoads.Staged> fresh = unloaded(children.staged(
                     page.stream().map(ImportLedgerEntry::getLegacyKey).toList()));
+            people.resolve(fresh.values().stream()
+                    .flatMap(staged -> staged.people().stream())
+                    .toList());
             Map<Long, Existing> existing = context.cases()
                     .existing(page.stream()
                             .filter(entry -> fresh.containsKey(entry.getLegacyKey()))

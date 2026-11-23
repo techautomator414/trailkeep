@@ -5,10 +5,14 @@ package io.trailkeep.importer;
 import io.trailkeep.casefile.CaseImportService;
 import io.trailkeep.importer.ChildRules.Finding;
 import io.trailkeep.importer.ImportIssue.Severity;
+import io.trailkeep.importer.staging.StagedAttachment;
 import io.trailkeep.importer.staging.StagedCase;
+import io.trailkeep.importer.staging.StagedComment;
 import io.trailkeep.importer.staging.StagedPerson;
+import io.trailkeep.importer.staging.StagedRow;
 import io.trailkeep.user.ImportPeopleDirectory;
 import io.trailkeep.user.ImportPeopleDirectory.PersonMatch;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -18,6 +22,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
+import java.util.function.Function;
 import org.jspecify.annotations.Nullable;
 import tools.jackson.databind.JsonNode;
 
@@ -33,6 +38,12 @@ import tools.jackson.databind.JsonNode;
  * defaults.owner.byTeam}, a user named by external id or by an email address only one user has, who must be
  * eligible too. Every team with open cases needs one, because an owner eligible today may not be at the load: a team
  * without is a FATAL {@code DEFAULT_OWNER_MISSING} carrying the team's id.
+ *
+ * <p>The dry run and the load hold one page of people at a time (WP-30 part b, design §8.2 "Memory"): {@link
+ * #prepare} starts a page of staged people, {@link #resolve} a page of the people a page of cases or their children
+ * name, read from staging, and either forgets the page before. Once pages are in use, asking about a person the
+ * current page did not resolve is a bug, and fails rather than read as unmatched. People matched with {@link #person}
+ * alone, outside any page, are all kept.
  */
 final class PeopleMatcher {
 
@@ -50,6 +61,9 @@ final class PeopleMatcher {
     private final SortedSet<Long> openTeams = new TreeSet<>();
     private final Map<String, Optional<PersonMatch>> byExternalId = new HashMap<>();
     private final Map<String, List<PersonMatch>> byEmail = new HashMap<>();
+    private final Set<String> resolved = new HashSet<>();
+    private boolean paged;
+    private final Function<List<String>, List<StagedPerson>> staged;
 
     /**
      * A matcher with nothing matched yet.
@@ -58,14 +72,17 @@ final class PeopleMatcher {
      * @param cases who may own an imported case
      * @param mapping the validated mapping, whose {@code people.match} gives the order
      * @param defaultOwners {@code defaults.owner.byTeam}: team name to the default owner's external id or email
+     * @param staged the run's staged people with these keys, for {@link #resolve}
      */
     PeopleMatcher(
             ImportPeopleDirectory people,
             CaseImportService cases,
             JsonNode mapping,
-            Map<String, String> defaultOwners) {
+            Map<String, String> defaultOwners,
+            Function<List<String>, List<StagedPerson>> staged) {
         this.people = people;
         this.cases = cases;
+        this.staged = staged;
         this.order = mapping.at("/people/match")
                 .valueStream()
                 .map(JsonNode::asString)
@@ -76,14 +93,19 @@ final class PeopleMatcher {
     /**
      * Looks up, for a page of staged people, every user {@link #person} will ask the directory for, in one query per
      * way of matching and 500 values (#173), in {@code people.match} order: a way is asked only for the people no
-     * earlier way matched to exactly one user, as {@link #person} would ask it. Only the last page's answers are kept,
-     * so the matcher holds no more of the directory than a page.
+     * earlier way matched to exactly one user, as {@link #person} would ask it. The page before is forgotten, its
+     * people and their answers.
      *
      * @param page staged people, each then passed to {@link #person}
      */
     void prepare(List<StagedPerson> page) {
         byExternalId.clear();
         byEmail.clear();
+        matched.clear();
+        names.clear();
+        identities.clear();
+        resolved.clear();
+        paged = true;
         List<StagedPerson> unmatched = page;
         for (String way : order) {
             boolean external = "externalId".equals(way);
@@ -93,6 +115,9 @@ final class PeopleMatcher {
                 if (value != null) {
                     values.add(value);
                 }
+            }
+            if (values.isEmpty()) {
+                continue;
             }
             if (external) {
                 Map<String, PersonMatch> found = people.byExternalIds(values);
@@ -108,6 +133,46 @@ final class PeopleMatcher {
     }
 
     /**
+     * Starts the dry run's page of one entity (WP-30 part b): a page of people is {@link #prepare prepared}; a page of
+     * cases, comments or attachments has the people it names {@link #resolve resolved}: a case's owner, a comment's
+     * author, a file's uploader (the dry run asks about nobody a history row names).
+     *
+     * @param <T> the entity's row type
+     * @param type the entity's row type
+     * @param rows the page
+     */
+    <T extends StagedRow> void page(Class<T> type, List<T> rows) {
+        if (type == StagedPerson.class) {
+            prepare(rows.stream().map(StagedPerson.class::cast).toList());
+            return;
+        }
+        resolve(rows.stream()
+                .map(row -> switch (row) {
+                    case StagedCase staged -> staged.getOwnerKey();
+                    case StagedComment staged -> staged.getAuthorKey();
+                    case StagedAttachment staged -> staged.getUploaderKey();
+                    default -> null;
+                })
+                .toList());
+    }
+
+    /**
+     * Starts a page of the people a page of cases or of their children names: reads them from staging, {@link
+     * #prepare prepares} and matches them, so the page's rows can ask about any of them. A key staging does not have
+     * is a person who matches nobody and has no name, as before.
+     *
+     * @param personKeys the keys the page names; {@code null}s are ignored
+     */
+    void resolve(Collection<@Nullable String> personKeys) {
+        List<String> keys =
+                personKeys.stream().filter(Objects::nonNull).distinct().toList();
+        List<StagedPerson> rows = keys.isEmpty() ? List.of() : staged.apply(keys);
+        prepare(rows);
+        rows.forEach(this::person);
+        resolved.addAll(keys);
+    }
+
+    /**
      * Matches one staged person, from what {@link #prepare} looked up for its page or, when it was not prepared, from
      * the directory.
      *
@@ -115,6 +180,7 @@ final class PeopleMatcher {
      * @return {@code AMBIGUOUS_PERSON} when only an ambiguous email address matched; else nothing
      */
     List<Finding> person(StagedPerson row) {
+        resolved.add(row.getKey().legacyKey());
         if (row.getDisplayName() != null) {
             names.put(row.getKey().legacyKey(), row.getDisplayName());
         }
@@ -159,7 +225,7 @@ final class PeopleMatcher {
      * @return true if matched
      */
     boolean matched(@Nullable String personKey) {
-        return personKey != null && matched.containsKey(personKey);
+        return personKey != null && matched.containsKey(known(personKey));
     }
 
     /**
@@ -170,7 +236,7 @@ final class PeopleMatcher {
      */
     @Nullable
     PersonMatch match(@Nullable String personKey) {
-        return personKey == null ? null : matched.get(personKey);
+        return personKey == null ? null : matched.get(known(personKey));
     }
 
     /**
@@ -181,7 +247,7 @@ final class PeopleMatcher {
      */
     @Nullable
     String name(@Nullable String personKey) {
-        return personKey == null ? null : names.get(personKey);
+        return personKey == null ? null : names.get(known(personKey));
     }
 
     /**
@@ -199,7 +265,7 @@ final class PeopleMatcher {
         if (teamId != null) {
             openTeams.add(teamId);
         }
-        PersonMatch match = row.getOwnerKey() == null ? null : matched.get(row.getOwnerKey());
+        PersonMatch match = match(row.getOwnerKey());
         return match != null && teamId != null && eligible(match.userId(), teamId);
     }
 
@@ -240,11 +306,11 @@ final class PeopleMatcher {
         if (keepsOwner(row, teamId)) {
             return new Owner(Objects.requireNonNull(matched.get(key), "kept").userId(), null, null);
         }
-        String snapshot = key == null ? null : names.get(key);
+        String snapshot = name(key);
         if (!"OPEN".equals(row.getStatus())) {
             return new Owner(importer, snapshot, null);
         }
-        Identity legacy = key == null ? null : identities.get(key);
+        Identity legacy = key == null ? null : identities.get(known(key));
         return defaultOwner(teamId, teamName)
                 .map(id -> new Owner(id, snapshot, legacy))
                 .orElse(null);
@@ -260,6 +326,14 @@ final class PeopleMatcher {
         return openTeams.stream()
                 .filter(team -> defaultOwner(team, teamNames.get(team)).isEmpty())
                 .toList();
+    }
+
+    /** The key, once checked that the current page resolved it. */
+    private String known(String personKey) {
+        if (paged && !resolved.contains(personKey)) {
+            throw new IllegalStateException("A person was asked about outside the page that resolved the people");
+        }
+        return personKey;
     }
 
     private Optional<Long> defaultOwner(long teamId, @Nullable String teamName) {
