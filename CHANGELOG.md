@@ -17,6 +17,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- The same person's first sign-in from several sessions at once no longer returns 500 for all but one (#298). Each
+  looked the user up, found none and inserted, and the unique key on `APP_USER.EXTERNAL_ID` refused every insert but
+  the first. Provisioning now commits in a transaction of its own, and a refusal by that key (only that violation of
+  that insert, recognised by `UniqueViolations`) rolls the loser back cleanly, with its audit event, so the creation
+  is audited once. The sign-in proper then runs in a second transaction that reads the committed row and locks it, so
+  concurrent sign-ins of one person queue: they resolve to the same user and roles, the role sync is audited once, and
+  a disabled user is refused by every one. No retry and no extra connection is held while another is asked for.
+  `ConcurrentFirstSignInIT` (PostgreSQL and Oracle) lines up 8 first sign-ins on a pool of 4. The warm-up in
+  `perf/k6/release-mix.js` `setup()` is no longer required.
 - The cases list's CSV export and the audit trail's export no longer deadlock the database pool (WP-30, #84, #91).
   Both read their rows in pages of 500 inside one read-only transaction while they wrote the response, and the first
   write commits the response, which saves the person's session through a second connection. With as many exports in

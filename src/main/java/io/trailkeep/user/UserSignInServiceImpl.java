@@ -6,6 +6,7 @@ import io.trailkeep.audit.AuditChanges;
 import io.trailkeep.audit.AuditEntry;
 import io.trailkeep.audit.AuditOrigin;
 import io.trailkeep.audit.AuditRecorder;
+import io.trailkeep.shared.persistence.UniqueViolations;
 import java.time.Instant;
 import java.time.InstantSource;
 import java.util.EnumSet;
@@ -16,8 +17,10 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.TransactionStatus;
+import org.springframework.transaction.support.TransactionOperations;
 
 /**
  * Provisions users at login and audits every state change it makes (Part E), in the login's transaction. Audit rows
@@ -43,6 +46,7 @@ class UserSignInServiceImpl implements UserSignInService {
     private final AppUserGlobalRoleRepository globalRoles;
     private final InstantSource clock;
     private final AuditRecorder audit;
+    private final TransactionOperations transactions;
 
     UserSignInServiceImpl(
             AppUserRepository users,
@@ -50,24 +54,60 @@ class UserSignInServiceImpl implements UserSignInService {
             AppUserTeamRepository memberships,
             AppUserGlobalRoleRepository globalRoles,
             InstantSource clock,
-            AuditRecorder audit) {
+            AuditRecorder audit,
+            TransactionOperations transactions) {
         this.users = users;
         this.teams = teams;
         this.memberships = memberships;
         this.globalRoles = globalRoles;
         this.clock = clock;
         this.audit = audit;
+        this.transactions = transactions;
     }
 
+    /**
+     * Not one transaction: provisioning commits first, on its own, so that the sign-in proper always starts from a row
+     * that is committed and, if a concurrent first sign-in of the same person created it, that is the winner's.
+     */
     @Override
-    @Transactional
     public SignInOutcome signIn(ExternalIdentity identity, Set<GlobalRole> claimedRoles) {
         Instant now = clock.instant();
-        AppUser user = users.findByExternalId(identity.subject()).orElse(null);
-        if (user == null) {
-            user = users.save(new AppUser(identity.subject(), identity.displayName(), identity.email(), now));
-            record(user, USER_PROVISIONED, AuditChanges.none());
+        transactions.executeWithoutResult(status -> provision(identity, now, status));
+        return Objects.requireNonNull(transactions.execute(status -> signInProvisioned(identity, claimedRoles, now)));
+    }
+
+    /**
+     * Creates the user if there is none. Two first sign-ins of one person both miss the lookup; the unique key on
+     * {@code EXTERNAL_ID} lets one insert through and the other waits for it to commit and then fails. Only that
+     * violation of that insert is answered: the loser's transaction (and with it its audit event) is rolled back
+     * cleanly, and the winner's row, now committed, is read by {@link #signInProvisioned}. Any other failure, and a
+     * violation after which the row is still not there, is thrown.
+     */
+    private void provision(ExternalIdentity identity, Instant now, TransactionStatus status) {
+        if (users.findByExternalId(identity.subject()).isPresent()) {
+            return;
         }
+        try {
+            AppUser created =
+                    users.save(new AppUser(identity.subject(), identity.displayName(), identity.email(), now));
+            users.flush();
+            record(created, USER_PROVISIONED, AuditChanges.none());
+        } catch (DataIntegrityViolationException failure) {
+            if (!UniqueViolations.isUnique(failure)) {
+                throw failure;
+            }
+            // The failed flush has left the persistence context unusable and PostgreSQL's transaction aborted.
+            status.setRollbackOnly();
+        }
+    }
+
+    /**
+     * The sign-in of a user that exists. The user's row is locked first: concurrent sign-ins of one person queue, so
+     * the role sync and its audit event are made once and the others find the roles already as they claim.
+     */
+    private SignInOutcome signInProvisioned(ExternalIdentity identity, Set<GlobalRole> claimedRoles, Instant now) {
+        AppUser user = users.findLockedByExternalId(identity.subject())
+                .orElseThrow(() -> new IllegalStateException("a provisioned user is stored"));
         long userId = Objects.requireNonNull(user.getId());
         if (user.isDisabled()) {
             // The refusal is the only write: no profile refresh, no login time, no role change.
