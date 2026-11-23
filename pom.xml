@@ -274,6 +274,15 @@
       <scope>provided</scope>
     </dependency>
     <dependency>
+      <!-- Pins the version that already ships at runtime (Hibernate's), so javac sees the same Checker Framework
+           annotations Hibernate was built with. Compile mediation had picked 3.37.0, whose @EnsuresNonNullIf lacks
+           expression() and result(), and -Werror turned that warning into an error as soon as main code implemented
+           a Hibernate SPI interface (NoTempTableInsertStrategy, issue #317). No new artifact, no new licence. -->
+      <groupId>org.checkerframework</groupId>
+      <artifactId>checker-qual</artifactId>
+      <version>3.55.1</version>
+    </dependency>
+    <dependency>
       <groupId>com.oracle.database.jdbc</groupId>
       <artifactId>ojdbc17</artifactId>
       <scope>runtime</scope>

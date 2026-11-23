@@ -136,6 +136,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- Oracle: Hibernate no longer creates 24 `HTE_*` global temporary tables in the owner's schema at start-up (#317).
+  They were DDL outside Flyway, created by whichever process started first with the right to do it (the migration
+  Job as the owner; the runtime user cannot). They were Hibernate's insert-select strategy for entities whose ids come
+  from pooled sequences, and Trailkeep has no HQL `insert ... select`, so none was ever used. Oracle now configures
+  `NoTempTableInsertStrategy`, which creates nothing and refuses such a statement with an explanation. A new test
+  (`SchemaStartupIT`, `OracleSchemaStartupIT`) fails if start-up adds any table, sequence or index to what Flyway
+  built. PostgreSQL was unaffected. Also pins `checker-qual` 3.55.1, already shipped at runtime, so javac sees the
+  annotations Hibernate was built with.
+
 - The importer's dry run and load no longer look legacy people up one by one (#173, WP-30 part b,
   `docs/perf/importer-volume.md`). `PeopleMatcher` asks the directory, for a page of people, one query per way of
   matching and 500 values, in `people.match` order, and matches exactly as before. At the release volume the dry run
