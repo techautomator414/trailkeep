@@ -47,6 +47,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- The CI Semgrep lockfile takes `wcmatch` 12.0.4 (and `bracex` 3.2.4), fixing the glob ReDoS GHSA-53pm-wgxf-c6qf
+  (Dependabot alerts #6 and #7, fixed in 11.2). Semgrep 1.183.0 pins `wcmatch~=8.3`, so the pin is lifted in
+  `semgrep-overrides.in`, as already done for `mcp` and OpenTelemetry. CI-only tooling; nothing ships.
 - The same person's first sign-in from several sessions at once no longer returns 500 for all but one (#298). Each
   looked the user up, found none and inserted, and the unique key on `APP_USER.EXTERNAL_ID` refused every insert but
   the first. Provisioning now commits in a transaction of its own, and a refusal by that key (only that violation of
