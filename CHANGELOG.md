@@ -161,6 +161,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- Both CSV exports page by keyset, so a row committed while an export runs can no longer shift a page boundary (#300).
+  They read in pages, each in its own short transaction (#295), at READ COMMITTED, and OFFSET paging let a row
+  committed between two pages be written twice or skipped. The cases export resumes strictly after the last row
+  written, in the list's own order: any of the five sort columns, ascending or descending (cases without a due date
+  last, as in the list), then the case id. The audit-trail export resumes after the last `(time, id)`, newest first.
+  The audit export is also a snapshot of the trail as of the moment it started: it reads only events whose id is up
+  to the highest id committed at that moment and whose time is before it (the filter's end was already pinned there),
+  and the count and the `app.export.max-rows` check use the same bound, so an event committed afterwards, with
+  whatever timestamp, is not in the file; the export's own audit event is not either. Read-committed isolation is
+  kept (one long snapshot is what deadlocked the pool, #295), so an event that was still uncommitted at the start, or
+  written by another instance with an id below the bound, can be in the file if it commits before the export reaches
+  its position, and is then there exactly once. The cases export is not a snapshot: a case committed meanwhile is in
+  the file once if it sorts after the last row written and not at all if it sorts before; none is written twice and
+  none that existed throughout is skipped. `app.export.page-size` (default and maximum 500) exists so a test can cross
+  pages with few rows. No migration: V20's `IX_AUDIT_AT (AT_TS, ID)` serves the audit query (an index scan of 21
+  buffers for a page 4 000 events into a window, 140 for the offset form), and the cases export reads at most
+  `max-rows` filtered cases per sort either way.
+
 - Oracle: Hibernate no longer creates 24 `HTE_*` global temporary tables in the owner's schema at start-up (#317).
   They were DDL outside Flyway, created by whichever process started first with the right to do it (the migration
   Job as the owner; the runtime user cannot). They were Hibernate's insert-select strategy for entities whose ids come
