@@ -3,7 +3,6 @@
 package io.trailkeep.restoredrill;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.securityContext;
 import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.asyncDispatch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -32,6 +31,7 @@ import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.HexFormat;
@@ -53,7 +53,8 @@ import org.springframework.boot.WebApplicationType;
 import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.boot.jdbc.autoconfigure.JdbcConnectionDetails;
 import org.springframework.context.ConfigurableApplicationContext;
-import org.springframework.security.core.context.SecurityContext;
+import org.springframework.mock.web.MockHttpSession;
+import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
@@ -185,6 +186,15 @@ abstract class AbstractRestoreDrillIT {
      */
     abstract Map<String, Long> sequences(Connection owner) throws SQLException;
 
+    /**
+     * The space the schema takes in the database, tables, indexes and large objects together.
+     *
+     * @param owner a connection as the owner
+     * @return bytes
+     * @throws SQLException if it cannot be read
+     */
+    abstract long databaseBytes(Connection owner) throws SQLException;
+
     /** Extra connection properties for this vendor. */
     Properties connectionProperties() {
         return new Properties();
@@ -224,6 +234,13 @@ abstract class AbstractRestoreDrillIT {
                 try (Connection connection = connect(source, owner)) {
                     seed(source, owner, connection, report);
                     insertAdmin(connection);
+                    // What V20 costs an upgrade at this volume (docs/RUNBOOK.md): the same index, built and dropped.
+                    report.run("V20's index built on the 500 000 audit events (a copy, then dropped)", () -> {
+                        try (Statement statement = connection.createStatement()) {
+                            statement.execute("CREATE INDEX IX_DRILL_AUDIT_AT ON AUDIT_EVENT (AT_TS, ID)");
+                            statement.execute("DROP INDEX IX_DRILL_AUDIT_AT");
+                        }
+                    });
                     long bytes = report.time(
                             "Attachments written (" + AttachmentSeed.FILES + " files)",
                             () -> AttachmentSeed.write(connection));
@@ -242,6 +259,7 @@ abstract class AbstractRestoreDrillIT {
                             () -> DatabaseFingerprint.of(connection, theOwner.schema()));
                     indexBefore = indexState(source, connection);
                     sequencesBefore = sequences(connection);
+                    report.fact("Database size: " + mib(databaseBytes(connection)) + " MiB");
                 }
                 report.fact("Source: " + before.size() + " tables, "
                         + before.values().stream()
@@ -458,7 +476,7 @@ abstract class AbstractRestoreDrillIT {
         MockMvc mvc = MockMvcBuilders.webAppContextSetup((WebApplicationContext) app)
                 .apply(springSecurity())
                 .build();
-        SecurityContext admin = admin();
+        MockHttpSession admin = adminSession();
         assertThat(body(mvc, "/cases?q=kestrel", admin))
                 .as("the cases page with a search")
                 .isNotEmpty();
@@ -479,18 +497,30 @@ abstract class AbstractRestoreDrillIT {
         return new Observation(rows, downloads);
     }
 
-    private static byte[] body(MockMvc mvc, String url, SecurityContext admin) throws Exception {
-        MvcResult result = mvc.perform(get(url).with(securityContext(admin))).andReturn();
+    private static byte[] body(MockMvc mvc, String url, MockHttpSession admin) throws Exception {
+        MvcResult result = mvc.perform(get(url).session(admin)).andReturn();
         if (result.getRequest().isAsyncStarted()) {
             result = mvc.perform(asyncDispatch(result)).andReturn();
         }
-        assertThat(result.getResponse().getStatus()).as(url).isEqualTo(200);
+        assertThat(result.getResponse().getStatus())
+                .as(url + " -> " + result.getResponse().getHeader("Location"))
+                .isEqualTo(200);
         return result.getResponse().getContentAsByteArray();
     }
 
-    private static SecurityContext admin() {
-        WithAppUser user = Admin.class.getAnnotation(WithAppUser.class);
-        return new WithAppUserSecurityContextFactory().createSecurityContext(Objects.requireNonNull(user));
+    /**
+     * A signed-in session of the Compliance Admin, as the shared session store holds one after an OIDC login: the
+     * security context and the login time. {@code SessionPermissionsFilter} reloads the person's roles from the
+     * database on every request, so the restored copy's user tables are exercised too.
+     */
+    private static MockHttpSession adminSession() {
+        WithAppUser user = Objects.requireNonNull(Admin.class.getAnnotation(WithAppUser.class));
+        MockHttpSession session = new MockHttpSession();
+        session.setAttribute(
+                HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY,
+                new WithAppUserSecurityContextFactory().createSecurityContext(user));
+        session.setAttribute("trailkeep.loginAt", System.currentTimeMillis());
+        return session;
     }
 
     // --- the audit canaries ------------------------------------------------------------------------------------------

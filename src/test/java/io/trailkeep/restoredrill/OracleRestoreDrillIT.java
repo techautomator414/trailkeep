@@ -218,6 +218,13 @@ class OracleRestoreDrillIT extends AbstractRestoreDrillIT {
     }
 
     @Override
+    long databaseBytes(Connection owner) throws SQLException {
+        try (Statement statement = owner.createStatement()) {
+            return Long.parseLong(single(statement, "SELECT NVL(SUM(BYTES), 0) FROM USER_SEGMENTS"));
+        }
+    }
+
+    @Override
     Map<String, Long> sequences(Connection owner) throws SQLException {
         Map<String, Long> marks = new TreeMap<>();
         try (Statement statement = owner.createStatement();

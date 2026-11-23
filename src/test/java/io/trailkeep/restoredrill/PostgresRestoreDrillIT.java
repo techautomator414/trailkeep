@@ -147,6 +147,15 @@ class PostgresRestoreDrillIT extends AbstractRestoreDrillIT {
     }
 
     @Override
+    long databaseBytes(Connection owner) throws SQLException {
+        try (Statement statement = owner.createStatement();
+                ResultSet size = statement.executeQuery("SELECT pg_database_size(current_database())")) {
+            size.next();
+            return size.getLong(1);
+        }
+    }
+
+    @Override
     Map<String, Long> sequences(Connection owner) throws SQLException {
         Map<String, Long> marks = new TreeMap<>();
         try (Statement statement = owner.createStatement();
