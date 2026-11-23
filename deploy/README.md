@@ -160,6 +160,18 @@ The order for a fresh install and for every release:
    runtime user DDL to make a pod start. A pod rolled out against an unmigrated schema fails Hibernate's `validate`
    (or, for a migration with no entity change, runs the previous schema's queries until the `Job` has run).
 
+### Search indexes (V21)
+
+V21 indexes `CASE_SEARCH.SEARCH_TEXT` for the cases search (ADR-0017). On PostgreSQL it needs one thing before the
+migration `Job` runs, and no new grant for the runtime, purge or import users. (Oracle's V21 comes with its adapter.)
+
+- **PostgreSQL: the `pg_trgm` extension.** It ships with PostgreSQL and is a trusted extension (13+), so
+  `TRAILKEEP_OWNER` creates it when it may create in the database (`GRANT CREATE ON DATABASE <db> TO
+  trailkeep_owner`). Otherwise a database administrator runs `CREATE EXTENSION IF NOT EXISTS pg_trgm;` once, in any
+  schema, and V21 finds it there. Managed PostgreSQL services allow it.
+  Building the index over the 500k seed took 13 s (87 MB); writes to `CASE_SEARCH` wait for it (Flyway runs the
+  migration in one transaction, where `CONCURRENTLY` is not allowed), so posting a comment pauses for that long.
+
 ## Runtime properties
 
 - **Pod security.** Non-root, read-only root filesystem, no privilege escalation, all capabilities dropped, seccomp
