@@ -9,6 +9,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Semgrep, gitleaks and CodeQL now run in the release (#321, IMPLEMENTATION_PLAN Part G "release" column), and
+  publishing waits for them. `ci.yml` and `codeql.yml` are callable (`workflow_call`) with their triggers, rules and job
+  names unchanged. gitleaks scans every commit since the previous release tag (the action sees no commits on a tag
+  push), CodeQL's new `alerts` job stops the release if the tagged commit has no analysis or any open alert, and each
+  scanner uploads its SARIF (`semgrep-results`, `gitleaks-results.sarif`, `codeql-results`), which the evidence pack
+  requires from 1.0.0. `ReleaseEvidencePackTest` fails a release without the jobs, the `needs` or the uploads.
 - The release evidence pack, complete and checked (WP-30 part d, `docs/RELEASING.md`).
   `.github/release/evidence-pack.txt` lists every file a GitHub Release carries (BUILD_PLAN §12.3 and WP-30), where it
   comes from and the first version that requires it; `.github/scripts/evidence-pack.py` builds the pack from the release

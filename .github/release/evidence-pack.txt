@@ -38,6 +38,9 @@ accessibility-tests.md | generated:accessibility | all | axe results per screen 
 oracle-it-reports.zip | artifact:oracle-it-reports | all | Oracle integration test results (XE 21 and Free 23) | JUnit XML
 sqlserver-it-reports.zip | artifact:sqlserver-it-reports | all | SQL Server source integration test results (importer) | JUnit XML
 static-analysis.zip | artifact:static-analysis | all | SAST reports of the verify build (SpotBugs with FindSecBugs, Checkstyle) | Both gates fail the build on any finding
+semgrep-results.zip | artifact:semgrep-results | 1.0.0 | SAST report: Semgrep (SARIF; p/default, p/java, p/secrets and the project rules) over the tagged commit | Any finding fails the release
+codeql-results.zip | artifact:codeql-results | 1.0.0 | SAST report: CodeQL (SARIF; java-kotlin, security-extended) over the tagged commit | An open alert on the tagged commit fails the release
+gitleaks-results.sarif.zip | artifact:gitleaks-results.sarif | 1.0.0 | Secret scan report: gitleaks (SARIF) over every commit since the previous release tag | Any leak fails the release
 trivy-sbom-report.zip | artifact:trivy-sbom-report | all | SCA report: Trivy over the SBOM (SARIF and JSON) | Fixable High or Critical fails the release
 image-scan-reports.zip | artifact:image-scan-reports | all | Container scan reports: Trivy (SARIF and JSON) and Dockle | Fixable High or Critical fails the release
 dependency-check-report.zip | artifact:dependency-check-report | 1.0.0 | SCA report: OWASP Dependency-Check (HTML and SARIF) | Runs only with the NVD API key (issue 30)

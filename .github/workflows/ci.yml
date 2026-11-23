@@ -9,6 +9,15 @@ on:
   pull_request:
   push:
     branches: [main]
+  # release.yml calls this file with scanners-only (#321, IMPLEMENTATION_PLAN Part G "release" column): only the gitleaks
+  # and semgrep jobs run, from the tagged commit, and publishing waits for them. Their job names, and so the required
+  # status checks, stay as they are, which a job per scanner calling a reusable workflow would not keep.
+  workflow_call:
+    inputs:
+      scanners-only:
+        description: Run only the secret and static scans (gitleaks, semgrep)
+        type: boolean
+        default: false
 
 permissions: {}
 
@@ -18,6 +27,7 @@ permissions: {}
 jobs:
   build:
     name: build (./mvnw verify)
+    if: ${{ !inputs.scanners-only }}
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     permissions:
@@ -81,7 +91,7 @@ jobs:
       contents: read
       pull-requests: read
     concurrency:
-      group: ci-gitleaks-${{ github.event_name == 'push' && github.sha || github.ref }}
+      group: ci-gitleaks-${{ github.workflow }}-${{ github.event_name == 'push' && github.sha || github.ref }}
       cancel-in-progress: true
     steps:
       - name: Check out (full history)
@@ -90,12 +100,42 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      # Pull requests and pushes to main: the action scans the commits of the event. A tag push carries no commits, so the
+      # action would find "No commits to scan" and pass: the release scans the next step's range instead.
       - name: Scan for secrets
+        if: github.ref_type != 'tag'
         uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
         env:
           # The automatic, read-only job token; no license key is needed for a personal-account repository.
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITLEAKS_ENABLE_COMMENTS: "false"
+
+      # A release: the same gitleaks version and default rules as the action (8.24.3), run from the image pinned by
+      # digest, over every commit since the previous release tag (all of them for the first), so no commit goes out
+      # unscanned. The SARIF is uploaded under the name the action uses, so the evidence pack has one name.
+      - name: Scan for secrets (release, every commit since the previous tag)
+        if: github.ref_type == 'tag'
+        env:
+          GITLEAKS_IMAGE: zricethezav/gitleaks@sha256:e1b35e12a8c6fa8901f060459cfb6b2fc4c484d3afbe3b029733a3bbfab07055 # v8.24.3
+        run: |
+          set -euo pipefail
+          previous="$(git tag --list 'v*' --merged "${GITHUB_SHA}" --sort=-v:refname | grep -vxF "${GITHUB_REF_NAME}" | head -n 1 || true)"
+          range="${GITHUB_SHA}"
+          if [ -n "${previous}" ]; then range="${previous}..${GITHUB_SHA}"; fi
+          echo "scanning ${range}"
+          mkdir -p "${RUNNER_TEMP}/gitleaks"
+          docker run --rm --user "$(id -u):$(id -g)" -v "${PWD}:/repo" -v "${RUNNER_TEMP}/gitleaks:/out" -w /repo \
+            "${GITLEAKS_IMAGE}" detect --no-banner --redact -v --exit-code=2 --report-format=sarif \
+            --report-path=/out/results.sarif "--log-opts=--no-merges ${range}"
+
+      - name: Upload the gitleaks report (release)
+        if: always() && github.ref_type == 'tag'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: gitleaks-results.sarif
+          path: ${{ runner.temp }}/gitleaks/results.sarif
+          if-no-files-found: error
+          retention-days: 90
 
   semgrep:
     name: semgrep
@@ -104,7 +144,7 @@ jobs:
     permissions:
       contents: read
     concurrency:
-      group: ci-semgrep-${{ github.event_name == 'push' && github.sha || github.ref }}
+      group: ci-semgrep-${{ github.workflow }}-${{ github.event_name == 'push' && github.sha || github.ref }}
       cancel-in-progress: true
     steps:
       - name: Check out
@@ -140,7 +180,19 @@ jobs:
           # Thymeleaf's th:name/th:value or the token th:action injects, so it fires on every POST form here. CSRF
           # enforcement is proven by SecurityDefaultsIT and WebShellIT. Excluded by owner decision (PR 9, #19).
           semgrep scan "${configs[@]}" --exclude security/semgrep --error --metrics=off \
-            --exclude-rule python.django.security.django-no-csrf-token.django-no-csrf-token
+            --exclude-rule python.django.security.django-no-csrf-token.django-no-csrf-token \
+            --sarif-output=semgrep.sarif
+
+      # The SARIF is the release's SAST evidence (the pack takes artifact semgrep-results); on pull requests it is the
+      # same report, kept for 14 days.
+      - name: Upload the Semgrep report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: semgrep-results
+          path: semgrep.sarif
+          if-no-files-found: error
+          retention-days: ${{ github.ref_type == 'tag' && 90 || 14 }}
 
   dco:
     name: dco (Signed-off-by on every commit)
@@ -183,6 +235,7 @@ jobs:
 
   actionlint:
     name: actionlint
+    if: ${{ !inputs.scanners-only }}
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
