@@ -2,6 +2,9 @@
 # Copyright 2026 Charlie Genova and contributors
 #
 # CodeQL SAST for Java with the security-extended suite (BUILD_PLAN §12.1). Fork-safe.
+# release.yml calls this file on a v* tag (#321): the analysis of the tagged commit is uploaded to code scanning and kept as
+# a SARIF artifact, then `alerts` fails the run if that commit has any open CodeQL alert (the analyze step reports
+# alerts but never fails on them). Pull requests and main run `analyze` exactly as before; `alerts` runs on tags only.
 name: codeql
 
 on:
@@ -10,6 +13,7 @@ on:
     branches: [main]
   schedule:
     - cron: "27 4 * * 1"
+  workflow_call:
 
 permissions: {}
 
@@ -42,3 +46,36 @@ jobs:
         uses: github/codeql-action/analyze@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
         with:
           category: /language:java-kotlin
+          output: codeql-sarif
+
+      - name: Upload the CodeQL SARIF
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: codeql-results
+          path: codeql-sarif
+          if-no-files-found: error
+          retention-days: ${{ github.ref_type == 'tag' && 90 || 14 }}
+
+  # Release only. Every severity the security-extended suite reports counts: the suite is the configured severity (no
+  # threshold is set anywhere else). A dismissed alert is not open, so a dismissal (with its reason, in the alert's
+  # history) is the one way to let a release through.
+  alerts:
+    name: open alerts (release)
+    if: github.ref_type == 'tag'
+    needs: analyze
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      security-events: read
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: .github/scripts
+
+      - name: Fail on open alerts for the tagged commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash .github/scripts/codeql-open-alerts.sh "${GITHUB_REPOSITORY}" "refs/tags/${GITHUB_REF_NAME}" "${GITHUB_SHA}"

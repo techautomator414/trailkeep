@@ -15,6 +15,8 @@ repository secret, or the tag itself. Everything else goes through ordinary pull
 | `verify` | `./mvnw verify` cold (no cache): every unit, PostgreSQL and browser test, axe and the Nu checker, every static gate | Nothing was published |
 | `zap` | `zap.yml` in release mode: any Medium or higher alert, or a partial scan, fails | Nothing was published |
 | `perf` | `perf.yml`: the 50k and 500k seeds on PostgreSQL in process; a p95 past its target fails | Nothing was published |
+| `gitleaks-semgrep` | `ci.yml` with `scanners-only`: Semgrep over the tagged commit (any finding fails) and gitleaks over every commit since the previous release tag (a tag push has no commits for the gitleaks action, so the release runs the same gitleaks version directly); both upload their SARIF | Nothing was published |
+| `codeql` | `codeql.yml`: the analysis of the tagged commit is uploaded (SARIF artifact and code scanning), then its `alerts` job fails the run if the commit has no analysis or any open CodeQL alert. Fix the finding, or dismiss the alert with a reason in code scanning, then move the tag | Nothing was published |
 | `publish` | Builds the image cold from digest-pinned bases, scans it, pushes it to GHCR, signs it and attests the SBOM (keyless cosign) | Nothing was published, or an image without a release (section 5) |
 | `provenance` | SLSA provenance (slsa-github-generator) attached to the image | An image without a release |
 | `verify-published` | `verify-image.yml`: the signature, the SBOM attestation and the provenance, checked as a user would, against `release.yml@refs/tags/<tag>` | An image without a release |

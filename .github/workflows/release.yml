@@ -173,9 +173,30 @@ jobs:
     permissions:
       contents: read
 
+  # The release column's secret and static scans (IMPLEMENTATION_PLAN Part G; #321), from the tagged commit, each
+  # uploading its report for the pack. gitleaks and semgrep are the jobs of ci.yml (scanners-only: no build, no
+  # actionlint); CodeQL is codeql.yml, whose `alerts` job also fails the run if the tagged commit has an open alert.
+  # Publishing waits for all three, so a finding stops the release before anything is pushed.
+  # The permissions are what the called jobs ask for: a called job cannot hold more than its caller grants.
+  gitleaks-semgrep:
+    name: gitleaks and semgrep
+    uses: ./.github/workflows/ci.yml
+    with:
+      scanners-only: true
+    permissions:
+      contents: read
+      pull-requests: read # gitleaks asks for it on pull requests; unused on a tag
+
+  codeql:
+    name: codeql
+    uses: ./.github/workflows/codeql.yml
+    permissions:
+      contents: read
+      security-events: write # the SARIF upload; the alerts job asks for read only
+
   publish:
     name: image (push, sign, attest)
-    needs: [preflight, main-gates, verify, zap, perf]
+    needs: [preflight, main-gates, verify, zap, perf, gitleaks-semgrep, codeql]
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     permissions:

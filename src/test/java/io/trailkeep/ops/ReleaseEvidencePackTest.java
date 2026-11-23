@@ -25,6 +25,8 @@ import tools.jackson.dataformat.yaml.YAMLMapper;
  * by a job of the release run, the GitHub Release waits for all of them, publishing waits for the preflight and every
  * gate, the preflight checks the tag, the secrets and the repository first, the pack is assembled, signed and checked
  * before the release is created, every checked-in source exists, and the pack covers each item the plan asks for.
+ * Semgrep, gitleaks and CodeQL run in the release too (#321): publishing waits for them, each uploads its report, the
+ * pack requires the reports, and CodeQL's open alerts on the tagged commit stop the release.
  * {@code EvidencePackScriptTest} runs the script that builds the pack.
  */
 class ReleaseEvidencePackTest {
@@ -39,6 +41,7 @@ class ReleaseEvidencePackTest {
     private static final List<String> REQUIRED = List.of(
             "SBOM (CycloneDX JSON)",
             "SAST report",
+            "Secret scan report",
             "SCA report",
             "DAST report",
             "Suppressions with justifications",
@@ -81,6 +84,99 @@ class ReleaseEvidencePackTest {
         assertThat(missing)
                 .as("pack files whose artifact no release job uploads")
                 .isEmpty();
+    }
+
+    @Test
+    void publishingWaitsForSemgrepGitleaksAndCodeQl() throws IOException {
+        JsonNode jobs = workflow("release.yml").get("jobs");
+        assertThat(needs(jobs.get("publish"))).contains("gitleaks-semgrep", "codeql");
+        assertThat(jobs.at("/gitleaks-semgrep/uses").asString("")).isEqualTo("./.github/workflows/ci.yml");
+        assertThat(jobs.at("/gitleaks-semgrep/with/scanners-only").asBoolean(false))
+                .as("release.yml runs ci.yml's scanners only, not its build")
+                .isTrue();
+        assertThat(jobs.at("/codeql/uses").asString("")).isEqualTo("./.github/workflows/codeql.yml");
+        assertThat(jobs.at("/codeql/permissions/security-events").asString("")).isEqualTo("write");
+    }
+
+    @Test
+    void theCalledScannersKeepTheirTriggersAndFitTheirCallersPermissions() throws IOException {
+        JsonNode ci = workflow("ci.yml");
+        JsonNode codeql = workflow("codeql.yml");
+        assertThat(ci.at("/on/workflow_call/inputs/scanners-only").isMissingNode())
+                .isFalse();
+        assertThat(ci.at("/on/pull_request").isMissingNode()).isFalse();
+        assertThat(ci.at("/on/push/branches/0").asString("")).isEqualTo("main");
+        assertThat(codeql.at("/on/workflow_call").isMissingNode()).isFalse();
+        assertThat(codeql.at("/on/pull_request").isMissingNode()).isFalse();
+        assertThat(codeql.at("/on/schedule").isMissingNode()).isFalse();
+        // Only the scanners run in a release; the build and actionlint jobs are switched off by the input.
+        for (String job : List.of("build", "actionlint")) {
+            assertThat(ci.at("/jobs/" + job + "/if").asString("")).contains("scanners-only");
+        }
+        for (String job : List.of("gitleaks", "semgrep")) {
+            assertThat(ci.at("/jobs/" + job + "/if").isMissingNode())
+                    .as("ci.yml's %s job runs in a scanners-only release", job)
+                    .isTrue();
+        }
+        JsonNode release = workflow("release.yml").get("jobs");
+        assertThat(shortfall(release.at("/gitleaks-semgrep/permissions"), ci.at("/jobs/gitleaks/permissions")))
+                .isEmpty();
+        assertThat(shortfall(release.at("/gitleaks-semgrep/permissions"), ci.at("/jobs/semgrep/permissions")))
+                .isEmpty();
+        assertThat(shortfall(release.at("/codeql/permissions"), codeql.at("/jobs/analyze/permissions")))
+                .isEmpty();
+        assertThat(shortfall(release.at("/codeql/permissions"), codeql.at("/jobs/alerts/permissions")))
+                .isEmpty();
+    }
+
+    @Test
+    void everyScannerUploadsItsReportAndThePackRequiresIt() throws IOException {
+        assertThat(uploads("ci.yml")).contains("semgrep-results", "gitleaks-results.sarif");
+        assertThat(uploads("codeql.yml")).contains("codeql-results");
+        Set<String> artifacts = new TreeSet<>();
+        for (Row row : rows) {
+            if (row.fromArtifact() && row.since().equals("1.0.0")) {
+                artifacts.add(row.artifact());
+            }
+        }
+        assertThat(artifacts).contains("semgrep-results", "gitleaks-results.sarif", "codeql-results");
+    }
+
+    @Test
+    void codeQlStopsTheReleaseOnAnOpenAlertForTheTaggedCommit() throws IOException {
+        JsonNode alerts = workflow("codeql.yml").at("/jobs/alerts");
+        assertThat(alerts.path("if").asString("")).isEqualTo("github.ref_type == 'tag'");
+        assertThat(needs(alerts)).containsExactly("analyze");
+        assertThat(runs(alerts))
+                .contains("codeql-open-alerts.sh", "\"refs/tags/${GITHUB_REF_NAME}\"", "\"${GITHUB_SHA}\"");
+        String script = Files.readString(Path.of(".github/scripts/codeql-open-alerts.sh"));
+        assertThat(script)
+                .contains("state=open", "most_recent_instance.commit_sha", "exit 1")
+                .contains("no CodeQL analysis of");
+    }
+
+    @Test
+    void gitleaksScansTheTagBecauseTheActionSeesNoCommitsThere() throws IOException {
+        JsonNode steps = workflow("ci.yml").at("/jobs/gitleaks/steps");
+        List<String> conditions = new ArrayList<>();
+        steps.forEach(step -> conditions.add(step.path("if").asString("")));
+        assertThat(conditions)
+                .contains(
+                        "github.ref_type != 'tag'", "github.ref_type == 'tag'", "always() && github.ref_type == 'tag'");
+        assertThat(runs(workflow("ci.yml").at("/jobs/gitleaks"))).contains("--exit-code=2", "--log-opts=");
+    }
+
+    /** What a called job asks for that its caller does not grant ({@code write} covers {@code read}). */
+    private static List<String> shortfall(JsonNode caller, JsonNode called) {
+        List<String> missing = new ArrayList<>();
+        called.properties().forEach(entry -> {
+            String granted = caller.path(entry.getKey()).asString("none");
+            String wanted = entry.getValue().asString();
+            if (!granted.equals(wanted) && !(granted.equals("write") && wanted.equals("read"))) {
+                missing.add(entry.getKey() + ": " + wanted);
+            }
+        });
+        return missing;
     }
 
     @Test
