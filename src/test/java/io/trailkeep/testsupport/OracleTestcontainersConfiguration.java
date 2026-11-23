@@ -3,10 +3,19 @@
 package io.trailkeep.testsupport;
 
 import io.trailkeep.shared.persistence.DatabaseVendor;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.regex.Pattern;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.jdbc.autoconfigure.JdbcConnectionDetails;
 import org.springframework.boot.test.context.TestConfiguration;
@@ -36,6 +45,9 @@ public class OracleTestcontainersConfiguration {
 
     /** System property: the size in MB of the three redo log groups to give the container (opt-in). */
     public static final String REDO_PROPERTY = "trailkeep.oracle.redo-mb";
+
+    /** A plain absolute directory with a trailing slash, the only shape of redo log directory that is used in DDL. */
+    private static final Pattern REDO_DIRECTORY = Pattern.compile("^/[A-Za-z0-9_./-]+/$");
 
     private static final Duration STARTUP = Duration.ofMinutes(5);
 
@@ -100,46 +112,57 @@ public class OracleTestcontainersConfiguration {
         }
         int megabytes = Integer.parseInt(size.strip());
         String root = container.getJdbcUrl().replaceAll("(?i)(free|xe)pdb1$", "$1");
-        try (java.sql.Connection connection =
-                        java.sql.DriverManager.getConnection(root, "system", container.getPassword());
-                java.sql.Statement st = connection.createStatement()) {
-            java.util.List<Integer> old = new java.util.ArrayList<>();
+        try (Connection connection = DriverManager.getConnection(root, "system", container.getPassword());
+                Statement st = connection.createStatement()) {
+            List<Integer> old = new ArrayList<>();
             String dir;
-            try (java.sql.ResultSet rs = st.executeQuery("SELECT GROUP# FROM V$LOG ORDER BY GROUP#")) {
+            try (ResultSet rs = st.executeQuery("SELECT GROUP# FROM V$LOG ORDER BY GROUP#")) {
                 while (rs.next()) {
                     old.add(rs.getInt(1));
                 }
             }
-            try (java.sql.ResultSet rs = st.executeQuery("SELECT MEMBER FROM V$LOGFILE WHERE ROWNUM = 1")) {
+            try (ResultSet rs = st.executeQuery("SELECT MEMBER FROM V$LOGFILE WHERE ROWNUM = 1")) {
                 rs.next();
                 String member = rs.getString(1);
                 dir = member.substring(0, member.lastIndexOf('/') + 1);
+                if (!REDO_DIRECTORY.matcher(dir).matches()) {
+                    throw new IllegalStateException("Unexpected redo log directory: " + dir);
+                }
             }
             int first = old.get(old.size() - 1) + 1;
             // Three groups at least: the image has two, and a group still ACTIVE (needed for crash recovery) cannot be
             // reused, so with two a switch waits for the checkpoint of the other.
+            // DDL cannot bind: the statements below are built from ints and the validated directory only.
             for (int i = 0; i < Math.max(3, old.size()); i++) {
                 st.execute("ALTER DATABASE ADD LOGFILE GROUP " + (first + i) + " ('" + dir + "redo" + (first + i)
                         + ".log') SIZE " + megabytes + "M");
             }
             for (int group : old) {
-                // A group can be dropped once it is INACTIVE: switch away from it and checkpoint.
-                for (int attempt = 0; attempt < 20; attempt++) {
-                    String status;
-                    try (java.sql.ResultSet rs = st.executeQuery("SELECT STATUS FROM V$LOG WHERE GROUP# = " + group)) {
-                        rs.next();
-                        status = rs.getString(1);
-                    }
-                    if ("INACTIVE".equals(status)) {
-                        break;
-                    }
-                    st.execute("ALTER SYSTEM SWITCH LOGFILE");
-                    st.execute("ALTER SYSTEM CHECKPOINT");
-                }
+                switchAwayFrom(connection, group);
                 st.execute("ALTER DATABASE DROP LOGFILE GROUP " + group);
             }
-        } catch (java.sql.SQLException failed) {
+        } catch (SQLException failed) {
             throw new IllegalStateException("Cannot resize the redo logs to " + megabytes + " MB", failed);
+        }
+    }
+
+    /** A group can be dropped once it is INACTIVE: switch away from it and checkpoint until it is. */
+    private static void switchAwayFrom(Connection connection, int group) throws SQLException {
+        try (Statement st = connection.createStatement();
+                PreparedStatement query = connection.prepareStatement("SELECT STATUS FROM V$LOG WHERE GROUP# = ?")) {
+            query.setInt(1, group);
+            for (int attempt = 0; attempt < 20; attempt++) {
+                String status;
+                try (ResultSet rs = query.executeQuery()) {
+                    rs.next();
+                    status = rs.getString(1);
+                }
+                if ("INACTIVE".equals(status)) {
+                    return;
+                }
+                st.execute("ALTER SYSTEM SWITCH LOGFILE");
+                st.execute("ALTER SYSTEM CHECKPOINT");
+            }
         }
     }
 
