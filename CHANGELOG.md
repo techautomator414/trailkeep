@@ -75,6 +75,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- The importer's dry run and load hold one page of legacy people, not every person they have matched, and the two
+  import principals are read once instead of twice for every imported row (WP-30 part b,
+  `docs/perf/importer-volume.md`). At the release volume the dry run holds 126 MiB after GC instead of 296 and the load
+  157 instead of 319, and the load makes 3.0 million statements instead of 4.1 (1 262 s instead of 1 441 s); the dry
+  run takes 20 s instead of 13, because each page reads again the people it names.
+
 - Keycloak 26.8.2-2 (compose and test image) and the Nu Html Checker image digest, landed as one change because
   ComposeImagesTest fails on either Dependabot PR alone (supersedes #279 and #280); compose-only alpine/openssl 3.5.8.
 - ClamAV 1.5.4 in compose.yaml and the test image together, since ComposeImagesTest fails on the Dependabot PR alone
