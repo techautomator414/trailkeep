@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 # ADR-0017: Serve search from vendor indexes in 1.0.0: Oracle Text on Oracle, a trigram index on PostgreSQL
 
-- **Status:** Proposed
+- **Status:** Accepted (2026-11-23)
 - **Date:** 2026-11-23
 - **Register rows:** IMPLEMENTATION_PLAN.md A.1 #7 (search; amends ADR-0006), A.1 #1 (the Oracle test images), Part C
   "v1.1 backlog" (vendor search adapters)

@@ -21,4 +21,4 @@ Format: [MADR](https://adr.github.io/madr/); copy [`0000-adr-template.md`](0000-
 | [0014](0014-importer-sources-and-canonical-model.md) | Import from SQL Server, Oracle, PostgreSQL or their exports through one canonical staging model | Accepted (2026-11-21) | 2026-11-05 |
 | [0015](0015-import-principals.md) | Two seeded, disabled principals act for the importer | Accepted (2026-11-20) | 2026-11-10 |
 | [0016](0016-go-live-alerts-pre-marked.md) | Record an imported case's alerts already raised as sent, so go-live sends no wave | Accepted (2026-11-20) | 2026-11-13 |
-| [0017](0017-vendor-search-adapters.md) | Serve search from vendor indexes in 1.0.0: Oracle Text on Oracle, a trigram index on PostgreSQL | Proposed | 2026-11-23 |
+| [0017](0017-vendor-search-adapters.md) | Serve search from vendor indexes in 1.0.0: Oracle Text on Oracle, a trigram index on PostgreSQL | Accepted | 2026-11-23 |
