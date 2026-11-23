@@ -36,10 +36,11 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 
 /**
- * Oracle's V21 search index ({@code -Poracle-it}, both images; ADR-0017): an Oracle Text
- * {@code CONTEXT} index, valid, built from system preferences only, synchronised on commit and optimised daily, with
- * no optimizer statistics and those of {@code CASE_SEARCH} locked; its script runs again without harm; and the runtime and purge users write {@code CASE_SEARCH} with the grants they had
- * before it, the runtime user finding its own text in the index before and after the commit.
+ * Oracle's V21 search index ({@code -Poracle-it}, both images; ADR-0017): an Oracle Text {@code CONTEXT} index, valid,
+ * built from system preferences only, synchronised on commit and optimised daily, with no optimizer statistics and
+ * those of {@code CASE_SEARCH} locked; its script runs again without harm; and the runtime and purge users write {@code
+ * CASE_SEARCH} with the grants they had before it, the runtime user finding its own text in the index before and after
+ * the commit.
  */
 // "IT" is the Failsafe suffix Part B mandates for integration tests, not an abbreviation.
 @SuppressWarnings("checkstyle:AbbreviationAsWordInName")
@@ -98,7 +99,7 @@ class OracleSearchIndexIT {
     }
 
     @Test
-    void aValidContextIndexOfSystemPreferencesSynchronisedOnCommitAndOptimisedDaily() {
+    void theIndexIsValidContextOfSystemPreferencesSynchronisedOnCommitAndOptimisedDaily() {
         Map<String, Object> index = jdbc.queryForMap(
                 "SELECT TABLE_NAME, ITYP_OWNER, ITYP_NAME, STATUS, DOMIDX_STATUS, DOMIDX_OPSTATUS FROM USER_INDEXES"
                         + " WHERE INDEX_NAME = ?",

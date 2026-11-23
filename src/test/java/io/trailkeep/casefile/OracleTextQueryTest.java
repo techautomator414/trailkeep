@@ -15,7 +15,7 @@ class OracleTextQueryTest {
     private static final String SAFE = "(%[a-z0-9]{3,64}%( AND %[a-z0-9]{3,64}%)*)?";
 
     @Test
-    void aWordOfLettersAndDigitsIsMatchedByTheIndexAlone() {
+    void wordsOfLettersAndDigitsAreMatchedByTheIndexAlone() {
         OracleTextQuery query = of("Kestrel 3fa9c1");
 
         assertThat(query.contains()).isEqualTo("%kestrel% AND %3fa9c1%");
@@ -31,7 +31,7 @@ class OracleTextQueryTest {
     }
 
     @Test
-    void wordsWithoutARunOfThreeAreLeftToLike() {
+    void wordsWithoutThreeLettersOrDigitsInSequenceAreLeftToLike() {
         OracleTextQuery query = of("50% ab é");
 
         assertThat(query.contains()).isEmpty();
@@ -47,7 +47,7 @@ class OracleTextQueryTest {
     }
 
     @Test
-    void aRunLongerThanSixtyFourIsCutAndItsWordCheckedByLike() {
+    void runsLongerThanSixtyFourAreCutAndTheirWordsCheckedByLike() {
         String word = "a".repeat(70);
 
         OracleTextQuery query = of(word);

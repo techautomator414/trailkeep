@@ -20,8 +20,8 @@ import org.springframework.test.context.ActiveProfiles;
 /**
  * The 500k seed on Oracle (WP-30), where {@code SEARCH_TEXT} is a {@code CLOB}, searched through the Oracle Text
  * adapter (ADR-0017). Opt-in, in the {@code perf-it} profile's {@code perf-500k-oracle} execution, which no workflow
- * runs (seeding takes minutes on Oracle; see {@code docs/perf/release-500k.md}). The image is {@code trailkeep.oracle.image} as for {@code
- * -Poracle-it}. The table goes to {@code target/perf/comments-500k-oracle.md}.
+ * runs (seeding takes minutes on Oracle; see {@code docs/perf/release-500k.md}). The image is {@code
+ * trailkeep.oracle.image} as for {@code -Poracle-it}. The table goes to {@code target/perf/comments-500k-oracle.md}.
  */
 // "IT" is the Failsafe suffix Part B mandates for integration tests, not an abbreviation.
 @SuppressWarnings("checkstyle:AbbreviationAsWordInName")
@@ -71,8 +71,9 @@ class OracleComments500kPerfIT extends AbstractComments500kPerfIT {
     String searchCount(String word) {
         // OracleTextSearchGateway: CASE_SEARCH left-joined on the CONTEXT index; a word of letters is decided by the
         // index alone (ADR-0017).
-        return "SELECT COUNT(*) FROM CASE_RECORD r LEFT JOIN CASE_SEARCH s ON s.CASE_ID = r.ID AND CONTAINS(s.SEARCH_TEXT,"
-                + " '%" + word + "%') > 0 WHERE r.STATUS <> 'ARCHIVED' AND (UPPER(r.CASE_NUMBER) LIKE '%"
+        return "SELECT COUNT(*) FROM CASE_RECORD r LEFT JOIN CASE_SEARCH s ON s.CASE_ID = r.ID"
+                + " AND CONTAINS(s.SEARCH_TEXT, '%" + word + "%') > 0 WHERE r.STATUS <> 'ARCHIVED'"
+                + " AND (UPPER(r.CASE_NUMBER) LIKE '%"
                 + word.toUpperCase(Locale.ROOT) + "%' OR s.CASE_ID IS NOT NULL)";
     }
 

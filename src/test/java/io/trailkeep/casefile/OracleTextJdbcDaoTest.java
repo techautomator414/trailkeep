@@ -30,7 +30,7 @@ class OracleTextJdbcDaoTest {
     private final OracleTextJdbcDao index = new OracleTextJdbcDao(jdbc);
 
     @Test
-    void aQueryTheIndexRunsIsAnswered() {
+    void queriesTheIndexRunsAreAnswered() {
         when(jdbc.queryForObject(anyString(), eq(Long.class), any(Object[].class)))
                 .thenReturn(1L);
 
