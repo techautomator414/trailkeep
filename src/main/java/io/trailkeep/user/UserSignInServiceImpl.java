@@ -21,10 +21,14 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.TransactionStatus;
 import org.springframework.transaction.support.TransactionOperations;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
- * Provisions users at login and audits every state change it makes (Part E), in the login's transaction. Audit rows
- * carry the user id and display name, never the email address.
+ * Provisions users at login and audits every state change it makes (Part E). A sign-in is two transactions, never one
+ * the caller holds: provisioning commits first (the new user and its {@code USER_PROVISIONED} event, or nothing if a
+ * concurrent first sign-in of the same person won), then the sign-in proper runs against the committed row, locked
+ * (the profile and login time, the role sync and their events). Audit rows carry the user id and display name, never
+ * the email address.
  */
 @Service
 class UserSignInServiceImpl implements UserSignInService {
@@ -71,6 +75,11 @@ class UserSignInServiceImpl implements UserSignInService {
      */
     @Override
     public SignInOutcome signIn(ExternalIdentity identity, Set<GlobalRole> claimedRoles) {
+        if (TransactionSynchronizationManager.isActualTransactionActive()) {
+            // Inside a caller's transaction both steps would join it: provisioning would not commit first, and a
+            // lost race would mark the caller's transaction rollback-only and fail at its commit.
+            throw new IllegalStateException("signIn runs its own transactions; call it outside one");
+        }
         Instant now = clock.instant();
         transactions.executeWithoutResult(status -> provision(identity, now, status));
         return Objects.requireNonNull(transactions.execute(status -> signInProvisioned(identity, claimedRoles, now)));
@@ -103,9 +112,10 @@ class UserSignInServiceImpl implements UserSignInService {
 
     /**
      * The sign-in of a user that exists. The user's row is locked first: concurrent sign-ins of one person queue, so
-     * the role sync and its audit event are made once and the others find the roles already as they claim.
+     * the role sync and its audit event are made once and the others find the roles already as they claim. Package-
+     * private for the tests that sign in from inside a test transaction, which {@link #signIn} refuses.
      */
-    private SignInOutcome signInProvisioned(ExternalIdentity identity, Set<GlobalRole> claimedRoles, Instant now) {
+    SignInOutcome signInProvisioned(ExternalIdentity identity, Set<GlobalRole> claimedRoles, Instant now) {
         AppUser user = users.findLockedByExternalId(identity.subject())
                 .orElseThrow(() -> new IllegalStateException("a provisioned user is stored"));
         long userId = Objects.requireNonNull(user.getId());

@@ -3,6 +3,7 @@
 package io.trailkeep.user;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.trailkeep.audit.AuditRecord;
 import io.trailkeep.audit.AuditTrailService;
@@ -23,6 +24,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * The same person signing in for the first time from several sessions at once (issue 298), once per vendor. Each
@@ -50,6 +52,9 @@ abstract class AbstractConcurrentFirstSignInIT {
 
     @Autowired
     private JdbcTemplate jdbc;
+
+    @Autowired
+    private TransactionTemplate transactions;
 
     @Test
     void concurrentFirstSignInsOfOnePersonAllResolveToOneUser() throws Exception {
@@ -95,6 +100,14 @@ abstract class AbstractConcurrentFirstSignInIT {
                 .allSatisfy(outcome -> assertThat(outcome).isInstanceOf(SignInOutcome.Disabled.class));
         assertThat(jdbc.queryForObject("SELECT DISABLED FROM APP_USER WHERE EXTERNAL_ID = ?", Boolean.class, subject))
                 .isTrue();
+    }
+
+    @Test
+    void signInRefusesToRunInsideACallersTransaction() {
+        assertThatThrownBy(() -> transactions.executeWithoutResult(status -> service.signIn(
+                        new ExternalIdentity("subject-" + UUID.randomUUID(), "Inside", EMAIL), Set.of())))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("outside one");
     }
 
     private List<SignInOutcome> concurrently(String subject) throws Exception {

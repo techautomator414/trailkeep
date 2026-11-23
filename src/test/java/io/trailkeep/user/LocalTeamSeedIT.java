@@ -56,7 +56,7 @@ class LocalTeamSeedIT {
     private AuditTrailService trail;
 
     @Autowired
-    private UserSignInService signIn;
+    private UserSignInServiceImpl signIn;
 
     @Autowired
     private AuditRecorder auditRecorder;
@@ -80,8 +80,9 @@ class LocalTeamSeedIT {
                 .containsOnly("TEAM_CREATED", "USER_PROVISIONED", "ROLE_GRANTED")
                 .hasSize(2 + 8 + 8);
 
-        SignInOutcome outcome =
-                signIn.signIn(new ExternalIdentity(BETA_ANALYST, "Beta Analyst", "b@example.test"), Set.of());
+        // The sign-in's transactional body: signIn itself refuses to run inside this test's transaction.
+        SignInOutcome outcome = signIn.signInProvisioned(
+                new ExternalIdentity(BETA_ANALYST, "Beta Analyst", "b@example.test"), Set.of(), clock.instant());
         assertThat(((SignInOutcome.SignedIn) outcome).account().teamRoles())
                 .isEqualTo(Map.of("Beta", TeamRole.ANALYST));
     }
