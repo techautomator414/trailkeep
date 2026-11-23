@@ -4,4 +4,6 @@
 # Oracle XE 21, the first image of the oracle-it matrix (the pom's oracle-xe-21 execution names it).
 # The one place this image is named: TestImages reads the FROM line, and Dependabot's docker ecosystem
 # proposes updates to the tag and the digest (issue 235). Keep exactly one FROM, pinned by digest.
-FROM gvenzl/oracle-xe:21-slim@sha256:ecdf4302ac3d134e1bac5ef6e0c223c2d0f4d4d2b6d551aa79b2346f1ab8f792
+# The full image, not -slim: the slim images remove Oracle Text, which the V21 search index needs (ADR-0006,
+# amended 2026-11-23).
+FROM gvenzl/oracle-xe:21@sha256:c2682a4216b0fe65537912c4a049c7e5c15a85bb7c94bb8137d5f2d2eef60603

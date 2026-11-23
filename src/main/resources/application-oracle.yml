@@ -4,6 +4,10 @@
 app:
   db:
     vendor: oracle
+  search:
+    # Oracle Text narrows the LIKE search through the V21 CONTEXT index; "like" scans CASE_SEARCH instead (ADR-0006,
+    # amended 2026-11-23).
+    adapter: oracle-text
 
 spring:
   flyway:
@@ -26,7 +30,7 @@ spring:
     properties:
       # Fix the dialect version (ADR-0004). These OVERRIDE the product name and version Hibernate detects from
       # the connection; they do not skip detection (that would need hibernate.boot.allow_jdbc_metadata_access=false).
-      # 21.0 matches the gvenzl/oracle-xe:21-slim CI image (no native BOOLEAN). CI also runs gvenzl/oracle-free:23-slim
+      # 21.0 matches the gvenzl/oracle-xe:21 CI image (no native BOOLEAN). CI also runs gvenzl/oracle-free:23
       # against this same 21.0 pin, proving a newer server does not change DDL expectations. A deploying organization
       # sets the version of its own server here (for example 19).
       jakarta:

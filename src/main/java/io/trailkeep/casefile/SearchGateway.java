@@ -8,10 +8,12 @@ import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
 
 /**
- * Case search behind one seam (ADR-0006): v1 matches {@code CASE_SEARCH} with {@code LIKE} ({@link
- * LikeSearchGateway}); vendor adapters ({@code pg_trgm}, Oracle Text) may replace it in v1.1. An adapter contributes
+ * Case search behind one seam (ADR-0006): {@link LikeSearchGateway} matches {@code CASE_SEARCH} with {@code LIKE},
+ * which PostgreSQL answers from a trigram index ({@code pg_trgm}); on Oracle, {@link OracleTextSearchGateway} narrows
+ * the same match with Oracle Text; {@code app.search.adapter} chooses ({@link SearchConfig}). An adapter contributes
  * a predicate on the case root of the caller's query, so the candidates it finds are filtered by the same {@code
- * CaseScope} predicate in the same statement, and a count over a search is exact.
+ * CaseScope} predicate in the same statement, and a count over a search is exact. Every adapter returns the same
+ * cases for the same text.
  */
 interface SearchGateway {
 
