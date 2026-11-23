@@ -225,8 +225,11 @@ is the owner's call.
 - **On Oracle, the Oracle Text sync per case** (above): about 85 % of the load. The measured remedy is an operator step
   around the initial load, as the schema owner: `ALTER INDEX IX_CASE_SEARCH_TEXT PARAMETERS ('REPLACE METADATA SYNC
   (MANUAL)')` before it, then `CTX_DDL.SYNC_INDEX('IX_CASE_SEARCH_TEXT')` and `ALTER INDEX IX_CASE_SEARCH_TEXT
-  PARAMETERS ('REPLACE METADATA SYNC (ON COMMIT)')` after it. Whether it belongs in the runbook (WP-30's later part),
-  in the Job with a new grant, or nowhere, is the owner's call.
+  PARAMETERS ('REPLACE METADATA SYNC (ON COMMIT)')` after it. Decided (2026-11-23): a runbook step for the schema
+  owner, not a grant to the Job (`docs/RUNBOOK.md`, "Import go-live"). The restore drill refined it: the owner needs
+  `EXECUTE ON CTXSYS.CTX_DDL` for the sync, granted by a DBA for the window, and the last statement must be
+  `REPLACE METADATA SYNC (ON COMMIT) OPTIMIZE (AUTO_DAILY)`, because on Oracle 21 the sync clause alone drops the
+  nightly optimisation from the index's metadata (`docs/ops/restore-drill.md`).
 - **The extract** is now the longest command on PostgreSQL: 209 s, 5 500 rows/s, for 1 152 000 rows. It was not part
   of #173 and was not investigated here.
 - **Per-case reads in `importCase`**: the case type, the team and the SLA policy are read for every case in its own

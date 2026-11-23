@@ -94,6 +94,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   `V21`): the list reads no comments and did not slow down, and the recommended `(OPENED_AT, ID)` index would not
   serve the list's `DESC NULLS LAST, ID ASC` order; the page records the matching index and when it pays.
 
+- `docs/RUNBOOK.md`, the operator's runbook (WP-30 part c): deploy and upgrade through the migration Job, with what
+  each migration since 0.2.0 costs at the release volume (V20: a short pause for audited writes while its index
+  builds; V21: a ~13 s write pause on `CASE_SEARCH` on PostgreSQL, an online build on Oracle); rollback of the image,
+  and of the schema only by restore; backup and restore as drilled (`docs/ops/restore-drill.md`), with the timings;
+  rotating the database, OIDC, SMTP and audit HMAC secrets (a new audit key leaves older redacted values confirmable
+  only with the old key, so every key is archived); scaling and pool sizing (20 a replica, sessions = replicas × 20 +
+  10); health, metrics and alerts; the scheduled jobs and their failure handling, re-sending a failed mail; rate
+  limits; the import go-live with the Oracle Text manual sync around the load, done by the schema owner with `CTX_DDL`
+  granted by a DBA for that window only, and the index restored with `SYNC (ON COMMIT) OPTIMIZE (AUTO_DAILY)` (on
+  Oracle 21 the sync clause alone drops the nightly optimisation from the index's metadata); incidents (logs, request
+  ids, the audit trail, kill switches); and disaster recovery, including what to do after any restore (mail and alerts
+  that would go again, purges to repeat). Its last section lists the standing database decisions: full Oracle images,
+  three 512 MB redo groups, locked `CASE_SEARCH` statistics, `JOB_QUEUE_PROCESSES` above 0, the
+  `APP_SEARCH_ADAPTER=like` kill switch, and `pg_trgm` created beforehand. The PostgreSQL restore covers a case
+  checked by hand: when a DBA created `pg_trgm`, the owner cannot restore the extension's comment, so that one entry
+  is left out of the restore list. `deploy/README.md` points to the runbook.
+
 ### Changed
 
 - The importer's load writes a case's comments and history together, so their inserts go to the database in JDBC
