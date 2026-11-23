@@ -178,6 +178,13 @@ The order for a fresh install and for every release:
   memory, per replica**: with N replicas a person can make up to N times the limit, and a restart refills them. A
   multi-replica deployment also sets a platform limit at the route or ingress (per client, not per person). The
   `prod` profile refuses to start with `app.rate-limit.enabled=false`, which only tests may set.
+- **Database connections.** Each web replica keeps a pool of 20 (`spring.datasource.hikari.maximum-pool-size`, measured
+  in WP-30, `docs/perf/release-500k.md`): the 8 attachment-download slots, each holding a connection while it streams,
+  plus about 10 for interactive requests at a load well above the expected one. Hikari keeps the pool full, so the
+  database must allow replicas × 20 sessions for the run-time user, plus a few for the purge, importer and migration
+  Jobs (their profiles open connections only as they need them). On Oracle that is the `SESSIONS` and `PROCESSES`
+  parameters and any profile limit on the run-time user. Keep the pool at least `app.attachments.max-concurrent-downloads`
+  plus 10: lower, slow downloads starve every other request on the replica.
 - **Router access logs.** Search terms (`q`) and case numbers travel in GET query strings, which Trailkeep does not
   log but the router or ingress access log can. Configure it to omit query strings, or treat that log as restricted
   (access and retention as for case data). Saved views and the `CASES_EXPORTED` audit row keep the query by design; see
@@ -224,10 +231,10 @@ the outbox; the purge removes mail only together with the purged case or the exp
 `TrailkeepDbPoolExhausted`: on some replica, requests have been queuing for a connection from the HikariCP pool for
 5 minutes (`hikaricp_connections_pending` above zero). A connection that is momentarily busy shows as a pending count
 for milliseconds, so five minutes means the pool is too small for the load or connections are held too long. Check
-`hikaricp_connections_active` against `hikaricp_connections_max` and the database's own sessions and locks; long CSV
-exports and attachment downloads hold a connection while they stream (bounded by `app.export.max-rows` and
-`app.attachments.max-concurrent-downloads`). Raise `spring.datasource.hikari.maximum-pool-size` only within what the
-database allows for all replicas together.
+`hikaricp_connections_active` against `hikaricp_connections_max` and the database's own sessions and locks; attachment
+downloads hold a connection while they stream (at most `app.attachments.max-concurrent-downloads` at once). Raise
+`spring.datasource.hikari.maximum-pool-size` only within what the database allows for all replicas together (see
+"Runtime properties").
 
 ### The virus scanner is down
 

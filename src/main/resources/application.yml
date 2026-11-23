@@ -14,6 +14,16 @@ spring:
       test: postgresql, test-common
       oracle-test: oracle, test-common
 
+  datasource:
+    hikari:
+      # Per web replica, measured in WP-30 (docs/perf/release-500k.md "Pool sizing"): each attachment download holds a
+      # connection for as long as it streams, so the pool is app.attachments.max-concurrent-downloads (8) plus what
+      # interactive requests use at a load far above the expected one (about 10). With Hikari's former default of 10,
+      # eight slow downloads cut the replica to a quarter of its throughput and pushed the list past its target. Hikari
+      # keeps the pool full (minimum-idle defaults to this), so the database must allow replicas x 20 sessions plus the
+      # batch Jobs' few (their profiles open connections as needed, minimum-idle 1).
+      maximum-pool-size: 20
+
   jpa:
     open-in-view: false
     hibernate:
@@ -151,8 +161,9 @@ app:
     # clamd.probe-cron (default every minute, "0 * * * * *"): in clamd mode each replica asks clamd for VERSION on this
     # schedule and reports trailkeep.scanner.up (1 or 0) for the TrailkeepScannerDown alert; "-" turns it off.
     # max-concurrent-downloads (default 8): downloads streaming at once per replica; one more is refused with 503 and
-    # Retry-After. Each holds a database connection while it streams, so keep it below the Hikari pool (10 by
-    # default), and at most the async executor's core size (spring.task.execution.pool.core-size, 8 by default).
+    # Retry-After. Each holds a database connection while it streams, so keep it well below the Hikari pool (20 above:
+    # these 8 plus room for interactive requests), and at most the async executor's core size
+    # (spring.task.execution.pool.core-size, 8 by default).
   # Per-person rate limits (#247), in each replica's memory: a bucket per person and route holds capacity requests
   # and gains refill more per window, evenly. Over it, the request is refused 429 with Retry-After before any work,
   # counted on trailkeep.rate_limit.refusals{route} and logged with the person's id. search covers the cases list and

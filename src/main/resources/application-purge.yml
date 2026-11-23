@@ -7,6 +7,10 @@
 spring:
   main:
     web-application-type: none
+  # One thread: connections are opened as needed rather than filling the web replicas' pool of 20 (application.yml).
+  datasource:
+    hikari:
+      minimum-idle: 1
   # Nobody signs in to the purge: no OIDC client is registered, so its pod needs neither the client's secret nor a
   # route to the identity provider.
   autoconfigure:
