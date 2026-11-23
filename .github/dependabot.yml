@@ -86,6 +86,8 @@ updates:
   # The images compose.yaml starts for local development and the DAST stack (#256). ComposeImagesTest keeps each equal to
   # its test image under src/test/resources/images/ (or, for the compose-only alpine/openssl, digest-pinned), so the
   # weekly test-images PR above and this one must land together; a PR that moves only one fails that test.
+  # When both groups move a shared image, land them as one combined PR (the Dependabot PRs cannot pass alone); Dependabot
+  # closes the pair once main has those versions.
   - package-ecosystem: docker-compose
     directory: /
     schedule:
