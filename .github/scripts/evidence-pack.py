@@ -23,7 +23,6 @@ import re
 import shutil
 import subprocess
 import sys
-import xml.etree.ElementTree as ET
 import zipfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -135,10 +134,13 @@ def accessibility(artifacts: Path) -> str:
     """A table of the accessibility ITs (axe with 0 violations, and the Nu HTML check) from the failsafe reports."""
     rows, executed, failed = [], 0, 0
     for report in sorted((artifacts / "test-reports").rglob("TEST-*AccessibilityIT.xml")):
-        suite = ET.parse(report).getroot()
+        # Only the attributes of the root <testsuite> element are read, by pattern rather than with an XML parser, so
+        # nothing in the report (entities, DTDs) is ever interpreted.
+        tag = re.search(r"<testsuite\b[^>]*>", report.read_text(encoding="utf-8", errors="replace"))
+        suite = dict(re.findall(r'\s([\w:-]+)="([^"]*)"', tag[0])) if tag else {}
         counts = [int(suite.get(key, "0")) for key in ("tests", "failures", "errors", "skipped")]
         executed += counts[0] - counts[3]
-        failed += counts[1] + counts[2]
+        failed += counts[1] + counts[2] + (0 if tag else 1)
         rows.append(f"| `{suite.get('name', report.stem)}` | " + " | ".join(map(str, counts)) + " |")
     if not rows or executed == 0 or failed:
         raise ValueError(f"{len(rows)} accessibility IT reports, {executed} tests run, {failed} failed")
