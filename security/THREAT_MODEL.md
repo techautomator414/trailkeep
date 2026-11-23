@@ -233,7 +233,7 @@ process) or **platform** (the database, cluster, storage or secret store).
 
 | # | Risk | Owner | Status |
 |---|---|---|---|
-| RR-1 | Encryption at rest (Oracle TDE or volume encryption) and backups are not provided or tested here. Backups also keep purged content until they expire. | platform | Position: TEST_MAP [Gaps] 10 |
+| RR-1 | Encryption at rest (Oracle TDE or volume encryption) and backups are not provided here; a restore from logical backups is drilled by hand (`docs/ops/restore-drill.md`). Backups also keep purged content until they expire, and a restore brings it back until the purge runs again. | platform | Position: TEST_MAP [Gaps] 10 |
 | RR-2 | Secret-store hygiene: who can read the namespace's Secrets, rotation, and keeping `TRAILKEEP_OWNER` and `TRAILKEEP_IMPORT` locked when no migration or import runs (`deploy/README.md` asks this for the import user only). `app.audit.hmac-key` is one key with no rotation procedure: a new key makes older redacted values incomparable, and a leaked key makes short redacted values testable by dictionary. | platform, deployer | Open |
 | RR-3 | Rate limits are per replica, in memory (built in #263): a multi-replica deployment needs a limit at the route or ingress as well. Only search, export and upload are limited. | deployer | Position: TEST_MAP [Availability] |
 | RR-4 | The IdP is tested only against the Keycloak dev realm: real-provider login, group claims and back-channel logout are unverified (#30), and no repository test sends a forged or valid logout token end to end (validation is Spring Security's). | project, deployer | Tracked: #30 |

@@ -86,7 +86,15 @@ public class OracleTestcontainersConfiguration {
         }
     }
 
-    private static JdbcDatabaseContainer<?> start(String image) {
+    /**
+     * Starts a new container of {@code image}, not shared: for a test that needs a database of its own, such as the
+     * restore drill's source and target. Resized like the shared one ({@value #REDO_PROPERTY}) and stopped by a
+     * shutdown hook if the test does not stop it first.
+     *
+     * @param image an {@code images/} name or a full image reference
+     * @return the started container
+     */
+    public static JdbcDatabaseContainer<?> start(String image) {
         boolean fileName = image.indexOf('/') < 0 && image.indexOf(':') < 0;
         DockerImageName name = fileName ? TestImages.image(image) : DockerImageName.parse(image);
         JdbcDatabaseContainer<?> container;

@@ -278,7 +278,9 @@ duties").
 
 Not in the repository. A database backup holds every table above, staging included if taken during an import, and
 keeps purged content until the backup expires. Encryption, access and retention of backups belong to the deploying
-organization (BUILD_PLAN §9 "Data at rest"; TEST_MAP gap 10).
+organization (BUILD_PLAN §9 "Data at rest"; TEST_MAP gap 10). A restore brings back content purged after the backup
+was taken; the runbook runs the purge at once after any restore (`docs/RUNBOOK.md`, 12.3). The restore itself is drilled
+in `docs/ops/restore-drill.md`.
 
 ## Importer staging and records
 
