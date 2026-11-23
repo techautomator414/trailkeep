@@ -11,6 +11,7 @@ import io.trailkeep.importer.ImportIssue.Subject;
 import io.trailkeep.importer.staging.StagedEvent;
 import io.trailkeep.user.ImportPeopleDirectory.PersonMatch;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -97,10 +98,14 @@ final class EventLoad {
      * @param people the load's matched people
      */
     void write(CaseImportService.Created created, List<StagedEvent> staged, PeopleMatcher people) {
+        if (staged.isEmpty()) {
+            return;
+        }
+        List<Long> ids = new ArrayList<>(staged.size());
         for (StagedEvent row : staged) {
             Kind kind = Kind.valueOf(Objects.requireNonNull(row.getKind(), "checked"));
             boolean plain = ImportedHistoryService.storesAsText(kind, row.getFieldName());
-            long id = history.record(new ImportedEvent(
+            ids.add(history.record(new ImportedEvent(
                     created.caseId(),
                     Objects.requireNonNull(row.getEventAt(), "checked"),
                     who(row, people),
@@ -108,7 +113,13 @@ final class EventLoad {
                     row.getFieldName(),
                     plain ? cut(row.getOldValue(), ImportedHistoryService.MAX_VALUE) : row.getOldValue(),
                     plain ? cut(row.getNewValue(), ImportedHistoryService.MAX_VALUE) : row.getNewValue(),
-                    context.run().runId()));
+                    context.run().runId())));
+        }
+        // One read back for the case's events, not one per event, so their inserts go in JDBC batches (WP-30 part b).
+        Map<Long, String> forms = history.writtenEvents(ids);
+        for (int i = 0; i < staged.size(); i++) {
+            StagedEvent row = staged.get(i);
+            long id = ids.get(i);
             context.ledger()
                     .save(ImportLedgerEntry.ofChild(
                                     context.run(),
@@ -118,10 +129,7 @@ final class EventLoad {
                                     created.caseId(),
                                     id,
                                     context.now())
-                            .written(
-                                    WrittenHash.of(context.hashKey(), List.of(id), history.writtenEvents(List.of(id))),
-                                    null,
-                                    List.of()));
+                            .written(WrittenHash.of(context.hashKey(), List.of(id), forms), null, List.of()));
         }
     }
 

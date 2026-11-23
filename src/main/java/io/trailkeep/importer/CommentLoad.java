@@ -133,46 +133,60 @@ final class CommentLoad {
     }
 
     /**
-     * Writes one comment of a case being loaded, in the case's transaction: each of its parts, and its ledger row
-     * unless it continues the description, which the case's own row covers. The row's written hash covers every
-     * part, and the row lists the parts after the first, so {@code reconcile} reads back exactly those comments.
+     * Writes the comments of a case being loaded, in the case's transaction: every part of every comment at once
+     * ({@link CaseImportService#importComments}), read back once, then each comment's ledger row unless it continues
+     * the description, which the case's own row covers. A row's written hash covers every part of its comment, and the
+     * row lists the parts after the first, so {@code reconcile} reads back exactly those comments. Writing and reading
+     * a case's comments together, not one by one, lets their inserts go to the database in JDBC batches (WP-30 part
+     * b); what is written, and every hash, is the same.
      *
      * @param created the case
-     * @param comment the comment
-     * @return the ids of its parts, in order
+     * @param comments its comments, in the order they are written
+     * @return the ids of each comment's parts, in order
      */
-    List<Long> write(CaseImportService.Created created, CaseComments.Comment comment) {
-        List<Long> ids = new ArrayList<>();
-        for (String part : comment.parts()) {
-            ids.add(context.cases()
-                    .importComment(
-                            context.audited(),
-                            new ImportedComment(
-                                    created.number(),
-                                    part,
-                                    comment.author().id(),
-                                    comment.author().name(),
-                                    comment.writtenAt())));
+    List<List<Long>> write(CaseImportService.Created created, List<CaseComments.Comment> comments) {
+        List<ImportedComment> parts = new ArrayList<>();
+        for (CaseComments.Comment comment : comments) {
+            for (String part : comment.parts()) {
+                parts.add(new ImportedComment(
+                        created.number(),
+                        part,
+                        comment.author().id(),
+                        comment.author().name(),
+                        comment.writtenAt()));
+            }
         }
-        StagedComment staged = comment.staged();
-        if (staged != null) {
-            context.ledger()
-                    .save(ImportLedgerEntry.ofChild(
-                                    context.run(),
-                                    Subject.COMMENT,
-                                    staged.getKey().legacyKey(),
-                                    staged.getRowHash(),
-                                    created.caseId(),
-                                    ids.getFirst(),
-                                    context.now())
-                            .written(
-                                    WrittenHash.of(
-                                            context.hashKey(),
-                                            ids,
-                                            context.cases().writtenComments(ids)),
-                                    null,
-                                    ids.subList(1, ids.size())));
+        List<Long> written = context.cases().importComments(context.audited(), parts);
+        List<List<Long>> byComment = new ArrayList<>(comments.size());
+        int from = 0;
+        for (CaseComments.Comment comment : comments) {
+            int to = from + comment.parts().size();
+            byComment.add(written.subList(from, to));
+            from = to;
         }
-        return ids;
+        if (comments.stream().allMatch(comment -> comment.staged() == null)) {
+            return byComment;
+        }
+        Map<Long, String> forms = context.cases().writtenComments(written);
+        for (int i = 0; i < comments.size(); i++) {
+            StagedComment staged = comments.get(i).staged();
+            if (staged != null) {
+                List<Long> ids = byComment.get(i);
+                context.ledger()
+                        .save(ImportLedgerEntry.ofChild(
+                                        context.run(),
+                                        Subject.COMMENT,
+                                        staged.getKey().legacyKey(),
+                                        staged.getRowHash(),
+                                        created.caseId(),
+                                        ids.getFirst(),
+                                        context.now())
+                                .written(
+                                        WrittenHash.of(context.hashKey(), ids, forms),
+                                        null,
+                                        ids.subList(1, ids.size())));
+            }
+        }
+        return byComment;
     }
 }

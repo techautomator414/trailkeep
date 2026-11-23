@@ -75,6 +75,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- The importer's load writes a case's comments and history together, so their inserts go to the database in JDBC
+  batches (WP-30 part b, `docs/perf/importer-volume.md`). `CaseImportService.importComments` takes a case's comments
+  at once (one read of the case, one flush, one search append of every body in order), and the load reads a case's
+  comments and history back once each for their written hashes. Every row, id and written hash is as before (a digest
+  of everything the load writes is unchanged). At the release volume the load takes 390 s instead of 1 262 s (1 671
+  rows/s) and makes 1.0 million statements instead of 3.0; from before #173, 1 826 s and 4.9 million. On Oracle, at a
+  tenth of the corpus, it takes 436 s instead of 596 s; 85 % of what is left is the Oracle Text index synchronising on
+  every case's commit, which a manual sync around the initial load removes (measured, not built: an owner decision).
+
 - The importer's dry run and load hold one page of legacy people, not every person they have matched, and the two
   import principals are read once instead of twice for every imported row (WP-30 part b,
   `docs/perf/importer-volume.md`). At the release volume the dry run holds 126 MiB after GC instead of 296 and the load
