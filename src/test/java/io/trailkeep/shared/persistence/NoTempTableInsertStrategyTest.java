@@ -18,7 +18,7 @@ class NoTempTableInsertStrategyTest {
     private final NoTempTableInsertStrategy strategy = new NoTempTableInsertStrategy();
 
     @Test
-    void anInsertSelectInHqlIsRefusedWithTheReasonInsteadOfFailingOnAMissingTable() {
+    void insertSelectInHqlIsRefusedWithTheReason() {
         assertThatThrownBy(() -> strategy.buildHandler(
                         mock(SqmInsertStatement.class),
                         mock(DomainParameterXref.class),
