@@ -6,6 +6,8 @@ WP-30 (IMPLEMENTATION_PLAN Part C) asks for k6 at the 50k and 500k seeds and for
 database connections, and the cases-list indexes that `cases-list-50k.md` left for this run. The restore drill, the
 runbook and the evidence pack are later parts of WP-30. The two changes the numbers led to are their own pull
 requests: the exports' transactions (#295) and the pool size (#296). The k6 tables below were measured before either.
+The Oracle search missed its target, so the vendor search adapters were pulled forward (#299, ADR-0017); "Vendor
+search adapters (#299)" records the numbers after them.
 
 ## What is measured, and against what
 
@@ -175,22 +177,93 @@ second for the 50 000 rows, and a search runs it twice. Only the 500 longest tex
 Oracle keeps in the row, so storage out of line is not the cause; matching a `CLOB` is simply that much slower than
 matching PostgreSQL's `text`.
 
+## Vendor search adapters (#299)
+
+BUILD_PLAN §12 decided in advance what the Oracle numbers above trigger: the vendor search adapters move from v1.1
+into 1.0.0. ADR-0017 records the design; in short, V21 adds an Oracle Text `CONTEXT` index on `CASE_SEARCH.SEARCH_TEXT`
+and `OracleTextSearchGateway` puts `CONTAINS(SEARCH_TEXT, '%run%') > 0` in front of the `LIKE` predicate (each word's
+longest run of letters and digits, at most two runs a search, `LIKE` still deciding every other word), so the results
+stay exactly `LIKE`'s; on PostgreSQL V21 adds a `pg_trgm` GIN index under the unchanged `LIKE` predicate.
+
+### In process at the 500k seed, before and after (60 measured requests each, ms)
+
+Before is the Free 23 table above (the `LIKE` adapter); after is the same IT on the same images, with V21.
+
+| Scenario | Free 23 before: p95 | Free 23 after: p50 | p95 | max | XE 21 after: p50 | p95 | max | Target |
+|---|---:|---:|---:|---:|---:|---:|---:|---|
+| `GET /cases`, Compliance Admin, newest first | 127.3 | 89.9 | 103.1 | 120.3 | 96.8 | 120.3 | 122.5 | p95 < 500 |
+| `GET /cases?q=plover audit` | 2 398.1 | 710.9 | **724.0** | 742.3 | 738.9 | **755.1** | 776.7 | p95 < 1 000 |
+| `GET /cases?q=kestrel` | 2 043.1 | 394.7 | **399.7** | 406.6 | 415.4 | **423.0** | 426.7 | p95 < 1 000 |
+| `GET /cases?q=PERF-2026-0499` | 2 169.8 | 388.5 | **398.4** | 405.6 | 405.1 | **418.4** | 424.8 | p95 < 1 000 |
+| `GET /cases?q=plover audit`, Analyst | 574.3 | 647.1 | 652.0 | 660.9 | 241.5 | 247.3 | 250.6 | p95 < 1 000 |
+| `GET /cases/{n}`, 8 comments | 58.1 | 40.5 | 51.0 | 59.6 | 43.0 | 51.7 | 84.9 | p95 < 500 |
+| `GET /cases/{n}`, 208 comments | 126.1 | 90.1 | 104.9 | 118.4 | 92.1 | 108.3 | 129.4 | p95 < 500 |
+| `GET /cases/{n}/history`, 208 comments | 21.8 | 15.1 | 18.9 | 21.7 | 16.6 | 22.9 | 33.7 | p95 < 500 |
+| `GET /reports/aging` | 85.3 | 62.1 | 68.9 | 72.7 | 64.1 | 69.8 | 78.1 | < 30 000 |
+| `POST /cases/{n}/comments`, 208 comments | 23.0 | 92.6 | 107.0 | 35 927.2 | 35.5 | 52.8 | 45 833.3 | none |
+
+On PostgreSQL, `PostgresComments500kPerfIT` before (the table above, `LIKE` scanning `CASE_SEARCH`) and after (the same
+patterns answered from the trigram index):
+
+| Scenario | Before: p95 | After: p50 | p95 | max | Target |
+|---|---:|---:|---:|---:|---|
+| `GET /cases`, Compliance Admin, newest first | 134.6 | 96.7 | 108.8 | 116.1 | p95 < 500 |
+| `GET /cases?q=plover audit` | 425.1 | 98.1 | **104.4** | 107.1 | p95 < 1 000 |
+| `GET /cases?q=kestrel` | 374.9 | 101.2 | **106.3** | 108.6 | p95 < 1 000 |
+| `GET /cases?q=PERF-2026-0499` | 409.5 | 80.6 | **90.7** | 102.2 | p95 < 1 000 |
+| `GET /cases?q=plover audit`, Analyst | 349.0 | 40.6 | 43.6 | 56.0 | p95 < 1 000 |
+| `GET /cases/{n}`, 208 comments | 108.4 | 80.5 | 93.3 | 95.5 | p95 < 500 |
+| `POST /cases/{n}/comments`, 208 comments | 9.9 | 8.9 | 14.9 | 18.0 | none |
+
+The comment-word subquery is now a bitmap scan of the trigram index (501 rows, 14 ms) where it was a 131 ms scan, and
+the planner hashes it once for the statement. Seeding the 500k layer takes 55 s instead of 33 s, the index being
+maintained as the comments are appended.
+
+**Every search target is now met on both Oracle images and on PostgreSQL**, at a third of the time or less, and
+`OracleComments500kPerfIT` passes on both images. What the times are made of, measured on Free 23 with the same seed:
+
+- **Expanding `%run%` reads every token of the index**, about 90 ms per run (the seed has 600 000 distinct tokens,
+  half a million of them the comments' reference codes), and each of a search's statements expands it again: a
+  one-word search is three expansions (the DRG-51030 probe, the count, the page), a two-word search six. A word
+  without the leading wildcard (`kestrel`, `kestrel%`) costs under 1 ms, but would not find `estre`. Oracle's
+  substring index makes the expansion about 10 ms; ADR-0017 records why it is not used yet and when it should be.
+- **Oracle 21 needs the join.** With the `LIKE` adapter's shape, `CASE_RECORD.ID IN (subquery) OR <case number>`,
+  XE 21 does not unnest the subquery and evaluates `CONTAINS` case by case without the index: 1.2 to 1.7 s, where
+  Free 23 unnests it. The adapter left-joins `CASE_SEARCH` instead, which both plan as a hash join on the domain index
+  (the plan is in the IT's report).
+- **Optimizer statistics on the index doubled every search.** With them, Oracle Text estimates a `CONTAINS`
+  predicate's selectivity by running the query, at every execution of a statement with a bound query: a loop of one
+  bound statement went from 90 ms to 180 ms an execution once `DBMS_STATS` had gathered the table with `cascade`,
+  which the Oracle seeds did and the nightly statistics job would. V21 deletes the index's statistics and locks
+  `CASE_SEARCH`'s; the seeds no longer gather that table. The first runs of this IT, before that and before the query
+  was bound and the probe asked once per transaction, measured 1.5 to 2.1 s.
+- **Posting a comment costs more** on Oracle (23 ms to 107 ms p95 on Free 23, 53 ms on XE 21, for the 208-comment
+  case): the commit re-indexes the case's whole search text, about 36 000 characters, before it returns
+  (`SYNC (ON COMMIT)`), and writes about 240 KB of redo doing so. In each run one post of the sixty took 36 to 46 s:
+  the container's redo logs are 20 MB, so right after the seed a log switch waits for a checkpoint and stalls the
+  commit. Like the 86 s outlier above, it is a property of the test container, reported rather than tuned away; size
+  redo logs for the write rate as for any Oracle Text application.
+- **Seeding** takes as long as before on Free 23, about 5.5 minutes, the commit-time indexing included; 7.8 minutes
+  on XE 21.
+
+Building the index over an existing 500k seed took 17 to 33 s on Free 23 and 95 s on XE 21 (the image's 20 MB redo
+logs, with another database busy on the same disk), `ONLINE`, so the running release keeps writing; the index's tables
+take 117 MB. On PostgreSQL the trigram index took 13 s to build and 87 MB.
+
 ## What the numbers say
 
 **Every target is met at the 500k seed on PostgreSQL**, at a load of ten requests always in flight.
 
 - **The search** is where the comments show: a p95 of 235 ms becomes 496 ms over HTTP and 425 ms in process, because
   `LIKE '%…%'` reads every case's whole text and that text is seventeen times longer. It is half the 1 s budget, so
-  BUILD_PLAN's condition for pulling the vendor adapters forward is not met on PostgreSQL.
+  BUILD_PLAN's condition for pulling the vendor adapters forward is not met on PostgreSQL; the trigram index #299 adds
+  for parity brings it to about 0.1 s in process.
 - **On Oracle it is met.** The same search is about 0.3 s at the 50k seed and **2.0 to 2.4 s at the 500k seed**,
   every-team, against the 1 s target; an Analyst's one-team search is 0.57 s. Nothing else on Oracle comes near its
   target. BUILD_PLAN decided this case in advance: "if the 500k-comment seed pushes it past that, the v1.1 vendor
-  adapters are pulled forward" (Oracle Text `CONTAINS`, and PostgreSQL `pg_trgm` behind the same `SearchGateway`,
-  ADR-0006). That is a new adapter, vendor migrations, Oracle Text grants and their tests on both Oracle images, too
-  large for this part and a scope decision for the owner (pulling v1.1 work into 1.0.0), so it is **not built here**.
-  Halving the work instead (one scan shared by the count and the page) would still leave about 1.2 s and was not
-  attempted. `OracleComments500kPerfIT` asserts the target and fails today; it is the acceptance test for that
-  adapter.
+  adapters are pulled forward". They were (#299, ADR-0017), and the searches now take 0.41 to 0.74 s on Free 23 (see
+  "Vendor search adapters (#299)" above). Halving the `LIKE` work instead (one scan shared by the count and the page)
+  would have left about 1.2 s.
 - **The list** does not read comments, and did not slow down (215 ms p95 at 50k, 190 ms at 500k: within the noise of
   a shared machine and the lower request rate).
 - **The case page of a 208-comment case** is the slowest page: 390 ms p95 under load, 108 ms alone. Every comment is
@@ -305,10 +378,10 @@ fails it. Not in CI, and why:
 - **k6.** It needs the application behind a real identity provider with redirects, and the numbers it adds (load,
   pool waits) are only meaningful on a known, quiet machine; a shared CI runner gives noise, not a gate. It stays a
   release-time run by hand, recorded here.
-- **The Oracle 500k run.** Seeding alone takes about six minutes and the run fails today (above), so a nightly job
-  would be red until the vendor adapter exists and would add a quarter of an hour of Oracle to every night. It stays
-  opt-in (`perf-500k-oracle`), like the role-conflict run; once the adapter lands, adding it to the nightly `perf` job
-  is one more execution in the same command.
+- **The Oracle 500k run.** Seeding alone takes about six minutes, and the run takes about eleven with the
+  scenarios. It stays opt-in (`perf-500k-oracle`), like the role-conflict run; it passes since #299, so adding it to the
+  nightly `perf` job is one more execution in the same command, at about a quarter of an hour of Oracle a night. That
+  is left to the owner.
 
 ## Found on the way, not fixed here
 

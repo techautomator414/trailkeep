@@ -9,6 +9,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Vendor search indexes, pulled forward from v1.1 by BUILD_PLAN §12's rule (#299, ADR-0017): at the 500k seed the
+  Oracle `LIKE` search took 2.0 to 2.4 s against its 1 s target. On Oracle, V21 adds an Oracle Text `CONTEXT` index
+  on `CASE_SEARCH.SEARCH_TEXT` and `OracleTextSearchGateway` puts `CONTAINS` in front of the `LIKE` match: each word's
+  longest run of letters and digits (three or more, at most two runs a search) is looked up as `%run%`, which can only
+  narrow, and `LIKE` still decides every word that is not such a run, so the results are the `LIKE` adapter's
+  (`OracleSearchParityIT` compares both for five kinds of reader). Nothing typed reaches Oracle Text but those runs,
+  so no search can be read as query syntax. A query Oracle Text would refuse for expanding to too many tokens
+  (DRG-51030) is probed first, once a transaction, and falls back to `LIKE`. The adapter left-joins `CASE_SEARCH`,
+  because Oracle 21 evaluates `CONTAINS` row by row under the `LIKE` adapter's `OR`-ed subquery. The index is built
+  online, synchronised on commit and transactional, so a search never lags a write, and optimised nightly by
+  `CTXSYS`; it uses system preferences only, so the schema owner needs no new privilege; it has no optimizer
+  statistics and `CASE_SEARCH`'s are locked, because with them Oracle Text estimates every search by running it first.
+  One known difference: a word found only past the first 255 bytes of an unbroken run of letters and digits is not
+  found. On PostgreSQL, V21 adds `pg_trgm` and a GIN trigram index that serves the unchanged `LIKE` patterns.
+  `app.search.adapter` (`oracle-text` or `like`) is set by each vendor profile. At the 500k seed the searches now take
+  0.40 to 0.72 s p95 on Oracle Free 23, 0.42 to 0.76 s on XE 21 and about 0.1 s on PostgreSQL
+  (`OracleComments500kPerfIT` passes on both images); posting to a 208-comment case takes about 0.1 s on Oracle, which re-indexes its text on
+  commit (`docs/perf/release-500k.md`). The Oracle test images and the compose Oracle service are now the full
+  `gvenzl/oracle-xe:21` and `gvenzl/oracle-free:23`: the `-slim` images remove Oracle Text. Oracle deployments need
+  Oracle Text installed (it is by default); PostgreSQL deployments need `pg_trgm` creatable by the owner or created
+  beforehand (deploy/README.md, "Search indexes (V21)"). The Oracle perf seeds no longer gather `CASE_SEARCH`.
+
 - Performance at the 500k seed (WP-30 part a, `docs/perf/release-500k.md`). BUILD_PLAN's "500k" is comments: the
   50 000 cases of `cases-list-50k.md` plus `perf/seed-comments-postgresql.sql`, 500 000 synthetic, deterministic
   comments with their search text and `COMMENT_ADDED` audit events (8 a case, 208 on every hundredth), which make each

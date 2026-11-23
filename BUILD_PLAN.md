@@ -672,7 +672,9 @@ Assumes a core team of **2 Java developers + 1 part-time UX/accessibility/QA + s
 
 The per-phase table above is the **shape** of delivery; the **re-baselined durations** after the audit are in `IMPLEMENTATION_PLAN.md` Part F: ≈ **25 weeks** for two developers to a 1.0 release (≈ 18 with a third developer from Phase 2), with Phase 1 at 4 weeks for its serial foundation chain, Phase 6 at 3 weeks for the Section 508 conformance pass by a named certified tester, and 2 weeks of hypercare. A reduced "pilot" (Phases 0–4, one team, open items imported by hand) is ≈ 17 weeks.
 
-**Deferred to v1.1 (decided, not by demand):** PDF export via `openhtmltopdf` + veraPDF; vendor search adapters (`pg_trgm`, Oracle Text); SAML2 login; WAR packaging; email-template editor; step-up re-authentication for admin actions; importer mapping DSL beyond the fixed YAML. **v1.1 candidates by demand:** optional checklist on cases; per-case subscribe; business-day SLA calendars; structured parties; chat/webhook notifications; bulk reassign for managers; a public API; additional UI languages.
+**Deferred to v1.1 (decided, not by demand):** PDF export via `openhtmltopdf` + veraPDF; SAML2 login; WAR packaging; email-template editor; step-up re-authentication for admin actions; importer mapping DSL beyond the fixed YAML. **v1.1 candidates by demand:** optional checklist on cases; per-case subscribe; business-day SLA calendars; structured parties; chat/webhook notifications; bulk reassign for managers; a public API; additional UI languages.
+
+**Pulled forward into 1.0.0 (§12 rule):** the vendor search adapters (Oracle Text on Oracle, a `pg_trgm` trigram index on PostgreSQL), because the 500k-comment seed took the Oracle `LIKE` search to 2.0–2.4 s against the 1 s target (#299, `docs/perf/release-500k.md`, ADR-0017).
 
 ---
 
