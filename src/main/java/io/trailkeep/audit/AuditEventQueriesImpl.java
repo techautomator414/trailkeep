@@ -6,6 +6,7 @@ import io.trailkeep.shared.access.CaseScope;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.CriteriaQuery;
+import jakarta.persistence.criteria.Expression;
 import jakarta.persistence.criteria.Path;
 import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
@@ -98,6 +99,61 @@ class AuditEventQueriesImpl implements AuditEventQueries {
         Root<AuditEvent> event = query.from(AuditEvent.class);
         query.select(cb.count(event)).where(matching(filter, event, cb));
         return entityManager.createQuery(query).getSingleResult();
+    }
+
+    @Override
+    public long countSearch(CaseScope scope, AuditTrailService.AuditFilter filter, long upToId) {
+        if (!scope.isUnrestricted()) {
+            return 0;
+        }
+        CriteriaBuilder cb = entityManager.getCriteriaBuilder();
+        CriteriaQuery<Long> query = cb.createQuery(Long.class);
+        Root<AuditEvent> event = query.from(AuditEvent.class);
+        query.select(cb.count(event))
+                .where(matching(filter, event, cb), cb.lessThanOrEqualTo(event.<Long>get("id"), upToId));
+        return entityManager.createQuery(query).getSingleResult();
+    }
+
+    @Override
+    public long newestId(CaseScope scope) {
+        if (!scope.isUnrestricted()) {
+            return 0;
+        }
+        CriteriaBuilder cb = entityManager.getCriteriaBuilder();
+        CriteriaQuery<Long> query = cb.createQuery(Long.class);
+        Root<AuditEvent> event = query.from(AuditEvent.class);
+        query.select(cb.max(event.<Long>get("id")));
+        Long newest = entityManager.createQuery(query).getSingleResult();
+        return newest == null ? 0 : newest;
+    }
+
+    @Override
+    public List<AuditEvent> searchAfter(
+            CaseScope scope,
+            AuditTrailService.AuditFilter filter,
+            long upToId,
+            AuditTrailService.@Nullable Position after,
+            int limit) {
+        if (!scope.isUnrestricted()) {
+            return List.of();
+        }
+        CriteriaBuilder cb = entityManager.getCriteriaBuilder();
+        CriteriaQuery<AuditEvent> query = cb.createQuery(AuditEvent.class);
+        Root<AuditEvent> event = query.from(AuditEvent.class);
+        List<Predicate> all = new ArrayList<>(3);
+        all.add(matching(filter, event, cb));
+        all.add(cb.lessThanOrEqualTo(event.<Long>get("id"), upToId));
+        if (after != null) {
+            // Both columns are NOT NULL, so no NULLS handling. The redundant "at <= :at" is a plain range on the
+            // leading column of IX_AUDIT_AT, which bounds the index scan; the OR alone would not.
+            Expression<Instant> at = event.get("at");
+            all.add(cb.lessThanOrEqualTo(at, after.at()));
+            all.add(cb.or(cb.lessThan(at, after.at()), cb.lessThan(event.<Long>get("id"), after.id())));
+        }
+        query.select(event)
+                .where(all.toArray(Predicate[]::new))
+                .orderBy(cb.desc(event.get("at")), cb.desc(event.get("id")));
+        return entityManager.createQuery(query).setMaxResults(limit).getResultList();
     }
 
     /** The time range always, then each filter given; the name is matched as text, its wildcards escaped. */

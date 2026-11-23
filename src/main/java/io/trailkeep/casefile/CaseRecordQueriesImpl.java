@@ -4,6 +4,7 @@ package io.trailkeep.casefile;
 
 import io.trailkeep.shared.CaseNumber;
 import io.trailkeep.shared.CaseStatus;
+import io.trailkeep.shared.Sensitivity;
 import io.trailkeep.shared.access.CaseScope;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.Tuple;
@@ -22,10 +23,12 @@ import jakarta.persistence.criteria.Subquery;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Stream;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -98,28 +101,100 @@ class CaseRecordQueriesImpl implements CaseRecordQueries {
 
     @Override
     public List<CaseListRow> list(CaseScope scope, CaseListQuery request, int pageSize) {
-        return page(scope, request, pageSize, entityManager.getCriteriaBuilder().createQuery(CaseListRow.class), false);
+        return page(scope, request, pageSize, entityManager.getCriteriaBuilder().createQuery(CaseListRow.class));
     }
 
     @Override
-    public List<CaseExportRow> export(CaseScope scope, CaseListQuery request, int pageSize) {
-        return page(
-                scope, request, pageSize, entityManager.getCriteriaBuilder().createQuery(CaseExportRow.class), true);
+    public ExportPage export(CaseScope scope, CaseListQuery request, @Nullable ExportCursor after, int pageSize) {
+        CriteriaBuilder cb = entityManager.getCriteriaBuilder();
+        CriteriaQuery<Tuple> query = cb.createTupleQuery();
+        Root<CaseRecord> root = query.from(CaseRecord.class);
+        Join<CaseRecord, CaseType> caseType = root.join(CaseType.class);
+        caseType.on(cb.equal(caseType.get("id"), root.get("caseTypeId")));
+        Join<CaseRecord, CaseSla> sla = root.join(CaseSla.class, JoinType.LEFT);
+        sla.on(cb.equal(sla.get("caseId"), root.get("id")));
+        Expression<?> key = sortKey(request.sort(), root, sla, cb);
+        // The subject and the description are selected as they are, with no function applied: the description is a
+        // CLOB on Oracle. The last two columns are the keyset cursor: the sort key as the database computed it, and the
+        // id.
+        query.select(cb.tuple(
+                        root.get("caseNumber"),
+                        root.get("title"),
+                        root.get("status"),
+                        root.get("sensitivity"),
+                        root.get("priority"),
+                        caseType.get("name"),
+                        root.get("teamId"),
+                        root.get("ownerId"),
+                        root.get("openedAt"),
+                        sla.get("state"),
+                        sla.get("dueAt"),
+                        root.get("subjectText"),
+                        root.get("description"),
+                        key,
+                        root.get("id")))
+                .where(Stream.concat(
+                                Arrays.stream(where(scope, request.filter(), root, query, cb)),
+                                Stream.ofNullable(after).map(cursor -> following(request, key, root, cursor, cb)))
+                        .toArray(Predicate[]::new))
+                .orderBy(order(request, key, cb), cb.asc(root.get("id")));
+        List<Tuple> tuples =
+                entityManager.createQuery(query).setMaxResults(pageSize).getResultList();
+        List<CaseExportRow> rows =
+                tuples.stream().map(CaseRecordQueriesImpl::exportRow).toList();
+        Tuple last = tuples.isEmpty() ? null : tuples.get(tuples.size() - 1);
+        return new ExportPage(rows, last == null ? null : new ExportCursor(last.get(13), last.get(14, Long.class)));
+    }
+
+    private static CaseExportRow exportRow(Tuple t) {
+        return new CaseExportRow(
+                t.get(0, String.class),
+                t.get(1, String.class),
+                t.get(2, CaseStatus.class),
+                t.get(3, Sensitivity.class),
+                t.get(4, CasePriority.class),
+                t.get(5, String.class),
+                t.get(6, Long.class),
+                t.get(7, Long.class),
+                t.get(8, Instant.class),
+                t.get(9, SlaState.class),
+                t.get(10, Instant.class),
+                t.get(11, String.class),
+                t.get(12, String.class));
     }
 
     /**
-     * One page of the list's projection, or of the export's, which adds the subject and the description: selected
-     * as they are, with no function applied, because the description is a CLOB on Oracle.
+     * The rows strictly after a cursor in the list's order: the sort key in its direction, then the id ascending, and
+     * the cases without a due instant last in both directions (the {@code NULLS LAST} of {@link #order}). Written as
+     * comparisons and an {@code OR}, not as a row-value comparison, which Oracle does not take in every context, and
+     * it handles a null key on its own: once the cursor is in the null block, only a later id of that block remains.
+     * The key is compared as the database computed it (the value the cursor carries came from the same expression),
+     * so the collation that ordered the rows also decides "after".
      */
-    private <T> List<T> page(
-            CaseScope scope, CaseListQuery request, int pageSize, CriteriaQuery<T> query, boolean details) {
+    @SuppressWarnings({"unchecked", "rawtypes"}) // the key is a column or expression of one Comparable type per sort
+    private static Predicate following(
+            CaseListQuery request, Expression<?> key, Root<CaseRecord> root, ExportCursor cursor, CriteriaBuilder cb) {
+        Expression<Comparable> sortKey = (Expression<Comparable>) key;
+        Predicate laterId = cb.greaterThan(root.<Long>get("id"), cursor.id());
+        if (cursor.key() == null) {
+            return cb.and(cb.isNull(sortKey), laterId);
+        }
+        Comparable value = (Comparable) cursor.key();
+        Predicate beyond = request.descending() ? cb.lessThan(sortKey, value) : cb.greaterThan(sortKey, value);
+        Predicate tie = cb.and(cb.equal(sortKey, value), laterId);
+        // Only DUE has a nullable key; the null block comes after every value.
+        return request.sort() == CaseSort.DUE ? cb.or(beyond, tie, cb.isNull(sortKey)) : cb.or(beyond, tie);
+    }
+
+    /** One page of the list's projection. */
+    private <T> List<T> page(CaseScope scope, CaseListQuery request, int pageSize, CriteriaQuery<T> query) {
         CriteriaBuilder cb = entityManager.getCriteriaBuilder();
         Root<CaseRecord> root = query.from(CaseRecord.class);
         Join<CaseRecord, CaseType> caseType = root.join(CaseType.class);
         caseType.on(cb.equal(caseType.get("id"), root.get("caseTypeId")));
         Join<CaseRecord, CaseSla> sla = root.join(CaseSla.class, JoinType.LEFT);
         sla.on(cb.equal(sla.get("caseId"), root.get("id")));
-        List<Selection<?>> columns = new ArrayList<>(List.of(
+        List<Selection<?>> columns = List.of(
                 root.get("caseNumber"),
                 root.get("title"),
                 root.get("status"),
@@ -130,11 +205,7 @@ class CaseRecordQueriesImpl implements CaseRecordQueries {
                 root.get("ownerId"),
                 root.get("openedAt"),
                 sla.get("state"),
-                sla.get("dueAt")));
-        if (details) {
-            columns.add(root.get("subjectText"));
-            columns.add(root.get("description"));
-        }
+                sla.get("dueAt"));
         query.select(cb.construct(query.getResultType(), columns.toArray(new Selection<?>[0])))
                 .where(where(scope, request.filter(), root, query, cb))
                 .orderBy(order(request, sortKey(request.sort(), root, sla, cb), cb), cb.asc(root.get("id")));

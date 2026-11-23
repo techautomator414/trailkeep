@@ -8,6 +8,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -64,6 +65,25 @@ class DefaultAuditTrailService implements AuditTrailService {
         long total = repository.countSearch(scope, filter);
         return new AuditPage(
                 offset >= total ? List.of() : toRecords(repository.search(scope, filter, offset, checked)), total);
+    }
+
+    @Override
+    public long newestId(CaseScope scope) {
+        return repository.newestId(scope);
+    }
+
+    @Override
+    public long count(CaseScope scope, AuditFilter filter, long upToId) {
+        return repository.countSearch(scope, filter, upToId);
+    }
+
+    @Override
+    public AuditSlice searchAfter(
+            CaseScope scope, AuditFilter filter, long upToId, @Nullable Position after, int limit) {
+        List<AuditEvent> events = repository.searchAfter(scope, filter, upToId, after, checked(limit));
+        return new AuditSlice(
+                toRecords(events),
+                events.isEmpty() ? null : events.get(events.size() - 1).position());
     }
 
     @Override

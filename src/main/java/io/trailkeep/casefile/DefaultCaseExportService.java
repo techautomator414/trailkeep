@@ -7,6 +7,8 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 import io.trailkeep.audit.AuditEntry;
 import io.trailkeep.audit.AuditOrigin;
 import io.trailkeep.audit.AuditRecorder;
+import io.trailkeep.casefile.CaseRecordQueries.ExportCursor;
+import io.trailkeep.casefile.CaseRecordQueries.ExportPage;
 import io.trailkeep.casefile.CaseService.Actor;
 import io.trailkeep.shared.access.CaseAccessPath;
 import io.trailkeep.shared.access.CaseScope;
@@ -41,14 +43,25 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * Counts, audits and streams a CSV export. The count and the audit row are one transaction; the rows are read later,
- * when the response body is written, in pages of {@link #PAGE_SIZE}, never more than {@code app.export.max-rows} of
- * them. Each page, with its teams' and owners' names, is read in a short read-only transaction of its own and written
- * to the client after that transaction has ended (Part B "Transactions": no network I/O inside a transaction). One
- * transaction across the whole stream held a connection for as long as the client took to read, and committing the
- * response inside it saves the person's session through a second connection, so as many concurrent exports as the
- * pool has connections deadlocked it until the acquire timeout (WP-30, docs/perf/release-500k.md). Reading the pages
- * in one transaction gave no more consistency: both vendors run at READ COMMITTED, where each statement sees the data
- * committed when it starts, so a page always reflected its own moment.
+ * when the response body is written, in keyset pages of {@link #PAGE_SIZE}, never more than
+ * {@code app.export.max-rows} of them. Each page, with its teams' and owners' names, is read in a short read-only
+ * transaction of its own
+ * and written to the client after that transaction has ended (Part B "Transactions": no network I/O inside a
+ * transaction). One transaction across the whole stream held a connection for as long as the client took to read,
+ * and committing the response inside it saves the person's session through a second connection, so as many
+ * concurrent exports as the pool has connections deadlocked it until the acquire timeout (WP-30,
+ * docs/perf/release-500k.md). Reading the pages in one transaction gave no more consistency: both vendors run at
+ * READ COMMITTED, where each statement sees the data committed when it starts, so a page always reflected its own
+ * moment.
+ *
+ * <p>The pages are keyset pages, so that moment cannot shift a boundary: each resumes strictly after the last row of
+ * the page before, in the list's order, the person's sort column in the person's direction (any of the five columns,
+ * ascending or descending, cases without a due instant last) and then the case id ascending, which is unique. A case
+ * committed between two pages is therefore written exactly once if it sorts after the cursor and not at all if it
+ * sorts before it (the file is "the cases as each page found them", not a snapshot, since a new case does not
+ * belong in an export of the cases that existed at the click); no case is written twice, and none that existed
+ * throughout is skipped. The count that the {@code app.export.max-rows} refusal and the audit row use is taken before
+ * the first page, and {@code max-rows} still caps what is written.
  */
 @Service
 @CaseAccessPath
@@ -81,6 +94,7 @@ class DefaultCaseExportService implements CaseExportService {
     private final InstantSource clock;
     private final ZoneId zone;
     private final int maxRows;
+    private final int pageSize;
     private final TransactionTemplate readOnly;
 
     DefaultCaseExportService(
@@ -99,6 +113,7 @@ class DefaultCaseExportService implements CaseExportService {
         this.clock = clock;
         this.zone = app.timezone();
         this.maxRows = properties.maxRows();
+        this.pageSize = properties.pageSize();
         this.readOnly = new TransactionTemplate(transactionManager);
         this.readOnly.setReadOnly(true);
     }
@@ -183,10 +198,12 @@ class DefaultCaseExportService implements CaseExportService {
         writer.write(CsvFormat.line(HEADER));
         LocalDate today = LocalDate.ofInstant(clock.instant(), zone);
         int written = 0;
-        for (int page = 1; written < maxRows; page++) {
-            Page rows = read(scope, query.onPage(page));
+        ExportCursor after = null;
+        while (written < maxRows) {
+            Page rows = read(scope, query, after);
             written += writePage(writer, rows, today, user, details, maxRows - written);
-            if (rows.rows().size() < PAGE_SIZE) {
+            after = rows.last();
+            if (rows.rows().size() < pageSize) {
                 break;
             }
         }
@@ -194,12 +211,13 @@ class DefaultCaseExportService implements CaseExportService {
     }
 
     /** One page and the names of its teams and owners (one lookup each), in a read-only transaction of its own. */
-    private Page read(CaseScope scope, CaseListQuery query) {
+    private Page read(CaseScope scope, CaseListQuery query, @Nullable ExportCursor after) {
         return Objects.requireNonNull(readOnly.execute(status -> {
-            List<CaseExportRow> rows = cases.export(scope, query, PAGE_SIZE);
+            ExportPage page = cases.export(scope, query, after, pageSize);
+            List<CaseExportRow> rows = page.rows();
             Map<Long, String> teams = directory.teams(ids(rows, CaseExportRow::teamId)).values().stream()
                     .collect(Collectors.toUnmodifiableMap(TeamSummary::id, TeamSummary::name));
-            return new Page(rows, teams, directory.displayNames(ids(rows, CaseExportRow::ownerId)));
+            return new Page(rows, teams, directory.displayNames(ids(rows, CaseExportRow::ownerId)), page.last());
         }));
     }
 
@@ -236,8 +254,13 @@ class DefaultCaseExportService implements CaseExportService {
      * @param rows the rows
      * @param teams team names by id
      * @param owners owner display names by id
+     * @param last the cursor the next page resumes from
      */
-    private record Page(List<CaseExportRow> rows, Map<Long, String> teams, Map<Long, String> owners) {}
+    private record Page(
+            List<CaseExportRow> rows,
+            Map<Long, String> teams,
+            Map<Long, String> owners,
+            @Nullable ExportCursor last) {}
 
     private static String text(@Nullable String value) {
         return value == null ? "" : value;

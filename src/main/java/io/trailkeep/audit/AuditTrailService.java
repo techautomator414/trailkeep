@@ -192,6 +192,65 @@ public interface AuditTrailService {
     AuditPage search(CaseScope scope, AuditFilter filter, int offset, int limit);
 
     /**
+     * Where a keyset page resumes: the position of the last event of the page before.
+     *
+     * @param at the event's time
+     * @param id the event's id, the tiebreaker of events at one instant
+     */
+    record Position(Instant at, long id) {}
+
+    /**
+     * One keyset page of an export.
+     *
+     * @param records the events, newest first
+     * @param last the position of the last of them, {@code null} for an empty page
+     */
+    record AuditSlice(List<AuditRecord> records, @Nullable Position last) {
+
+        /**
+         * Copies the list, so the record holds nothing mutable.
+         *
+         * @param records the events of the slice
+         * @param last the position of the last of them
+         */
+        public AuditSlice {
+            records = List.copyOf(records);
+        }
+    }
+
+    /**
+     * The highest event id there is; an export's upper bound. Zero unless the scope is unrestricted.
+     *
+     * @param scope the caller's scope
+     * @return the id, or 0 if there is no event
+     */
+    long newestId(CaseScope scope);
+
+    /**
+     * How many events a filter keeps among those with an id up to a bound.
+     *
+     * @param scope the caller's scope
+     * @param filter the time range and the other filters
+     * @param upToId the highest id counted
+     * @return the count
+     */
+    long count(CaseScope scope, AuditFilter filter, long upToId);
+
+    /**
+     * One page, newest first, of the events a filter keeps among those with an id up to a bound, starting strictly
+     * after a position: the keyset form of {@link #search}, which a row committed between two pages cannot shift. Only
+     * an unrestricted scope sees anything.
+     *
+     * @param scope the caller's scope
+     * @param filter the time range and the other filters
+     * @param upToId the highest id read
+     * @param after the last event of the previous page, or {@code null} for the first
+     * @param limit the page size, 1 to 500
+     * @return the page
+     */
+    AuditSlice searchAfter(CaseScope scope, AuditFilter filter, long upToId, @Nullable Position after, int limit);
+
+    /**
      * One page of audit events.
      *
      * @param records the events of the page, newest first

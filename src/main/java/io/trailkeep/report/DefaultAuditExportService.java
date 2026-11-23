@@ -11,6 +11,8 @@ import io.trailkeep.audit.AuditRecord;
 import io.trailkeep.audit.AuditRecorder;
 import io.trailkeep.audit.AuditTrailService;
 import io.trailkeep.audit.AuditTrailService.AuditFilter;
+import io.trailkeep.audit.AuditTrailService.AuditSlice;
+import io.trailkeep.audit.AuditTrailService.Position;
 import io.trailkeep.casefile.CaseService;
 import io.trailkeep.casefile.CaseService.Actor;
 import io.trailkeep.shared.access.CaseScope;
@@ -41,13 +43,26 @@ import org.springframework.transaction.support.TransactionTemplate;
  * ended (Part B "Transactions": no network I/O inside a transaction). Holding one transaction across the whole stream
  * held a connection while the response was committed, and committing it saves the person's session through a second
  * connection, so as many concurrent exports as the pool has connections deadlocked it until the acquire timeout
- * (WP-30, docs/perf/release-500k.md). The filter's end is pinned to the moment of the count, so pages cannot shift
- * under new events between those transactions.
+ * (WP-30, docs/perf/release-500k.md).
+ *
+ * <p><b>The file is a snapshot of the trail up to the moment the export started.</b> Three things make it so. (1) The
+ * pages are keyset pages, {@code (AT_TS, ID)} strictly before the last row written, newest first, so an event
+ * committed between two pages cannot shift a boundary: nothing is written twice and nothing is skipped (offset pages
+ * did both). (2) The filter's end is pinned to the start (milliseconds), so an event stamped later is out. (3) Only
+ * events with an id up to the highest id committed at the start are read, so an event committed after the start is
+ * out even if it carries an earlier time (a slow request that stamped the event before this export began but
+ * committed after). The count and the {@code app.export.max-rows} refusal use the same bound. This export's own audit
+ * event is written after the bound is read, so it is not in its file.
+ *
+ * <p>The limit: ids come from a pooled sequence (blocks of 50 per application instance) and read-committed isolation
+ * is kept (one long snapshot is what deadlocked the pool), so an event that was still uncommitted at the start, or
+ * written by another instance with an id below the bound, can be included if it commits before the export reaches its
+ * position, and is then in the file exactly once.
  */
 @Service
 class DefaultAuditExportService implements AuditExportService {
 
-    /** Rows read per statement while streaming. */
+    /** Rows read per statement while streaming, unless {@code app.export.page-size} says fewer. */
     static final int PAGE_SIZE = 500;
 
     private static final List<String> HEADER = List.of(
@@ -66,6 +81,7 @@ class DefaultAuditExportService implements AuditExportService {
     private final CaseService cases;
     private final InstantSource clock;
     private final int maxRows;
+    private final int pageSize;
     private final TransactionTemplate readOnly;
 
     DefaultAuditExportService(
@@ -74,12 +90,14 @@ class DefaultAuditExportService implements AuditExportService {
             CaseService cases,
             InstantSource clock,
             @Value("${app.export.max-rows:10000}") int maxRows,
+            @Value("${app.export.page-size:" + PAGE_SIZE + "}") int pageSize,
             PlatformTransactionManager transactionManager) {
         this.trail = trail;
         this.audit = audit;
         this.cases = cases;
         this.clock = clock;
         this.maxRows = maxRows;
+        this.pageSize = Math.clamp(pageSize, 1, PAGE_SIZE);
         this.readOnly = new TransactionTemplate(transactionManager);
         this.readOnly.setReadOnly(true);
     }
@@ -106,7 +124,9 @@ class DefaultAuditExportService implements AuditExportService {
                         requested.action(),
                         requested.caseId())
                 : requested;
-        long rows = trail.search(scope, filter, 0, 1).total();
+        // Read before the count and before this export's own audit event is written, so neither is in the bound.
+        long newestId = trail.newestId(scope);
+        long rows = trail.count(scope, filter, newestId);
         if (rows > maxRows) {
             return new TooMany(rows, maxRows);
         }
@@ -119,7 +139,7 @@ class DefaultAuditExportService implements AuditExportService {
                 null,
                 "AUDIT_EXPORTED",
                 audit.diff(null, new Exported(rows, query))));
-        return new Streamed(rows, actor, scope, filter);
+        return new Streamed(rows, actor, scope, filter, newestId);
     }
 
     /** The export, read and written when the response body is. */
@@ -129,8 +149,10 @@ class DefaultAuditExportService implements AuditExportService {
         private final Actor actor;
         private final CaseScope scope;
         private final AuditFilter filter;
+        private final long newestId;
 
-        Streamed(long rows, Actor actor, CaseScope scope, AuditFilter filter) {
+        Streamed(long rows, Actor actor, CaseScope scope, AuditFilter filter, long newestId) {
+            this.newestId = newestId;
             this.rows = rows;
             this.actor = actor;
             this.scope = scope;
@@ -147,21 +169,27 @@ class DefaultAuditExportService implements AuditExportService {
             Writer writer = new BufferedWriter(new OutputStreamWriter(out, UTF_8));
             writer.write(CsvFormat.BOM);
             writer.write(CsvFormat.line(HEADER));
-            for (int offset = 0; offset < maxRows; offset += PAGE_SIZE) {
-                Page page = read(offset, Math.min(PAGE_SIZE, maxRows - offset));
+            Position after = null;
+            for (int written = 0; written < maxRows; ) {
+                Page page = read(after, maxRows - written);
                 write(writer, page);
-                if (page.fetched() < PAGE_SIZE) {
+                written += page.records().size();
+                after = page.last();
+                if (page.fetched() < pageSize) {
                     break;
                 }
             }
             writer.flush();
         }
 
-        /** One page, up to {@code room} of its events, and their case numbers, in a transaction of its own. */
-        private Page read(int offset, int room) {
+        /**
+         * The page after a position, up to {@code room} of its events, and their case numbers, in a transaction of its
+         * own.
+         */
+        private Page read(@Nullable Position after, int room) {
             return Objects.requireNonNull(readOnly.execute(status -> {
-                List<AuditRecord> fetched =
-                        trail.search(scope, filter, offset, PAGE_SIZE).records();
+                AuditSlice slice = trail.searchAfter(scope, filter, newestId, after, pageSize);
+                List<AuditRecord> fetched = slice.records();
                 List<AuditRecord> records = fetched.subList(0, Math.min(fetched.size(), room));
                 Map<Long, String> numbers = cases
                         .refs(
@@ -175,7 +203,7 @@ class DefaultAuditExportService implements AuditExportService {
                         .collect(Collectors.toMap(
                                 Map.Entry::getKey,
                                 entry -> entry.getValue().number().toString()));
-                return new Page(List.copyOf(records), fetched.size(), numbers);
+                return new Page(List.copyOf(records), fetched.size(), numbers, slice.last());
             }));
         }
 
@@ -202,8 +230,13 @@ class DefaultAuditExportService implements AuditExportService {
      * @param records the events to write
      * @param fetched how many events the page's statement returned (fewer than a page: the last)
      * @param numbers case numbers by case id
+     * @param last the position of the last event fetched, where the next page resumes
      */
-    private record Page(List<AuditRecord> records, int fetched, Map<Long, String> numbers) {}
+    private record Page(
+            List<AuditRecord> records,
+            int fetched,
+            Map<Long, String> numbers,
+            @Nullable Position last) {}
 
     /** The changed fields as the screen shows them: "name: before → after", a redacted value as its length. */
     static String changes(AuditChanges changes) {
