@@ -10,6 +10,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import org.jspecify.annotations.Nullable;
 
 /**
  * The children of the cases one load writes (WP-26 parts u and w): comments ({@link CommentLoad}), attachments
@@ -29,7 +30,21 @@ record ChildLoads(CommentLoad comments, AttachmentLoad attachments, EventLoad ev
      * @param files its attachments with bytes staged
      * @param events its legacy history, in the order it happened
      */
-    record Staged(List<StagedComment> comments, List<StagedAttachment> files, List<StagedEvent> events) {}
+    record Staged(List<StagedComment> comments, List<StagedAttachment> files, List<StagedEvent> events) {
+
+        /**
+         * The people these children name, for {@link PeopleMatcher#resolve}.
+         *
+         * @return the comments' authors, the files' uploaders and the history's actors; {@code null} where none
+         */
+        List<@Nullable String> people() {
+            List<@Nullable String> keys = new ArrayList<>();
+            comments.forEach(row -> keys.add(row.getAuthorKey()));
+            files.forEach(row -> keys.add(row.getUploaderKey()));
+            events.forEach(row -> keys.add(row.getWhoKey()));
+            return keys;
+        }
+    }
 
     /**
      * The staged children of a page's cases to load.
