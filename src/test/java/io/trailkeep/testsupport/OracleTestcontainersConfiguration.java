@@ -3,6 +3,7 @@
 package io.trailkeep.testsupport;
 
 import io.trailkeep.shared.persistence.DatabaseVendor;
+import java.sql.CallableStatement;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
@@ -132,17 +133,44 @@ public class OracleTestcontainersConfiguration {
             int first = old.get(old.size() - 1) + 1;
             // Three groups at least: the image has two, and a group still ACTIVE (needed for crash recovery) cannot be
             // reused, so with two a switch waits for the checkpoint of the other.
-            // DDL cannot bind: the statements below are built from ints and the validated directory only.
-            for (int i = 0; i < Math.max(3, old.size()); i++) {
-                st.execute("ALTER DATABASE ADD LOGFILE GROUP " + (first + i) + " ('" + dir + "redo" + (first + i)
-                        + ".log') SIZE " + megabytes + "M");
+            // DDL cannot bind, so it runs as constant PL/SQL that builds the statement from bound values.
+            try (CallableStatement add = connection.prepareCall("BEGIN EXECUTE IMMEDIATE 'ALTER DATABASE ADD LOGFILE"
+                    + " GROUP ' || TO_CHAR(?) || ' (' || DBMS_ASSERT.ENQUOTE_LITERAL(?) || ') SIZE ' || TO_CHAR(?)"
+                    + " || 'M'; END;")) {
+                for (int i = 0; i < Math.max(3, old.size()); i++) {
+                    add.setInt(1, first + i);
+                    add.setString(2, dir + "redo" + (first + i) + ".log");
+                    add.setInt(3, megabytes);
+                    add.execute();
+                }
             }
-            for (int group : old) {
-                switchAwayFrom(connection, group);
-                st.execute("ALTER DATABASE DROP LOGFILE GROUP " + group);
+            try (CallableStatement drop = connection.prepareCall(
+                    "BEGIN EXECUTE IMMEDIATE 'ALTER DATABASE DROP LOGFILE GROUP ' || TO_CHAR(?); END;")) {
+                for (int group : old) {
+                    switchAwayFrom(connection, group);
+                    drop.setInt(1, group);
+                    drop.execute();
+                }
             }
+            logRedo(st, megabytes);
         } catch (SQLException failed) {
             throw new IllegalStateException("Cannot resize the redo logs to " + megabytes + " MB", failed);
+        }
+    }
+
+    private static void logRedo(Statement st, int megabytes) throws SQLException {
+        try (ResultSet rs = st.executeQuery("SELECT GROUP#, BYTES / 1048576, STATUS FROM V$LOG ORDER BY GROUP#")) {
+            StringBuilder groups = new StringBuilder();
+            while (rs.next()) {
+                groups.append(" [group ")
+                        .append(rs.getInt(1))
+                        .append(", ")
+                        .append(rs.getInt(2))
+                        .append(" MB, ")
+                        .append(rs.getString(3))
+                        .append(']');
+            }
+            System.out.println("Oracle redo resized to " + megabytes + " MB:" + groups);
         }
     }
 
