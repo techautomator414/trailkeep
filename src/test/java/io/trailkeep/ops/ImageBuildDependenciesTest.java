@@ -48,13 +48,33 @@ class ImageBuildDependenciesTest {
             if (step.path("uses").asString("").startsWith("actions/cache") && path.contains(".m2")) {
                 cached.add(path);
             }
-            assertThat(step.at("/with/cache").asString(""))
-                    .as("setup-java's own cache in " + job)
-                    .isEmpty();
+            if (step.path("uses").asString("").startsWith("actions/setup-java")) {
+                assertThat(step.at("/with/cache").asString(""))
+                        .as("setup-java's own cache in " + job)
+                        .isEmpty();
+            }
         }
         assertThat(cached)
                 .as("Maven repository caches in release.yml's " + job + " job")
                 .isEmpty();
+    }
+
+    @Test
+    void theReleaseImageJobDownloadsTheTrivyDatabasesColdAndMainCachesThem() throws IOException {
+        String job = modes("release.yml").keySet().iterator().next();
+
+        List<String> release = trivyDbCacheInputs("release.yml", job);
+        assertThat(release).as("trivy-db steps in release.yml's " + job + " job").containsExactly("false");
+        for (JsonNode step : steps("release.yml", job)) {
+            assertThat(step.path("uses").asString("").startsWith("actions/cache")
+                            && step.at("/with/path").asString("").contains("trivy"))
+                    .as("a Trivy cache step in release.yml's " + job + " job")
+                    .isFalse();
+        }
+        for (Map.Entry<String, String> image : modes("main.yml").entrySet()) {
+            assertThat(trivyDbCacheInputs("main.yml", image.getKey())).containsOnly("true");
+        }
+        assertThat(trivyDbCacheInputs("main.yml", "trivy-sbom")).containsExactly("true");
     }
 
     @Test
@@ -78,6 +98,24 @@ class ImageBuildDependenciesTest {
                         "-Daether.transport.http.retryHandler.count=10",
                         "-Daether.transport.http.retryHandler.intervalMax=120000",
                         "-Daether.transport.http.retryHandler.serviceUnavailable=429,503");
+    }
+
+    private static JsonNode steps(String workflow, String job) throws IOException {
+        return YAML.readTree(Files.readString(Path.of(".github/workflows", workflow)))
+                .get("jobs")
+                .get(job)
+                .get("steps");
+    }
+
+    /** The explicit {@code with.cache} of every trivy-db step in a job. */
+    private static List<String> trivyDbCacheInputs(String workflow, String job) throws IOException {
+        List<String> inputs = new ArrayList<>();
+        for (JsonNode step : steps(workflow, job)) {
+            if (step.path("uses").asString("").equals("./.github/actions/trivy-db")) {
+                inputs.add(step.at("/with/cache").asString("<unset>"));
+            }
+        }
+        return inputs;
     }
 
     /** Each job that builds the image, with the dependency mode it passes (blank if it passes none). */
