@@ -9,6 +9,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- A trigram index for the cases search on PostgreSQL (#299, part 1, ADR-0017): V21 creates `pg_trgm` if absent and a
+  GIN index on `CASE_SEARCH.SEARCH_TEXT`, which answers the `LIKE` adapter's unchanged `'%word%'` patterns; PostgreSQL
+  rechecks each candidate, so results are unchanged. BUILD_PLAN §12 pulls the v1.1 vendor search adapters into 1.0.0
+  because the Oracle search missed its 1 s target at the 500k seed; PostgreSQL met it, and gets the index for parity: at
+  the 500k seed its searches take about 0.1 s p95 instead of 0.4 s, posting to a 208-comment case 15 ms instead of 10,
+  and the index takes 13 s to build and 87 MB (`docs/perf/release-500k.md`). `pg_trgm` is a trusted extension: the
+  schema owner creates it if it may create in the database, or an administrator creates it once beforehand, in any
+  schema (deploy/README.md, "Search indexes (V21)"). ADR-0017 records the decision for both vendors; BUILD_PLAN's and
+  IMPLEMENTATION_PLAN's v1.1 lists no longer defer the adapters. The Oracle Text adapter follows in its own pull
+  request.
 - Performance at the 500k seed (WP-30 part a, `docs/perf/release-500k.md`). BUILD_PLAN's "500k" is comments: the
   50 000 cases of `cases-list-50k.md` plus `perf/seed-comments-postgresql.sql`, 500 000 synthetic, deterministic
   comments with their search text and `COMMENT_ADDED` audit events (8 a case, 208 on every hundredth), which make each

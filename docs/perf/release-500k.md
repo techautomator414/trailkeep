@@ -6,6 +6,8 @@ WP-30 (IMPLEMENTATION_PLAN Part C) asks for k6 at the 50k and 500k seeds and for
 database connections, and the cases-list indexes that `cases-list-50k.md` left for this run. The restore drill, the
 runbook and the evidence pack are later parts of WP-30. The two changes the numbers led to are their own pull
 requests: the exports' transactions (#295) and the pool size (#296). The k6 tables below were measured before either.
+The Oracle search missed its target, so the vendor search adapters were pulled forward (#299, ADR-0017); "Vendor
+search adapters (#299)" records the numbers after them.
 
 ## What is measured, and against what
 
@@ -175,13 +177,38 @@ second for the 50 000 rows, and a search runs it twice. Only the 500 longest tex
 Oracle keeps in the row, so storage out of line is not the cause; matching a `CLOB` is simply that much slower than
 matching PostgreSQL's `text`.
 
+## Vendor search adapters (#299)
+
+BUILD_PLAN §12 decided in advance what the Oracle numbers above trigger: the vendor search adapters move from v1.1
+into 1.0.0 (#299, ADR-0017). On PostgreSQL that is V21's `pg_trgm` GIN index on `CASE_SEARCH.SEARCH_TEXT`, under the
+unchanged `LIKE` predicate; PostgreSQL rechecks every candidate against the pattern, so the results are `LIKE`'s. The
+Oracle Text adapter follows in its own pull request.
+
+`PostgresComments500kPerfIT` before (the table above, `LIKE` scanning `CASE_SEARCH`) and after (the same
+patterns answered from the trigram index):
+
+| Scenario | Before: p95 | After: p50 | p95 | max | Target |
+|---|---:|---:|---:|---:|---|
+| `GET /cases`, Compliance Admin, newest first | 134.6 | 96.7 | 108.8 | 116.1 | p95 < 500 |
+| `GET /cases?q=plover audit` | 425.1 | 98.1 | **104.4** | 107.1 | p95 < 1 000 |
+| `GET /cases?q=kestrel` | 374.9 | 101.2 | **106.3** | 108.6 | p95 < 1 000 |
+| `GET /cases?q=PERF-2026-0499` | 409.5 | 80.6 | **90.7** | 102.2 | p95 < 1 000 |
+| `GET /cases?q=plover audit`, Analyst | 349.0 | 40.6 | 43.6 | 56.0 | p95 < 1 000 |
+| `GET /cases/{n}`, 208 comments | 108.4 | 80.5 | 93.3 | 95.5 | p95 < 500 |
+| `POST /cases/{n}/comments`, 208 comments | 9.9 | 8.9 | 14.9 | 18.0 | none |
+
+The comment-word subquery is now a bitmap scan of the trigram index (501 rows, 14 ms) where it was a 131 ms scan, and
+the planner hashes it once for the statement. Seeding the 500k layer takes 55 s instead of 33 s, the index being
+maintained as the comments are appended.
+
 ## What the numbers say
 
 **Every target is met at the 500k seed on PostgreSQL**, at a load of ten requests always in flight.
 
 - **The search** is where the comments show: a p95 of 235 ms becomes 496 ms over HTTP and 425 ms in process, because
   `LIKE '%…%'` reads every case's whole text and that text is seventeen times longer. It is half the 1 s budget, so
-  BUILD_PLAN's condition for pulling the vendor adapters forward is not met on PostgreSQL.
+  BUILD_PLAN's condition for pulling the vendor adapters forward is not met on PostgreSQL; the trigram index #299 adds
+  for parity brings it to about 0.1 s in process.
 - **On Oracle it is met.** The same search is about 0.3 s at the 50k seed and **2.0 to 2.4 s at the 500k seed**,
   every-team, against the 1 s target; an Analyst's one-team search is 0.57 s. Nothing else on Oracle comes near its
   target. BUILD_PLAN decided this case in advance: "if the 500k-comment seed pushes it past that, the v1.1 vendor

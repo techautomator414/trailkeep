@@ -190,7 +190,9 @@ Phase 1 exit: WP-01…08 merged; every scanner green; login works against a real
 | **WP-30** | Performance, restore drill, runbook, evidence pack, 1.0.0 | M | all | k6 at 50k/500k seed, pool sizing, restore drill, `docs/RUNBOOK.md`, release workflow + evidence pack, `CHANGELOG`, signed tag. |
 
 ### v1.1 backlog (explicitly deferred)
-PDF export via `openhtmltopdf` + veraPDF (ADR-010) · vendor search adapters · SAML2 · WAR packaging · Helm chart · email-template editor · step-up re-authentication · importer mapping DSL beyond fixed YAML · per-case subscribe · business-day SLA calendars · structured parties · bulk reassign · Modulith event registry · additional UI languages · virtual threads on Java 25.
+PDF export via `openhtmltopdf` + veraPDF (ADR-010) · SAML2 · WAR packaging · Helm chart · email-template editor · step-up re-authentication · importer mapping DSL beyond fixed YAML · per-case subscribe · business-day SLA calendars · structured parties · bulk reassign · Modulith event registry · additional UI languages · virtual threads on Java 25.
+
+Vendor search adapters were pulled forward into 1.0.0 by BUILD_PLAN §12's rule (#299, ADR-0017).
 
 ---
 
