@@ -17,11 +17,11 @@ import org.springframework.test.context.DynamicPropertySource;
 
 /**
  * The schema-validation harness on Oracle. Runs only under {@code -Poracle-it}, once per image: the profile's two
- * Failsafe executions set {@value OracleTestcontainersConfiguration#IMAGE_PROPERTY} to
- * {@code gvenzl/oracle-xe:21-slim} and {@code gvenzl/oracle-free:23-slim}. A deploying organization points the same
- * property at its own image. The dialect version is NOT taken from the image: both runs use the pin in
- * {@code application-oracle.yml} (21.0), so the 23 server is validated against 21-era DDL expectations — the
- * ADR-0004 claim that a newer server never changes what the build expects.
+ * Failsafe executions set {@value OracleTestcontainersConfiguration#IMAGE_PROPERTY} to {@code oracle-xe} (XE 21) and
+ * {@code oracle-free} (Free 23), the images of {@code src/test/resources/images}. A deploying organization points the
+ * same property at its own image. The dialect version is NOT taken from the image: both runs use the pin in {@code
+ * application-oracle.yml} (21.0), so the 23 server is validated against 21-era DDL expectations — the ADR-0004 claim
+ * that a newer server never changes what the build expects.
  */
 // "IT" is the Failsafe suffix Part B mandates for integration tests, not an abbreviation.
 @SuppressWarnings("checkstyle:AbbreviationAsWordInName")
