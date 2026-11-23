@@ -201,9 +201,10 @@ and the signed tag.
 
 - **WP-29**, the Section 508 conformance pass (#92): Trusted Tester v5 by a named certified human tester (owner item
   9), remediation, and the ACR at `accessibility/ACR.md` (VPAT 2.5; today only the shell's draft
-  `accessibility/ACR-shell.md` exists). The release preflight refuses 1.0.0 while the ACR is titled DRAFT, has a
-  "Does Not Support" or has an undated "Partially Supports" (#320, `docs/RELEASING.md` section 3). #92's screen-reader
-  pass can be folded into it.
+  `accessibility/ACR-shell.md` exists). The release preflight (automated, #320) refuses 1.0.0 only while the ACR is
+  titled DRAFT. WP-29's acceptance, no "Does Not Support" and a dated ticket for each "Partially Supports", is not
+  automated: the release manager verifies it (`docs/RELEASING.md` section 3, item 1). #92's screen-reader pass can be
+  folded into it.
 - **#30:** the repository secrets `SONAR_TOKEN` and `NVD_API_KEY`, which the preflight requires from 1.0.0 (#320: no
   scanner may be skipped, and the pack requires the Dependency-Check report; WP-28's "Sonar gate A; Dependency-Check
   clean" cannot be shown without them), a real identity-provider sign-in in DEV, and the manual testing of the shell
