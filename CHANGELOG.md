@@ -83,6 +83,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- The importer's dry run and load no longer look legacy people up one by one (#173, WP-30 part b,
+  `docs/perf/importer-volume.md`). `PeopleMatcher` asks the directory, for a page of people, one query per way of
+  matching and 500 values, in `people.match` order, and matches exactly as before. At the release volume the dry run
+  went from 427 s and 756 303 transactions to 13 s and 9 328; the load from 1 826 s and 800 787 transactions to
+  1 441 s and 53 812.
+
 - The CI Semgrep lockfile takes `wcmatch` 12.0.4 (and `bracex` 3.2.4), fixing the glob ReDoS GHSA-53pm-wgxf-c6qf
   (Dependabot alerts #6 and #7, fixed in 11.2). Semgrep 1.183.0 pins `wcmatch~=8.3`, so the pin is lifted in
   `semgrep-overrides.in`, as already done for `mcp` and OpenTelemetry. CI-only tooling; nothing ships.
