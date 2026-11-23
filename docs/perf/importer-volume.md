@@ -109,11 +109,9 @@ The other commands did not change: `validate-mapping` 0.5 s, `extract` 208 to 20
 statements), `reconcile` 22 to 23 s (9 047 statements), `purge-staging` 0.8 to 0.9 s (13 statements). Both runs gave
 the same dry-run digest (`a986672e6dd74d3f`) and load digest (`b85f4f2d62f88af8`).
 
-On `main` the dry run and the load are where the time is: 7 and 30 minutes of the 41 the whole import takes. Both run about one
-transaction per row. The most frequent queries say why: the dry run asked the directory about each legacy person one
-query at a time (499 000 email and 250 777 external-id lookups), and the load did the same (1 454 779 and 499 000),
-each lookup outside a transaction being a transaction of its own (Spring Data's repository methods are transactional).
-The load's 4.9 million statements are, after those, nearly all per child row. (b) to (d) take these in turn.
+On `main` the dry run and the load are where the time is: 7 and 30 minutes of the 41 the whole import takes, each
+about one transaction per row, for the people lookups (b) explains. The load's 4.9 million statements are, after those,
+nearly all per child row, which (c) and (d) take in turn.
 
 ### What each fix did
 
