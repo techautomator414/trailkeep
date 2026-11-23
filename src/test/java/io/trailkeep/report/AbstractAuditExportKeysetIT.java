@@ -25,8 +25,11 @@ import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -97,6 +100,7 @@ abstract class AbstractAuditExportKeysetIT {
     @Test
     void eventsCommittedBetweenPagesNeitherRepeatNorSkipARowAndAreNotInTheFile() throws IOException {
         List<Long> startOfExport = newestFirst();
+        long newestAtStart = Objects.requireNonNull(jdbc.queryForObject("SELECT MAX(ID) FROM AUDIT_EVENT", Long.class));
         assertThat(startOfExport).hasSize(EVENTS);
         AtomicInteger pages = new AtomicInteger();
         doAnswer(call -> {
@@ -126,6 +130,24 @@ abstract class AbstractAuditExportKeysetIT {
                 .as("the events of the start, newest first, each once; none of the events committed meanwhile")
                 .containsExactlyElementsOf(startOfExport);
         assertThat(pages.get()).as("pages read").isEqualTo(5);
+        assertThat(exported.stream()
+                        .mapToLong(entity -> SEEDED_IDS + entity)
+                        .max()
+                        .orElseThrow())
+                .as("the highest event id in the file")
+                .isLessThanOrEqualTo(newestAtStart);
+        String recorded = Objects.requireNonNull(jdbc.queryForObject(
+                "SELECT NEW_VALUES_JSON FROM AUDIT_EVENT WHERE ACTION = 'AUDIT_EXPORTED' AND ACTOR_ID = ?",
+                String.class,
+                admin));
+        assertThat(recorded)
+                .as("the export's own audit event records the bound: the highest id read at the start")
+                .contains("\"upToEventId\":" + newestAtStart, "\"rows\":" + EVENTS);
+        Matcher started = Pattern.compile("\"startedAt\":\"([^\"]+)\"").matcher(recorded);
+        assertThat(started.find()).as("startedAt recorded").isTrue();
+        assertThat(Instant.parse(started.group(1)))
+                .as("startedAt: after the seed, before now, no event of the file is stamped later")
+                .isBetween(start, Instant.now());
     }
 
     private void event(long id, Instant at, long entityId) {

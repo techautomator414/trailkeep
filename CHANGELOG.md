@@ -169,7 +169,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   The audit export is also a snapshot of the trail as of the moment it started: it reads only events whose id is up
   to the highest id committed at that moment and whose time is before it (the filter's end was already pinned there),
   and the count and the `app.export.max-rows` check use the same bound, so an event committed afterwards, with
-  whatever timestamp, is not in the file; the export's own audit event is not either. Read-committed isolation is
+  whatever timestamp, is not in the file; the export's own audit event is not either, and it records the
+  bound (`upToEventId`, the highest id included, and `startedAt`) so a file can be tied to its window from the trail. Read-committed isolation is
   kept (one long snapshot is what deadlocked the pool, #295), so an event that was still uncommitted at the start, or
   written by another instance with an id below the bound, can be in the file if it commits before the export reaches
   its position, and is then there exactly once. The cases export is not a snapshot: a case committed meanwhile is in

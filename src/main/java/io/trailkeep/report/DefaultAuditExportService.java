@@ -52,7 +52,9 @@ import org.springframework.transaction.support.TransactionTemplate;
  * events with an id up to the highest id committed at the start are read, so an event committed after the start is
  * out even if it carries an earlier time (a slow request that stamped the event before this export began but
  * committed after). The count and the {@code app.export.max-rows} refusal use the same bound. This export's own audit
- * event is written after the bound is read, so it is not in its file.
+ * event is written after the bound is read, so it is not in its file. That event records the bound, as
+ * {@code upToEventId} (the highest id included) and {@code startedAt}, so a person holding a file can tell from the
+ * audit trail which window it covers and verify it.
  *
  * <p>The limit: ids come from a pooled sequence (blocks of 50 per application instance) and read-committed isolation
  * is kept (one long snapshot is what deadlocked the pool), so an event that was still uncommitted at the start, or
@@ -107,8 +109,10 @@ class DefaultAuditExportService implements AuditExportService {
      *
      * @param rows how many events it holds
      * @param query the screen's query string
+     * @param upToEventId the highest event id the export may hold ({@code id <= upToEventId}), 0 if the trail was empty
+     * @param startedAt the instant the export started ({@code at < startedAt}, milliseconds)
      */
-    record Exported(long rows, String query) {}
+    record Exported(long rows, String query, long upToEventId, Instant startedAt) {}
 
     @Override
     @Transactional
@@ -138,7 +142,7 @@ class DefaultAuditExportService implements AuditExportService {
                 "AUDIT_TRAIL",
                 null,
                 "AUDIT_EXPORTED",
-                audit.diff(null, new Exported(rows, query))));
+                audit.diff(null, new Exported(rows, query, newestId, now))));
         return new Streamed(rows, actor, scope, filter, newestId);
     }
 
