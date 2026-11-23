@@ -23,7 +23,7 @@ import java.util.stream.Collectors;
  * <p>Nothing the person typed reaches Oracle Text but those runs ({@code [a-z0-9]}), each between two {@code %}
  * wildcards and joined by {@code AND}, so no operator, reserved word or special character in a search can be read as
  * query syntax. Where Oracle Text keeps only the first 255 bytes of a token, a run past them is not found; that is
- * the one known difference from {@code LIKE} (ADR-0006, amended 2026-11-23).
+ * the one known difference from {@code LIKE} (ADR-0017).
  *
  * @param contains the {@code CONTAINS} query, empty when the index cannot help
  * @param likeWords the words still matched with {@code LIKE}
@@ -33,8 +33,11 @@ record OracleTextQuery(String contains, List<String> likeWords) {
     /** The shortest run of letters and digits worth an index lookup. */
     static final int MIN_RUN = 3;
 
-    /** The most runs one search asks the index for: each costs a lookup, and the rest are matched by {@code LIKE}. */
-    static final int MAX_TERMS = 3;
+    /**
+     * The most runs one search asks the index for. Each costs a lookup of every token (about 90 ms at the 500k seed),
+     * in each of the search's statements; the other words are matched by {@code LIKE} on the cases the index found.
+     */
+    static final int MAX_TERMS = 2;
 
     /** Longer runs are cut to this length and their word is checked by {@code LIKE}. */
     static final int MAX_TERM_LENGTH = 64;

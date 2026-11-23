@@ -26,7 +26,7 @@ class OracleTextQueryTest {
     void anyOtherWordIsNarrowedByItsLongestRunAndCheckedByLike() {
         OracleTextQuery query = of("kestrel-escalation under_score straße");
 
-        assertThat(query.contains()).isEqualTo("%escalation% AND %under% AND %stra%");
+        assertThat(query.contains()).isEqualTo("%escalation% AND %under%");
         assertThat(query.likeWords()).containsExactly("kestrel-escalation", "under_score", "straße");
     }
 
@@ -39,11 +39,11 @@ class OracleTextQueryTest {
     }
 
     @Test
-    void atMostThreeRunsAreLookedUpTheLongestFirstAndTheRestAreLeftToLike() {
+    void atMostTwoRunsAreLookedUpTheLongestFirstAndTheRestAreLeftToLike() {
         OracleTextQuery query = of("abc abcdefg abcd abcdef abcde");
 
-        assertThat(query.contains()).isEqualTo("%abcdefg% AND %abcdef% AND %abcde%");
-        assertThat(query.likeWords()).containsExactly("abc", "abcd");
+        assertThat(query.contains()).isEqualTo("%abcdefg% AND %abcdef%");
+        assertThat(query.likeWords()).containsExactly("abc", "abcd", "abcde");
     }
 
     @Test

@@ -8,6 +8,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.sql.SQLException;
@@ -15,8 +17,13 @@ import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.jdbc.UncategorizedSQLException;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
-/** The probe tells Oracle Text's "too many terms" apart from every other failure, which it passes on. */
+/**
+ * The probe tells Oracle Text's "too many terms" apart from every other failure, which it passes on, and asks once per
+ * transaction.
+ */
 class OracleTextJdbcDaoTest {
 
     private final JdbcTemplate jdbc = mock(JdbcTemplate.class);
@@ -41,6 +48,25 @@ class OracleTextJdbcDaoTest {
                 .thenThrow(new UncategorizedSQLException("probe", "SELECT", refused));
 
         assertThat(index.answers("%qzx%")).isFalse();
+    }
+
+    @Test
+    void oneTransactionAsksOnceAndForgetsTheAnswerWhenItEnds() {
+        when(jdbc.queryForObject(anyString(), eq(Long.class), any(Object[].class)))
+                .thenReturn(1L);
+        TransactionSynchronizationManager.initSynchronization();
+        try {
+            assertThat(index.answers("%kestrel%")).isTrue();
+            assertThat(index.answers("%kestrel%")).isTrue();
+            verify(jdbc, times(1)).queryForObject(anyString(), eq(Long.class), any(Object[].class));
+
+            TransactionSynchronizationManager.getSynchronizations()
+                    .forEach(synchronization ->
+                            synchronization.afterCompletion(TransactionSynchronization.STATUS_COMMITTED));
+            assertThat(TransactionSynchronizationManager.hasResource(index)).isFalse();
+        } finally {
+            TransactionSynchronizationManager.clearSynchronization();
+        }
     }
 
     @Test

@@ -5,7 +5,7 @@ app:
   db:
     vendor: postgresql
   search:
-    # The LIKE patterns are answered from the V21 trigram index (pg_trgm); ADR-0006, amended 2026-11-23.
+    # The LIKE patterns are answered from the V21 trigram index (pg_trgm); ADR-0017.
     adapter: like
 
 spring:

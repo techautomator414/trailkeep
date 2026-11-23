@@ -7,7 +7,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.validation.annotation.Validated;
 
 /**
- * Case search settings under {@code app.search} (ADR-0006, amended 2026-11-23).
+ * Case search settings under {@code app.search} (ADR-0017).
  *
  * @param adapter which {@link SearchGateway} serves the search; the vendor profile sets it: {@code oracle-text} on
  *     Oracle, {@code like} on PostgreSQL, where the V21 trigram index serves the {@code LIKE} patterns

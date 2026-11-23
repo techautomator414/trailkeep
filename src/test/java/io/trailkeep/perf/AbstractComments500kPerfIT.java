@@ -125,7 +125,7 @@ abstract class AbstractComments500kPerfIT {
                         get("/cases").param("q", "plover audit"));
         long commentWord = report().p95(
                         mvc,
-                        "GET /cases?q=kestrel (a word in 1 comment in 997: every text read whole)",
+                        "GET /cases?q=kestrel (a word in 1 comment in 997)",
                         get("/cases").param("q", "kestrel"));
         long caseNumber = report().p95(
                         mvc,
@@ -191,8 +191,20 @@ abstract class AbstractComments500kPerfIT {
     @Test
     @Order(6)
     void theSearchIsPlannedAsExpected() {
-        plan("SELECT COUNT(*) FROM CASE_RECORD r WHERE r.STATUS <> 'ARCHIVED' AND r.ID IN (SELECT CASE_ID FROM"
-                        + " CASE_SEARCH WHERE SEARCH_TEXT LIKE '%kestrel%')")
+        plan("SELECT COUNT(*) FROM CASE_RECORD r WHERE r.STATUS <> 'ARCHIVED' AND (UPPER(r.CASE_NUMBER) LIKE"
+                        + " '%KESTREL%' OR r.ID IN (SELECT CASE_ID FROM CASE_SEARCH WHERE "
+                        + searchTextMatches("kestrel") + "))")
                 .forEach(line -> report().add("Plan, search for a comment word: " + line));
+    }
+
+    /**
+     * The vendor adapter's condition on {@code CASE_SEARCH} for one word of letters, as the search's statement holds
+     * it, for the plan.
+     *
+     * @param word a lower-case word of letters
+     * @return the condition
+     */
+    String searchTextMatches(String word) {
+        return "SEARCH_TEXT LIKE '%" + word + "%'";
     }
 }

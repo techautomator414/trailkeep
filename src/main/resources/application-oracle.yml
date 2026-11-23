@@ -5,8 +5,7 @@ app:
   db:
     vendor: oracle
   search:
-    # Oracle Text narrows the LIKE search through the V21 CONTEXT index; "like" scans CASE_SEARCH instead (ADR-0006,
-    # amended 2026-11-23).
+    # Oracle Text narrows the LIKE search through the V21 CONTEXT index; "like" scans CASE_SEARCH instead (ADR-0017).
     adapter: oracle-text
 
 spring:

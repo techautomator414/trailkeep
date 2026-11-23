@@ -21,7 +21,7 @@ import java.util.function.Function;
  * CLOB}. Criteria, not native SQL: JPA expresses {@code LIKE} on the {@code CLOB}/{@code text} column on both vendors,
  * and only a predicate lets the scope filter in the same statement. {@code %}, {@code _} and the escape character in
  * the text match themselves. On PostgreSQL the patterns are answered from the trigram index of V21; on Oracle it is a
- * scan, and {@link OracleTextSearchGateway} narrows it with Oracle Text (ADR-0006, amended 2026-11-23).
+ * scan, and {@link OracleTextSearchGateway} narrows it with Oracle Text (ADR-0017).
  */
 class LikeSearchGateway implements SearchGateway {
 

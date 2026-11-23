@@ -9,9 +9,10 @@ import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
 import java.util.ArrayList;
 import java.util.List;
+import org.hibernate.query.criteria.HibernateCriteriaBuilder;
 
 /**
- * The Oracle {@link SearchGateway} (ADR-0006, amended 2026-11-23): the {@link LikeSearchGateway}'s predicate, with
+ * The Oracle {@link SearchGateway} (ADR-0017): the {@link LikeSearchGateway}'s predicate, with
  * {@code CONTAINS(SEARCH_TEXT, ?) > 0} on the V21 {@code CONTEXT} index added to its subquery, so the index finds the
  * candidate rows and {@code LIKE} reads only those, instead of every case's {@code CLOB}. {@link OracleTextQuery} says
  * why the results are the same. When no word has a run the index can look up, or Oracle Text would refuse the query
@@ -43,7 +44,12 @@ class OracleTextSearchGateway implements SearchGateway {
         });
     }
 
+    /**
+     * {@code CONTAINS(SEARCH_TEXT, ?) > 0}, the query bound: {@link CriteriaBuilder#literal} would be rendered into the
+     * statement, a new statement (and hard parse) for every search, while Hibernate's {@code value} is a parameter.
+     */
     private static Predicate contains(Expression<String> haystack, String contains, CriteriaBuilder cb) {
-        return cb.greaterThan(cb.function("contains", Integer.class, haystack, cb.literal(contains)), 0);
+        Expression<String> query = ((HibernateCriteriaBuilder) cb).value(contains);
+        return cb.greaterThan(cb.function("contains", Integer.class, haystack, query), 0);
     }
 }

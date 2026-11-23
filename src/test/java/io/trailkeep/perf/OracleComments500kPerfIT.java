@@ -17,10 +17,9 @@ import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 
 /**
- * The 500k seed on Oracle (WP-30), where {@code SEARCH_TEXT} is a {@code CLOB} and {@code LIKE} reads it as one.
- * Opt-in, in the {@code perf-it} profile's {@code perf-500k-oracle} execution, which no workflow runs (seeding takes
- * minutes on Oracle, and the search misses its target until the vendor adapter exists; see {@code
- * docs/perf/release-500k.md}). The image is {@code trailkeep.oracle.image} as for {@code
+ * The 500k seed on Oracle (WP-30), where {@code SEARCH_TEXT} is a {@code CLOB}, searched through the Oracle Text
+ * adapter (ADR-0017). Opt-in, in the {@code perf-it} profile's {@code perf-500k-oracle} execution, which no workflow
+ * runs (seeding takes minutes on Oracle; see {@code docs/perf/release-500k.md}). The image is {@code trailkeep.oracle.image} as for {@code
  * -Poracle-it}. The table goes to {@code target/perf/comments-500k-oracle.md}.
  */
 // "IT" is the Failsafe suffix Part B mandates for integration tests, not an abbreviation.
@@ -65,6 +64,12 @@ class OracleComments500kPerfIT extends AbstractComments500kPerfIT {
         // plan.
         jdbc.execute("EXPLAIN PLAN FOR " + sql);
         return jdbc.queryForList("SELECT PLAN_TABLE_OUTPUT FROM TABLE(DBMS_XPLAN.DISPLAY)", String.class);
+    }
+
+    @Override
+    String searchTextMatches(String word) {
+        // OracleTextSearchGateway: a word of letters is decided by the CONTEXT index alone (ADR-0017).
+        return "CONTAINS(SEARCH_TEXT, '%" + word + "%') > 0";
     }
 
     @Override

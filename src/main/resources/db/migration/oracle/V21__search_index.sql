@@ -1,6 +1,6 @@
 -- SPDX-License-Identifier: Apache-2.0
 -- Copyright 2026 Charlie Genova and contributors
--- V21 search index, Oracle (WP-30 part a2, #299; ADR-0006, amended 2026-11-23). An Oracle Text CONTEXT index on
+-- V21 search index, Oracle (WP-30 part a2, #299; ADR-0017). An Oracle Text CONTEXT index on
 -- CASE_SEARCH.SEARCH_TEXT for OracleTextSearchGateway, which narrows the LIKE search with it: at the 500k seed LIKE
 -- reads every case's CLOB, twice a search (docs/perf/release-500k.md). PostgreSQL's V21 is a trigram index instead.
 --

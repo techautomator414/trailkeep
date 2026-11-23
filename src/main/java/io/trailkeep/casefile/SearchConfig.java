@@ -8,7 +8,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.jdbc.core.JdbcTemplate;
 
-/** Chooses the {@link SearchGateway} named by {@code app.search.adapter} (ADR-0006, amended 2026-11-23). */
+/** Chooses the {@link SearchGateway} named by {@code app.search.adapter} (ADR-0017). */
 @Configuration(proxyBeanMethods = false)
 class SearchConfig {
 

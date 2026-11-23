@@ -41,8 +41,7 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * The Oracle Text adapter against the {@code LIKE} adapter on Oracle ({@code -Poracle-it}, both images; ADR-0006,
- * amended 2026-11-23): one corpus of committed search texts, one set of searches, and every reader the scope tells
+ * The Oracle Text adapter against the {@code LIKE} adapter on Oracle ({@code -Poracle-it}, both images; ADR-0017): one corpus of committed search texts, one set of searches, and every reader the scope tells
  * apart (a Compliance Admin, a team manager, the owner of a restricted case, a colleague who is not, another team's
  * analyst). For each reader and each search, the two adapters must return the same case numbers and the same count.
  * The searches include every character and reserved word with a meaning in Oracle Text queries, which must match
