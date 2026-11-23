@@ -19,7 +19,6 @@ import java.io.BufferedWriter;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
-import java.io.UncheckedIOException;
 import java.io.Writer;
 import java.time.Instant;
 import java.time.InstantSource;
@@ -37,8 +36,13 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * Counts, audits and streams an audit export, as the cases list's export does: the count and the audit event are one
- * transaction, and the rows are read when the response body is written, {@value #PAGE_SIZE} a statement inside one
- * read-only transaction. The filter's end is pinned to the moment of the count, so pages cannot shift under new events.
+ * transaction, and the rows are read when the response body is written, {@value #PAGE_SIZE} a statement, each page
+ * with its case numbers in a read-only transaction of its own, and written to the client after that transaction has
+ * ended (Part B "Transactions": no network I/O inside a transaction). Holding one transaction across the whole stream
+ * held a connection while the response was committed, and committing it saves the person's session through a second
+ * connection, so as many concurrent exports as the pool has connections deadlocked it until the acquire timeout
+ * (WP-30, docs/perf/release-500k.md). The filter's end is pinned to the moment of the count, so pages cannot shift
+ * under new events between those transactions.
  */
 @Service
 class DefaultAuditExportService implements AuditExportService {
@@ -143,54 +147,63 @@ class DefaultAuditExportService implements AuditExportService {
             Writer writer = new BufferedWriter(new OutputStreamWriter(out, UTF_8));
             writer.write(CsvFormat.BOM);
             writer.write(CsvFormat.line(HEADER));
-            try {
-                readOnly.executeWithoutResult(status -> {
-                    for (int offset = 0; offset < maxRows; offset += PAGE_SIZE) {
-                        List<AuditRecord> page =
-                                trail.search(scope, filter, offset, PAGE_SIZE).records();
-                        write(writer, page.subList(0, Math.min(page.size(), maxRows - offset)));
-                        if (page.size() < PAGE_SIZE) {
-                            break;
-                        }
-                    }
-                });
-            } catch (UncheckedIOException failed) {
-                throw failed.getCause();
+            for (int offset = 0; offset < maxRows; offset += PAGE_SIZE) {
+                Page page = read(offset, Math.min(PAGE_SIZE, maxRows - offset));
+                write(writer, page);
+                if (page.fetched() < PAGE_SIZE) {
+                    break;
+                }
             }
             writer.flush();
         }
 
-        private void write(Writer writer, List<AuditRecord> page) {
-            Map<Long, String> numbers = cases
-                    .refs(
-                            actor,
-                            page.stream()
-                                    .map(AuditRecord::caseId)
-                                    .filter(Objects::nonNull)
-                                    .toList())
-                    .entrySet()
-                    .stream()
-                    .collect(Collectors.toMap(
-                            Map.Entry::getKey,
-                            entry -> entry.getValue().number().toString()));
-            try {
-                for (AuditRecord r : page) {
-                    writer.write(CsvFormat.line(List.of(
-                            r.at().toString(),
-                            Objects.toString(r.actorName(), ""),
-                            r.origin().name(),
-                            r.entityType(),
-                            Objects.toString(r.entityId(), ""),
-                            r.action(),
-                            r.caseId() == null ? "" : numbers.getOrDefault(r.caseId(), ""),
-                            changes(r.changes()),
-                            Objects.toString(r.requestId(), ""))));
-                }
-            } catch (IOException failed) {
-                throw new UncheckedIOException(failed);
+        /** One page, up to {@code room} of its events, and their case numbers, in a transaction of its own. */
+        private Page read(int offset, int room) {
+            return Objects.requireNonNull(readOnly.execute(status -> {
+                List<AuditRecord> fetched =
+                        trail.search(scope, filter, offset, PAGE_SIZE).records();
+                List<AuditRecord> records = fetched.subList(0, Math.min(fetched.size(), room));
+                Map<Long, String> numbers = cases
+                        .refs(
+                                actor,
+                                records.stream()
+                                        .map(AuditRecord::caseId)
+                                        .filter(Objects::nonNull)
+                                        .toList())
+                        .entrySet()
+                        .stream()
+                        .collect(Collectors.toMap(
+                                Map.Entry::getKey,
+                                entry -> entry.getValue().number().toString()));
+                return new Page(List.copyOf(records), fetched.size(), numbers);
+            }));
+        }
+
+        /** Writes one page, after its transaction has ended. */
+        private void write(Writer writer, Page page) throws IOException {
+            for (AuditRecord r : page.records()) {
+                writer.write(CsvFormat.line(List.of(
+                        r.at().toString(),
+                        Objects.toString(r.actorName(), ""),
+                        r.origin().name(),
+                        r.entityType(),
+                        Objects.toString(r.entityId(), ""),
+                        r.action(),
+                        r.caseId() == null ? "" : page.numbers().getOrDefault(r.caseId(), ""),
+                        changes(r.changes()),
+                        Objects.toString(r.requestId(), ""))));
             }
         }
     }
+
+    /**
+     * One page of an audit export as read.
+     *
+     * @param records the events to write
+     * @param fetched how many events the page's statement returned (fewer than a page: the last)
+     * @param numbers case numbers by case id
+     */
+    private record Page(List<AuditRecord> records, int fetched, Map<Long, String> numbers) {}
 
     /** The changed fields as the screen shows them: "name: before → after", a redacted value as its length. */
     static String changes(AuditChanges changes) {

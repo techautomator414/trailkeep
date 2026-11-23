@@ -21,7 +21,6 @@ import java.io.BufferedWriter;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
-import java.io.UncheckedIOException;
 import java.io.Writer;
 import java.time.InstantSource;
 import java.time.LocalDate;
@@ -42,8 +41,14 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * Counts, audits and streams a CSV export. The count and the audit row are one transaction; the rows are read later,
- * when the response body is written, in pages of {@link #PAGE_SIZE} inside one read-only transaction of their own
- * (the attachment download pattern), never more than {@code app.export.max-rows} of them.
+ * when the response body is written, in pages of {@link #PAGE_SIZE}, never more than {@code app.export.max-rows} of
+ * them. Each page, with its teams' and owners' names, is read in a short read-only transaction of its own and written
+ * to the client after that transaction has ended (Part B "Transactions": no network I/O inside a transaction). One
+ * transaction across the whole stream held a connection for as long as the client took to read, and committing the
+ * response inside it saves the person's session through a second connection, so as many concurrent exports as the
+ * pool has connections deadlocked it until the acquire timeout (WP-30, docs/perf/release-500k.md). Reading the pages
+ * in one transaction gave no more consistency: both vendors run at READ COMMITTED, where each statement sees the data
+ * committed when it starts, so a page always reflected its own moment.
  */
 @Service
 @CaseAccessPath
@@ -177,56 +182,62 @@ class DefaultCaseExportService implements CaseExportService {
         writer.write(CsvFormat.BOM);
         writer.write(CsvFormat.line(HEADER));
         LocalDate today = LocalDate.ofInstant(clock.instant(), zone);
-        try {
-            readOnly.executeWithoutResult(status -> {
-                int written = 0;
-                for (int page = 1; written < maxRows; page++) {
-                    List<CaseExportRow> rows = cases.export(scope, query.onPage(page), PAGE_SIZE);
-                    written += write(writer, rows, today, user, details, maxRows - written);
-                    if (rows.size() < PAGE_SIZE) {
-                        break;
-                    }
-                }
-            });
-        } catch (UncheckedIOException failed) {
-            throw failed.getCause();
+        int written = 0;
+        for (int page = 1; written < maxRows; page++) {
+            Page rows = read(scope, query.onPage(page));
+            written += writePage(writer, rows, today, user, details, maxRows - written);
+            if (rows.rows().size() < PAGE_SIZE) {
+                break;
+            }
         }
         writer.flush();
     }
 
-    /** Writes one page, naming its teams and owners in one lookup each; returns how many rows it wrote. */
-    private int write(
-            Writer writer, List<CaseExportRow> rows, LocalDate today, UserPermissions user, boolean details, int room) {
-        Map<Long, String> teams = directory.teams(ids(rows, CaseExportRow::teamId)).values().stream()
-                .collect(Collectors.toUnmodifiableMap(TeamSummary::id, TeamSummary::name));
-        Map<Long, String> owners = directory.displayNames(ids(rows, CaseExportRow::ownerId));
+    /** One page and the names of its teams and owners (one lookup each), in a read-only transaction of its own. */
+    private Page read(CaseScope scope, CaseListQuery query) {
+        return Objects.requireNonNull(readOnly.execute(status -> {
+            List<CaseExportRow> rows = cases.export(scope, query, PAGE_SIZE);
+            Map<Long, String> teams = directory.teams(ids(rows, CaseExportRow::teamId)).values().stream()
+                    .collect(Collectors.toUnmodifiableMap(TeamSummary::id, TeamSummary::name));
+            return new Page(rows, teams, directory.displayNames(ids(rows, CaseExportRow::ownerId)));
+        }));
+    }
+
+    /** Writes one page, after its transaction has ended; returns how many rows it wrote. */
+    private int writePage(Writer writer, Page page, LocalDate today, UserPermissions user, boolean details, int room)
+            throws IOException {
         int written = 0;
-        try {
-            for (CaseExportRow row : rows.subList(0, Math.min(rows.size(), room))) {
-                boolean shown = details
-                        && (user.has(GlobalRole.COMPLIANCE_ADMIN) || user.roleIn(row.teamId()) == TeamRole.MANAGER);
-                CaseView.Sla sla = CaseView.Sla.of(row.slaState(), row.slaDueAt(), today, zone);
-                writer.write(CsvFormat.line(List.of(
-                        row.caseNumber(),
-                        row.title(),
-                        row.status().name(),
-                        row.sensitivity().name(),
-                        row.priority().name(),
-                        row.caseTypeName(),
-                        teams.getOrDefault(row.teamId(), ""),
-                        owners.getOrDefault(row.ownerId(), ""),
-                        sla.state().name(),
-                        Objects.toString(sla.dueOn(), ""),
-                        LocalDate.ofInstant(row.openedAt(), zone).toString(),
-                        shown ? text(row.subjectText()) : REDACTED,
-                        shown ? text(row.description()) : REDACTED)));
-                written++;
-            }
-        } catch (IOException failed) {
-            throw new UncheckedIOException(failed);
+        for (CaseExportRow row : page.rows().subList(0, Math.min(page.rows().size(), room))) {
+            boolean shown =
+                    details && (user.has(GlobalRole.COMPLIANCE_ADMIN) || user.roleIn(row.teamId()) == TeamRole.MANAGER);
+            CaseView.Sla sla = CaseView.Sla.of(row.slaState(), row.slaDueAt(), today, zone);
+            writer.write(CsvFormat.line(List.of(
+                    row.caseNumber(),
+                    row.title(),
+                    row.status().name(),
+                    row.sensitivity().name(),
+                    row.priority().name(),
+                    row.caseTypeName(),
+                    page.teams().getOrDefault(row.teamId(), ""),
+                    page.owners().getOrDefault(row.ownerId(), ""),
+                    sla.state().name(),
+                    Objects.toString(sla.dueOn(), ""),
+                    LocalDate.ofInstant(row.openedAt(), zone).toString(),
+                    shown ? text(row.subjectText()) : REDACTED,
+                    shown ? text(row.description()) : REDACTED)));
+            written++;
         }
         return written;
     }
+
+    /**
+     * One page of the export as read.
+     *
+     * @param rows the rows
+     * @param teams team names by id
+     * @param owners owner display names by id
+     */
+    private record Page(List<CaseExportRow> rows, Map<Long, String> teams, Map<Long, String> owners) {}
 
     private static String text(@Nullable String value) {
         return value == null ? "" : value;
