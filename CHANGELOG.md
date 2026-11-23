@@ -7,6 +7,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- Keycloak 26.8.2-2 (compose and test image) and the Nu Html Checker image digest, landed as one change because
+  ComposeImagesTest fails on either Dependabot PR alone (supersedes #279 and #280); compose-only alpine/openssl 3.5.8.
+
 ## [0.3.0] - 2026-11-22
 
 Hardening before 1.0.0, with no new work package: the follow-ups of WP-28's security test map and of the threat model
