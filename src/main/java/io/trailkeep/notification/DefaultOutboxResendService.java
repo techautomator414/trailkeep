@@ -140,6 +140,8 @@ class DefaultOutboxResendService implements OutboxResendService {
                         mail.get("caseId").alias("caseId"),
                         mail.get("attempts").alias("attempts"),
                         mail.get("lastError").alias("lastError"),
+                        // No failed-at column exists; MARK_FAILED sets NEXT_ATTEMPT_AT to the final failure time, so it
+                        // is shown as such.
                         mail.get("nextAttemptAt").alias("failedAt")))
                 .where(where(scope, ids, mail, query, cb))
                 .orderBy(cb.asc(mail.get("id")));

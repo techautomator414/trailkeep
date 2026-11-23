@@ -29,7 +29,8 @@ public interface OutboxResendService {
      * @param caseNumber the case it is about, or {@code null} for none
      * @param attempts the attempts made
      * @param lastError the relay's reply with any address in it masked, or {@code null}
-     * @param failedAt when the last attempt failed
+     * @param failedAt when the last attempt ended, read from {@code NEXT_ATTEMPT_AT}: the table has no failed-at column
+     *     and the dispatcher sets that column to the time of the final failure
      */
     record FailedMail(
             long id,

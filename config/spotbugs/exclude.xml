@@ -255,8 +255,8 @@
     are changed by one conditional UPDATE ... WHERE STATUS = 'FAILED', counted, with one MAIL_REQUEUED audit event
     for each row actually moved in the same transaction; a row about a case the scope cannot read is skipped as if
     absent. The recipient and any address in the failure reason are masked before they leave the service and no body
-    is read. Covered by OutboxResendControllerIT, OutboxResendIT and OutboxResendAccessibilityIT. Pending review in
-    the security-reviewer role on the #318 pull request.
+    is read. Covered by OutboxResendControllerIT, OutboxResendIT and OutboxResendAccessibilityIT. Reviewed on the
+    #318 pull request.
     ImportRunController (WP-26 part s1): behind login; GET /admin/import-runs and GET /admin/import-runs/{id} only, no
     state change. The controller takes nothing from the request but the page, the run id and (part y3, below) the
     closure worklist's page (all parsed leniently: an unreadable page is the first, an unreadable id names no run);
