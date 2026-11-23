@@ -122,10 +122,10 @@ abstract class AbstractAuditExportKeysetIT {
 
         List<Long> exported = entityIds();
 
-        assertThat(pages.get()).as("pages read").isEqualTo(5);
         assertThat(exported)
                 .as("the events of the start, newest first, each once; none of the events committed meanwhile")
                 .containsExactlyElementsOf(startOfExport);
+        assertThat(pages.get()).as("pages read").isEqualTo(5);
     }
 
     private void event(long id, Instant at, long entityId) {

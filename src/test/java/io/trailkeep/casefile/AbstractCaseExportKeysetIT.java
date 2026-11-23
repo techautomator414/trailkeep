@@ -31,6 +31,7 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -47,8 +48,9 @@ import org.springframework.transaction.support.TransactionTemplate;
  * export repeat a row or skip one, in any of the five sort columns, ascending and descending. The page size is 5, so
  * 23 cases are five pages; after the first page has been read (the hook is the page's owner-name lookup, which both
  * the offset and the keyset code make once per page, inside the page's transaction) the test commits, on its own
- * connection, two cases that sort before the cursor in one direction or the other (the smallest and the largest key
- * of the column, the lowest ids) by moving them into the exported team, and deletes the first row already written. The
+ * connection, four cases that sort before the cursor in one direction or the other (two with the smallest and two
+ * with the largest key of the column, the lowest ids) by moving them into the exported team, and deletes the first
+ * row already written. The
  * data is committed, so it is removed afterwards as the schema owner (issue 309).
  */
 // "IT" is the Failsafe suffix Part B mandates for integration tests, not an abbreviation.
@@ -118,10 +120,32 @@ abstract class AbstractCaseExportKeysetIT {
     })
     void casesCommittedOrDeletedBetweenPagesNeitherRepeatNorSkipARow(CaseSort sort, boolean descending)
             throws IOException {
+        exportWhile(sort, descending, true);
+    }
+
+    /** Offset paging skipped the row after the one deleted; here nothing else moves, so only that shows. */
+    @Test
+    void deletingAWrittenCaseSkipsNoOtherRow() throws IOException {
+        exportWhile(CaseSort.NUMBER, false, false);
+    }
+
+    private void exportWhile(CaseSort sort, boolean descending, boolean moveIn) throws IOException {
         // The extremes, parked in another team: lowest ids, so they sort first among equals, and out of the export.
-        long smallest =
-                extreme("SEED-2026-000001", "Synthetic AAA first", "HIGH", BASE.minus(30, ChronoUnit.DAYS), -30);
-        long largest = extreme("SEED-2026-899999", "Synthetic ZZZ last", "NORMAL", BASE.plus(30, ChronoUnit.DAYS), 30);
+        List<Long> parked = new ArrayList<>();
+        for (int i = 1; i <= 2; i++) {
+            parked.add(extreme(
+                    "SEED-2026-00000" + i,
+                    "Synthetic AAA first " + i,
+                    "HIGH",
+                    BASE.minus(30, ChronoUnit.DAYS).plusSeconds(i),
+                    -30 + i));
+            parked.add(extreme(
+                    "SEED-2026-89999" + i,
+                    "Synthetic ZZZ last " + i,
+                    "NORMAL",
+                    BASE.plus(30, ChronoUnit.DAYS).plusSeconds(i),
+                    30 + i));
+        }
         // Ties in every column (4 titles, 2 priorities, 5 instants, 4 due dates and no due date for a third).
         for (int i = 0; i < 23; i++) {
             cases.add(caseRow(i, team));
@@ -137,8 +161,11 @@ abstract class AbstractCaseExportKeysetIT {
                     Object names = call.callRealMethod();
                     if (pages.incrementAndGet() == 1) {
                         committedMeanwhile(() -> {
-                            jdbc.update(
-                                    "UPDATE CASE_RECORD SET TEAM_ID = ? WHERE ID IN (?, ?)", team, smallest, largest);
+                            if (moveIn) {
+                                for (long id : parked) {
+                                    jdbc.update("UPDATE CASE_RECORD SET TEAM_ID = ? WHERE ID = ?", team, id);
+                                }
+                            }
                             jdbc.update("DELETE FROM CASE_SLA WHERE CASE_ID = ?", firstWritten);
                             jdbc.update("DELETE FROM CASE_RECORD WHERE ID = ?", firstWritten);
                         });
@@ -152,7 +179,7 @@ abstract class AbstractCaseExportKeysetIT {
 
         assertThat(pages.get()).as("pages read").isGreaterThanOrEqualTo(5);
         assertThat(exported).as("no row twice").doesNotHaveDuplicates();
-        List<String> inserted = List.of(number(smallest), number(largest));
+        List<String> inserted = parked.stream().map(this::number).toList();
         assertThat(exported.stream().filter(n -> !inserted.contains(n)).toList())
                 .as("every case that existed, in order, none skipped (the deleted one was already written)")
                 .containsExactlyElementsOf(baseline);
