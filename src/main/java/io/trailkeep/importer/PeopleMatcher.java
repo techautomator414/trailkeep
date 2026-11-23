@@ -10,10 +10,12 @@ import io.trailkeep.importer.staging.StagedPerson;
 import io.trailkeep.user.ImportPeopleDirectory;
 import io.trailkeep.user.ImportPeopleDirectory.PersonMatch;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
 import org.jspecify.annotations.Nullable;
@@ -46,6 +48,8 @@ final class PeopleMatcher {
     private final Map<Eligibility, Boolean> eligible = new HashMap<>();
     private final Map<Long, Optional<Long>> defaults = new HashMap<>();
     private final SortedSet<Long> openTeams = new TreeSet<>();
+    private final Map<String, Optional<PersonMatch>> byExternalId = new HashMap<>();
+    private final Map<String, List<PersonMatch>> byEmail = new HashMap<>();
 
     /**
      * A matcher with nothing matched yet.
@@ -70,7 +74,42 @@ final class PeopleMatcher {
     }
 
     /**
-     * Matches one staged person.
+     * Looks up, for a page of staged people, every user {@link #person} will ask the directory for, in one query per
+     * way of matching and 500 values (#173), in {@code people.match} order: a way is asked only for the people no
+     * earlier way matched to exactly one user, as {@link #person} would ask it. Only the last page's answers are kept,
+     * so the matcher holds no more of the directory than a page.
+     *
+     * @param page staged people, each then passed to {@link #person}
+     */
+    void prepare(List<StagedPerson> page) {
+        byExternalId.clear();
+        byEmail.clear();
+        List<StagedPerson> unmatched = page;
+        for (String way : order) {
+            boolean external = "externalId".equals(way);
+            Set<String> values = new HashSet<>();
+            for (StagedPerson row : unmatched) {
+                String value = external ? row.getExternalId() : row.getEmail();
+                if (value != null) {
+                    values.add(value);
+                }
+            }
+            if (external) {
+                Map<String, PersonMatch> found = people.byExternalIds(values);
+                values.forEach(value -> byExternalId.put(value, Optional.ofNullable(found.get(value))));
+            } else {
+                Map<String, List<PersonMatch>> found = people.byEmails(values);
+                values.forEach(value -> byEmail.put(value, found.getOrDefault(value, List.of())));
+            }
+            unmatched = unmatched.stream()
+                    .filter(row -> found(way, row).size() != 1)
+                    .toList();
+        }
+    }
+
+    /**
+     * Matches one staged person, from what {@link #prepare} looked up for its page or, when it was not prepared, from
+     * the directory.
      *
      * @param row the person
      * @return {@code AMBIGUOUS_PERSON} when only an ambiguous email address matched; else nothing
@@ -84,13 +123,7 @@ final class PeopleMatcher {
         }
         boolean ambiguous = false;
         for (String way : order) {
-            List<PersonMatch> found = switch (way) {
-                case "externalId" ->
-                    row.getExternalId() == null
-                            ? List.of()
-                            : people.byExternalId(row.getExternalId()).stream().toList();
-                default -> row.getEmail() == null ? List.of() : people.byEmail(row.getEmail());
-            };
+            List<PersonMatch> found = found(way, row);
             if (found.size() == 1) {
                 matched.put(row.getKey().legacyKey(), found.getFirst());
                 return List.of();
@@ -98,6 +131,25 @@ final class PeopleMatcher {
             ambiguous |= found.size() > 1;
         }
         return ambiguous ? List.of(new Finding("AMBIGUOUS_PERSON", Severity.WARNING, null)) : List.of();
+    }
+
+    /** The users one way finds for a person: what {@link #prepare} looked up, else the directory's answer. */
+    private List<PersonMatch> found(String way, StagedPerson row) {
+        if ("externalId".equals(way)) {
+            String externalId = row.getExternalId();
+            if (externalId == null) {
+                return List.of();
+            }
+            Optional<PersonMatch> prepared = byExternalId.get(externalId);
+            return (prepared != null ? prepared : people.byExternalId(externalId))
+                    .stream().toList();
+        }
+        String email = row.getEmail();
+        if (email == null) {
+            return List.of();
+        }
+        List<PersonMatch> prepared = byEmail.get(email);
+        return prepared != null ? prepared : people.byEmail(email);
     }
 
     /**

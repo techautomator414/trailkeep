@@ -14,6 +14,10 @@ import io.trailkeep.user.ImportPeopleDirectory.SignedIn;
 import io.trailkeep.user.ImportPeopleService.ImportPrincipals;
 import io.trailkeep.user.TeamAdminService.Actor;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Consumer;
@@ -141,6 +145,56 @@ abstract class AbstractImportPeopleIT {
         assertThat(lookups.byEmail("import@trailkeep.invalid"))
                 .as("a principal's address")
                 .isEmpty();
+    }
+
+    /**
+     * The batch lookups of #173 answer each value exactly as the single lookups do, on both vendors: external ids
+     * exactly, addresses in any letter case, a shared address with both users, a disabled user, an address with a
+     * character outside ASCII, never a principal, duplicates once, and more values than one {@code IN} list holds.
+     */
+    @Test
+    void batchLookupsAnswerEveryValueExactlyAsTheSingleLookups() {
+        String tag = UUID.randomUUID().toString().substring(0, 8);
+        user("ext-a-" + tag, "Synthetic A", "a." + tag + "@Example.invalid");
+        AppUser disabled =
+                users.save(new AppUser("ext-b-" + tag, "Synthetic B", "b." + tag + "@example.invalid", CREATED));
+        disabled.disable();
+        users.save(disabled);
+        user("ext-c-" + tag, "Synthetic C", "shared." + tag + "@example.invalid");
+        user("ext-d-" + tag, "Synthetic D", "SHARED." + tag + "@example.INVALID");
+        user("ext-e-" + tag, "Synthetic E", "josé." + tag + "@example.invalid");
+        List<String> externalIds = new ArrayList<>(List.of(
+                "ext-a-" + tag,
+                "ext-b-" + tag,
+                "EXT-A-" + tag,
+                "ext-c-" + tag,
+                "ext-a-" + tag,
+                ImportPeopleService.PRINCIPAL_PREFIX + "import"));
+        List<String> emails = new ArrayList<>(List.of(
+                "a." + tag + "@example.invalid",
+                "A." + tag + "@EXAMPLE.INVALID",
+                "b." + tag + "@example.invalid",
+                "Shared." + tag + "@Example.Invalid",
+                "josé." + tag + "@example.invalid",
+                "JOSÉ." + tag + "@EXAMPLE.INVALID",
+                "a." + tag + "@example.invalid",
+                "import@trailkeep.invalid"));
+        for (int i = 0; i < 1200; i++) {
+            externalIds.add("ext-none-" + i + "-" + tag);
+            emails.add("none." + i + "." + tag + "@example.invalid");
+        }
+
+        Map<String, PersonMatch> single = new HashMap<>();
+        externalIds.forEach(id -> lookups.byExternalId(id).ifPresent(match -> single.put(id, match)));
+        Map<String, List<PersonMatch>> singleByEmail = new HashMap<>();
+        emails.stream()
+                .filter(email -> !lookups.byEmail(email).isEmpty())
+                .forEach(email -> singleByEmail.put(email, lookups.byEmail(email)));
+
+        assertThat(lookups.byExternalIds(externalIds)).isEqualTo(single).hasSize(3);
+        assertThat(lookups.byEmails(emails)).isEqualTo(singleByEmail);
+        assertThat(singleByEmail.get("Shared." + tag + "@Example.Invalid")).hasSize(2);
+        assertThat(singleByEmail).containsKeys("b." + tag + "@example.invalid", "josé." + tag + "@example.invalid");
     }
 
     @Test
