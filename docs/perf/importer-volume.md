@@ -91,8 +91,8 @@ The report reduces what the importer decided to digests, so a change can be show
 
 One desktop machine: a 16-core AMD Ryzen 9 5900XT, 62 GB RAM, NVMe storage; PostgreSQL 16 (`postgres:16-alpine`,
 default settings) and Oracle in Testcontainers, the application in the Failsafe JVM on Temurin 21 with `-Xmx1152m`. The
-machine runs other services, so times move by some percent between runs; each run below was made alone, one after the
-other, on the same day.
+machine runs other services, so times move by some percent between runs; the timed runs were made one after the other
+on the same day.
 
 ## Results on PostgreSQL, the full corpus
 
