@@ -74,7 +74,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   downloads the vulnerability and Java databases once per job, each from `mirror.gcr.io` and then `ghcr.io`, with a
   60 s timeout per try and 3 attempts, and all scans run with `--skip-db-update --skip-java-db-update`. `main.yml`
   caches the databases by UTC date and falls back to the cache only if every attempt fails; `release.yml` always
-  downloads fresh and has no cache. A missing database fails the job. The Trivy gates are unchanged.
+  downloads fresh and has no cache. A missing database, or one built more than 48 h ago (Java DB: 96 h), fails the
+  job. The Trivy gates are unchanged.
 - The same person's first sign-in from several sessions at once no longer returns 500 for all but one (#298). Each
   looked the user up, found none and inserted, and the unique key on `APP_USER.EXTERNAL_ID` refused every insert but
   the first. Provisioning now commits in a transaction of its own, and a refusal by that key (only that violation of
