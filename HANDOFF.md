@@ -2,12 +2,13 @@
   SPDX-License-Identifier: Apache-2.0
   Copyright 2026 Charlie Genova and contributors
 -->
-# Trailkeep handoff: state at 0.3.0
+# Trailkeep handoff: state at pre-1.0.0
 
 _Written 2026-11-04 at 0.1.0 for the team taking over; refreshed 2026-11-06, after WP-11 to WP-18 merged (Phase 2
 closed), 2026-11-07, after WP-19 merged (Phase 3 closed), 2026-11-08, after WP-23 merged (Phase 4 closed),
 2026-11-13, after WP-24 to WP-27 merged (Phase 5 closed), 2026-11-20 for the 0.2.0 tag, after WP-28 merged, and
-2026-11-22 for the 0.3.0 tag, after the security test map's and the threat model's follow-ups merged. Read
+2026-11-22 for the 0.3.0 tag, after the security test map's and the threat model's follow-ups merged, and
+2026-11-23, after WP-30's build work merged (everything left for 1.0.0 is in "What remains for 1.0.0"). Read
 this first, then `README.md`, then `IMPLEMENTATION_PLAN.md` Part B (standards) and Part C (work packages). Where this
 file and the plans disagree, the plans win; this file only says where the build stands._
 
@@ -15,15 +16,38 @@ file and the plans disagree, the plans win; this file only says where the build 
 
 | Measure | Done | Total | Share |
 |---|---|---|---|
-| Work packages (IMPLEMENTATION_PLAN Part C) | 31 (WP-01 to WP-08 are 10 rows with the 03a/b and 04a/b splits, plus WP-09 to WP-28 with WP-17b) | 33 | 94 % |
-| Work packages weighted by size (S = 1, M = 2, L = 3) | 62 (53 at the end of Phase 4, plus WP-24 M, WP-25 S, WP-26 L, WP-27 S and WP-28 M) | 67 | 93 % |
+| Work packages (IMPLEMENTATION_PLAN Part C) | 32 (WP-01 to WP-08 are 10 rows with the 03a/b and 04a/b splits, plus WP-09 to WP-28 with WP-17b, plus WP-30's build work; its signed tag is an owner item) | 33 | 97 % |
+| Work packages weighted by size (S = 1, M = 2, L = 3) | 64 (53 at the end of Phase 4, plus WP-24 M, WP-25 S, WP-26 L, WP-27 S, WP-28 M and WP-30 M) | 67 | 96 % |
 | Phase 1 pull requests (Part D) | 12 | 12 | 100 % |
 | Plan calendar (Part F) | 18 weeks: Phase 1 (4), Phase 2 (5), Phase 3 (3), Phase 4 (3) and Phase 5 (3) | 25 weeks | 72 % (the 25 include Phase 0 discovery and Phase 7 go-live, 2 weeks each, neither of them build work; Phases 1 to 6 alone are 18 of 21 weeks, 86 %) |
 
-What is left in the plan is the rest of Phase 6: WP-29 (the Section 508 conformance pass, L, with a named certified
-tester) and WP-30 (performance at 500k, restore drill, runbook and 1.0.0, M). 0.3.0 adds no work package: it closes
-the follow-ups that WP-28's security test map and the threat model filed. "0.2.0", "0.3.0" and "What remains for
-1.0.0", at the end of this section, give each release's scope and the open issues.
+What is left in the plan is WP-29 (the Section 508 conformance pass, L, with a named certified tester) and the owner's
+part of WP-30 (the signed `v1.0.0` tag and the release-candidate evidence runs). **WP-30's build work is done**, in
+these PRs:
+- #295, #296 and #297 (part a, performance): exports read each page in its own transaction, which ends the deadlock of
+  concurrent exports on the connection pool (#295); the pool is 20 per web replica (#296); the 500k seed (50 000 cases,
+  500 000 comments), its in-process IT, the k6 mix and the measurements (#297, `docs/perf/release-500k.md`). Every
+  target is met on PostgreSQL. On Oracle the `LIKE` search took 2.0 to 2.4 s against 1 s, which BUILD_PLAN section 12
+  answers by pulling the vendor search adapters into 1.0.0;
+- #304 and #305 (part a2, the vendor search adapters, #299, ADR-0017): a trigram index on PostgreSQL and an Oracle
+  Text `CONTEXT` index (`V21__search_index`, one file per vendor), results identical to `LIKE`'s;
+- #311 to #314 (part b, the importer at volume, #173): the dry run's people matching is batched, the import principals
+  are read once, and a case's comments and history are written together. On PostgreSQL at the release corpus the dry
+  run went from 427 s to 21 s and the load from 1 826 s to 390 s (`docs/perf/importer-volume.md`);
+- #315 and #316 (part c): the restore drill on PostgreSQL 16, Oracle Free 23 and XE 21 (`docs/ops/restore-drill.md`),
+  and the operator's runbook (`docs/RUNBOOK.md`);
+- #320 (part d): the evidence pack, its checks and the signed-tag readiness (`docs/RELEASING.md`).
+
+The work also closed: #302 (#298, concurrent first sign-ins of one person; #309 cleans up its tests), #310 (#308, the
+Oracle redo minimum), #319 (#317, no `HTE_*` tables created outside Flyway on Oracle, and a schema guard), #322 (#321,
+Semgrep, gitleaks and CodeQL gate the release), #323 (#300, keyset paging for both CSV exports and a bounded snapshot
+for the audit export) and #306 (#303, Trivy database fallbacks). Dependencies and images: #278, #293 (the combined
+compose and test-image bump procedure), #301 (ClamAV 1.5.4, a security release) and #307 (`wcmatch`, GHSA-53pm-wgxf-c6qf).
+**#324 (#318, an audited re-send of failed mail) is an open draft pull request, not merged**; until it is, the
+runbook's section 8.2 still has the SQL.
+
+"0.2.0", "0.3.0" and "What remains for 1.0.0", at the end of this section, give each release's scope and the open
+issues.
 
 **WP-28 (authenticated DAST and security E2E, M) is built**, in these PRs:
 - #206 (part a): the CSRF and 404-not-403 route sweeps and the forwarded-header spoof;
@@ -114,15 +138,15 @@ reconciliation report; it runs as a Kubernetes `Job`, one command per run. **Pre
 single-key shortcuts (`/` for the cases search, `N` for a new case) on or off, all mail wording lives in
 `messages.properties`, and every time a page shows is in `app.timezone`.
 
-What Phase 6 adds: authenticated DAST with ZAP and the security E2E suite (WP-28), the Section 508 conformance pass
-and ACR by the named certified tester (WP-29), and performance at the 500k seed, the restore drill, the runbook, the
-evidence pack and 1.0.0 (WP-30).
+What Phase 6 adds: authenticated DAST with ZAP and the security E2E suite (WP-28), performance at the 500k seed, the
+vendor search indexes, the importer at volume, the restore drill, the runbook and the release evidence pack (WP-30,
+built), and still to come the Section 508 conformance pass and ACR by the named certified tester (WP-29) and 1.0.0.
 
 0.1.0 is the `v0.1.0` tag, cut from `main` as the last step of this handoff, after #25 (CI fix for #13), #33 (the
 test port fix below) and #32 (this document) merged. Every workflow is green on that commit: `ci`, `main` (both Oracle images, image build and
 scan), `codeql`, `scorecard`. "Green" has one caveat: `main.yml` skips SonarCloud and Dependency-Check with a notice
 when their secrets are absent, and they were absent at handoff (#30). `v0.2.0` followed on 2026-11-20 ("0.2.0"
-below), and the next tag is `v0.3.0`, cut after this refresh merges ("0.3.0" below).
+below), `v0.3.0` followed on 2026-11-22 ("0.3.0" below), and the next tag is the signed `v1.0.0` ("What remains for 1.0.0" below).
 
 ### 0.2.0
 
@@ -136,7 +160,7 @@ no Dependency-Check report.
 
 ### 0.3.0
 
-**0.3.0 is the `v0.3.0` tag**, cut from `main` once this refresh merges. Its scope is everything merged since
+**0.3.0 is the `v0.3.0` tag**, cut from `main` on 2026-11-22. Its scope is everything merged since
 `v0.2.0`; no work package is in it. `CHANGELOG.md`'s `[0.3.0]` section lists every change; section 2, "Merged since
 0.2.0", maps them to their PRs. In short:
 - **The security test map's gaps are closed** (#245, in #250, which shipped in 0.2.0, and #260, #261 and #262):
@@ -171,16 +195,33 @@ Dependency-Check stay intentionally off for 0.3.0**, for the same reason as in 0
 
 ### What remains for 1.0.0
 
-- **WP-29**, the Section 508 conformance pass: Trusted Tester v5 by a named certified human tester, remediation, and
-  the ACR (owner item 9). #92's screen-reader pass can be folded into it.
-- **WP-30**, performance at the 500k seed, the restore drill, the runbook, the evidence pack and the signed `v1.0.0`
-  tag.
-- **The open issues:**
-  - The `json-schema-validator` 3.0.9 bump, tracked on #254 and now carried by Dependabot's grouped #277: it stays red
-    on `RequireUpperBoundDeps` (it declares Jackson 3.1.8, Spring Boot 4.1.x manages 3.1.7) until a Spring Boot release
-    manages Jackson 3.1.8 or later. No override, exclusion or ignore rule.
-- **#30:** the scanner secrets `SONAR_TOKEN` and `NVD_API_KEY` (WP-28's "Sonar gate A; Dependency-Check clean" cannot
-  be shown without them), a real identity-provider sign-in in DEV, and the manual testing of the shell ACR.
+Nothing that remains is a code change in this repository except WP-29's remediation and the 1.0.0 version cut.
+`docs/RELEASING.md` section 3 is the checklist; the preflight in `release.yml` refuses a 1.0.0 tag without items 1, 2
+and the signed tag.
+
+- **WP-29**, the Section 508 conformance pass (#92): Trusted Tester v5 by a named certified human tester (owner item
+  9), remediation, and the ACR at `accessibility/ACR.md` (VPAT 2.5; today only the shell's draft
+  `accessibility/ACR-shell.md` exists). The release preflight refuses 1.0.0 while the ACR is titled DRAFT, has a
+  "Does Not Support" or has an undated "Partially Supports" (#320, `docs/RELEASING.md` section 3). #92's screen-reader
+  pass can be folded into it.
+- **#30:** the repository secrets `SONAR_TOKEN` and `NVD_API_KEY`, which the preflight requires from 1.0.0 (#320: no
+  scanner may be skipped, and the pack requires the Dependency-Check report; WP-28's "Sonar gate A; Dependency-Check
+  clean" cannot be shown without them), a real identity-provider sign-in in DEV, and the manual testing of the shell
+  ACR.
+- **The owner's signing key and the signed `v1.0.0` tag**: an annotated tag GitHub reports as `verified`
+  (`docs/RELEASING.md` section 4).
+- **A fresh k6 and Oracle 500k run on the release-candidate commit**, recorded with their date in
+  `docs/perf/release-500k.md` (and the restore drill, `docs/ops/restore-drill.md`, if the schema or the attachment path
+  changed since). k6 stays a release-time hand run (`docs/RELEASING.md` section 2); the in-process 50k and 500k runs
+  gate the release (#320).
+- **The 1.0.0 version cut**, a separate pull request once the items above are done: the `[Unreleased]` entries of
+  `CHANGELOG.md` move under `[1.0.0]` (`docs/RELEASING.md` section 3, item 5).
+- **#277**, Dependabot's grouped bump (an open pull request, not an issue): the `json-schema-validator` 3.0.9 update
+  stays red on `RequireUpperBoundDeps` (it declares Jackson 3.1.8, Spring Boot 4.1.x manages 3.1.7) until a Spring Boot
+  release manages Jackson 3.1.8 or later. No override, exclusion or ignore rule (tracked on #254).
+- **The open issues** (`gh issue list --state open`, 2026-11-23), exactly three: **#318** (audited re-send of a FAILED
+  mail; its pull request #324 is a draft, so until it merges the runbook's section 8.2 uses SQL), **#92** (WP-29's
+  assistive-technology pass) and **#30** (above).
 
 ### Phase 1 exit criteria (Part C)
 
@@ -298,9 +339,10 @@ Schema on `main`: `V1__identity`, `V2__audit`, `V3__admin`, `V3_1__sessions`, `V
 `V11__import_principals` (#137), `V12__case_legacy_number` (#142), `V13__import_staging` (#147),
 `V14__attachment_uploader_snapshot` (#149), `V15__closure_imported` (#150), `V16__case_imported_event` (#152),
 `V17__import_ledger` (#177), `V18__import_owner_pending` (#187), `V19__import_ledger_written` (#190),
-`V20__audit_time_index` (#288, 0.3.0), plus the repeatable `R__grants` per vendor. Every migration is in
-`db/migration/common`; the vendor folders hold only `R__grants.sql`. Other PRs added no migration. The next migration
-is `V21`, assigned in the PR that ships it.
+`V20__audit_time_index` (#288, 0.3.0) and `V21__search_index` (#304 for PostgreSQL, #305 for Oracle; first released in
+1.0.0), plus the repeatable `R__grants` per vendor. Every migration is in `db/migration/common`, except `V21`, which
+differs by vendor and so lives in `db/migration/postgresql` and `db/migration/oracle` beside `R__grants.sql`. Other PRs
+added no migration. The next migration is `V22`, assigned in the PR that ships it.
 
 ### Database users, profiles and Jobs
 
@@ -351,9 +393,9 @@ rollout; the `prod` profile runs Flyway off, so no run-time user ever runs DDL (
 
 ### Not built yet
 
-The Section 508 conformance pass and ACR (WP-29), and performance at 500k, the restore drill, the runbook, the
-evidence pack and 1.0.0 (WP-30). Since WP-28 the ZAP scan and the Nu HTML validator have jobs; k6 at the 500k seed
-waits for WP-30 and veraPDF for v1.1 (section 4).
+The Section 508 conformance pass and ACR (WP-29), and 1.0.0 itself (the signed tag and the release-candidate evidence
+runs; section 1, "What remains for 1.0.0"). The ZAP scan and the Nu HTML validator have jobs; k6 at the 500k seed is a
+release-time hand run (`docs/RELEASING.md` section 2) and veraPDF waits for v1.1 (section 4).
 
 Consequences for local development today: `compose.yaml` runs PostgreSQL, Keycloak, ClamAV with its TLS sidecar (the
 `local` profile trusts the dev-only CA that `clamav-tls-init` generates, so run `docker compose up -d` before
@@ -400,6 +442,21 @@ Developer edition container as the legacy database). Testcontainers ITs skip wit
 
 Playwright: the `e2e` suite launches Chromium; locally it skips if no browser is installed, CI installs one.
 
+### Operations pointers
+
+For whoever deploys or runs it: `docs/RUNBOOK.md` is the operator's runbook (upgrade and what each migration costs, roll
+back, back up and restore, secrets, pool sizing, jobs, rate limits, import go-live, incidents, disaster recovery; #316).
+`docs/RELEASING.md` is the release process and the evidence pack (#320). `docs/ops/restore-drill.md` is the restore
+drill on PostgreSQL 16, Oracle Free 23 and XE 21, with the targets and every finding (#315). `docs/perf/` holds the
+measurements: `release-500k.md` (500k seed, k6, Oracle, search adapters, pool, exports, indexes), `importer-volume.md`,
+`cases-list-50k.md` and `role-conflict.md`.
+
+The standing database decisions are in **RUNBOOK section 13**, with the check and the fix for each; they are not
+repeated here. In short: full (not `-slim`) Oracle images, Oracle redo of at least three 512 MB groups (#310), locked
+`CASE_SEARCH` statistics (ADR-0017), the Oracle Text manual sync around the go-live load (the schema owner, with
+`CTX_DDL` granted by a DBA for that window only), the `APP_SEARCH_ADAPTER=like` kill switch, and PostgreSQL V21's
+write pause of about 13 s at the release volume.
+
 ## 4. CI and release
 
 | Workflow | Trigger | What it proves |
@@ -408,20 +465,22 @@ Playwright: the `e2e` suite launches Chromium; locally it skips if no browser is
 | `codeql.yml` | every PR, push to `main`, weekly | CodeQL `security-extended` for Java |
 | `scorecard.yml` | push to `main`, weekly | OpenSSF Scorecard |
 | `main.yml` | push to `main` (since #148 each merge has its own concurrency group, so every code merge gets a complete run and none is cancelled); on demand with `gh workflow run main.yml` (its own group since #88); called by nightly and release | SonarCloud, Dependency-Check, SBOM + Trivy, image build + Trivy (`--ignore-unfixed`) + Dockle + kube-linter, `oracle-it` (`./mvnw verify -Poracle-it`, both images, one job), `sqlserver-it` (the importer's SQL Server source ITs, `-Psqlserver-it`, WP-26 part p) |
-| `nightly.yml` | 04:41 UTC | `main.yml` again; the `perf` job (`PerfCasesListIT` at 50k cases; fails at a list p95 of 500 ms or a search p95 of 1 s); and `zap.yml` in nightly mode (reports; a red run blocks no merge). The 500k-comment k6 run is a placeholder until WP-30 |
-| `release.yml` | tag `v*` | `main.yml` again plus its own `./mvnw verify`, `zap.yml` in release mode (a Medium+ alert or a partial scan fails the release), image to GHCR with keyless cosign signature, SBOM attestation, SLSA provenance, `verify-image.yml` against the published digest (#267; a failure stops the release), GitHub Release with the evidence pack (it does not re-run the `ci.yml` jobs) |
+| `nightly.yml` | 04:41 UTC | `main.yml` again; the `perf` job, which calls the reusable `perf.yml` (#320): `PerfCasesListIT` at 50k cases and `PostgresComments500kPerfIT` at the 500k seed (50k cases, 500k comments) in one command, both measured before either verdict, failing at the plan's p95 targets (list 500 ms, search 1 s), tables uploaded as the `perf` artifact (#297); and `zap.yml` in nightly mode (reports; a red run blocks no merge). The Oracle 500k IT stays opt-in and k6 a hand run |
+| `release.yml` | tag `v*` | `preflight` first (the tag points at the built commit, the CHANGELOG section exists, the checked-in evidence files exist; from 1.0.0 also a GitHub-verified annotated tag, `SONAR_TOKEN` and `NVD_API_KEY` set, no DRAFT document; #320). Then `main.yml` again (`main-gates`), its own cold `./mvnw verify`, `zap.yml` in release mode (a Medium+ alert or a partial scan fails), `perf` (`perf.yml`, run cold, gates publishing on the targets), and the scanners Semgrep and gitleaks (`ci.yml`, over the tagged commit and the commits since the last release) and CodeQL (`codeql.yml`, which fails on a missing analysis or an open alert) (#322). Only then `publish`: image to GHCR with keyless cosign signature, SBOM attestation, SLSA provenance, `verify-image.yml` against the published digest (#267; a failure stops the release), and `github-release`: the evidence pack, `EVIDENCE.md`, `VERIFY.md` and a keyless-signed `SHA256SUMS` (#320). `docs/RELEASING.md` section 1 has each job |
+| `perf.yml` | called by nightly and release | the in-process performance ITs on PostgreSQL, 50k cases and the 500k seed, failing at the plan's p95 targets (#320; the nightly job moved here) |
 | `verify-image.yml` | called by release; on demand against a tag and digest | `cosign verify`, `cosign verify-attestation --type cyclonedx` and `slsa-verifier verify-image` for the published image (#249) |
 | `zap.yml` | called by nightly and release; on demand with a `mode` | the authenticated ZAP full scan and API scan of an image built from the commit, once per scan identity (`compliance.admin`, `alpha.analyst`), each on its own stack (WP-28) |
 
 Secrets: `SONAR_TOKEN` and `NVD_API_KEY` are referenced but were not set at handoff (#30). The release workflow
-needs no secrets beyond the job token for signing and publishing, but it forwards those two to `main.yml`, so a
-release cut without them skips SonarCloud and Dependency-Check and its evidence pack has no Dependency-Check report.
+needs no secrets beyond the job token for signing and publishing, but it forwards those two to `main.yml`. Until 1.0.0 a
+release cut without them skips SonarCloud and Dependency-Check and its evidence pack has no Dependency-Check report;
+from 1.0.0 the `preflight` job refuses the release without them (#320).
 They were still absent at 0.2.0: the latest `main` run before this refresh (44007159836, on 37dfd20) reports "Secret
 SONAR_TOKEN is not configured for this repository; the quality gate did not run." and "Secret NVD_API_KEY is not
 configured for this repository; the NVD scan did not run." Both scanners are intentionally off for 0.2.0. They were
 still absent at 0.3.0: the latest `main` run before this refresh (44988621200, on 369b889) gives the same two notices,
 and both scanners stay intentionally off for 0.3.0. WP-28's acceptance ("Sonar gate A; Dependency-Check clean")
-cannot be shown until they are set.
+cannot be shown until they are set. #30 is still open.
 
 ### Part G as it runs today
 
@@ -432,15 +491,15 @@ cannot be shown until they are set.
 | PostgreSQL ITs incl. `validate` and metadata-diff | ✓ | ✓ | ✓ | ✓ | as above |
 | Oracle ITs (xe 21 and free 23) | – | ✓ | ✓ | ✓ | `main.yml` `oracle-it` |
 | SQL Server source ITs (importer) | – | ✓ | ✓ | ✓ | `main.yml` `sqlserver-it`. **Not a Part G row**: proposed in #167 (WP-26 part p) and run since, but not written into `IMPLEMENTATION_PLAN.md`; owner decision (section 6) |
-| CodeQL, Semgrep, SpotBugs/FindSecBugs, gitleaks | ✓ | ✓ | partly | partly | `codeql.yml` (PRs, pushes, weekly on Mondays) and `ci.yml` (Semgrep, gitleaks; PRs and pushes). Nightly and release get SpotBugs through `verify`, but neither runs Semgrep, gitleaks or CodeQL; a release tag is cut from a `main` commit those already passed |
+| CodeQL, Semgrep, SpotBugs/FindSecBugs, gitleaks | ✓ | ✓ | partly | ✓ | `codeql.yml` (PRs, pushes, weekly on Mondays) and `ci.yml` (Semgrep, gitleaks; PRs and pushes). Nightly gets SpotBugs through `verify` only. Since #322 the release runs Semgrep, gitleaks and CodeQL on the tagged commit and publishing waits for them |
 | Playwright E2E + axe + Nu validator | ✓ | ✓ | ✓ | ✓ | Playwright, axe and the Nu Html Checker (#239, a pinned image started by the tests) run inside `verify` |
 | SonarCloud, Dependency-Check | – | ✓ | ✓ | ✓ | `main.yml`; skipped with a notice while `SONAR_TOKEN` and `NVD_API_KEY` are absent (#30) |
 | CycloneDX SBOM generated | – | ✓ | ✓ | ✓ | `main.yml` `sbom`, scanned by `trivy-sbom` |
 | Container build, Trivy, Dockle, kube-linter | – | ✓ | ✓ | ✓ | `main.yml` `image` |
 | ZAP authenticated full + API scan | – | – | ✓ | ✓ | `zap.yml`, called by `nightly.yml` (reports) and `release.yml` (gates) |
-| k6 at the 50k/500k seed | – | – | 50k, in process | – | `nightly.yml` `perf` runs `PerfCasesListIT` at 50k (not k6); the k6 smoke runs by hand; 500k and the release run arrive with WP-30 |
+| k6 at the 50k/500k seed | – | – | in process, not k6 | in process, not k6 | **Plan deviation, recorded in `docs/RELEASING.md` section 2 (#320):** k6 needs a real identity provider and a quiet machine, so it stays a release-time hand run, with its dated results in `docs/perf/release-500k.md` (a fresh run on the candidate commit is owed, section 1). `perf.yml` runs the 50k and 500k ITs on PostgreSQL in nightly and in the release, where they gate publishing; the Oracle 500k IT is opt-in (#297) |
 | OpenSSF Scorecard | – | push and weekly | – | – | `scorecard.yml` |
-| SBOM signed, cosign, SLSA, evidence pack | – | – | – | ✓ | `release.yml`; exercised at `v0.1.0` and `v0.2.0`, next at `v0.3.0`. Since #267 `verify-image.yml` checks the signature, the SBOM attestation and the provenance of the published image before the GitHub Release; shown green against `v0.2.0` by hand |
+| SBOM signed, cosign, SLSA, evidence pack | – | – | – | ✓ | `release.yml`; exercised at `v0.1.0` and `v0.2.0` and `v0.3.0`, next at `v1.0.0` (the pack is listed in `.github/release/evidence-pack.txt` and checked by `evidence-pack.py`, #320). Since #267 `verify-image.yml` checks the signature, the SBOM attestation and the provenance of the published image before the GitHub Release; shown green against `v0.2.0` by hand |
 | veraPDF | – | – | – | – | v1.1 only (no PDF in v1) |
 
 Branch rules: status checks required, linear history, no force-push, zero approving reviews (single maintainer).
@@ -472,8 +531,8 @@ All are recorded where they were made; this is the index.
 | Saved views store the canonical query string, not `filter_json`; they are private to the person, and save and delete are audited by name only | #78, `V4_7` | `SAVED_VIEW.QUERY` holds `CaseListQuery.toQueryString()` (BUILD_PLAN §5's `filter_json` is replaced; the binding to the typed filter record is kept because the posted query is parsed into `CaseListQuery` before it is stored). Another person's or an unknown view is 404, never 403, so a view's existence stays private. Applying a view is a plain GET that is re-read through the parser and `CaseScope`, so a view never widens what the person reads. `SAVED_VIEW_CREATED` and `SAVED_VIEW_DELETED` carry the name only |
 | `VIEW_RESTRICTED` is written in the read's own transaction, through one `RestrictedReadAudit` | #83, #87, BUILD_PLAN §3.3 | The case page, an attachment download and the History page share the one writer, so the rule lives in one place; the audit row commits or rolls back with the read, and for the History page it is written before the events are read, so the page's own entry is the newest line. Absent and unreadable cases write nothing (404) |
 | The audited export's `query` carries search words as typed | #84 | `CASES_EXPORTED` stores the list's query string as sent, which can include search words; `subject` and `description` never enter the audit row. Accepted by the release manager: the audit trail is itself access-controlled |
-| Exports hold a database connection while they stream, are not counted against `app.attachments.max-concurrent-downloads`, and keep no semaphore of their own | #84, #91 | `app.export.max-rows` bounds an export's length, and rows are read in pages of 500 inside one read-only transaction. WP-15 part 5 measured 0.5 s for 9 645 rows with details (about the cap), so a Hikari pool of 10 serves ten at once without an interactive request waiting more than that. A slow client stretches the hold; if WP-30's load test shows it, share the download semaphore (the small fix) or render to a temporary file (the larger one). Both are recorded in `docs/perf/cases-list-50k.md`, not built |
-| No index or cache was added for the cases list; the recommendations (`CASE_RECORD (OPENED_AT, ID)`, an expression index on `LOWER(TITLE)`, no cache for the filter choices) wait for WP-30's 500k run | #91 | Every target is met with a wide margin at 50k cases, so a migration now would be speculation; `docs/perf/cases-list-50k.md` has the evidence to weigh them against |
+| Resolved: each export page is read in its own short read-only transaction and written after it ends, and both CSV exports page by keyset on their own sort order; the audit export reads a bounded snapshot (ids up to the highest at start, times before its start) | #295 (the old hold deadlocked the Hikari pool: the first write commits the response, which saves the session on a second connection), #323 (#300) | No semaphore and no temporary file. READ COMMITTED stays, because one long snapshot is what deadlocked the pool. The cases export is not a snapshot (a case committed meanwhile is written once or not at all, never twice); the audit export's limit is stated in `DefaultAuditExportService` and the CHANGELOG. `docs/perf/release-500k.md`, "Exports and database connections" |
+| No V21 cases index and no cache for the cases list; the trigger is recorded in `docs/perf/release-500k.md` ("The cases-list indexes"): add matching indexes in one migration for both vendors, with an Oracle plan test, when the cases one person lists approach a few hundred thousand | #297, #91 | The 500k seed adds comments and the list reads none, so its numbers did not move (190 ms p95 at 500k). `CASE_RECORD (OPENED_AT, ID)` as recommended would not be used (the list orders `OPENED_AT DESC NULLS LAST, ID`); an index that matches the order is needed. The deep page needs keyset paging, not an index |
 | History is a separate page, not an ARIA tab strip | #87, IMPLEMENTATION_PLAN WP-16 | A page with plain previous and next links, a labelled native select for the kind, and a "Case sections" link list works without script and has one h1 and one region to test. A tab strip, if it ever comes, is Phase 6 polish and these links are its no-script form. A redacted field reaches the page only as "(set)" or "(changed)"; the check is structural (no value, HMAC or length is passed to the template) |
 | The outbox dispatcher takes no ShedLock | #94, #95 | It runs every minute on every web replica. The claim's `FOR UPDATE SKIP LOCKED` gives each row to exactly one claimer, and its lease keeps the row there until it is released or lapses (`app.mail.lease`, 5 minutes), so replicas cannot send the same row twice and no extra lock table is needed |
 | Mail delivery is at-least-once | #95 | A crash between the server accepting a batch and the release leaves the rows `SENDING`; the reaper returns them after the lease and they are sent again. Nothing is lost; that batch may arrive twice. The class Javadoc says so |
@@ -513,6 +572,8 @@ All are recorded where they were made; this is the index.
 | `REPORT_RUN` is kept 400 days (`app.retention.report-runs`) | #128 | A run is a weekly snapshot with case numbers, titles and names; 400 days keeps last year's run for the same week. The live aging report answers "as of today". A deployment under a longer records schedule raises it |
 | The purge's native SQL lives in `retention.PurgeJdbcDao`, outside Part B's three `*JdbcDao` modules | #128 | It deletes across modules under its own user, without Hibernate validation, from tables whose entities are `@Immutable`; one class mirrored statement for statement by the grants is what makes "the purge user can do exactly this" reviewable. The class says why JPA cannot express it |
 | The purge keeps the case row, `CASE_SLA`, the audit trail, the alert ledger, the hold history and `USER_ALERT`; it deletes the case's mail; it writes one `CASE_PURGED` row of counts per tombstone and a `JOB_RUN` row | #128 | Every kept table references the case, which is never deleted. An alert carries only what the tombstone keeps; a mail body may carry more. The audit row has counts only, so the purge pod needs no HMAC key. The tombstone also keeps `OWNER_NAME_SNAPSHOT` (#142), the stand-in for an imported case's legacy owner. A purged case still opens, with "Content removed on (day) under the retention policy." |
+| The cases search is served by a vendor index in front of the unchanged `LIKE` match: a trigram GIN index on PostgreSQL, an Oracle Text `CONTEXT` index on Oracle; `app.search.adapter` (`oracle-text` or `like`) is set by each vendor profile, and `APP_SEARCH_ADAPTER=like` is the kill switch | ADR-0017, #304, #305 (#299) | BUILD_PLAN section 12 pulls the vendor adapters forward when the 500k seed pushes `LIKE` past 1 s; on Oracle it was 2.0 to 2.4 s, and is 0.41 to 0.74 s with the adapter. Results are `LIKE`'s by construction. Oracle needs the full image, locked `CASE_SEARCH` statistics and a manual index sync around the import (RUNBOOK section 13) |
+| Hibernate's Oracle start-up creates no `HTE_*` temporary tables: `NoTempTableInsertStrategy` for Oracle, and a schema guard against DDL outside Flyway | #319 (#317) | No HQL `insert ... select` exists, so the 24 tables were never used, and which process created them depended on start order. Making Flyway own them would ship 24 unused tables with grants |
 | Four database users (owner, app, purge, import), and `app.db.schema` as every pooled connection's default schema | BUILD_PLAN §8 rule 7, #134, #178 | The import user joined in WP-26 (design §5). The run-time users own nothing, and every statement Hibernate does not write (the DAOs, ShedLock, Spring Session) used to resolve in the connecting user's own schema on Oracle; one `connectionInitSql` covers them all, and a later native statement cannot forget it. The schema must be a plain identifier, and a second `connection-init-sql` fails the start |
 | The batch profiles (`purge`, `importer`) run once and exit, with no web server, scheduler or OIDC client and Flyway off | #128, #134 | `TrailkeepApplication.main` exits with the context's exit code, so a failed run fails the pod. Spring Modulith's "moments" were the only thing starting a scheduler outside the servlet-only configuration |
 | The role-conflict list and the test-mail throttle are read from the audit trail | #140, #159 | Cluster truth without a new table: the latest `LOGIN` or `ROLE_CONFLICT` per user (closes #67 item 9), and at most one `TEST_MAIL_QUEUED` per person per 5 minutes. The role-conflict query at multi-year audit volume was #141, rewritten as a range by #238 |
@@ -548,15 +609,19 @@ All are recorded where they were made; this is the index.
 |---|---|
 | #30 | Phase 1 exit items: scanner secrets, real IdP login in DEV, shell ACR manual testing |
 | #92 | Owner item: the manual assistive-technology pass on the Phase 2 screens (a Phase 2 exit criterion). Still open, and it now also covers the Alerts page and the Request update dialog with its combobox (WP-17, WP-18), the WP-19 screens (the Request closure, Reject or request changes, Reassign approver and Reopen dialogs and their fallback pages, the pending banner and the dashboard's "Pending my approval"), the WP-20 to WP-23 screens (the dashboard's tiles, My cases and paged lists, the Aging and SLA compliance reports and their print view, the scheduled report runs and the report schedules), and the Phase 5 screens (the legal hold dialog, its fallback page and the hold history; the purged case page; the System screen and "send me a test"; the Import runs list, run page, run request and sign-off; the History tab's imported rows; `/preferences` and the `/` and `N` shortcuts), which pass axe and a keyboard walk but have had no screen-reader pass |
+| #318 | Audited re-send of a FAILED mail (replaces the runbook's SQL); its pull request #324 is an open draft |
 | #277 (was #254) | The `json-schema-validator` 3.0.9 bump stays red on `RequireUpperBoundDeps` until a Spring Boot release manages Jackson 3.1.8 or later; no override, exclusion or ignore rule. Dependabot closed #254 and carries the bump in its grouped #277 |
 
 Follow-ups without an issue yet, each recorded in the PR or close-out that found it:
 
 | Area | What | For |
 |---|---|---|
-| Performance | The dry run's `PeopleMatcher` looks people up one by one (#173); batch it before a 500k-person source | WP-30 |
-| Performance | The cases-list index recommendations of `docs/perf/cases-list-50k.md` (`CASE_RECORD (OPENED_AT, ID)`, an expression index on `LOWER(TITLE)`) still wait for the 500k run | WP-30 |
-| Performance | The importer's dry run, load and staging purge have not been measured at volume | WP-30 |
+| Performance | Resolved: `PeopleMatcher` looks people up a page at a time (#173): the dry run took 427 s and takes 21 s at the release corpus | #312 |
+| Performance | The cases-list indexes: no V21 cases index; the 500k run showed no need, and the trigger is recorded in `docs/perf/release-500k.md` | #297 |
+| Performance | Resolved: the importer at the release volume is measured (`docs/perf/importer-volume.md`); the whole import went from 41 to 11 minutes on PostgreSQL. Open there: on Oracle the Oracle Text sync per case is about 85 % of the load, remedied by the manual-sync step of RUNBOOK section 10; the extract (209 s) is not investigated | #311 to #314 |
+| Performance | Resolved: the restore drill passed every check on PostgreSQL 16, Oracle Free 23 and XE 21 (restore to serving 20, 99 and 91 s); it found that on Oracle 21 `REPLACE METADATA SYNC` drops the index's `OPTIMIZE (AUTO_DAILY)`, now handled in the runbook | #315, `docs/ops/restore-drill.md` |
+| Operations | A FAILED mail is re-sent with SQL (RUNBOOK section 8.2, not audited) until the audited admin action merges | #318, draft #324 |
+| Performance | The Oracle 500k run is opt-in, not nightly (about a quarter of an hour of Oracle a night); adding it is the owner's call | `docs/perf/release-500k.md` |
 | Tests | Some tests that place times relative to "now" leave a window of seconds around midnight in which they can fail (#151 moved one, the at-risk SLA walk, off the day boundary); the others are not yet swept | Phase 6 |
 | Security review | The plain SHA-256 mapping hash (section 5, #169) is flagged for the Phase 6 security review; WP-28 did not review it, and `security/TEST_MAP.md` lists it among the gaps | owner decision |
 | Operations | After an import: lock `TRAILKEEP_IMPORT` again, and keep `trailkeep-import-hash-key` while a delta may still compare with the ledger (`deploy/README.md` "Importer" step 5) | the deploying team |
@@ -592,8 +657,9 @@ code change.
 1. **OpenSSF Best Practices badge.** Register the project at bestpractices.dev, then add the badge to `README.md`.
    This closes Scorecard alert #8.
 2. **Repository secrets `SONAR_TOKEN` and `NVD_API_KEY`**, for the `main.yml` SonarCloud and Dependency-Check steps
-   (they are skipped with a notice without them; #30). Both are intentionally off for 0.2.0 and 0.3.0; until they are set,
-   WP-28's "Sonar gate A; Dependency-Check clean" cannot be shown.
+   (they are skipped with a notice without them; #30). Both were intentionally off for 0.2.0 and 0.3.0; from 1.0.0 the
+   release preflight refuses a release without them (#320), and until they are set WP-28's "Sonar gate A;
+   Dependency-Check clean" cannot be shown.
 3. **One real sign-in against the organization's identity provider in DEV**, following
    [`deploy/OIDC_PROVIDER.md`](deploy/OIDC_PROVIDER.md). Record the outcome on #30, not the values.
 4. **Manual accessibility testing** to finish the draft report [`accessibility/ACR-shell.md`](accessibility/ACR-shell.md):
@@ -618,10 +684,10 @@ code change.
    which also relaxes the pod's no-egress `NetworkPolicy`; or point `freshclam` at a private mirror. Setting
    `app.attachments.scanning: external` (ADR-0013, `deploy/overlays/external-scanning`) removes the ClamAV pod and
    with it this decision, at the cost of files being stored `NOT_SCANNED`.
-8. **Tag 0.3.0.** Prepared by this refresh: `CHANGELOG.md`'s Unreleased block is now `[0.3.0] - 2026-11-22` (`v0.2.0`
-   was tagged on 2026-11-20). The annotated `v0.3.0` tag on the merge commit runs `release.yml` again: the image to
-   GHCR with its signature, SBOM attestation and provenance, their verification by `verify-image.yml` (new since #267),
-   and a GitHub Release with the evidence pack (without the Dependency-Check report while #30's secrets are absent).
+8. **Tag 1.0.0.** The annotated, signed `v1.0.0` tag on the release pull request's merge commit, once the items of
+   section 1, "What remains for 1.0.0", are done. One-time key setup and each-release commands are in
+   `docs/RELEASING.md` section 4; the preflight refuses a tag GitHub does not report as verified. (`v0.3.0` was tagged
+   on 2026-11-22.)
 9. **The named certified tester for WP-29.** The Section 508 conformance pass needs a Trusted Tester v5 (or the
    deploying organization's equivalent) for a 3-week window (Part F); the remediation and the ACR depend on it. #92's
    screen-reader pass is the same kind of work and can be folded into it.
@@ -656,19 +722,18 @@ Not defects, but worth knowing:
    - **WP-29, the Section 508 conformance pass and ACR** (L, plus the 3-week tester window): Trusted Tester v5 by the
      named certified tester (owner item 9), remediation, and the ACR (VPAT 2.5) with the manual test matrix in
      `accessibility/`. Acceptance: no "Does Not Support", and dated tickets for any "Partially Supports";
-   - **WP-30, performance, restore drill, runbook, evidence pack and 1.0.0** (M): k6 at the 50k and 500k seeds, pool
-     sizing, a restore drill, `docs/RUNBOOK.md`, the release workflow and evidence pack, `CHANGELOG`, a signed tag.
-     It inherits the performance follow-ups of section 6 (`PeopleMatcher`, the importer at volume, the cases-list
-     indexes, the export's connection hold of section 5; #141 is done, #238). The two deploy gaps are fixed: #204
-     (`APP_DB_SCHEMA`, #207) and #205 (the migration `Job`, #208).
+   - **WP-30, performance, restore drill, runbook, evidence pack and 1.0.0** (M): built (section 1). What is left is
+     the owner's: the signed `v1.0.0` tag and the release-candidate k6 and Oracle 500k runs (`docs/RELEASING.md`
+     section 3). Its inherited follow-ups are closed (section 5, section 6 and the PRs of section 1); #204 and #205 were
+     fixed earlier (#207, #208).
 2. **Owner-only items** that gate Phase 6 or the release, none of them code: the scanner secrets for WP-28's
    acceptance (item 2, #30), the named certified tester for WP-29 (item 9), the screen-reader pass of #92, the
-   `v0.3.0` tag after this refresh merges (item 8), the Part G SQL Server row (item 10), and the
+   signed `v1.0.0` tag (item 8), the Part G SQL Server row (item 10), and the
    open Phase 1 items of #30 (real IdP sign-in, shell ACR manual testing). #24 (Spring Session pin) needs no action
    while the pin stays.
 3. Carried forward: rows of the cases list open on click only (the case-number link is the keyboard path, #84). #117
    (one shared Keycloak container per test JVM) is done (#232).
-4. The open issues of section 1, "What remains for 1.0.0", alongside WP-29 and WP-30.
+4. The open issues of section 1, "What remains for 1.0.0".
 
 Two conventions the receiving team inherits and should keep: one migration per PR shipped with its entity, and the
 independent review on a different model recorded on the PR.
