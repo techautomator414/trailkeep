@@ -591,6 +591,22 @@ paths:
           application/x-www-form-urlencoded:
             schema: {type: object, properties: {template: {type: string, example: closure-requested}}}
       responses: {"302": {description: To the System screen}}
+  /admin/outbox:
+    get:
+      summary: Failed mail (Compliance Admin)
+      parameters:
+        - {name: requeued, in: query, schema: {type: integer, example: 1}}
+        - {name: skipped, in: query, schema: {type: integer, example: 0}}
+      responses: {"200": {description: Page}}
+  /admin/outbox/requeue:
+    post:
+      summary: Send the chosen failed mails again (Compliance Admin; audited, at most 50)
+      parameters: [{$ref: "#/components/parameters/csrf"}]
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema: {type: object, properties: {id: {type: integer, example: 1}}}
+      responses: {"302": {description: To Failed mail with the counts}}
 
   # ---- Import runs (Compliance or System Admin)
   /admin/import-runs:

@@ -425,14 +425,21 @@ kubectl -n <ns> create job --from=cronjob/trailkeep-purge trailkeep-purge-manual
 ### 8.2 Mail that failed
 
 A `FAILED` mail stays in `NOTIFICATION_OUTBOX` with its `LAST_ERROR`; it is not retried. Fix the cause (usually a
-recipient the relay rejects), then, to send it again, *as the owner or the runtime user*:
+recipient the relay rejects), then send it again from **Failed mail** (`/admin/outbox`, linked from the Compliance
+Admin screens): a Compliance Admin ticks the mails and chooses *Send selected again*. At most 50 at a time, oldest
+first; recipients are shown partly hidden. Each mail goes back to `PENDING` with its attempts reset, the dispatcher
+sends it within a minute, and one `MAIL_REQUEUED` event per mail (who, when, which row, the previous attempts and
+failure reason) is in the audit trail (Audit trail, entity `NOTIFICATION_OUTBOX`). Two people choosing the same mail
+move it once. A System Admin gets 403.
+
+**Break-glass only**, when the application cannot be used: *as the owner or the runtime user*,
 
 ```sql
 UPDATE NOTIFICATION_OUTBOX SET STATUS = 'PENDING', ATTEMPTS = 0, NEXT_ATTEMPT_AT = CURRENT_TIMESTAMP, LAST_ERROR = NULL
  WHERE STATUS = 'FAILED' AND ID IN (<ids>);
 ```
 
-The dispatcher sends it within a minute. This change is not audited by the application: record it in your change log.
+This change is not audited by the application: record it in the change ticket.
 
 ### 8.3 Reports and quarantined files
 

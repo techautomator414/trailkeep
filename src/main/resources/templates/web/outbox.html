@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Failed mail for Compliance Admins (#318): a plain table of checkboxes in a POST form, no script. Every value is
+     written with th:text, so it is escaped; the recipient and any address in the reason arrive already masked. -->
+<html lang="en" xmlns:th="http://www.thymeleaf.org" th:replace="~{web/layout :: page(~{::title}, ~{::main})}">
+<head><title th:text="#{tk.outbox.title} + ' · ' + ${@branding.name()}">Failed mail</title></head>
+<body>
+<main id="main" class="container tk-main" tabindex="-1">
+  <h1 th:text="#{tk.outbox.title}">Failed mail</h1>
+  <p th:replace="~{report/schedules :: admin}"></p>
+  <p th:text="#{tk.outbox.intro}">Mail that used all its attempts is kept here.</p>
+  <div th:if="${requeued != null}" id="tk-outbox-result" class="alert alert-success" role="status" tabindex="-1">
+    <p class="mb-0" th:text="#{tk.outbox.requeued(${requeued})}">2 mails queued to be sent again.</p>
+    <p class="mb-0" th:if="${skipped != null and skipped > 0}" th:text="#{tk.outbox.skipped(${skipped})}">1 skipped.</p>
+  </div>
+  <p id="tk-outbox-status" th:text="${failed.total == 0} ? #{tk.outbox.none} : #{tk.outbox.found(${failed.total})}
+     + (${failed.total > maxBatch} ? ' ' + #{tk.outbox.more(${maxBatch})} : '')">2 failed mails.</p>
+  <form th:unless="${failed.mails.isEmpty()}" method="post" th:action="@{/admin/outbox/requeue}">
+    <div class="table-responsive" tabindex="0" role="region" aria-labelledby="tk-outbox-caption">
+      <table class="table align-middle">
+        <caption id="tk-outbox-caption" th:text="#{tk.outbox.caption}">Failed mail, oldest first</caption>
+        <thead><tr>
+          <th scope="col" th:text="#{tk.outbox.col.select}">Select</th>
+          <th scope="col" th:text="#{tk.outbox.col.recipient}">Recipient</th>
+          <th scope="col" th:text="#{tk.outbox.col.template}">Template</th>
+          <th scope="col" th:text="#{tk.outbox.col.case}">Case</th>
+          <th scope="col" th:text="#{tk.outbox.col.attempts}">Attempts</th>
+          <th scope="col" th:text="#{tk.outbox.col.failed}">Last attempt</th>
+          <th scope="col" th:text="#{tk.outbox.col.reason}">Failure reason</th>
+        </tr></thead>
+        <tbody>
+        <tr th:each="m : ${failed.mails}">
+          <td><input class="form-check-input" type="checkbox" name="id" th:id="'tk-outbox-' + ${m.id}"
+                     th:value="${m.id}">
+            <label class="visually-hidden" th:for="'tk-outbox-' + ${m.id}" th:text="#{tk.outbox.select(${m.id})}">
+              Select mail 1</label></td>
+          <th scope="row" th:text="${m.recipient}">a***@example.org</th>
+          <td th:text="${m.templateId}">comment-added</td>
+          <td th:text="${m.caseNumber} ?: '—'">CASE-2026-000001</td>
+          <td th:text="${m.attempts}">10</td>
+          <td th:text="${#temporals.format(m.failedAt.atZone(zone), 'yyyy-MM-dd HH:mm')}">2026-11-11 09:15</td>
+          <td th:text="${m.lastError} ?: '—'">550 mailbox unavailable</td>
+        </tr>
+        </tbody>
+      </table>
+    </div>
+    <button id="tk-outbox-requeue" class="btn btn-primary" type="submit"
+            aria-describedby="tk-outbox-requeue-hint" th:text="#{tk.outbox.requeue}">Send selected again</button>
+    <p id="tk-outbox-requeue-hint" class="form-text" th:text="#{tk.outbox.requeue.hint(${maxBatch})}">At most 50.</p>
+  </form>
+</main>
+</body>
+</html>
