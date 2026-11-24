@@ -4,17 +4,22 @@ package io.trailkeep.notification;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.trailkeep.shared.access.CaseScope;
 import io.trailkeep.testsupport.PostgresTestcontainersConfiguration;
 import io.trailkeep.testsupport.RequiresDocker;
 import io.trailkeep.testsupport.TestImages;
+import io.trailkeep.user.GlobalRole;
+import io.trailkeep.user.UserPermissions;
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -61,6 +66,9 @@ class MailpitDispatchIT {
 
     @Autowired
     private NotificationService notifications;
+
+    @Autowired
+    private OutboxResendService resend;
 
     @Autowired
     private TransactionTemplate transactions;
@@ -114,6 +122,46 @@ class MailpitDispatchIT {
                 .containsEntry("LOCKED_UNTIL", null)
                 .containsEntry("LAST_ERROR", null)
                 .doesNotContainEntry("SENT_AT", null);
+    }
+
+    @Test
+    void failedMailAnAdminRequeuesIsSentByTheDispatcherAndArrives() throws Exception {
+        long id = Objects.requireNonNull(transactions.execute(status -> notifications.enqueue(
+                "owner@example.invalid",
+                "comment-added",
+                Map.of(
+                        "caseNumber", "CASE-2026-000044",
+                        "title", "Synthetic requeued",
+                        "commenter", "Synthetic Commenter",
+                        "link", LINK),
+                null)));
+        jdbc.update(
+                "UPDATE NOTIFICATION_OUTBOX SET STATUS = 'FAILED', ATTEMPTS = 10, LAST_ERROR = 'MailConnectException'"
+                        + " WHERE ID = ?",
+                id);
+        try {
+            assertThat(dispatcher.dispatch()).isZero();
+            assertThat(get("/api/v1/messages").get("total").asInt()).isZero();
+
+            UserPermissions admin = new UserPermissions(982_001L, false, Set.of(GlobalRole.COMPLIANCE_ADMIN), Map.of());
+            assertThat(resend.requeue(admin, "Synthetic Admin", CaseScope.system(), List.of(id)))
+                    .isEqualTo(new OutboxResendService.Result(1, 0));
+            assertThat(dispatcher.dispatch()).isEqualTo(1);
+
+            JsonNode list = get("/api/v1/messages");
+            assertThat(list.get("total").asInt()).isEqualTo(1);
+            assertThat(get("/api/v1/message/"
+                                    + list.get("messages").get(0).get("ID").asString())
+                            .get("Subject")
+                            .asString())
+                    .isEqualTo("New comment on CASE-2026-000044");
+            assertThat(jdbc.queryForMap("SELECT * FROM NOTIFICATION_OUTBOX WHERE ID = ?", id))
+                    .containsEntry("STATUS", "SENT")
+                    .containsEntry("ATTEMPTS", 1)
+                    .containsEntry("LAST_ERROR", null);
+        } finally {
+            jdbc.update("DELETE FROM AUDIT_EVENT WHERE ENTITY_TYPE = 'NOTIFICATION_OUTBOX' AND ENTITY_ID = ?", id);
+        }
     }
 
     @Test

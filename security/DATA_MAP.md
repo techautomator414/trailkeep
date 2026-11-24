@@ -203,7 +203,8 @@ duties").
   outcome, a team, a day count and a link. They never read a description, subject, comment, message or closure text
   (`MailTemplatesTest`, `ClosureRequestIT`, `NotificationServiceIT`).
 - **Read by, in the application:** an alert by its person; outbox content by no screen (the System screen shows
-  counts).
+  counts); the Failed mail screen (Compliance Admins, #318) shows a failed row's masked recipient, template, case number,
+  attempts and failure reason, with addresses in the reason masked, and never a body.
 - **Read by, in the database:** `NOTIFICATION_OUTBOX`: app S I U; purge S D; import S. `USER_ALERT`: app S I U D;
   import S.
 - **Retention:** outbox rows, sent or failed, stay until the purge removes their case or the report run they deliver
