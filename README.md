@@ -9,8 +9,8 @@ nothing about it. Each case has an owner, a type, an SLA clock, comments, attach
 approval moment: closure. The system emails people before deadlines pass, sends an automated aging report,
 and keeps an evidence-grade history.
 
-> **Status: 0.3.0. Every work package of Phases 1 to 5 is merged, and WP-28 of Phase 6; WP-29 and WP-30 remain
-> before 1.0.0.** 0.1.0 was the walking skeleton: Phase 1 of `IMPLEMENTATION_PLAN.md` (build and scanning gates, two-vendor
+> **Status: 0.3.0. Every work package of Phases 1 to 5 is merged, and WP-28 and the build work of WP-30 of Phase 6;
+> WP-29 and the owner's items (`HANDOFF.md`, "What remains for 1.0.0") remain before 1.0.0.** 0.1.0 was the walking skeleton: Phase 1 of `IMPLEMENTATION_PLAN.md` (build and scanning gates, two-vendor
 > schema tooling, identity, OIDC login and shared sessions, audit, web shell, container and deploy base) with team and
 > case-configuration administration (WP-09, WP-10). 0.2.0 added everything from WP-11 to WP-28:
 > - **Phase 2 (WP-11 to WP-16):** case create, view, edit, reassign and restrict, comments, attachments with virus
