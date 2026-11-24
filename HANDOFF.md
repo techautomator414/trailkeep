@@ -43,8 +43,9 @@ Oracle redo minimum), #319 (#317, no `HTE_*` tables created outside Flyway on Or
 Semgrep, gitleaks and CodeQL gate the release), #323 (#300, keyset paging for both CSV exports and a bounded snapshot
 for the audit export) and #306 (#303, Trivy database fallbacks). Dependencies and images: #278, #293 (the combined
 compose and test-image bump procedure), #301 (ClamAV 1.5.4, a security release) and #307 (`wcmatch`, GHSA-53pm-wgxf-c6qf).
-**#324 (#318, an audited re-send of failed mail) is an open draft pull request, not merged**; until it is, the
-runbook's section 8.2 still has the SQL.
+#324 (#318, closed by it) adds **Failed mail**, the audited re-send of failed mail for Compliance Admins
+(`/admin/outbox`, a `MAIL_REQUEUED` audit event per mail, no migration); the runbook's section 8.2 now uses the screen
+and keeps the SQL as break-glass, recorded in the change ticket and not audited.
 
 "0.2.0", "0.3.0" and "What remains for 1.0.0", at the end of this section, give each release's scope and the open
 issues.
@@ -220,9 +221,8 @@ and the signed tag.
 - **#277**, Dependabot's grouped bump (an open pull request, not an issue): the `json-schema-validator` 3.0.9 update
   stays red on `RequireUpperBoundDeps` (it declares Jackson 3.1.8, Spring Boot 4.1.x manages 3.1.7) until a Spring Boot
   release manages Jackson 3.1.8 or later. No override, exclusion or ignore rule (tracked on #254).
-- **The open issues** (`gh issue list --state open`, 2026-11-23), exactly three: **#318** (audited re-send of a FAILED
-  mail; its pull request #324 is a draft, so until it merges the runbook's section 8.2 uses SQL), **#92** (WP-29's
-  assistive-technology pass) and **#30** (above).
+- **The open issues** (`gh issue list --state open`, 2026-11-24), exactly two: **#92** (WP-29's assistive-technology
+  pass) and **#30** (above).
 
 ### Phase 1 exit criteria (Part C)
 
@@ -610,7 +610,6 @@ All are recorded where they were made; this is the index.
 |---|---|
 | #30 | Phase 1 exit items: scanner secrets, real IdP login in DEV, shell ACR manual testing |
 | #92 | Owner item: the manual assistive-technology pass on the Phase 2 screens (a Phase 2 exit criterion). Still open, and it now also covers the Alerts page and the Request update dialog with its combobox (WP-17, WP-18), the WP-19 screens (the Request closure, Reject or request changes, Reassign approver and Reopen dialogs and their fallback pages, the pending banner and the dashboard's "Pending my approval"), the WP-20 to WP-23 screens (the dashboard's tiles, My cases and paged lists, the Aging and SLA compliance reports and their print view, the scheduled report runs and the report schedules), and the Phase 5 screens (the legal hold dialog, its fallback page and the hold history; the purged case page; the System screen and "send me a test"; the Import runs list, run page, run request and sign-off; the History tab's imported rows; `/preferences` and the `/` and `N` shortcuts), which pass axe and a keyboard walk but have had no screen-reader pass |
-| #318 | Audited re-send of a FAILED mail (replaces the runbook's SQL); its pull request #324 is an open draft |
 | #277 (was #254) | The `json-schema-validator` 3.0.9 bump stays red on `RequireUpperBoundDeps` until a Spring Boot release manages Jackson 3.1.8 or later; no override, exclusion or ignore rule. Dependabot closed #254 and carries the bump in its grouped #277 |
 
 Follow-ups without an issue yet, each recorded in the PR or close-out that found it:
@@ -621,7 +620,7 @@ Follow-ups without an issue yet, each recorded in the PR or close-out that found
 | Performance | The cases-list indexes: no V21 cases index; the 500k run showed no need, and the trigger is recorded in `docs/perf/release-500k.md` | #297 |
 | Performance | Resolved: the importer at the release volume is measured (`docs/perf/importer-volume.md`); the whole import went from 41 to 11 minutes on PostgreSQL. Open there: on Oracle the Oracle Text sync per case is about 85 % of the load, remedied by the manual-sync step of RUNBOOK section 10; the extract (209 s) is not investigated | #311 to #314 |
 | Performance | Resolved: the restore drill passed every check on PostgreSQL 16, Oracle Free 23 and XE 21 (restore to serving 20, 99 and 91 s); it found that on Oracle 21 `REPLACE METADATA SYNC` drops the index's `OPTIMIZE (AUTO_DAILY)`, now handled in the runbook | #315, `docs/ops/restore-drill.md` |
-| Operations | A FAILED mail is re-sent with SQL (RUNBOOK section 8.2, not audited) until the audited admin action merges | #318, draft #324 |
+| Operations | Resolved: a FAILED mail is re-sent from the audited Failed mail screen (`/admin/outbox`); the SQL stays in RUNBOOK section 8.2 as break-glass and is not audited | #324 (#318) |
 | Performance | The Oracle 500k run is opt-in, not nightly (about a quarter of an hour of Oracle a night); adding it is the owner's call | `docs/perf/release-500k.md` |
 | Tests | Some tests that place times relative to "now" leave a window of seconds around midnight in which they can fail (#151 moved one, the at-risk SLA walk, off the day boundary); the others are not yet swept | Phase 6 |
 | Security review | The plain SHA-256 mapping hash (section 5, #169) is flagged for the Phase 6 security review; WP-28 did not review it, and `security/TEST_MAP.md` lists it among the gaps | owner decision |
